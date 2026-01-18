@@ -1,5 +1,3 @@
-// Aggregated config exports for auth-related concerns.
-
 const { ROLES, isClientRole, isAdminRole } = require('./roles');
 const { jwtConfig, mainAdminIdentifier, isMainAdminIdentifier } = require('./jwt');
 
@@ -11,3 +9,8 @@ module.exports = {
   mainAdminIdentifier,
   isMainAdminIdentifier,
 };
+
+
+
+
+

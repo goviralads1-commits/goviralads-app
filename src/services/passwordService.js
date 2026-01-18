@@ -1,18 +1,21 @@
 const bcrypt = require('bcryptjs');
 
-// Password hashing and verification service.
-// No user persistence or business logic here.
+const SALT_ROUNDS = 10;
 
-async function hashPassword(plainPassword) {
-  const saltRounds = 10;
-  return bcrypt.hash(plainPassword, saltRounds);
+async function hashPassword(password) {
+  return bcrypt.hash(password, SALT_ROUNDS);
 }
 
-async function verifyPassword(plainPassword, passwordHash) {
-  return bcrypt.compare(plainPassword, passwordHash);
+async function verifyPassword(password, hash) {
+  return bcrypt.compare(password, hash);
 }
 
 module.exports = {
   hashPassword,
   verifyPassword,
 };
+
+
+
+
+

@@ -2,15 +2,14 @@ const mongoose = require('mongoose');
 
 const taskTemplateSchema = new mongoose.Schema(
   {
-    name: {
+    title: {
       type: String,
       required: true,
       trim: true,
-      unique: true,
     },
     description: {
       type: String,
-      required: true,
+      default: '',
       trim: true,
     },
     creditCost: {
@@ -21,13 +20,6 @@ const taskTemplateSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
-      required: true,
-      index: true,
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
     },
   },
   {
@@ -38,3 +30,8 @@ const taskTemplateSchema = new mongoose.Schema(
 const TaskTemplate = mongoose.model('TaskTemplate', taskTemplateSchema);
 
 module.exports = TaskTemplate;
+
+
+
+
+

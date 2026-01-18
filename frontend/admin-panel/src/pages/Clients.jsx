@@ -55,14 +55,13 @@ const Clients = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
         <Header />
-        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            <div className="text-center py-12">
-              <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full" role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTop: '4px solid #6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }}></div>
+              <div style={{ marginTop: '16px', fontSize: '14px', color: '#64748b' }}>Loading users...</div>
             </div>
           </div>
         </div>
@@ -72,13 +71,11 @@ const Clients = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
         <Header />
-        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            <div className="rounded-lg bg-red-50 p-4">
-              <div className="text-red-700">{error}</div>
-            </div>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+          <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '16px', color: '#dc2626' }}>
+            {error}
           </div>
         </div>
       </div>
@@ -86,136 +83,150 @@ const Clients = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Header />
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-6">Clients</h1>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>User Manager</h1>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Manage all registered users and their wallet balances</p>
+        </div>
 
-          {/* Wallet Adjustment Form */}
-          {showAdjustForm && selectedClient && (
-            <div className="bg-white shadow sm:rounded-lg mb-8">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Adjust Wallet for {selectedClient.user.email}</h3>
-                <div className="mt-5">
-                  <form onSubmit={handleAdjustmentSubmit} className="space-y-4">
-                    <div>
-                      <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
-                        Amount (credits)
-                      </label>
-                      <div className="mt-1">
-                        <input
-                          type="number"
-                          id="amount"
-                          value={adjustmentAmount}
-                          onChange={(e) => setAdjustmentAmount(e.target.value)}
-                          min="0"
-                          step="0.01"
-                          required
-                          className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="reason" className="block text-sm font-medium text-gray-700">
-                        Reason
-                      </label>
-                      <div className="mt-1">
-                        <input
-                          type="text"
-                          id="reason"
-                          value={adjustmentReason}
-                          onChange={(e) => setAdjustmentReason(e.target.value)}
-                          required
-                          className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAdjustForm(false);
-                          setSelectedClient(null);
-                        }}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={adjustmentSubmitting}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                      >
-                        {adjustmentSubmitting ? 'Adjusting...' : 'Adjust Wallet'}
-                      </button>
-                    </div>
-                  </form>
+        {/* Wallet Adjustment Form */}
+        {showAdjustForm && selectedClient && (
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: '0 0 20px 0' }}>Adjust Wallet for {selectedClient.clientIdentifier}</h3>
+            <form onSubmit={handleAdjustmentSubmit}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#334155', marginBottom: '8px' }}>
+                  Amount (credits)
+                </label>
+                <input
+                  type="number"
+                  value={adjustmentAmount}
+                  onChange={(e) => setAdjustmentAmount(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  required
+                  style={{ width: '100%', padding: '10px 14px', fontSize: '14px', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none', transition: 'border 0.2s' }}
+                  onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                  onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#334155', marginBottom: '8px' }}>
+                  Reason
+                </label>
+                <input
+                  type="text"
+                  value={adjustmentReason}
+                  onChange={(e) => setAdjustmentReason(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '10px 14px', fontSize: '14px', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none', transition: 'border 0.2s' }}
+                  onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                  onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdjustForm(false);
+                    setSelectedClient(null);
+                  }}
+                  style={{ padding: '10px 20px', fontSize: '14px', fontWeight: '500', color: '#475569', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={adjustmentSubmitting}
+                  style={{ padding: '10px 20px', fontSize: '14px', fontWeight: '500', color: '#ffffff', backgroundColor: adjustmentSubmitting ? '#94a3b8' : '#6366f1', border: 'none', borderRadius: '8px', cursor: adjustmentSubmitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
+                  onMouseEnter={(e) => !adjustmentSubmitting && (e.target.style.backgroundColor = '#4f46e5')}
+                  onMouseLeave={(e) => !adjustmentSubmitting && (e.target.style.backgroundColor = '#6366f1')}
+                >
+                  {adjustmentSubmitting ? 'Adjusting...' : 'Adjust Wallet'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Clients Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
+          {clients.wallets?.map((wallet) => (
+            <div key={wallet.clientId} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0', transition: 'all 0.2s', cursor: 'pointer' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+                e.currentTarget.style.borderColor = '#cbd5e1';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+                e.currentTarget.style.borderColor = '#e2e8f0';
+              }}
+            >
+              {/* User Info */}
+              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '16px', fontWeight: '600', color: '#0f172a', marginBottom: '6px' }}>
+                  {wallet.clientIdentifier}
+                </div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>
+                  ID: {wallet.clientId}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Clients Table */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">All Clients</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">List of all registered clients</p>
+              {/* Balance */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Wallet Balance
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '700', color: '#22c55e' }}>
+                  {wallet.balance.toFixed(2)} <span style={{ fontSize: '16px', fontWeight: '500', color: '#64748b' }}>credits</span>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Status
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
+                    Active
+                  </div>
+                </div>
+                <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Joined
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
+                    {new Date(wallet.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button
+                onClick={() => {
+                  setSelectedClient(wallet);
+                  setShowAdjustForm(true);
+                }}
+                style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: '500', color: '#ffffff', backgroundColor: '#6366f1', border: 'none', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#4f46e5'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#6366f1'}
+              >
+                Adjust Wallet
+              </button>
             </div>
-            <div className="border-t border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Client
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Wallet Balance
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Tasks
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {clients.map((client) => (
-                    <tr key={client._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {client.user.name || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {client.user.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {client.balance.toFixed(2)} credits
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {client.taskCount}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button
-                          onClick={() => {
-                            setSelectedClient(client);
-                            setShowAdjustForm(true);
-                          }}
-                          className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        >
-                          Adjust Wallet
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          ))}
         </div>
+
+        {clients.wallets?.length === 0 && (
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '16px', color: '#64748b' }}>No clients found</div>
+          </div>
+        )}
       </div>
     </div>
   );

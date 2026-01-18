@@ -7,9 +7,12 @@ const Wallet = () => {
   const [rechargeRequests, setRechargeRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState(null);
   const [showRechargeForm, setShowRechargeForm] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState('');
+  const [paymentRef, setPaymentRef] = useState('');
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'recharge'
 
   useEffect(() => {
     const fetchData = async () => {
@@ -20,10 +23,9 @@ const Wallet = () => {
         ]);
         
         setWalletData(walletResponse.data);
-        setRechargeRequests(requestsResponse.data);
+        setRechargeRequests(requestsResponse.data.requests || []);
       } catch (err) {
         setError('Failed to load wallet data');
-        console.error('Wallet error:', err);
       } finally {
         setLoading(false);
       }
@@ -35,22 +37,38 @@ const Wallet = () => {
   const handleRechargeSubmit = async (e) => {
     e.preventDefault();
     setRechargeSubmitting(true);
+    setError('');
     
     try {
-      await api.post('/client/wallet/recharge', { amount: parseFloat(rechargeAmount) });
-      // Refresh data after successful recharge request
-      const [walletResponse, requestsResponse] = await Promise.all([
-        api.get('/client/wallet'),
-        api.get('/client/wallet/recharge-requests')
-      ]);
+      const response = await api.post('/client/wallet/recharge', { 
+        amount: parseFloat(rechargeAmount),
+        paymentReference: paymentRef
+      });
       
-      setWalletData(walletResponse.data);
-      setRechargeRequests(requestsResponse.data);
+      // Success! Show toast immediately
+      setToast('Recharge request submitted successfully');
+      setTimeout(() => setToast(null), 3000);
+      
+      // Clear form
       setRechargeAmount('');
+      setPaymentRef('');
       setShowRechargeForm(false);
+      
+      // Refresh data (errors won't override success)
+      try {
+        const [walletResponse, requestsResponse] = await Promise.all([
+          api.get('/client/wallet'),
+          api.get('/client/wallet/recharge-requests')
+        ]);
+        setWalletData(walletResponse.data);
+        setRechargeRequests(requestsResponse.data.requests || []);
+      } catch (refreshErr) {
+        // Silently handle refresh errors
+      }
     } catch (err) {
-      setError('Failed to submit recharge request');
-      console.error('Recharge error:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to submit recharge request';
+      setToast(errorMsg);
+      setTimeout(() => setToast(null), 4000);
     } finally {
       setRechargeSubmitting(false);
     }
@@ -58,30 +76,37 @@ const Wallet = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div style={{minHeight: '100vh', backgroundColor: '#f8fafc', paddingBottom: '100px'}}>
         <Header />
-        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            <div className="text-center py-12">
-              <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full" role="status">
-                <span className="visually-hidden">Loading...</span>
+        <div style={{maxWidth: '1200px', margin: '0 auto', padding: '24px'}}>
+          {/* Balance Skeleton */}
+          <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '32px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
+            <div style={{width: '120px', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginBottom: '12px', animation: 'pulse 1.5s infinite'}}></div>
+            <div style={{width: '160px', height: '40px', backgroundColor: '#e2e8f0', borderRadius: '8px', animation: 'pulse 1.5s infinite'}}></div>
+          </div>
+          {/* Transaction Skeleton */}
+          <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
+            <div style={{width: '180px', height: '24px', backgroundColor: '#e2e8f0', borderRadius: '6px', marginBottom: '24px', animation: 'pulse 1.5s infinite'}}></div>
+            {[1,2,3,4].map(i => (
+              <div key={i} style={{display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f1f5f9'}}>
+                <div style={{width: '40%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px', animation: 'pulse 1.5s infinite'}}></div>
+                <div style={{width: '80px', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px', animation: 'pulse 1.5s infinite'}}></div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
+        <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div style={{minHeight: '100vh', backgroundColor: '#f8fafc', paddingBottom: '100px'}}>
         <Header />
-        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            <div className="rounded-lg bg-red-50 p-4">
-              <div className="text-red-700">{error}</div>
-            </div>
+        <div style={{maxWidth: '1200px', margin: '0 auto', padding: '24px'}}>
+          <div style={{padding: '20px', backgroundColor: '#fef2f2', borderRadius: '16px', border: '1px solid #fecaca'}}>
+            <p style={{color: '#dc2626', fontSize: '15px', fontWeight: '500', margin: 0}}>{error}</p>
           </div>
         </div>
       </div>
@@ -89,200 +114,302 @@ const Wallet = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{minHeight: '100vh', backgroundColor: '#f8fafc', paddingBottom: '100px'}}>
       <Header />
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900">Wallet</h1>
-            <button
-              onClick={() => setShowRechargeForm(!showRechargeForm)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Request Recharge
-            </button>
-          </div>
+      
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: toast.toLowerCase().includes('fail') || toast.toLowerCase().includes('error') || toast.toLowerCase().includes('maximum') ? '#ef4444' : '#10b981',
+          color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 100
+        }}>
+          {toast}
+        </div>
+      )}
+      
+      <div style={{maxWidth: '1200px', margin: '0 auto', padding: '24px'}}>
+        {/* Balance Card */}
+        <div style={{
+          background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+          borderRadius: '24px',
+          padding: '32px',
+          marginBottom: '24px',
+          color: '#fff',
+          boxShadow: '0 10px 40px rgba(99,102,241,0.3)'
+        }}>
+          <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: '0 0 8px 0'}}>Current Balance</p>
+          <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 16px 0'}}>₹{walletData?.balance?.toFixed(2) || '0.00'}</p>
+          <button
+            onClick={() => setShowRechargeForm(!showRechargeForm)}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              border: '2px solid rgba(255,255,255,0.3)',
+              cursor: 'pointer',
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            Request Recharge
+          </button>
+        </div>
 
-          {/* Wallet Balance Card */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
-            <div className="px-4 py-5 sm:p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
-                  <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Current Balance</dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {walletData.balance.toFixed(2)} credits
-                      </div>
-                    </dd>
-                  </dl>
-                </div>
+        {/* Recharge Form */}
+        {showRechargeForm && (
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '20px',
+            padding: '24px',
+            marginBottom: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+          }}>
+            <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px 0'}}>Request Recharge</h3>
+            <form onSubmit={handleRechargeSubmit}>
+              <div style={{marginBottom: '16px'}}>
+                <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>Amount (₹)</label>
+                <input
+                  type="number"
+                  value={rechargeAmount}
+                  onChange={(e) => setRechargeAmount(e.target.value)}
+                  min="100"
+                  max="100000"
+                  required
+                  placeholder="Enter amount (min ₹100)"
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    fontSize: '16px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '12px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
               </div>
-            </div>
+              <div style={{marginBottom: '20px'}}>
+                <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>Payment Reference</label>
+                <input
+                  type="text"
+                  value={paymentRef}
+                  onChange={(e) => setPaymentRef(e.target.value)}
+                  required
+                  placeholder="Transaction ID or reference"
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    fontSize: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '12px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{display: 'flex', gap: '12px'}}>
+                <button
+                  type="button"
+                  onClick={() => setShowRechargeForm(false)}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    backgroundColor: 'transparent',
+                    color: '#64748b',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    borderRadius: '12px',
+                    border: '2px solid #e2e8f0',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={rechargeSubmitting}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    borderRadius: '12px',
+                    border: 'none',
+                    cursor: rechargeSubmitting ? 'not-allowed' : 'pointer',
+                    opacity: rechargeSubmitting ? 0.6 : 1
+                  }}
+                >
+                  {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
           </div>
+        )}
 
-          {/* Recharge Request Form */}
-          {showRechargeForm && (
-            <div className="bg-white shadow sm:rounded-lg mb-8">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Request Recharge</h3>
-                <div className="mt-5">
-                  <form onSubmit={handleRechargeSubmit} className="space-y-4">
-                    <div>
-                      <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
-                        Amount (credits)
-                      </label>
-                      <div className="mt-1">
-                        <input
-                          type="number"
-                          id="amount"
-                          value={rechargeAmount}
-                          onChange={(e) => setRechargeAmount(e.target.value)}
-                          min="1"
-                          step="0.01"
-                          required
-                          className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                        />
+        {/* Tab Toggle */}
+        <div style={{
+          display: 'flex',
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          padding: '6px',
+          marginBottom: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+        }}>
+          <button
+            onClick={() => setActiveTab('transactions')}
+            style={{
+              flex: 1,
+              padding: '14px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'transactions' ? '#6366f1' : 'transparent',
+              color: activeTab === 'transactions' ? '#fff' : '#64748b',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Transaction History
+          </button>
+          <button
+            onClick={() => setActiveTab('recharge')}
+            style={{
+              flex: 1,
+              padding: '14px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'recharge' ? '#6366f1' : 'transparent',
+              color: activeTab === 'recharge' ? '#fff' : '#64748b',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Recharge Requests
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '20px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+        }}>
+          {/* Transaction History Tab */}
+          {activeTab === 'transactions' && (
+            <>
+              {(!walletData?.transactions || walletData.transactions.length === 0) ? (
+                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No transactions yet</p>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                  {walletData.transactions.map((tx, idx) => {
+                    // Determine label based on type
+                    const getLabel = () => {
+                      const type = tx.type?.toUpperCase() || '';
+                      if (type.includes('DEDUCT') || type.includes('SPEND')) return 'Task Deduction';
+                      if (type.includes('REFUND')) return 'Refund';
+                      if (type.includes('MANUAL') && tx.amount < 0) return 'Manual Deduct';
+                      if (type.includes('MANUAL') && tx.amount > 0) return 'Manual Credit';
+                      if (type.includes('CREDIT') || type.includes('RECHARGE')) return 'Recharge Credit';
+                      if (tx.amount > 0) return 'Credit';
+                      return tx.description || 'Deduction';
+                    };
+                    
+                    return (
+                      <div key={tx.id || idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '14px 16px',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '12px'
+                      }}>
+                        <div style={{flex: 1, minWidth: 0}}>
+                          <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0'}}>
+                            {getLabel()}
+                          </p>
+                          <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
+                            {new Date(tx.createdAt).toLocaleString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <span style={{
+                          fontSize: '16px',
+                          fontWeight: '700',
+                          color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                          marginLeft: '12px',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount).toFixed(2)}
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowRechargeForm(false)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={rechargeSubmitting}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                      >
-                        {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
-                      </button>
-                    </div>
-                  </form>
+                    );
+                  })}
                 </div>
-              </div>
-            </div>
+              )}
+            </>
           )}
 
-          {/* Transaction History */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Transaction History</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">All wallet transactions</p>
-            </div>
-            <div className="border-t border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Balance
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {walletData.transactions.map((transaction) => (
-                    <tr key={transaction._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(transaction.timestamp).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          transaction.type === 'CREDIT' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {transaction.type}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.description}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.amount.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.balanceAfter.toFixed(2)}
-                      </td>
-                    </tr>
+          {/* Recharge Requests Tab */}
+          {activeTab === 'recharge' && (
+            <>
+              {rechargeRequests.length === 0 ? (
+                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No recharge requests</p>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                  {rechargeRequests.map((req, idx) => (
+                    <div key={req.id || idx} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '14px 16px',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: '12px'
+                    }}>
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <p style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0'}}>
+                          ₹{req.amount?.toFixed(2) || '0.00'}
+                        </p>
+                        <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
+                          {new Date(req.createdAt).toLocaleString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </p>
+                        {req.paymentReference && (
+                          <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>
+                            Ref: {req.paymentReference}
+                          </p>
+                        )}
+                      </div>
+                      <span style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        marginLeft: '12px',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: req.status === 'APPROVED' ? '#dcfce7' : req.status === 'REJECTED' ? '#fee2e2' : '#fef3c7',
+                        color: req.status === 'APPROVED' ? '#15803d' : req.status === 'REJECTED' ? '#dc2626' : '#92400e'
+                      }}>
+                        {req.status === 'APPROVED' ? 'Approved' : req.status === 'REJECTED' ? 'Rejected' : 'Pending'}
+                      </span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Recharge Request History */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg mt-8">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Recharge Request History</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">All recharge requests submitted</p>
-            </div>
-            <div className="border-t border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Notes
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {rechargeRequests.map((request) => (
-                    <tr key={request._id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(request.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {request.amount.toFixed(2)} credits
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          request.status === 'APPROVED' 
-                            ? 'bg-green-100 text-green-800' 
-                            : request.status === 'REJECTED' 
-                              ? 'bg-red-100 text-red-800' 
-                              : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {request.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {request.adminNotes || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

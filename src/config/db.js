@@ -1,24 +1,22 @@
 const mongoose = require('mongoose');
 
-// MongoDB connection helper.
-// Uses MONGODB_URI from environment and fails fast if missing.
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/goviralads';
 
-function getRequiredEnv(name) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+async function connectDB() {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log('✓ MongoDB connected');
+  } catch (error) {
+    console.error('✗ MongoDB connection error:', error.message);
+    process.exit(1);
   }
-  return value;
-}
-
-const mongoUri = getRequiredEnv('MONGODB_URI');
-
-async function connectToDatabase() {
-  await mongoose.connect(mongoUri, {
-    // Keep options explicit for clarity; adjust as needed in production.
-  });
 }
 
 module.exports = {
-  connectToDatabase,
+  connectDB,
 };
+
+
+
+
+

@@ -1,0 +1,20 @@
+[build]
+  command = "npm install"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[services]]
+  name = "goviralads-api"
+  type = "web"
+  env = "node"
+  region = "fra"
+  plan = "free"
+  buildCommand = "npm install"
+  startCommand = "node src/index.js"
+  healthCheckPath = "/health"
+  autoDeploy = true
+
+[[services.envVars]]
+  key = "NODE_ENV"
+  value = "production"

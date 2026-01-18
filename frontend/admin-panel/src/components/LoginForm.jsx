@@ -1,13 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../services/authService';
+import api from '../services/api';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [branding, setBranding] = useState({ appName: 'TaskFlow Pro', tagline: 'Admin Portal', logoUrl: '' });
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Try to fetch public branding settings
+    const fetchBranding = async () => {
+      try {
+        const res = await api.get('/public/branding');
+        if (res.data) {
+          setBranding({
+            appName: res.data.appName || 'TaskFlow Pro',
+            tagline: res.data.tagline || 'Admin Portal',
+            logoUrl: res.data.logoUrl || '',
+            accentColor: res.data.accentColor || '#6366f1',
+          });
+        }
+      } catch (err) {
+        // Silent fail - use defaults
+      }
+    };
+    fetchBranding();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,7 +37,16 @@ const LoginForm = () => {
     setError('');
 
     try {
-      await login(email, password);
+      const { user } = await login(email, password);
+      
+      // Validate role - ADMIN panel requires ADMIN role
+      if (user.role !== 'ADMIN') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setError('Access denied. Admin credentials required.');
+        return;
+      }
+      
       navigate('/dashboard');
     } catch (err) {
       setError(err.message);
@@ -24,66 +55,256 @@ const LoginForm = () => {
     }
   };
 
+  const accentColor = branding.accentColor || '#6366f1';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            ADMIN PANEL LOGIN
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-700">{error}</div>
+    <div style={{
+      minHeight: '100vh',
+      background: `linear-gradient(135deg, ${accentColor}15 0%, #f8fafc 50%, ${accentColor}10 100%)`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+    }}>
+      <div style={{ width: '100%', maxWidth: '420px' }}>
+        {/* Logo / Brand */}
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          {branding.logoUrl ? (
+            <img 
+              src={branding.logoUrl} 
+              alt="Logo" 
+              style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '18px',
+                objectFit: 'cover',
+                margin: '0 auto 20px',
+                boxShadow: `0 8px 24px ${accentColor}40`
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '72px',
+              height: '72px',
+              background: `linear-gradient(135deg, ${accentColor} 0%, #4f46e5 100%)`,
+              borderRadius: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+              boxShadow: `0 8px 24px ${accentColor}40`
+            }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
           )}
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email address
+          <h1 style={{
+            fontSize: '28px',
+            fontWeight: '800',
+            color: '#0f172a',
+            margin: '0 0 8px 0',
+            letterSpacing: '-0.025em'
+          }}>
+            {branding.appName || 'TaskFlow Pro'}
+          </h1>
+          <p style={{
+            fontSize: '15px',
+            color: '#64748b',
+            margin: 0
+          }}>
+            {branding.tagline || 'Admin Portal'}
+          </p>
+          <span style={{
+            display: 'inline-block',
+            marginTop: '12px',
+            padding: '6px 14px',
+            backgroundColor: `${accentColor}15`,
+            color: accentColor,
+            fontSize: '12px',
+            fontWeight: '700',
+            borderRadius: '8px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em'
+          }}>
+            Admin Access
+          </span>
+        </div>
+
+        {/* Login Card */}
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '24px',
+          padding: '32px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.08)',
+          border: '1px solid #f1f5f9'
+        }}>
+          <form onSubmit={handleSubmit}>
+            {/* Error Message */}
+            {error && (
+              <div style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
+                </svg>
+                <span style={{ fontSize: '14px', color: '#dc2626', fontWeight: '500' }}>{error}</span>
+              </div>
+            )}
+
+            {/* Email Field */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
+                Email Address
               </label>
               <input
-                id="email-address"
-                name="email"
                 type="email"
-                autoComplete="email"
-                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
+                required
+                autoComplete="email"
+                placeholder="admin@example.com"
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '15px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  outline: 'none',
+                  backgroundColor: '#f8fafc',
+                  boxSizing: 'border-box',
+                  transition: 'all 0.2s'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = accentColor;
+                  e.target.style.backgroundColor = '#fff';
+                  e.target.style.boxShadow = `0 0 0 4px ${accentColor}15`;
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e2e8f0';
+                  e.target.style.backgroundColor = '#f8fafc';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
+
+            {/* Password Field */}
+            <div style={{ marginBottom: '28px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
                 Password
               </label>
               <input
-                id="password"
-                name="password"
                 type="password"
-                autoComplete="current-password"
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '15px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  outline: 'none',
+                  backgroundColor: '#f8fafc',
+                  boxSizing: 'border-box',
+                  transition: 'all 0.2s'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = accentColor;
+                  e.target.style.backgroundColor = '#fff';
+                  e.target.style.boxShadow = `0 0 0 4px ${accentColor}15`;
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e2e8f0';
+                  e.target.style.backgroundColor = '#f8fafc';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
-          </div>
 
-          <div>
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              style={{
+                width: '100%',
+                padding: '16px 24px',
+                background: loading ? '#a5b4fc' : `linear-gradient(135deg, ${accentColor} 0%, #4f46e5 100%)`,
+                color: '#fff',
+                fontSize: '15px',
+                fontWeight: '700',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: loading ? 'none' : `0 4px 16px ${accentColor}35`
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 8px 24px ${accentColor}45`;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = `0 4px 16px ${accentColor}35`;
+                }
+              }}
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading && (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                </svg>
+              )}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <p style={{
+          textAlign: 'center',
+          fontSize: '12px',
+          color: '#94a3b8',
+          marginTop: '24px'
+        }}>
+          Secure Admin Access • {branding.appName || 'TaskFlow Pro'}
+        </p>
       </div>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 };
