@@ -13,7 +13,23 @@ const app = express();
 
 app.use(express.json());
 
-app.use(cors()); // Allow all for audit proof
+const allowedOrigins = [
+  'https://goviralads.com',
+  'https://www.goviralads.com',
+  'https://admin.goviralads.com',
+  'https://app.goviralads.com'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(morgan('dev'));
 
 const authRoutes = require('./routes/auth');
@@ -29,17 +45,18 @@ const { Task } = require('./models/Task');
 const User = require('./models/User');
 const LegalPage = require('./models/LegalPage');
 
+app.get('/', (_req, res) => {
+  res.status(200).json({ status: 'ok', service: 'GoViral Backend' });
+});
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
 app.use('/auth', authRoutes);
 app.use('/client', clientRoutes);
 app.use('/admin', adminRoutes);
 app.use('/admin/subscriptions', adminSubscriptionRoutes);
-
-// Placeholder for routes (auth, protected, etc.)
-// They will be added step-by-step as we implement Phase 1.
-
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', service: 'goviral-backend' });
-});
 
 // Initialize default legal pages
 async function ensureLegalPages() {
@@ -116,6 +133,11 @@ app.get('/public/branding', async (_req, res) => {
   }
 });
 
+// Fallback for unknown routes
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
 const PORT = process.env.PORT || 3000;
 
 async function start() {
@@ -138,7 +160,7 @@ async function start() {
     reminderScheduler.startSchedulers();
 
     app.listen(PORT, () => {
-      console.log(`GoViral backend listening on port ${PORT}`);
+      console.log('Backend live');
     });
   } catch (err) {
     console.error('Failed to start server:', err.message);
