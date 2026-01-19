@@ -11,7 +11,7 @@
   region = "fra"
   plan = "free"
   buildCommand = "npm install"
-  startCommand = "node src/index.js"
+  startCommand = "npm start"
   healthCheckPath = "/health"
   autoDeploy = true
 
