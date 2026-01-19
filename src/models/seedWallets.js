@@ -10,7 +10,16 @@ async function ensureTestClient() {
   
   const existing = await User.findOne({ identifier: testClientIdentifier }).exec();
   if (existing) {
-    console.log('Test client user already exists');
+    console.log('✓ Test client user already exists:', testClientIdentifier);
+    
+    // Fix password hash if needed
+    if (!existing.passwordHash || !existing.passwordHash.startsWith('$2')) {
+      console.log('⚠️ Fixing client password hash...');
+      existing.passwordHash = await hashPassword(testClientPassword);
+      await existing.save();
+      console.log('✓ Client password hash fixed');
+    }
+    
     return existing;
   }
   
@@ -23,7 +32,7 @@ async function ensureTestClient() {
     displayName: 'Test Client',
   });
   
-  console.log(`Test client user created: ${testClientIdentifier}`);
+  console.log(`✓ Test client user created: ${testClientIdentifier}`);
   return testClient;
 }
 

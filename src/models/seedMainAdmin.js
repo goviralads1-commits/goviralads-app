@@ -11,22 +11,43 @@ async function ensureMainAdminSeed() {
   const password = process.env.MAIN_ADMIN_PASSWORD;
 
   if (!identifier || !password) {
-    throw new Error('MAIN_ADMIN_IDENTIFIER and MAIN_ADMIN_PASSWORD must be set for seeding');
+    console.error('⚠️ MAIN_ADMIN_IDENTIFIER or MAIN_ADMIN_PASSWORD not set - admin seed skipped');
+    return null;
   }
 
   // Check if a user with this identifier already exists.
   const existing = await User.findOne({ identifier }).exec();
 
   if (existing) {
-    // If an existing user has this identifier but is not ADMIN, we treat it as a configuration error.
+    console.log('✓ Admin user already exists:', identifier);
+    
+    // Update password hash if it's plain text or doesn't match bcrypt format
+    if (!existing.passwordHash || !existing.passwordHash.startsWith('$2')) {
+      console.log('⚠️ Fixing admin password hash...');
+      existing.passwordHash = await hashPassword(password);
+      await existing.save();
+      console.log('✓ Admin password hash fixed');
+    }
+    
+    // Ensure role is ADMIN
     if (existing.role !== ROLES.ADMIN) {
-      throw new Error('Existing MAIN ADMIN identifier is not assigned ADMIN role');
+      existing.role = ROLES.ADMIN;
+      await existing.save();
+      console.log('✓ Admin role corrected');
+    }
+    
+    // Ensure status is ACTIVE
+    if (existing.status !== 'ACTIVE') {
+      existing.status = 'ACTIVE';
+      await existing.save();
+      console.log('✓ Admin status set to ACTIVE');
     }
 
     return existing;
   }
 
   const passwordHash = await hashPassword(password);
+  console.log('Creating new admin user:', identifier);
 
   const mainAdmin = await User.create({
     identifier,
@@ -35,9 +56,7 @@ async function ensureMainAdminSeed() {
     status: 'ACTIVE',
   });
 
-  // No flag is stored for MAIN ADMIN beyond the identifier; privilege is derived
-  // exclusively via MAIN_ADMIN_IDENTIFIER.
-
+  console.log('✓ Admin user created successfully');
   return mainAdmin;
 }
 
