@@ -75,6 +75,20 @@ const Profile = () => {
     fetchPlans();
   }, []);
 
+  // Scroll lock effect for modals
+  useEffect(() => {
+    const hasOpenModal = showWalletModal || showNoticeModal || showTaskModal || showPlanModal || 
+                         showSuspendModal || showDeleteModal || showCreateUserModal;
+    
+    if (hasOpenModal) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    
+    return () => document.body.classList.remove('modal-open');
+  }, [showWalletModal, showNoticeModal, showTaskModal, showPlanModal, showSuspendModal, showDeleteModal, showCreateUserModal]);
+
   useEffect(() => {
     if (activeView === 'userManager') {
       fetchUsers();
@@ -1483,8 +1497,8 @@ const Profile = () => {
 
         {/* Wallet Modal */}
         {showWalletModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowWalletModal(false); }}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md" style={{ animation: 'slideIn 0.3s ease' }}>
               <h3 className="text-lg font-bold mb-4">Modify Wallet</h3>
               <div className="space-y-4">
                 <div className="flex gap-2">
@@ -1510,8 +1524,8 @@ const Profile = () => {
 
         {/* Notice Modal */}
         {showNoticeModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowNoticeModal(false); }}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ animation: 'slideIn 0.3s ease' }}>
               <h3 className="text-lg font-bold mb-4">Send Notice</h3>
               <div className="space-y-4">
                 <input type="text" placeholder="Title" value={noticeData.title} onChange={e => setNoticeData({...noticeData, title: e.target.value})} className="w-full px-4 py-3 rounded-lg border" />
@@ -1547,8 +1561,8 @@ const Profile = () => {
 
         {/* Task Modal */}
         {showTaskModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowTaskModal(false); }}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md" style={{ animation: 'slideIn 0.3s ease' }}>
               <h3 className="text-lg font-bold mb-4">Create Task</h3>
               <div className="space-y-4">
                 <input type="text" placeholder="Task Title" value={taskData.title} onChange={e => setTaskData({...taskData, title: e.target.value})} className="w-full px-4 py-3 rounded-lg border" />
@@ -1573,8 +1587,8 @@ const Profile = () => {
 
         {/* Plan Assignment Modal */}
         {showPlanModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md" style={{ animation: 'slideIn 0.3s ease' }}>
               <h3 className="text-lg font-bold mb-4">Assign Plan</h3>
               <div className="space-y-4">
                 <select value={selectedPlanId} onChange={e => setSelectedPlanId(e.target.value)} className="w-full px-4 py-3 rounded-lg border bg-white">
@@ -1634,8 +1648,8 @@ const Profile = () => {
 
         {/* Create User Modal */}
         {showCreateUserModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateUserModal(false); }}>
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowCreateUserModal(false); }}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ animation: 'slideIn 0.3s ease' }}>
               <h3 className="text-lg font-bold mb-4 flex items-center justify-between">
                 <span>➕ Create New User</span>
                 <button onClick={() => setShowCreateUserModal(false)} className="text-gray-400 hover:text-gray-600">

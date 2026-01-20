@@ -75,6 +75,16 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [banners.length]);
 
+  // Scroll lock for modals
+  useEffect(() => {
+    if (showNoticeForm || selectedNotice) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => document.body.classList.remove('modal-open');
+  }, [showNoticeForm, selectedNotice]);
+
   const showToast = (type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
@@ -706,8 +716,8 @@ const Dashboard = () => {
 
       {/* Notice Form Modal */}
       {showNoticeForm && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowNoticeForm(false); }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', animation: 'slideIn 0.3s ease' }}>
             <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{editingNotice ? 'Edit Notice' : 'Create Notice'}</h3>
               <button onClick={() => { setShowNoticeForm(false); resetForm(); }} style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}>✕</button>
@@ -804,8 +814,8 @@ const Dashboard = () => {
 
       {/* Notice Detail Modal */}
       {selectedNotice && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setSelectedNotice(null); }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', animation: 'slideIn 0.3s ease' }}>
             <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Notice Details</h3>
               <button onClick={() => setSelectedNotice(null)} style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}>✕</button>
