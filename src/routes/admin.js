@@ -1905,7 +1905,7 @@ router.get('/users', async (req, res) => {
 // POST /admin/users - Create new user
 router.post('/users', async (req, res) => {
   try {
-    const { identifier, password, role, name, phone, company } = req.body;
+    const { identifier, password, role, status, name, phone, company } = req.body;
 
     // Validation
     if (!identifier || !identifier.trim()) {
@@ -1917,9 +1917,12 @@ router.post('/users', async (req, res) => {
     if (!role || ![ROLES.CLIENT, ROLES.ADMIN].includes(role)) {
       return res.status(400).json({ error: 'Valid role is required (CLIENT or ADMIN)' });
     }
+    
+    // Validate status if provided
+    const userStatus = status && ['ACTIVE', 'SUSPENDED', 'DISABLED'].includes(status) ? status : 'ACTIVE';
 
     // Check if user already exists
-    const existingUser = await User.findOne({ identifier: identifier.trim() }).exec();
+    const existingUser = await User.findOne({ identifier: identifier.trim().toLowerCase() }).exec();
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email/identifier already exists' });
     }
@@ -1929,10 +1932,10 @@ router.post('/users', async (req, res) => {
 
     // Create user
     const user = await User.create({
-      identifier: identifier.trim(),
+      identifier: identifier.trim().toLowerCase(),
       passwordHash,
       role,
-      status: 'ACTIVE',
+      status: userStatus,
       profile: {
         name: name?.trim() || '',
         phone: phone?.trim() || '',

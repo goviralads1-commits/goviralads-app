@@ -67,7 +67,7 @@ const Profile = () => {
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-  const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', role: 'CLIENT', name: '', phone: '', company: '' });
+  const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', confirmPassword: '', role: 'CLIENT', status: 'ACTIVE', name: '', phone: '', company: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
@@ -362,15 +362,27 @@ const Profile = () => {
       showToast('Email/Identifier is required', 'error');
       return;
     }
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createUserData.identifier.trim())) {
+      showToast('Please enter a valid email address', 'error');
+      return;
+    }
     if (!createUserData.password || createUserData.password.length < 6) {
       showToast('Password must be at least 6 characters', 'error');
       return;
     }
+    if (createUserData.password !== createUserData.confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
     try {
       setSaving(true);
-      await api.post('/admin/users', createUserData);
+      // Don't send confirmPassword to backend
+      const { confirmPassword, ...userData } = createUserData;
+      await api.post('/admin/users', userData);
       setShowCreateUserModal(false);
-      setCreateUserData({ identifier: '', password: '', role: 'CLIENT', name: '', phone: '', company: '' });
+      setCreateUserData({ identifier: '', password: '', confirmPassword: '', role: 'CLIENT', status: 'ACTIVE', name: '', phone: '', company: '' });
       showToast('User created successfully');
       fetchUsers();
     } catch (err) {
@@ -1654,6 +1666,16 @@ const Profile = () => {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-semibold mb-2">Confirm Password *</label>
+                  <input 
+                    type="password" 
+                    placeholder="Re-enter password" 
+                    value={createUserData.confirmPassword} 
+                    onChange={e => setCreateUserData({...createUserData, confirmPassword: e.target.value})} 
+                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-semibold mb-2">Role *</label>
                   <select 
                     value={createUserData.role} 
@@ -1662,6 +1684,18 @@ const Profile = () => {
                   >
                     <option value="CLIENT">Client</option>
                     <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Status *</label>
+                  <select 
+                    value={createUserData.status} 
+                    onChange={e => setCreateUserData({...createUserData, status: e.target.value})} 
+                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none bg-white cursor-pointer transition"
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="SUSPENDED">Suspended</option>
+                    <option value="DISABLED">Disabled</option>
                   </select>
                 </div>
                 <div>
