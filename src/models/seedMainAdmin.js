@@ -15,40 +15,32 @@ async function ensureMainAdminSeed() {
     return null;
   }
 
-  // Check if a user with this identifier already exists.
+  console.log('🔧 [ADMIN SEED] Starting admin credential sync...');
+  console.log('🔧 [ADMIN SEED] Target identifier:', identifier);
+
+  // Always generate fresh bcrypt hash from env password
+  const passwordHash = await hashPassword(password);
+  console.log('✓ [ADMIN SEED] Password hash generated');
+
+  // Check if admin user exists
   const existing = await User.findOne({ identifier }).exec();
 
   if (existing) {
-    console.log('✓ Admin user already exists:', identifier);
+    console.log('✓ [ADMIN SEED] Admin user found - FORCING password reset');
     
-    // Update password hash if it's plain text or doesn't match bcrypt format
-    if (!existing.passwordHash || !existing.passwordHash.startsWith('$2')) {
-      console.log('⚠️ Fixing admin password hash...');
-      existing.passwordHash = await hashPassword(password);
-      await existing.save();
-      console.log('✓ Admin password hash fixed');
-    }
+    // FORCE password update from env
+    existing.passwordHash = passwordHash;
+    existing.role = ROLES.ADMIN;
+    existing.status = 'ACTIVE';
+    await existing.save();
     
-    // Ensure role is ADMIN
-    if (existing.role !== ROLES.ADMIN) {
-      existing.role = ROLES.ADMIN;
-      await existing.save();
-      console.log('✓ Admin role corrected');
-    }
-    
-    // Ensure status is ACTIVE
-    if (existing.status !== 'ACTIVE') {
-      existing.status = 'ACTIVE';
-      await existing.save();
-      console.log('✓ Admin status set to ACTIVE');
-    }
-
+    console.log('✅ [ADMIN SEED] Admin password RESET complete');
+    console.log('✅ [ADMIN SEED] Credentials synced from env');
     return existing;
   }
 
-  const passwordHash = await hashPassword(password);
-  console.log('Creating new admin user:', identifier);
-
+  // Create new admin
+  console.log('🔧 [ADMIN SEED] Admin not found - creating new');
   const mainAdmin = await User.create({
     identifier,
     passwordHash,
@@ -56,7 +48,8 @@ async function ensureMainAdminSeed() {
     status: 'ACTIVE',
   });
 
-  console.log('✓ Admin user created successfully');
+  console.log('✅ [ADMIN SEED] Admin user CREATED');
+  console.log('✅ [ADMIN SEED] Credentials synced from env');
   return mainAdmin;
 }
 
