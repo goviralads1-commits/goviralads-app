@@ -3,7 +3,11 @@ import api from './api';
 // Login function
 export const login = async (email, password) => {
   try {
-    const response = await api.post('/auth/login', { identifier: email, password });
+    // Trim whitespace and remove invisible characters
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    
+    const response = await api.post('/auth/login', { identifier: cleanEmail, password: cleanPassword });
     const { token, user } = response.data;
     
     // Store token and user info in localStorage

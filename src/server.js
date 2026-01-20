@@ -17,18 +17,26 @@ const allowedOrigins = [
   'https://goviralads.com',
   'https://www.goviralads.com',
   'https://admin.goviralads.com',
-  'https://app.goviralads.com'
+  'https://app.goviralads.com',
+  'http://localhost:5173',
+  'http://localhost:5175'
 ];
 
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    // Allow requests with no origin (mobile apps, Postman, etc)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('[CORS] Blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Authorization']
 }));
 app.use(morgan('dev'));
 
