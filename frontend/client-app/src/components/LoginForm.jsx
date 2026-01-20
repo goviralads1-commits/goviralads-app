@@ -37,22 +37,37 @@ const LoginForm = () => {
     setLoading(true);
     setError('');
 
+    console.log('[CLIENT LOGIN] ========== Starting login ==========');
+    console.log('[CLIENT LOGIN] Email:', email);
+    console.log('[CLIENT LOGIN] Password length:', password.length);
+    console.log('[CLIENT LOGIN] User agent:', navigator.userAgent);
+    console.log('[CLIENT LOGIN] Online:', navigator.onLine);
+
     try {
+      console.log('[CLIENT LOGIN] Calling login service...');
       const { user } = await login(email, password);
+      
+      console.log('[CLIENT LOGIN] Login response received');
+      console.log('[CLIENT LOGIN] User role:', user.role);
       
       // Validate role - CLIENT panel requires CLIENT role
       if (user.role !== 'CLIENT') {
+        console.log('[CLIENT LOGIN] ❌ Access denied - not CLIENT role');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setError('Access denied. Client credentials required.');
         return;
       }
       
+      console.log('[CLIENT LOGIN] ✓✓✓ Success - redirecting to dashboard');
       navigate('/dashboard');
     } catch (err) {
+      console.error('[CLIENT LOGIN] ❌ Error:', err.message);
+      console.error('[CLIENT LOGIN] Error details:', err);
       setError(err.message);
     } finally {
       setLoading(false);
+      console.log('[CLIENT LOGIN] ==========================================');
     }
   };
 

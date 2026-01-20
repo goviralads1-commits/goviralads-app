@@ -9,12 +9,16 @@ router.post('/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
-    console.log('[LOGIN] Attempt for identifier:', identifier);
+    console.log('[LOGIN] ========== NEW LOGIN ATTEMPT ==========');
+    console.log('[LOGIN] Raw email received:', identifier ? 'YES' : 'NO');
+    console.log('[LOGIN] Raw password received:', password ? 'YES' : 'NO');
+    console.log('[LOGIN] Password length:', password ? password.length : 0);
     console.log('[LOGIN] Request from:', req.get('user-agent'));
     console.log('[LOGIN] Origin:', req.get('origin'));
+    console.log('[LOGIN] IP:', req.ip || req.connection.remoteAddress);
 
     if (!identifier || !password) {
-      console.log('[LOGIN] Missing credentials');
+      console.log('[LOGIN] ❌ Missing credentials');
       return res.status(400).json({ error: 'Identifier and password are required' });
     }
 
@@ -22,32 +26,35 @@ router.post('/login', async (req, res) => {
     const cleanIdentifier = identifier.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    console.log('[LOGIN] Clean identifier:', cleanIdentifier);
+    console.log('[LOGIN] Trimmed email:', cleanIdentifier);
+    console.log('[LOGIN] Trimmed password length:', cleanPassword.length);
 
     const user = await User.findOne({ identifier: cleanIdentifier }).exec();
     if (!user) {
-      console.log('[LOGIN] User not found:', cleanIdentifier);
+      console.log('[LOGIN] ❌ User not found:', cleanIdentifier);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    console.log('[LOGIN] User found - Role:', user.role, 'Status:', user.status);
+    console.log('[LOGIN] ✓ User found - Role:', user.role, 'Status:', user.status);
 
     if (user.status !== 'ACTIVE') {
-      console.log('[LOGIN] Account disabled');
+      console.log('[LOGIN] ❌ Account disabled');
       return res.status(403).json({ error: 'Account is disabled' });
     }
 
     const isValidPassword = await verifyPassword(cleanPassword, user.passwordHash);
-    console.log('[LOGIN] Password valid:', isValidPassword);
+    console.log('[LOGIN] bcrypt verification result:', isValidPassword);
     
     if (!isValidPassword) {
-      console.log('[LOGIN] Invalid password for:', cleanIdentifier);
+      console.log('[LOGIN] ❌ Password mismatch for:', cleanIdentifier);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const token = signAuthToken(user);
-    console.log('[LOGIN] Token generated for:', cleanIdentifier);
-    console.log('[LOGIN] Success - sending response');
+    console.log('[LOGIN] ✓ JWT token generated');
+    console.log('[LOGIN] ✓ Token length:', token ? token.length : 0);
+    console.log('[LOGIN] ✓✓✓ SUCCESS - Sending response');
+    console.log('[LOGIN] ==========================================');
     
     res.status(200).json({ 
       token, 
@@ -59,7 +66,8 @@ router.post('/login', async (req, res) => {
       } 
     });
   } catch (error) {
-    console.error('[LOGIN] Error:', error);
+    console.error('[LOGIN] ❌❌❌ EXCEPTION:', error.message);
+    console.error('[LOGIN] Stack:', error.stack);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

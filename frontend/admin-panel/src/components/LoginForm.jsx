@@ -37,22 +37,37 @@ const LoginForm = () => {
     setLoading(true);
     setError('');
 
+    console.log('[ADMIN LOGIN] ========== Starting login ==========');
+    console.log('[ADMIN LOGIN] Email:', email);
+    console.log('[ADMIN LOGIN] Password length:', password.length);
+    console.log('[ADMIN LOGIN] User agent:', navigator.userAgent);
+    console.log('[ADMIN LOGIN] Online:', navigator.onLine);
+
     try {
+      console.log('[ADMIN LOGIN] Calling login service...');
       const { user } = await login(email, password);
+      
+      console.log('[ADMIN LOGIN] Login response received');
+      console.log('[ADMIN LOGIN] User role:', user.role);
       
       // Validate role - ADMIN panel requires ADMIN role
       if (user.role !== 'ADMIN') {
+        console.log('[ADMIN LOGIN] ❌ Access denied - not ADMIN role');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setError('Access denied. Admin credentials required.');
         return;
       }
       
+      console.log('[ADMIN LOGIN] ✓✓✓ Success - redirecting to dashboard');
       navigate('/dashboard');
     } catch (err) {
+      console.error('[ADMIN LOGIN] ❌ Error:', err.message);
+      console.error('[ADMIN LOGIN] Error details:', err);
       setError(err.message);
     } finally {
       setLoading(false);
+      console.log('[ADMIN LOGIN] ==========================================');
     }
   };
 
