@@ -2826,6 +2826,43 @@ router.patch('/profile', async (req, res) => {
   }
 });
 
+// POST /admin/profile/change-password - Change admin password
+router.post('/profile/change-password', async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const user = await User.findById(adminId).exec();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await verifyPassword(currentPassword, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash and update new password
+    user.passwordHash = await hashPassword(newPassword);
+    user.lastActivityAt = new Date();
+    await user.save();
+
+    return res.status(200).json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Failed to change password:', err);
+    return res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 // ========== LEGAL PAGES MANAGEMENT ==========
 
 // Get all legal pages
