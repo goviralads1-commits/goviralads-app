@@ -1610,7 +1610,7 @@ const Profile = () => {
 
         {/* Suspend Confirmation Modal */}
         {showSuspendModal && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px' }}>
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}>
             <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
               <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '16px' }}>⚠️</div>
               <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '12px', textAlign: 'center' }}>Suspend User?</h3>
@@ -1629,7 +1629,7 @@ const Profile = () => {
 
         {/* Delete Confirmation Modal */}
         {showDeleteModal && (
-          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px' }}>
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}>
             <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
               <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '16px' }}>🗑️</div>
               <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#dc2626', marginBottom: '12px', textAlign: 'center' }}>Delete User?</h3>
@@ -1764,7 +1764,7 @@ const Profile = () => {
 
         {/* Toast Notification */}
         {toast.show && (
-          <div style={{ position: 'fixed', top: '24px', right: '24px', zIndex: 10000, backgroundColor: toast.type === 'error' ? '#fef2f2' : '#ecfdf5', color: toast.type === 'error' ? '#dc2626' : '#16a34a', padding: '16px 24px', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: `2px solid ${toast.type === 'error' ? '#fecaca' : '#a7f3d0'}`, display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '400px', animation: 'slideIn 0.3s ease-out' }}>
+          <div style={{ position: 'fixed', top: '24px', right: '24px', zIndex: 100, backgroundColor: toast.type === 'error' ? '#fef2f2' : '#ecfdf5', color: toast.type === 'error' ? '#dc2626' : '#16a34a', padding: '16px 24px', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: `2px solid ${toast.type === 'error' ? '#fecaca' : '#a7f3d0'}`, display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '400px', animation: 'slideIn 0.3s ease-out' }}>
             <span style={{ fontSize: '20px' }}>{toast.type === 'error' ? '❌' : '✓'}</span>
             <span style={{ fontSize: '14px', fontWeight: '600' }}>{toast.message}</span>
           </div>
