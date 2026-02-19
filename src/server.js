@@ -11,22 +11,14 @@ const { runPhase2SafetyChecks, runPhase3SafetyChecks } = require('./utils/safety
 
 const app = express();
 
-// ============== CORS MUST BE FIRST ==============
-const corsOptions = {
-  origin: true,  // Allow all origins temporarily for debugging
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Authorization']
-};
+// ============== CORS CONFIGURATION ==============
+// cors() middleware handles OPTIONS preflight automatically
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 
-// Enable pre-flight across all routes
-app.options('*', cors(corsOptions));
-
-// Enable CORS for all requests
-app.use(cors(corsOptions));
-
-// ============== BODY PARSERS AFTER CORS ==============
+// ============== BODY PARSERS ==============
 app.use(express.json());
 app.use(morgan('dev'));
 
