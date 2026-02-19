@@ -6,6 +6,8 @@ const { signAuthToken } = require('../services/jwtService');
 const router = express.Router();
 
 router.post('/login', async (req, res) => {
+  console.log('==================== LOGIN HIT ====================');
+  console.log('[LOGIN] Request received at:', new Date().toISOString());
   try {
     const { identifier, password } = req.body;
 

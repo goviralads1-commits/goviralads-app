@@ -11,39 +11,23 @@ const { runPhase2SafetyChecks, runPhase3SafetyChecks } = require('./utils/safety
 
 const app = express();
 
-app.use(express.json());
-
-const allowedOrigins = [
-  'https://goviralads.com',
-  'https://www.goviralads.com',
-  'https://admin.goviralads.com',
-  'https://app.goviralads.com',
-  'https://goviralads-app.vercel.app',
-  'https://goviralads-admin.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:5175'
-];
-
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('[CORS] Blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+// ============== CORS MUST BE FIRST ==============
+const corsOptions = {
+  origin: true,  // Allow all origins temporarily for debugging
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Authorization']
-}));
+};
 
-// Handle preflight requests explicitly
-app.options('*', cors());
+// Enable pre-flight across all routes
+app.options('*', cors(corsOptions));
 
+// Enable CORS for all requests
+app.use(cors(corsOptions));
+
+// ============== BODY PARSERS AFTER CORS ==============
+app.use(express.json());
 app.use(morgan('dev'));
 
 const authRoutes = require('./routes/auth');
