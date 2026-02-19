@@ -40,6 +40,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['Authorization']
 }));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
+
 app.use(morgan('dev'));
 
 const authRoutes = require('./routes/auth');
