@@ -1,7 +1,11 @@
 import axios from 'axios';
 
-// API Base URL - uses environment variable or fallback
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// API Base URL - MUST be set in environment variable
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+if (!API_BASE_URL) {
+  throw new Error('VITE_API_URL is not defined. Set it in .env file.');
+}
 
 console.log('[API CONFIG] Base URL:', API_BASE_URL);
 

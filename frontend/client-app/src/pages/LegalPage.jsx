@@ -17,7 +17,10 @@ const LegalPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const API_URL = import.meta.env.VITE_API_URL;
+      if (!API_URL) {
+        throw new Error('VITE_API_URL not defined');
+      }
       const response = await fetch(`${API_URL}/public/legal/${slug}`);
       
       if (!response.ok) {

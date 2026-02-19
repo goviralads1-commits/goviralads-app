@@ -18,6 +18,8 @@ const allowedOrigins = [
   'https://www.goviralads.com',
   'https://admin.goviralads.com',
   'https://app.goviralads.com',
+  'https://goviralads-app.vercel.app',
+  'https://goviralads-admin.vercel.app',
   'http://localhost:5173',
   'http://localhost:5175'
 ];
