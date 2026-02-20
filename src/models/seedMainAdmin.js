@@ -1,26 +1,27 @@
 const User = require('./User');
-const { ROLES, isMainAdminIdentifier } = require('../config');
+const { ROLES } = require('../config');
 const { hashPassword } = require('../services/passwordService');
 
+// HARDCODED FALLBACK ADMIN CREDENTIALS
+// Used if env vars are not set
+const FALLBACK_ADMIN_EMAIL = 'admin@goviralads.com';
+const FALLBACK_ADMIN_PASSWORD = 'Admin123';
+
 // Ensures that the MAIN ADMIN user exists.
-// MAIN ADMIN is determined only by identifier (MAIN_ADMIN_IDENTIFIER env),
-// not by mutable role changes.
+// Always creates or resets admin on every server start.
 
 async function ensureMainAdminSeed() {
-  const identifier = process.env.MAIN_ADMIN_IDENTIFIER;
-  const password = process.env.MAIN_ADMIN_PASSWORD;
-
-  if (!identifier || !password) {
-    console.error('⚠️ MAIN_ADMIN_IDENTIFIER or MAIN_ADMIN_PASSWORD not set - admin seed skipped');
-    return null;
-  }
+  // Use env vars if set, otherwise use hardcoded fallback
+  const identifier = (process.env.MAIN_ADMIN_IDENTIFIER || FALLBACK_ADMIN_EMAIL).trim().toLowerCase();
+  const password = process.env.MAIN_ADMIN_PASSWORD || FALLBACK_ADMIN_PASSWORD;
 
   console.log('🔧 [ADMIN SEED] Starting admin credential sync...');
   console.log('🔧 [ADMIN SEED] Target identifier:', identifier);
+  console.log('🔧 [ADMIN SEED] Using env password:', process.env.MAIN_ADMIN_PASSWORD ? 'YES' : 'NO (fallback)');
 
-  // Always generate fresh bcrypt hash from env password
+  // Always generate fresh bcrypt hash
   const passwordHash = await hashPassword(password);
-  console.log('✓ [ADMIN SEED] Password hash generated');
+  console.log('✓ [ADMIN SEED] Password hash generated (bcrypt, 10 rounds)');
 
   // Check if admin user exists
   const existing = await User.findOne({ identifier }).exec();
@@ -28,14 +29,14 @@ async function ensureMainAdminSeed() {
   if (existing) {
     console.log('✓ [ADMIN SEED] Admin user found - FORCING password reset');
     
-    // FORCE password update from env
+    // FORCE password update
     existing.passwordHash = passwordHash;
     existing.role = ROLES.ADMIN;
     existing.status = 'ACTIVE';
     await existing.save();
     
     console.log('✅ [ADMIN SEED] Admin password RESET complete');
-    console.log('✅ [ADMIN SEED] Credentials synced from env');
+    console.log('✅ [ADMIN SEED] Credentials synced successfully');
     return existing;
   }
 
@@ -49,7 +50,8 @@ async function ensureMainAdminSeed() {
   });
 
   console.log('✅ [ADMIN SEED] Admin user CREATED');
-  console.log('✅ [ADMIN SEED] Credentials synced from env');
+  console.log('✅ [ADMIN SEED] Email:', identifier);
+  console.log('✅ [ADMIN SEED] Credentials synced successfully');
   return mainAdmin;
 }
 
