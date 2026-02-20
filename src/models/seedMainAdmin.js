@@ -1,47 +1,54 @@
 const User = require('./User');
 const { ROLES } = require('../config');
-const { hashPassword } = require('../services/passwordService');
+const bcrypt = require('bcryptjs');
 
-// HARDCODED FALLBACK ADMIN CREDENTIALS
-// Used if env vars are not set
-const FALLBACK_ADMIN_EMAIL = 'admin@goviralads.com';
-const FALLBACK_ADMIN_PASSWORD = 'Admin@12345';
+// HARDCODED ADMIN CREDENTIALS - ALWAYS USED
+const ADMIN_EMAIL = 'admin@goviralads.com';
+const ADMIN_PASSWORD = 'Admin@12345';
+const SALT_ROUNDS = 10;
 
-// Ensures that the MAIN ADMIN user exists.
-// Always creates or resets admin on every server start.
-
+// FORCE RESET admin password on every server start
 async function ensureMainAdminSeed() {
-  // Use env vars if set, otherwise use hardcoded fallback
-  const identifier = (process.env.MAIN_ADMIN_IDENTIFIER || FALLBACK_ADMIN_EMAIL).trim().toLowerCase();
-  const password = process.env.MAIN_ADMIN_PASSWORD || FALLBACK_ADMIN_PASSWORD;
+  const identifier = ADMIN_EMAIL.trim().toLowerCase();
+  
+  console.log('========================================');
+  console.log('[ADMIN SEED] FORCE RESET STARTING...');
+  console.log('[ADMIN SEED] Target email:', identifier);
+  console.log('[ADMIN SEED] Password to set:', ADMIN_PASSWORD);
+  console.log('========================================');
 
-  console.log('🔧 [ADMIN SEED] Starting admin credential sync...');
-  console.log('🔧 [ADMIN SEED] Target identifier:', identifier);
-  console.log('🔧 [ADMIN SEED] Using env password:', process.env.MAIN_ADMIN_PASSWORD ? 'YES' : 'NO (fallback)');
+  // Generate fresh bcrypt hash - ALWAYS
+  console.log('[ADMIN SEED] Generating bcrypt hash (10 rounds)...');
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, SALT_ROUNDS);
+  console.log('[ADMIN SEED] Hash generated:', passwordHash.substring(0, 20) + '...');
 
-  // Always generate fresh bcrypt hash
-  const passwordHash = await hashPassword(password);
-  console.log('✓ [ADMIN SEED] Password hash generated (bcrypt, 10 rounds)');
-
-  // Check if admin user exists
+  // Find existing admin
   const existing = await User.findOne({ identifier }).exec();
 
   if (existing) {
-    console.log('✓ [ADMIN SEED] Admin user found - FORCING password reset');
+    console.log('[ADMIN SEED] Admin user FOUND in database');
+    console.log('[ADMIN SEED] Current hash:', existing.passwordHash?.substring(0, 20) + '...');
+    console.log('[ADMIN SEED] OVERWRITING password hash NOW...');
     
-    // FORCE password update
+    // FORCE UPDATE using direct assignment and save
     existing.passwordHash = passwordHash;
     existing.role = ROLES.ADMIN;
     existing.status = 'ACTIVE';
-    await existing.save();
     
-    console.log('✅ [ADMIN SEED] Admin password RESET complete');
-    console.log('✅ [ADMIN SEED] Credentials synced successfully');
-    return existing;
+    const saved = await existing.save();
+    
+    console.log('[ADMIN SEED] Save completed');
+    console.log('[ADMIN SEED] New hash after save:', saved.passwordHash?.substring(0, 20) + '...');
+    console.log('========================================');
+    console.log('ADMIN PASSWORD FORCE RESET SUCCESS');
+    console.log('Email: admin@goviralads.com');
+    console.log('Password: Admin@12345');
+    console.log('========================================');
+    return saved;
   }
 
-  // Create new admin
-  console.log('🔧 [ADMIN SEED] Admin not found - creating new');
+  // Create new admin if not exists
+  console.log('[ADMIN SEED] Admin NOT FOUND - creating new user...');
   const mainAdmin = await User.create({
     identifier,
     passwordHash,
@@ -49,9 +56,12 @@ async function ensureMainAdminSeed() {
     status: 'ACTIVE',
   });
 
-  console.log('✅ [ADMIN SEED] Admin user CREATED');
-  console.log('✅ [ADMIN SEED] Email:', identifier);
-  console.log('✅ [ADMIN SEED] Credentials synced successfully');
+  console.log('[ADMIN SEED] Admin user CREATED');
+  console.log('========================================');
+  console.log('ADMIN USER CREATED SUCCESS');
+  console.log('Email: admin@goviralads.com');
+  console.log('Password: Admin@12345');
+  console.log('========================================');
   return mainAdmin;
 }
 
