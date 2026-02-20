@@ -5,7 +5,7 @@ const { hashPassword } = require('../services/passwordService');
 // HARDCODED FALLBACK ADMIN CREDENTIALS
 // Used if env vars are not set
 const FALLBACK_ADMIN_EMAIL = 'admin@goviralads.com';
-const FALLBACK_ADMIN_PASSWORD = 'Admin123';
+const FALLBACK_ADMIN_PASSWORD = 'Admin@12345';
 
 // Ensures that the MAIN ADMIN user exists.
 // Always creates or resets admin on every server start.
