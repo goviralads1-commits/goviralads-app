@@ -1572,6 +1572,17 @@ const Ticket = require('../models/Ticket');
 
 // Create new ticket
 router.post('/tickets', async (req, res) => {
+  // IMMEDIATE LOG - confirms route was hit
+  console.log('\n[TICKET ROUTE] ==========================================');
+  console.log('[TICKET ROUTE] POST /client/tickets HIT');
+  console.log('[TICKET ROUTE] Original URL:', req.originalUrl);
+  console.log('[TICKET ROUTE] Method:', req.method);
+  console.log('[TICKET ROUTE] Headers Content-Type:', req.headers['content-type']);
+  console.log('[TICKET ROUTE] User from token:', req.user ? req.user.id : 'NO USER');
+  console.log('[TICKET ROUTE] Body keys:', Object.keys(req.body || {}));
+  console.log('[TICKET ROUTE] Raw body:', JSON.stringify(req.body));
+  console.log('[TICKET ROUTE] ==========================================\n');
+  
   console.log('[TICKET] ========== CREATE TICKET START ==========');
   console.log('[TICKET] Timestamp:', new Date().toISOString());
   

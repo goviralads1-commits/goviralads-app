@@ -33,8 +33,14 @@ const Tickets = () => {
   };
 
   const handleCreate = async () => {
+    console.log('[TICKET UI] ==============================');
     console.log('[TICKET UI] Create button clicked');
-    console.log('[TICKET UI] Form data:', formData);
+    console.log('[TICKET UI] Form data:', JSON.stringify(formData));
+    
+    // Log the FULL URL that will be called
+    const fullUrl = `${import.meta.env.VITE_API_URL}/client/tickets`;
+    console.log('[TICKET UI] FULL API URL:', fullUrl);
+    console.log('[TICKET UI] VITE_API_URL env:', import.meta.env.VITE_API_URL);
     
     if (!formData.subject.trim() || !formData.message.trim()) {
       console.error('[TICKET UI] Validation failed: empty fields');
@@ -44,15 +50,18 @@ const Tickets = () => {
 
     try {
       setCreating(true);
-      console.log('[TICKET UI] Sending POST /client/tickets...');
+      console.log('[TICKET UI] Sending POST to:', fullUrl);
       const response = await api.post('/client/tickets', formData);
-      console.log('[TICKET UI] Success response:', response.data);
+      console.log('[TICKET UI] SUCCESS! Response:', response.data);
+      console.log('[TICKET UI] ==============================');
       setShowCreateModal(false);
       setFormData({ subject: '', category: 'GENERAL', priority: 'NORMAL', message: '' });
       fetchTickets();
     } catch (err) {
-      console.error('[TICKET UI] Create failed!');
+      console.error('[TICKET UI] ==============================');
+      console.error('[TICKET UI] FAILED!');
       console.error('[TICKET UI]   Status:', err.response?.status);
+      console.error('[TICKET UI]   URL called:', fullUrl);
       console.error('[TICKET UI]   Error:', err.response?.data || err.message);
       const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message || 'Failed to create ticket';
       alert(errorMsg);
