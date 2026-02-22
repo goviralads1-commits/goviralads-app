@@ -262,11 +262,12 @@ const Header = ({ title }) => {
         bottom: 0,
         left: 0,
         right: 0,
+        height: '64px',
         backgroundColor: 'rgba(255,255,255,0.98)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(0,0,0,0.06)',
-        padding: '8px 0 calc(8px + env(safe-area-inset-bottom))',
+        paddingBottom: 'env(safe-area-inset-bottom)',
         zIndex: 50,
         boxShadow: '0 -4px 20px rgba(0,0,0,0.06)'
       }}>
@@ -274,8 +275,10 @@ const Header = ({ title }) => {
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
+          height: '64px',
           maxWidth: '500px',
-          margin: '0 auto'
+          margin: '0 auto',
+          padding: '0 8px'
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -290,33 +293,35 @@ const Header = ({ title }) => {
                 key={item.path}
                 to={item.path}
                 style={{
+                  flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '4px',
-                  padding: '8px 16px',
-                  borderRadius: '12px',
-                  backgroundColor: isActive ? '#f0fdf4' : 'transparent',
+                  height: '56px',
                   textDecoration: 'none',
-                  transition: 'all 0.2s ease'
+                  WebkitTapHighlightColor: 'transparent'
                 }}
               >
                 <svg
                   style={{
                     width: '24px',
                     height: '24px',
-                    color: isActive ? '#22c55e' : '#9ca3af'
+                    color: isActive ? '#22c55e' : '#9ca3af',
+                    transition: 'color 0.15s ease'
                   }}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive ? 2 : 1.5} d={item.icon} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                 </svg>
                 <span style={{
                   fontSize: '11px',
-                  fontWeight: isActive ? '600' : '500',
-                  color: isActive ? '#22c55e' : '#6b7280'
+                  fontWeight: '600',
+                  color: isActive ? '#22c55e' : '#6b7280',
+                  transition: 'color 0.15s ease'
                 }}>
                   {item.label}
                 </span>
