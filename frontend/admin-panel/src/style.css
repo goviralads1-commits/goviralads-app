@@ -6,15 +6,13 @@
    MOBILE APP-LIKE BEHAVIOR
    ============================================ */
 
-/* Prevent zoom and ensure app-like feel */
+/* Prevent zoom, allow vertical scroll */
 html {
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  touch-action: manipulation;
   overflow-x: hidden;
-  width: 100%;
-  height: 100%;
+  overflow-y: auto;
 }
 
 body {
@@ -24,24 +22,15 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  touch-action: manipulation;
   overflow-x: hidden;
-  width: 100%;
-  min-height: 100vh;
-  /* Safe area for notched devices */
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* Prevent pull-to-refresh on mobile */
-body {
+  overflow-y: auto;
+  /* Prevent pull-to-refresh but allow scroll */
   overscroll-behavior-y: contain;
 }
 
-/* Root container - app shell */
+/* Root container */
 #root {
-  min-height: 100vh;
-  overflow-x: hidden;
-  position: relative;
+  padding-bottom: 80px; /* Space for bottom nav */
 }
 
 /* Modal scroll lock */
