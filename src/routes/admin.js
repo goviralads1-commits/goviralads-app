@@ -675,8 +675,9 @@ router.post('/tasks/assign', async (req, res) => {
     }
 
     // 4. Notification
+    console.log('[NOTIFICATION DEBUG] Creating notification for clientId:', clientId);
     try {
-      await createNotification({
+      const notifResult = await createNotification({
         recipientId: clientId,
         type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
         title: 'New Task Assigned',
@@ -686,6 +687,7 @@ router.post('/tasks/assign', async (req, res) => {
           entityId: result.task._id,
         },
       });
+      console.log('[NOTIFICATION DEBUG] Notification created successfully:', notifResult._id, 'for recipient:', clientId);
     } catch (err) {
       console.error('[FORENSIC] Notification Error (Non-Fatal):', err.message);
     }

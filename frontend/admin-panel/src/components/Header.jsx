@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout } from '../services/authService';
 import api from '../services/api';
@@ -12,20 +13,52 @@ const Header = ({ title }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [brandSettings, setBrandSettings] = useState({ appName: 'Admin Panel', logoUrl: '', accentColor: '#6366f1' });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const profileRef = useRef(null);
   const notifRef = useRef(null);
+  const bellButtonRef = useRef(null);
+
+  // Fetch notifications with proper API
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/notifications');
+      const notifs = (res.data.notifications || []).map(n => ({
+        id: n.id || n._id,
+        type: n.type,
+        title: n.title,
+        subtitle: n.message,
+        time: n.createdAt,
+        isRead: n.isRead,
+        relatedEntity: n.relatedEntity
+      }));
+      setNotifications(notifs.slice(0, 10));
+      setUnreadCount(notifs.filter(n => !n.isRead).length);
+    } catch (err) {
+      console.log('[NOTIFICATIONS] Fetch error:', err.message);
+    }
+  }, []);
 
   useEffect(() => {
     fetchNotifications();
     fetchBranding();
+    
+    // Polling: Refresh notifications every 30 seconds
+    const pollInterval = setInterval(fetchNotifications, 30000);
+    
     // Close dropdowns on outside click
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false);
-      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifications(false);
+      if (notifRef.current && !notifRef.current.contains(e.target) && 
+          !e.target.closest('[data-notification-dropdown]')) {
+        setShowNotifications(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      clearInterval(pollInterval);
+    };
+  }, [fetchNotifications]);
 
   const fetchBranding = async () => {
     try {
@@ -42,29 +75,6 @@ const Header = ({ title }) => {
     }
   };
 
-  const fetchNotifications = async () => {
-    try {
-      // Fetch urgent tasks and recent notices
-      const [tasksRes, noticesRes] = await Promise.all([
-        api.get('/admin/tasks?priority=URGENT&limit=5').catch(() => ({ data: { tasks: [] } })),
-        api.get('/admin/notices?limit=5').catch(() => ({ data: { notices: [] } }))
-      ]);
-      
-      const urgentTasks = (tasksRes.data.tasks || []).map(t => ({
-        id: t.id, type: 'task', title: t.title, subtitle: `Priority: ${t.priority}`, time: t.createdAt, urgent: t.priority === 'URGENT'
-      }));
-      const recentNotices = (noticesRes.data.notices || []).slice(0, 3).map(n => ({
-        id: n.id, type: 'notice', title: n.title, subtitle: n.type, time: n.createdAt, urgent: n.priority === 'URGENT'
-      }));
-      
-      const all = [...urgentTasks, ...recentNotices].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8);
-      setNotifications(all);
-      setUnreadCount(all.filter(n => n.urgent).length);
-    } catch (err) {
-      // Silent fail
-    }
-  };
-
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -72,8 +82,28 @@ const Header = ({ title }) => {
 
   const handleNotificationClick = (notif) => {
     setShowNotifications(false);
-    if (notif.type === 'task') navigate(`/tasks/${notif.id}`);
-    else navigate('/dashboard');
+    // Navigate based on entity type
+    if (notif.relatedEntity?.entityType === 'TASK') {
+      navigate(`/tasks/${notif.relatedEntity.entityId}`);
+    } else if (notif.relatedEntity?.entityType === 'TICKET') {
+      navigate(`/tickets`);
+    } else if (notif.type === 'task' || notif.type?.includes('TASK')) {
+      navigate(`/tasks/${notif.id}`);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleBellClick = () => {
+    // Calculate position for fixed dropdown
+    if (bellButtonRef.current) {
+      const rect = bellButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: Math.max(16, window.innerWidth - rect.right)
+      });
+    }
+    setShowNotifications(!showNotifications);
   };
 
   const formatTime = (dateStr) => {
@@ -130,7 +160,8 @@ const Header = ({ title }) => {
             {/* Notification Bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>
               <button
-                onClick={() => setShowNotifications(!showNotifications)}
+                ref={bellButtonRef}
+                onClick={handleBellClick}
                 style={{
                   width: '44px', height: '44px', borderRadius: '12px',
                   backgroundColor: showNotifications ? '#f0f5ff' : '#f8fafc',
@@ -156,19 +187,28 @@ const Header = ({ title }) => {
                 )}
               </button>
               
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div style={{
-                  position: 'absolute', top: '52px', right: 0,
-                  width: '340px', maxHeight: '400px', overflowY: 'auto',
-                  backgroundColor: '#fff', borderRadius: '16px',
-                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                  border: '1px solid #f1f5f9', zIndex: 200
-                }}>
+              {/* Notifications Dropdown - Portal to body with fixed positioning */}
+              {showNotifications && ReactDOM.createPortal(
+                <div
+                  data-notification-dropdown
+                  style={{
+                    position: 'fixed',
+                    top: dropdownPosition.top,
+                    right: dropdownPosition.right,
+                    width: 'min(340px, calc(100vw - 32px))',
+                    maxHeight: '70vh',
+                    overflowY: 'auto',
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+                    border: '1px solid #f1f5f9',
+                    zIndex: 9999
+                  }}
+                >
                   <div style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>Notifications</span>
                     {unreadCount > 0 && (
-                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>{unreadCount} urgent</span>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>{unreadCount} unread</span>
                     )}
                   </div>
                   {notifications.length === 0 ? (
@@ -179,39 +219,42 @@ const Header = ({ title }) => {
                   ) : (
                     notifications.map(notif => (
                       <div
-                        key={`${notif.type}-${notif.id}`}
+                        key={notif.id}
                         onClick={() => handleNotificationClick(notif)}
                         style={{
                           padding: '14px 16px', cursor: 'pointer',
                           borderBottom: '1px solid #f8fafc',
-                          backgroundColor: notif.urgent ? '#fef2f2' : 'transparent',
+                          backgroundColor: !notif.isRead ? '#f0f5ff' : 'transparent',
                           transition: 'background 0.2s'
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                           <div style={{
                             width: '36px', height: '36px', borderRadius: '10px',
-                            backgroundColor: notif.type === 'task' ? '#dbeafe' : '#f0fdf4',
+                            backgroundColor: notif.type?.includes('TASK') ? '#dbeafe' : notif.type?.includes('TICKET') ? '#fef3c7' : '#f0fdf4',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0
                           }}>
-                            <span style={{ fontSize: '16px' }}>{notif.type === 'task' ? '📋' : '📢'}</span>
+                            <span style={{ fontSize: '16px' }}>
+                              {notif.type?.includes('TASK') ? '📋' : notif.type?.includes('TICKET') ? '🎫' : '🔔'}
+                            </span>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notif.title}</p>
-                            <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{notif.subtitle}</p>
+                            <p style={{ fontSize: '12px', color: '#64748b', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notif.subtitle}</p>
                           </div>
                           <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}>{formatTime(notif.time)}</span>
                         </div>
                       </div>
                     ))
                   )}
-                  <div style={{ padding: '12px 16px', textAlign: 'center' }}>
-                    <Link to="/dashboard" onClick={() => setShowNotifications(false)} style={{ fontSize: '13px', fontWeight: '600', color: '#6366f1', textDecoration: 'none' }}>
+                  <div style={{ padding: '12px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
+                    <Link to="/notifications" onClick={() => setShowNotifications(false)} style={{ fontSize: '13px', fontWeight: '600', color: '#6366f1', textDecoration: 'none' }}>
                       View All →
                     </Link>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
 

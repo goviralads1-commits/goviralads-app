@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout } from '../services/authService';
 import api from '../services/api';
@@ -12,19 +13,54 @@ const Header = ({ title }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [branding, setBranding] = useState({ appName: 'Client Portal', logoUrl: '', accentColor: '#22c55e' });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const profileRef = useRef(null);
   const notifRef = useRef(null);
+  const bellButtonRef = useRef(null);
+
+  // CRITICAL FIX: Fetch from /client/notifications (NOT /client/notices)
+  const fetchNotifications = useCallback(async () => {
+    try {
+      console.log('[CLIENT NOTIFICATIONS] Fetching from /client/notifications...');
+      const res = await api.get('/client/notifications');
+      console.log('[CLIENT NOTIFICATIONS] Response:', res.data);
+      const notifs = (res.data.notifications || []).map(n => ({
+        id: n.id || n._id,
+        type: n.type,
+        title: n.title,
+        subtitle: n.message,
+        time: n.createdAt,
+        isRead: n.isRead,
+        relatedEntity: n.relatedEntity
+      }));
+      setNotifications(notifs.slice(0, 10));
+      setUnreadCount(notifs.filter(n => !n.isRead).length);
+      console.log('[CLIENT NOTIFICATIONS] Loaded:', notifs.length, 'notifications,', notifs.filter(n => !n.isRead).length, 'unread');
+    } catch (err) {
+      console.log('[CLIENT NOTIFICATIONS] Fetch error:', err.message);
+    }
+  }, []);
 
   useEffect(() => {
     fetchNotifications();
     fetchBranding();
+    
+    // Polling: Refresh notifications every 30 seconds
+    const pollInterval = setInterval(fetchNotifications, 30000);
+    
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false);
-      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifications(false);
+      if (notifRef.current && !notifRef.current.contains(e.target) && 
+          !e.target.closest('[data-notification-dropdown]')) {
+        setShowNotifications(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      clearInterval(pollInterval);
+    };
+  }, [fetchNotifications]);
 
   const fetchBranding = async () => {
     try {
@@ -41,24 +77,37 @@ const Header = ({ title }) => {
     }
   };
 
-  const fetchNotifications = async () => {
-    try {
-      const res = await api.get('/client/notices?limit=5').catch(() => ({ data: { notices: [] } }));
-      const notices = (res.data.notices || []).map(n => ({
-        id: n.id, type: n.type, title: n.title, 
-        subtitle: n.responseRequired && !n.hasResponded ? 'Action Required' : n.type,
-        time: n.createdAt, urgent: n.responseRequired && !n.hasResponded
-      }));
-      setNotifications(notices);
-      setUnreadCount(notices.filter(n => n.urgent).length);
-    } catch (err) {
-      // Silent fail
-    }
-  };
-
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleNotificationClick = (notif) => {
+    setShowNotifications(false);
+    // Navigate based on entity type
+    if (notif.relatedEntity?.entityType === 'TASK') {
+      navigate(`/tasks/${notif.relatedEntity.entityId}`);
+    } else if (notif.relatedEntity?.entityType === 'TICKET') {
+      navigate(`/tickets`);
+    } else if (notif.type?.includes('TASK')) {
+      navigate(`/tasks`);
+    } else if (notif.type?.includes('WALLET') || notif.type?.includes('RECHARGE')) {
+      navigate(`/wallet`);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleBellClick = () => {
+    // Calculate position for fixed dropdown
+    if (bellButtonRef.current) {
+      const rect = bellButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: Math.max(16, window.innerWidth - rect.right)
+      });
+    }
+    setShowNotifications(!showNotifications);
   };
 
   const formatTime = (dateStr) => {
@@ -116,7 +165,8 @@ const Header = ({ title }) => {
             {/* Notification Bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>
               <button
-                onClick={() => setShowNotifications(!showNotifications)}
+                ref={bellButtonRef}
+                onClick={handleBellClick}
                 style={{
                   width: '44px', height: '44px', borderRadius: '12px',
                   backgroundColor: showNotifications ? '#f0fdf4' : '#f8fafc',
@@ -142,19 +192,28 @@ const Header = ({ title }) => {
                 )}
               </button>
               
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div style={{
-                  position: 'absolute', top: '52px', right: 0,
-                  width: '320px', maxHeight: '400px', overflowY: 'auto',
-                  backgroundColor: '#fff', borderRadius: '16px',
-                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-                  border: '1px solid #f1f5f9', zIndex: 200
-                }}>
+              {/* Notifications Dropdown - Portal to body with fixed positioning */}
+              {showNotifications && ReactDOM.createPortal(
+                <div
+                  data-notification-dropdown
+                  style={{
+                    position: 'fixed',
+                    top: dropdownPosition.top,
+                    right: dropdownPosition.right,
+                    width: 'min(320px, calc(100vw - 32px))',
+                    maxHeight: '70vh',
+                    overflowY: 'auto',
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+                    border: '1px solid #f1f5f9',
+                    zIndex: 9999
+                  }}
+                >
                   <div style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>Notifications</span>
                     {unreadCount > 0 && (
-                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444' }}>{unreadCount} action needed</span>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#22c55e' }}>{unreadCount} new</span>
                     )}
                   </div>
                   {notifications.length === 0 ? (
@@ -166,38 +225,41 @@ const Header = ({ title }) => {
                     notifications.map(notif => (
                       <div
                         key={notif.id}
-                        onClick={() => { setShowNotifications(false); navigate('/dashboard'); }}
+                        onClick={() => handleNotificationClick(notif)}
                         style={{
                           padding: '14px 16px', cursor: 'pointer',
                           borderBottom: '1px solid #f8fafc',
-                          backgroundColor: notif.urgent ? '#fef2f2' : 'transparent',
+                          backgroundColor: !notif.isRead ? '#f0fdf4' : 'transparent',
                           transition: 'background 0.2s'
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                           <div style={{
                             width: '36px', height: '36px', borderRadius: '10px',
-                            backgroundColor: notif.urgent ? '#fee2e2' : '#f0fdf4',
+                            backgroundColor: notif.type?.includes('TASK') ? '#dbeafe' : notif.type?.includes('WALLET') || notif.type?.includes('RECHARGE') ? '#fef3c7' : '#f0fdf4',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0
                           }}>
-                            <span style={{ fontSize: '16px' }}>{notif.urgent ? '⚠️' : notif.type === 'REQUIREMENT' ? '📋' : '🔔'}</span>
+                            <span style={{ fontSize: '16px' }}>
+                              {notif.type?.includes('TASK') ? '📋' : notif.type?.includes('WALLET') || notif.type?.includes('RECHARGE') ? '💰' : '🔔'}
+                            </span>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notif.title}</p>
-                            <p style={{ fontSize: '12px', color: notif.urgent ? '#dc2626' : '#64748b', margin: 0, fontWeight: notif.urgent ? '600' : '400' }}>{notif.subtitle}</p>
+                            <p style={{ fontSize: '12px', color: '#64748b', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notif.subtitle}</p>
                           </div>
                           <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}>{formatTime(notif.time)}</span>
                         </div>
                       </div>
                     ))
                   )}
-                  <div style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <div style={{ padding: '12px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
                     <Link to="/dashboard" onClick={() => setShowNotifications(false)} style={{ fontSize: '13px', fontWeight: '600', color: '#22c55e', textDecoration: 'none' }}>
                       View All →
                     </Link>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
 
