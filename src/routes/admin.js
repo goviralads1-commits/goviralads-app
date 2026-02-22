@@ -264,22 +264,35 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
     }
 
     // --- Email Hook (HIGH PRIORITY FIX) ---
+    console.log('[EMAIL TRIGGER] Recharge approved - attempting to send email to client');
     try {
       const clientUser = await User.findById(updatedRequest.clientId).exec();
-      if (clientUser && clientUser.identifier) {
-        const emailResult = await emailService.sendWalletUpdate(clientUser.identifier, {
+      console.log('[EMAIL TRIGGER] Client found:', clientUser ? 'YES' : 'NO');
+      console.log('[EMAIL TRIGGER] Client identifier:', clientUser?.identifier);
+      
+      const recipientEmail = clientUser?.identifier;
+      
+      if (!recipientEmail) {
+        console.error('[EMAIL TRIGGER] ❌ Cannot send email: No identifier found for client');
+      } else if (!emailService.isValidEmail(recipientEmail)) {
+        console.error('[EMAIL TRIGGER] ❌ Cannot send email: identifier is not a valid email:', recipientEmail);
+        console.error('[EMAIL TRIGGER]   Tip: User.identifier must be an email address for email delivery');
+      } else {
+        const emailResult = await emailService.sendWalletUpdate(recipientEmail, {
           amount: updatedRequest.amount,
           description: `Recharge approved${request.paymentReference ? ` (Ref: ${request.paymentReference})` : ''}`,
           newBalance: wallet.balance
         });
+        
         if (emailResult.success) {
-          console.log('[EMAIL] Wallet recharge email sent to:', clientUser.identifier);
+          console.log('[EMAIL TRIGGER] ✅ Wallet update email sent successfully to:', recipientEmail);
+          console.log('[EMAIL TRIGGER]   Message ID:', emailResult.messageId);
         } else {
-          console.log('[EMAIL] Failed to send wallet email:', emailResult.reason || emailResult.error);
+          console.error('[EMAIL TRIGGER] ❌ Email failed:', emailResult.reason || emailResult.error);
         }
       }
     } catch (emailErr) {
-      console.error('[EMAIL] Error sending wallet update email (Non-Fatal):', emailErr.message);
+      console.error('[EMAIL TRIGGER] ❌ Exception during email send:', emailErr.message);
     }
     // ------------------------------------
 
@@ -693,24 +706,37 @@ router.post('/tasks/assign', async (req, res) => {
     }
 
     // 5. Email Notification (HIGH PRIORITY FIX)
+    console.log('[EMAIL TRIGGER] Task created - attempting to send email to client');
     try {
       const clientUser = await User.findById(clientId).exec();
-      if (clientUser && clientUser.identifier) {
-        const emailResult = await emailService.sendNewTask(clientUser.identifier, {
+      console.log('[EMAIL TRIGGER] Client found:', clientUser ? 'YES' : 'NO');
+      console.log('[EMAIL TRIGGER] Client identifier:', clientUser?.identifier);
+      
+      const recipientEmail = clientUser?.identifier;
+      
+      if (!recipientEmail) {
+        console.error('[EMAIL TRIGGER] ❌ Cannot send email: No identifier found for client');
+      } else if (!emailService.isValidEmail(recipientEmail)) {
+        console.error('[EMAIL TRIGGER] ❌ Cannot send email: identifier is not a valid email:', recipientEmail);
+        console.error('[EMAIL TRIGGER]   Tip: User.identifier must be an email address for email delivery');
+      } else {
+        const emailResult = await emailService.sendNewTask(recipientEmail, {
           taskTitle: title,
           description: description || '',
           status: 'Assigned',
           deadline: endDate ? new Date(endDate).toLocaleDateString() : null,
           taskUrl: `${process.env.CLIENT_URL || 'http://localhost:5175'}/tasks/${result.task._id}`
         });
+        
         if (emailResult.success) {
-          console.log('[EMAIL] New task email sent to:', clientUser.identifier);
+          console.log('[EMAIL TRIGGER] ✅ New task email sent successfully to:', recipientEmail);
+          console.log('[EMAIL TRIGGER]   Message ID:', emailResult.messageId);
         } else {
-          console.log('[EMAIL] Failed to send new task email:', emailResult.reason || emailResult.error);
+          console.error('[EMAIL TRIGGER] ❌ Email failed:', emailResult.reason || emailResult.error);
         }
       }
     } catch (emailErr) {
-      console.error('[EMAIL] Error sending new task email (Non-Fatal):', emailErr.message);
+      console.error('[EMAIL TRIGGER] ❌ Exception during email send:', emailErr.message);
     }
 
     console.log('[FORENSIC] ========== TASK CREATED ==========');

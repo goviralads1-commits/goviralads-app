@@ -13,6 +13,15 @@
 
 const nodemailer = require('nodemailer');
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Validate email format
+const isValidEmail = (email) => {
+  if (!email || typeof email !== 'string') return false;
+  return EMAIL_REGEX.test(email.trim());
+};
+
 // Create transporter with environment config
 const createTransporter = () => {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -38,23 +47,56 @@ const createTransporter = () => {
 const isEmailConfigured = () => {
   const configured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
   if (!configured) {
-    console.warn('[EMAIL CONFIG] ⚠️ SMTP not configured! Required env vars:');
-    console.warn('[EMAIL CONFIG]   - SMTP_HOST (current:', process.env.SMTP_HOST || 'NOT SET', ')');
-    console.warn('[EMAIL CONFIG]   - SMTP_PORT (current:', process.env.SMTP_PORT || 'NOT SET', ')');
-    console.warn('[EMAIL CONFIG]   - SMTP_USER (current:', process.env.SMTP_USER ? 'SET' : 'NOT SET', ')');
-    console.warn('[EMAIL CONFIG]   - SMTP_PASS (current:', process.env.SMTP_PASS ? 'SET' : 'NOT SET', ')');
+    console.error('[EMAIL CONFIG] ❌ SMTP NOT CONFIGURED! Emails will NOT be sent.');
+    console.error('[EMAIL CONFIG]   Required environment variables:');
+    console.error('[EMAIL CONFIG]   - SMTP_HOST:', process.env.SMTP_HOST || '❌ NOT SET');
+    console.error('[EMAIL CONFIG]   - SMTP_PORT:', process.env.SMTP_PORT || '❌ NOT SET');
+    console.error('[EMAIL CONFIG]   - SMTP_USER:', process.env.SMTP_USER ? '✅ SET' : '❌ NOT SET');
+    console.error('[EMAIL CONFIG]   - SMTP_PASS:', process.env.SMTP_PASS ? '✅ SET' : '❌ NOT SET');
+    console.error('[EMAIL CONFIG]   - SMTP_FROM:', process.env.SMTP_FROM || '❌ NOT SET');
   }
   return configured;
 };
 
+// Log SMTP config status on startup
+const logSmtpStatus = () => {
+  console.log('[EMAIL SERVICE] ========================================');
+  if (isEmailConfigured()) {
+    console.log('[EMAIL SERVICE] ✅ SMTP Configured');
+    console.log('[EMAIL SERVICE]   Host:', process.env.SMTP_HOST);
+    console.log('[EMAIL SERVICE]   Port:', process.env.SMTP_PORT);
+    console.log('[EMAIL SERVICE]   From:', process.env.SMTP_FROM || process.env.SMTP_USER);
+  } else {
+    console.log('[EMAIL SERVICE] ❌ SMTP NOT Configured - emails disabled');
+  }
+  console.log('[EMAIL SERVICE] ========================================');
+};
+
+// Call on module load
+logSmtpStatus();
+
 // Send email helper
 const sendEmail = async ({ to, subject, html, text }) => {
+  // 1. Check SMTP config
   if (!isEmailConfigured()) {
-    console.log('[EMAIL] SMTP not configured, skipping email send');
-    return { success: false, reason: 'not_configured' };
+    console.error('[EMAIL SEND] ❌ FAILED: SMTP not configured');
+    return { success: false, reason: 'smtp_not_configured' };
   }
   
+  // 2. Validate recipient email
+  if (!isValidEmail(to)) {
+    console.error('[EMAIL SEND] ❌ FAILED: Invalid recipient email:', to);
+    console.error('[EMAIL SEND]   The recipient address does not appear to be a valid email.');
+    console.error('[EMAIL SEND]   Tip: Check if User.identifier is an email address.');
+    return { success: false, reason: 'invalid_recipient_email', providedValue: to };
+  }
+  
+  // 3. Attempt to send
   try {
+    console.log('[EMAIL SEND] Attempting to send email...');
+    console.log('[EMAIL SEND]   To:', to);
+    console.log('[EMAIL SEND]   Subject:', subject);
+    
     const transporter = createTransporter();
     
     const info = await transporter.sendMail({
@@ -65,11 +107,18 @@ const sendEmail = async ({ to, subject, html, text }) => {
       html
     });
     
-    console.log('[EMAIL] Sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    console.log('[EMAIL SEND] ✅ SUCCESS!');
+    console.log('[EMAIL SEND]   Message ID:', info.messageId);
+    console.log('[EMAIL SEND]   Accepted:', info.accepted);
+    return { success: true, messageId: info.messageId, accepted: info.accepted };
   } catch (error) {
-    console.error('[EMAIL] Failed to send:', error.message);
-    return { success: false, error: error.message };
+    console.error('[EMAIL SEND] ❌ FAILED!');
+    console.error('[EMAIL SEND]   Error:', error.message);
+    console.error('[EMAIL SEND]   Code:', error.code);
+    if (error.responseCode) {
+      console.error('[EMAIL SEND]   SMTP Response Code:', error.responseCode);
+    }
+    return { success: false, error: error.message, code: error.code };
   }
 };
 
@@ -321,43 +370,54 @@ const templates = {
 
 const emailService = {
   isConfigured: isEmailConfigured,
+  isValidEmail: isValidEmail,
   
   sendWelcome: async (to, data) => {
+    console.log('[EMAIL] sendWelcome called for:', to);
     const template = templates.welcome(data);
     return sendEmail({ to, ...template });
   },
   
   sendNewTask: async (to, data) => {
+    console.log('[EMAIL] sendNewTask called for:', to);
+    console.log('[EMAIL]   Task:', data.taskTitle);
     const template = templates.newTask(data);
     return sendEmail({ to, ...template });
   },
   
   sendTaskReminder: async (to, data) => {
+    console.log('[EMAIL] sendTaskReminder called for:', to);
     const template = templates.taskReminder(data);
     return sendEmail({ to, ...template });
   },
   
   sendWalletUpdate: async (to, data) => {
+    console.log('[EMAIL] sendWalletUpdate called for:', to);
+    console.log('[EMAIL]   Amount:', data.amount, 'New Balance:', data.newBalance);
     const template = templates.walletUpdate(data);
     return sendEmail({ to, ...template });
   },
   
   sendNewNotice: async (to, data) => {
+    console.log('[EMAIL] sendNewNotice called for:', to);
     const template = templates.newNotice(data);
     return sendEmail({ to, ...template });
   },
   
   sendTicketReply: async (to, data) => {
+    console.log('[EMAIL] sendTicketReply called for:', to);
     const template = templates.ticketReply(data);
     return sendEmail({ to, ...template });
   },
   
   sendClientReply: async (to, data) => {
+    console.log('[EMAIL] sendClientReply called for:', to);
     const template = templates.clientReply(data);
     return sendEmail({ to, ...template });
   },
   
   sendOverdueAlert: async (to, data) => {
+    console.log('[EMAIL] sendOverdueAlert called for:', to);
     const template = templates.overdueAlert(data);
     return sendEmail({ to, ...template });
   },
