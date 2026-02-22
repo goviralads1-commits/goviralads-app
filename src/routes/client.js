@@ -1579,22 +1579,36 @@ router.post('/tickets', async (req, res) => {
     const clientId = req.user.id;
     console.log('[TICKET] Step 1: Client ID from token:', clientId);
     
-    // Log incoming request body
+    // Log incoming request body (with safe type handling)
     console.log('[TICKET] Step 2: Request body received:');
-    console.log('[TICKET]   - subject:', req.body.subject || '(empty)');
+    console.log('[TICKET]   - subject:', req.body.subject, '(type:', typeof req.body.subject, ')');
     console.log('[TICKET]   - category:', req.body.category || '(default: GENERAL)');
     console.log('[TICKET]   - priority:', req.body.priority || '(default: NORMAL)');
-    console.log('[TICKET]   - message:', req.body.message ? `${req.body.message.substring(0, 50)}...` : '(empty)');
+    console.log('[TICKET]   - message:', req.body.message, '(type:', typeof req.body.message, ')');
     console.log('[TICKET]   - relatedTaskId:', req.body.relatedTaskId || '(none)');
     
-    const { subject, category, priority, message, relatedTaskId } = req.body;
+    // Extract and type-check values
+    let { subject, category, priority, message, relatedTaskId } = req.body;
+    
+    // Ensure subject and message are strings
+    if (typeof subject !== 'string') {
+      console.error('[TICKET] ❌ TYPE ERROR: subject is not a string, got:', typeof subject);
+      return res.status(400).json({ error: 'Subject must be a string' });
+    }
+    if (typeof message !== 'string') {
+      console.error('[TICKET] ❌ TYPE ERROR: message is not a string, got:', typeof message);
+      return res.status(400).json({ error: 'Message must be a string' });
+    }
 
     // Validation
     console.log('[TICKET] Step 3: Validation...');
+    subject = subject.trim();
+    message = message.trim();
+    
     if (!subject || !message) {
-      console.error('[TICKET] ❌ VALIDATION FAILED: Subject or message is empty');
-      console.log('[TICKET]   - subject provided:', !!subject);
-      console.log('[TICKET]   - message provided:', !!message);
+      console.error('[TICKET] ❌ VALIDATION FAILED: Subject or message is empty after trim');
+      console.log('[TICKET]   - subject length:', subject.length);
+      console.log('[TICKET]   - message length:', message.length);
       console.log('[TICKET] ========== CREATE TICKET END (400) ==========');
       return res.status(400).json({ error: 'Subject and message are required' });
     }
@@ -1604,14 +1618,14 @@ router.post('/tickets', async (req, res) => {
     console.log('[TICKET] Step 4: Creating ticket in database...');
     const ticket = await Ticket.create({
       clientId,
-      subject: subject.trim(),
+      subject: subject,
       category: category || 'GENERAL',
       priority: priority || 'NORMAL',
       relatedTaskId: relatedTaskId || null,
       messages: [{
         senderId: clientId,
         senderRole: 'CLIENT',
-        message: message.trim(),
+        message: message,
       }],
     });
     
@@ -1664,6 +1678,21 @@ router.post('/tickets', async (req, res) => {
     console.error('[TICKET] ❌ CREATE TICKET FAILED!');
     console.error('[TICKET]   - Error name:', err.name);
     console.error('[TICKET]   - Error message:', err.message);
+    console.error('[TICKET]   - Error code:', err.code);
+    
+    // Check for specific MongoDB errors
+    if (err.name === 'ValidationError') {
+      console.error('[TICKET]   - Mongoose validation error');
+      const validationErrors = Object.keys(err.errors).map(key => `${key}: ${err.errors[key].message}`);
+      console.error('[TICKET]   - Fields:', validationErrors.join(', '));
+      return res.status(400).json({ error: 'Validation failed', details: validationErrors });
+    }
+    
+    if (err.code === 11000) {
+      console.error('[TICKET]   - Duplicate key error (ticketNumber collision)');
+      return res.status(500).json({ error: 'Ticket number collision, please try again' });
+    }
+    
     console.error('[TICKET]   - Stack:', err.stack);
     console.log('[TICKET] ========== CREATE TICKET END (500) ==========');
     return res.status(500).json({ error: 'Failed to create ticket', details: err.message });
