@@ -10,6 +10,7 @@ const { assignTaskToClient, updateTaskProgressAutomatically } = require('../serv
 const progressService = require('../services/progressService');
 const { getSystemOverview, getCreditFlowByPeriod, getTopSpenders, getTaskAnalyticsByTemplate, getTaskAnalyticsByStatus, getClientWalletSummary, getClientTaskSummary, getClientRecentActivity } = require('../services/reportingService');
 const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsRead, createNotification, getUnreadCount, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
+const emailService = require('../services/emailService');
 const User = require('../models/User');
 const Notice = require('../models/Notice');
 const LegalPage = require('../models/LegalPage');
@@ -260,6 +261,25 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
       });
     } catch (err) {
       console.error('Failed to notify client of recharge approval:', err.message);
+    }
+
+    // --- Email Hook (HIGH PRIORITY FIX) ---
+    try {
+      const clientUser = await User.findById(updatedRequest.clientId).exec();
+      if (clientUser && clientUser.identifier) {
+        const emailResult = await emailService.sendWalletUpdate(clientUser.identifier, {
+          amount: updatedRequest.amount,
+          description: `Recharge approved${request.paymentReference ? ` (Ref: ${request.paymentReference})` : ''}`,
+          newBalance: wallet.balance
+        });
+        if (emailResult.success) {
+          console.log('[EMAIL] Wallet recharge email sent to:', clientUser.identifier);
+        } else {
+          console.log('[EMAIL] Failed to send wallet email:', emailResult.reason || emailResult.error);
+        }
+      }
+    } catch (emailErr) {
+      console.error('[EMAIL] Error sending wallet update email (Non-Fatal):', emailErr.message);
     }
     // ------------------------------------
 
@@ -668,6 +688,27 @@ router.post('/tasks/assign', async (req, res) => {
       });
     } catch (err) {
       console.error('[FORENSIC] Notification Error (Non-Fatal):', err.message);
+    }
+
+    // 5. Email Notification (HIGH PRIORITY FIX)
+    try {
+      const clientUser = await User.findById(clientId).exec();
+      if (clientUser && clientUser.identifier) {
+        const emailResult = await emailService.sendNewTask(clientUser.identifier, {
+          taskTitle: title,
+          description: description || '',
+          status: 'Assigned',
+          deadline: endDate ? new Date(endDate).toLocaleDateString() : null,
+          taskUrl: `${process.env.CLIENT_URL || 'http://localhost:5175'}/tasks/${result.task._id}`
+        });
+        if (emailResult.success) {
+          console.log('[EMAIL] New task email sent to:', clientUser.identifier);
+        } else {
+          console.log('[EMAIL] Failed to send new task email:', emailResult.reason || emailResult.error);
+        }
+      }
+    } catch (emailErr) {
+      console.error('[EMAIL] Error sending new task email (Non-Fatal):', emailErr.message);
     }
 
     console.log('[FORENSIC] ========== TASK CREATED ==========');
@@ -3100,6 +3141,26 @@ router.patch('/tickets/:ticketId/status', async (req, res) => {
     if (status === 'CLOSED') ticket.closedAt = new Date();
 
     await ticket.save();
+
+    // --- Notification Hook (HIGH PRIORITY FIX) ---
+    if (status) {
+      try {
+        await createNotification({
+          recipientId: ticket.clientId,
+          type: NOTIFICATION_TYPES.TICKET_STATUS_CHANGED,
+          title: 'Ticket Status Updated',
+          message: `Your ticket #${ticket.ticketNumber} status changed to: ${status}`,
+          relatedEntity: {
+            entityType: 'TICKET',
+            entityId: ticket._id,
+          },
+        });
+        console.log('[NOTIFICATION] Ticket status change notification sent to client');
+      } catch (notifErr) {
+        console.error('[NOTIFICATION] Failed to notify client of ticket status change:', notifErr.message);
+      }
+    }
+    // ------------------------------------
 
     return res.status(200).json({
       success: true,

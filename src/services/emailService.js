@@ -36,7 +36,15 @@ const createTransporter = () => {
 
 // Check if email is configured
 const isEmailConfigured = () => {
-  return !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const configured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+  if (!configured) {
+    console.warn('[EMAIL CONFIG] ⚠️ SMTP not configured! Required env vars:');
+    console.warn('[EMAIL CONFIG]   - SMTP_HOST (current:', process.env.SMTP_HOST || 'NOT SET', ')');
+    console.warn('[EMAIL CONFIG]   - SMTP_PORT (current:', process.env.SMTP_PORT || 'NOT SET', ')');
+    console.warn('[EMAIL CONFIG]   - SMTP_USER (current:', process.env.SMTP_USER ? 'SET' : 'NOT SET', ')');
+    console.warn('[EMAIL CONFIG]   - SMTP_PASS (current:', process.env.SMTP_PASS ? 'SET' : 'NOT SET', ')');
+  }
+  return configured;
 };
 
 // Send email helper

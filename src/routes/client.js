@@ -1593,6 +1593,28 @@ router.post('/tickets', async (req, res) => {
       }],
     });
 
+    // --- Notification Hook (HIGH PRIORITY FIX) ---
+    // Notify admin(s) of new ticket
+    try {
+      const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).select('_id').exec();
+      for (const admin of admins) {
+        await createNotification({
+          recipientId: admin._id,
+          type: 'TICKET_CREATED',
+          title: 'New Support Ticket',
+          message: `New ticket #${ticket.ticketNumber}: ${subject.trim().substring(0, 50)}${subject.length > 50 ? '...' : ''}`,
+          relatedEntity: {
+            entityType: 'TICKET',
+            entityId: ticket._id,
+          },
+        });
+      }
+      console.log('[NOTIFICATION] Admin(s) notified of new ticket:', ticket.ticketNumber);
+    } catch (notifErr) {
+      console.error('[NOTIFICATION] Failed to notify admin of new ticket:', notifErr.message);
+    }
+    // ------------------------------------
+
     return res.status(201).json({
       success: true,
       ticket: {
