@@ -37,6 +37,11 @@ body.modal-open {
   }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Mobile-friendly touch targets */
 button, a, input[type="checkbox"], input[type="radio"] {
   -webkit-tap-highlight-color: rgba(0,0,0,0.1);

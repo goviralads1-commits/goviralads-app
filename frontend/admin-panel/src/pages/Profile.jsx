@@ -89,6 +89,24 @@ const Profile = () => {
     return () => document.body.classList.remove('modal-open');
   }, [showWalletModal, showNoticeModal, showTaskModal, showPlanModal, showSuspendModal, showDeleteModal, showCreateUserModal]);
 
+  // ESC key handler for modals
+  useEffect(() => {
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape') {
+        if (showCreateUserModal) setShowCreateUserModal(false);
+        else if (showWalletModal) setShowWalletModal(false);
+        else if (showNoticeModal) setShowNoticeModal(false);
+        else if (showTaskModal) setShowTaskModal(false);
+        else if (showPlanModal) setShowPlanModal(false);
+        else if (showSuspendModal) setShowSuspendModal(false);
+        else if (showDeleteModal) setShowDeleteModal(false);
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [showCreateUserModal, showWalletModal, showNoticeModal, showTaskModal, showPlanModal, showSuspendModal, showDeleteModal]);
+
   useEffect(() => {
     if (activeView === 'userManager') {
       fetchUsers();
@@ -1648,113 +1666,307 @@ const Profile = () => {
 
         {/* Create User Modal */}
         {showCreateUserModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" style={{ animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowCreateUserModal(false); }}>
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ animation: 'slideIn 0.3s ease' }}>
-              <h3 className="text-lg font-bold mb-4 flex items-center justify-between">
-                <span>➕ Create New User</span>
-                <button onClick={() => setShowCreateUserModal(false)} className="text-gray-400 hover:text-gray-600">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div 
+            style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              backgroundColor: 'rgba(0, 0, 0, 0.6)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              zIndex: 9999, 
+              padding: '16px',
+              backdropFilter: 'blur(4px)'
+            }} 
+            onClick={(e) => { if (e.target === e.currentTarget) setShowCreateUserModal(false); }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateUserModal(false); }}
+            tabIndex={-1}
+          >
+            <div 
+              style={{ 
+                backgroundColor: '#ffffff', 
+                borderRadius: '16px', 
+                padding: '24px', 
+                width: '100%', 
+                maxWidth: '440px', 
+                maxHeight: 'calc(100vh - 120px)', 
+                overflowY: 'auto', 
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                position: 'relative'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '24px' }}>👤</span>
+                  Create New User
+                </h3>
+                <button 
+                  onClick={() => setShowCreateUserModal(false)} 
+                  style={{ 
+                    width: '36px', 
+                    height: '36px', 
+                    borderRadius: '10px', 
+                    border: 'none', 
+                    backgroundColor: '#f1f5f9', 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.target.style.backgroundColor = '#e2e8f0'; }}
+                  onMouseLeave={(e) => { e.target.style.backgroundColor = '#f1f5f9'; }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
                     <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
                   </svg>
                 </button>
-              </h3>
-              <div className="space-y-4">
+              </div>
+
+              {/* Form Fields */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Email */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Email / Identifier *</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Email / Identifier *</label>
                   <input 
                     type="email" 
                     placeholder="user@example.com" 
                     value={createUserData.identifier} 
                     onChange={e => setCreateUserData({...createUserData, identifier: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 16px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      fontSize: '14px', 
+                      outline: 'none', 
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
+
+                {/* Password */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Password *</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Password *</label>
                   <input 
                     type="password" 
                     placeholder="Min. 6 characters" 
                     value={createUserData.password} 
                     onChange={e => setCreateUserData({...createUserData, password: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 16px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      fontSize: '14px', 
+                      outline: 'none', 
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
+
+                {/* Confirm Password */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Confirm Password *</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Confirm Password *</label>
                   <input 
                     type="password" 
                     placeholder="Re-enter password" 
                     value={createUserData.confirmPassword} 
                     onChange={e => setCreateUserData({...createUserData, confirmPassword: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 16px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      fontSize: '14px', 
+                      outline: 'none', 
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Role *</label>
-                  <select 
-                    value={createUserData.role} 
-                    onChange={e => setCreateUserData({...createUserData, role: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none bg-white cursor-pointer transition"
-                  >
-                    <option value="CLIENT">Client</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
+
+                {/* Role & Status Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Role *</label>
+                    <select 
+                      value={createUserData.role} 
+                      onChange={e => setCreateUserData({...createUserData, role: e.target.value})} 
+                      style={{ 
+                        width: '100%', 
+                        padding: '14px 16px', 
+                        borderRadius: '12px', 
+                        border: '2px solid #e2e8f0', 
+                        fontSize: '14px', 
+                        outline: 'none', 
+                        backgroundColor: '#ffffff', 
+                        cursor: 'pointer',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <option value="CLIENT">Client</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Status *</label>
+                    <select 
+                      value={createUserData.status} 
+                      onChange={e => setCreateUserData({...createUserData, status: e.target.value})} 
+                      style={{ 
+                        width: '100%', 
+                        padding: '14px 16px', 
+                        borderRadius: '12px', 
+                        border: '2px solid #e2e8f0', 
+                        fontSize: '14px', 
+                        outline: 'none', 
+                        backgroundColor: '#ffffff', 
+                        cursor: 'pointer',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="SUSPENDED">Suspended</option>
+                      <option value="DISABLED">Disabled</option>
+                    </select>
+                  </div>
                 </div>
+
+                {/* Full Name */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Status *</label>
-                  <select 
-                    value={createUserData.status} 
-                    onChange={e => setCreateUserData({...createUserData, status: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none bg-white cursor-pointer transition"
-                  >
-                    <option value="ACTIVE">Active</option>
-                    <option value="SUSPENDED">Suspended</option>
-                    <option value="DISABLED">Disabled</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Full Name</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Full Name</label>
                   <input 
                     type="text" 
                     placeholder="John Doe" 
                     value={createUserData.name} 
                     onChange={e => setCreateUserData({...createUserData, name: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 16px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      fontSize: '14px', 
+                      outline: 'none', 
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
+
+                {/* Phone */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Phone</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Phone</label>
                   <input 
                     type="tel" 
                     placeholder="+1 234 567 8900" 
                     value={createUserData.phone} 
                     onChange={e => setCreateUserData({...createUserData, phone: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 16px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      fontSize: '14px', 
+                      outline: 'none', 
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
+
+                {/* Company */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Company</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Company</label>
                   <input 
                     type="text" 
                     placeholder="Company name" 
                     value={createUserData.company} 
                     onChange={e => setCreateUserData({...createUserData, company: e.target.value})} 
-                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none transition"
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 16px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      fontSize: '14px', 
+                      outline: 'none', 
+                      transition: 'all 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
-                <div className="flex gap-2 pt-2">
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
                   <button 
                     onClick={() => setShowCreateUserModal(false)} 
-                    className="flex-1 py-3 rounded-lg border-2 border-gray-200 font-medium hover:bg-gray-50 transition"
+                    style={{ 
+                      flex: 1, 
+                      padding: '14px 20px', 
+                      borderRadius: '12px', 
+                      border: '2px solid #e2e8f0', 
+                      backgroundColor: '#ffffff', 
+                      fontSize: '14px', 
+                      fontWeight: '600', 
+                      color: '#64748b', 
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => { e.target.style.backgroundColor = '#f8fafc'; e.target.style.borderColor = '#cbd5e1'; }}
+                    onMouseLeave={(e) => { e.target.style.backgroundColor = '#ffffff'; e.target.style.borderColor = '#e2e8f0'; }}
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={handleCreateUser} 
                     disabled={saving} 
-                    className="flex-1 py-3 rounded-lg bg-indigo-600 text-white font-medium disabled:opacity-50 hover:bg-indigo-700 transition"
+                    style={{ 
+                      flex: 1, 
+                      padding: '14px 20px', 
+                      borderRadius: '12px', 
+                      border: 'none', 
+                      background: saving ? '#94a3b8' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', 
+                      fontSize: '14px', 
+                      fontWeight: '600', 
+                      color: '#ffffff', 
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      boxShadow: saving ? 'none' : '0 4px 14px rgba(99, 102, 241, 0.4)',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => { if (!saving) e.target.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={(e) => { if (!saving) e.target.style.transform = 'translateY(0)'; }}
                   >
-                    {saving ? 'Creating...' : 'Create User'}
+                    {saving ? (
+                      <>
+                        <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid #fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></span>
+                        Creating...
+                      </>
+                    ) : (
+                      'Create User'
+                    )}
                   </button>
                 </div>
               </div>
