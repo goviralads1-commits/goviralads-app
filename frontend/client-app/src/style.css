@@ -3,16 +3,29 @@
 @tailwind utilities;
 
 /* ============================================
-   MOBILE APP-LIKE BEHAVIOR
+   MOBILE APP-LIKE BEHAVIOR - SCROLL FIX
    ============================================ */
 
-/* Prevent zoom, allow vertical scroll */
-html {
+/* CRITICAL: Ensure native scroll is NEVER blocked */
+html, body {
+  /* Allow vertical scroll, block horizontal */
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  
+  /* NEVER lock height */
+  height: auto !important;
+  min-height: 100%;
+  
+  /* iOS Safari smooth scroll */
+  -webkit-overflow-scrolling: touch;
+  
+  /* Ensure touch gestures work */
+  touch-action: auto;
+  
+  /* Prevent text size adjust but allow scroll */
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
 }
 
 body {
@@ -22,20 +35,27 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
-  overflow-y: auto;
   /* Prevent pull-to-refresh but allow scroll */
   overscroll-behavior-y: contain;
 }
 
-/* Root container */
+/* Root container - MUST allow scroll */
 #root {
+  min-height: 100%;
   padding-bottom: 80px; /* Space for bottom nav */
+  /* Ensure scroll is not blocked */
+  overflow: visible !important;
 }
 
-/* Modal scroll lock */
+/* App wrapper - MUST allow scroll */
+.App {
+  min-height: 100%;
+  overflow: visible !important;
+}
+
+/* Modal scroll lock - ONLY when modal is open */
 body.modal-open {
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
 /* Mobile responsive fixes */
