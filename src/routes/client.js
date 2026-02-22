@@ -1572,14 +1572,36 @@ const Ticket = require('../models/Ticket');
 
 // Create new ticket
 router.post('/tickets', async (req, res) => {
+  console.log('[TICKET] ========== CREATE TICKET START ==========');
+  console.log('[TICKET] Timestamp:', new Date().toISOString());
+  
   try {
     const clientId = req.user.id;
+    console.log('[TICKET] Step 1: Client ID from token:', clientId);
+    
+    // Log incoming request body
+    console.log('[TICKET] Step 2: Request body received:');
+    console.log('[TICKET]   - subject:', req.body.subject || '(empty)');
+    console.log('[TICKET]   - category:', req.body.category || '(default: GENERAL)');
+    console.log('[TICKET]   - priority:', req.body.priority || '(default: NORMAL)');
+    console.log('[TICKET]   - message:', req.body.message ? `${req.body.message.substring(0, 50)}...` : '(empty)');
+    console.log('[TICKET]   - relatedTaskId:', req.body.relatedTaskId || '(none)');
+    
     const { subject, category, priority, message, relatedTaskId } = req.body;
 
+    // Validation
+    console.log('[TICKET] Step 3: Validation...');
     if (!subject || !message) {
+      console.error('[TICKET] ❌ VALIDATION FAILED: Subject or message is empty');
+      console.log('[TICKET]   - subject provided:', !!subject);
+      console.log('[TICKET]   - message provided:', !!message);
+      console.log('[TICKET] ========== CREATE TICKET END (400) ==========');
       return res.status(400).json({ error: 'Subject and message are required' });
     }
+    console.log('[TICKET] ✅ Validation passed');
 
+    // Create ticket
+    console.log('[TICKET] Step 4: Creating ticket in database...');
     const ticket = await Ticket.create({
       clientId,
       subject: subject.trim(),
@@ -1592,11 +1614,19 @@ router.post('/tickets', async (req, res) => {
         message: message.trim(),
       }],
     });
+    
+    console.log('[TICKET] ✅ Ticket created successfully!');
+    console.log('[TICKET]   - Ticket ID:', ticket._id.toString());
+    console.log('[TICKET]   - Ticket Number:', ticket.ticketNumber);
+    console.log('[TICKET]   - Status:', ticket.status);
 
     // --- Notification Hook (HIGH PRIORITY FIX) ---
     // Notify admin(s) of new ticket
+    console.log('[TICKET] Step 5: Notifying admins...');
     try {
       const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).select('_id').exec();
+      console.log('[TICKET]   - Found', admins.length, 'active admin(s)');
+      
       for (const admin of admins) {
         await createNotification({
           recipientId: admin._id,
@@ -1609,12 +1639,15 @@ router.post('/tickets', async (req, res) => {
           },
         });
       }
-      console.log('[NOTIFICATION] Admin(s) notified of new ticket:', ticket.ticketNumber);
+      console.log('[TICKET] ✅ Admin(s) notified of new ticket:', ticket.ticketNumber);
     } catch (notifErr) {
-      console.error('[NOTIFICATION] Failed to notify admin of new ticket:', notifErr.message);
+      console.error('[TICKET] ⚠️ Notification failed (non-blocking):', notifErr.message);
     }
     // ------------------------------------
 
+    console.log('[TICKET] Step 6: Sending success response (201)...');
+    console.log('[TICKET] ========== CREATE TICKET END (201) ==========');
+    
     return res.status(201).json({
       success: true,
       ticket: {
@@ -1628,8 +1661,12 @@ router.post('/tickets', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Failed to create ticket:', err);
-    return res.status(500).json({ error: 'Failed to create ticket' });
+    console.error('[TICKET] ❌ CREATE TICKET FAILED!');
+    console.error('[TICKET]   - Error name:', err.name);
+    console.error('[TICKET]   - Error message:', err.message);
+    console.error('[TICKET]   - Stack:', err.stack);
+    console.log('[TICKET] ========== CREATE TICKET END (500) ==========');
+    return res.status(500).json({ error: 'Failed to create ticket', details: err.message });
   }
 });
 

@@ -33,19 +33,29 @@ const Tickets = () => {
   };
 
   const handleCreate = async () => {
+    console.log('[TICKET UI] Create button clicked');
+    console.log('[TICKET UI] Form data:', formData);
+    
     if (!formData.subject.trim() || !formData.message.trim()) {
+      console.error('[TICKET UI] Validation failed: empty fields');
       alert('Please fill in all required fields');
       return;
     }
 
     try {
       setCreating(true);
-      await api.post('/client/tickets', formData);
+      console.log('[TICKET UI] Sending POST /client/tickets...');
+      const response = await api.post('/client/tickets', formData);
+      console.log('[TICKET UI] Success response:', response.data);
       setShowCreateModal(false);
       setFormData({ subject: '', category: 'GENERAL', priority: 'NORMAL', message: '' });
       fetchTickets();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to create ticket');
+      console.error('[TICKET UI] Create failed!');
+      console.error('[TICKET UI]   Status:', err.response?.status);
+      console.error('[TICKET UI]   Error:', err.response?.data || err.message);
+      const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message || 'Failed to create ticket';
+      alert(errorMsg);
     } finally {
       setCreating(false);
     }
