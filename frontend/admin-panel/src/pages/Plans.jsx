@@ -197,7 +197,7 @@ const Plans = () => {
       <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
         <Header />
         <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
-          <div style={{ width: '100px', backgroundColor: '#fff', borderRight: '1px solid #eef2f6', height: 'calc(100vh - 60px)', padding: '16px 0' }}>
+          <div style={{ width: '100px', backgroundColor: '#fff', borderRight: '1px solid #eef2f6', position: 'sticky', top: '60px', alignSelf: 'flex-start', padding: '16px 0' }}>
             {[1,2,3,4,5].map(i => (
               <div key={i} style={{ width: '68px', height: '90px', backgroundColor: '#f1f5f9', borderRadius: '16px', margin: '8px auto', animation: 'shimmer 1.5s infinite' }} />
             ))}
@@ -245,10 +245,11 @@ const Plans = () => {
           width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
-          height: 'calc(100vh - 60px)',
           position: 'sticky', top: '60px',
+          alignSelf: 'flex-start',
+          maxHeight: 'calc(100vh - 140px)',
           overflowY: 'auto', overflowX: 'hidden',
-          paddingTop: '16px', paddingBottom: '100px',
+          paddingTop: '16px', paddingBottom: '16px',
           scrollbarWidth: 'none', msOverflowStyle: 'none',
           boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
         }}>
