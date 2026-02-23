@@ -157,7 +157,15 @@ const Plans = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", paddingBottom: '100px' }}>
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#f5f7fa', 
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", 
+      paddingBottom: '100px',
+      overflowX: 'hidden',
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch'
+    }}>
       <Header />
       
       {/* Toast */}
@@ -175,18 +183,24 @@ const Plans = () => {
       {/* Main Layout: Left Category Rail + Right Content (Admin Pattern) */}
       <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
-        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position (Marketplace Feel) */}
+        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position (No Nested Scroll) */}
         <div style={{ 
           width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
-          position: 'sticky', top: '60px',
+          position: 'sticky', 
+          top: '60px',
           alignSelf: 'flex-start',
-          maxHeight: 'calc(100vh - 140px)',
-          overflowY: 'auto', overflowX: 'hidden',
-          paddingTop: '20px', paddingBottom: '20px',
-          scrollbarWidth: 'none', msOverflowStyle: 'none',
-          boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          paddingTop: '20px', 
+          paddingBottom: '20px',
+          scrollbarWidth: 'none', 
+          msOverflowStyle: 'none',
+          boxShadow: '4px 0 24px rgba(0,0,0,0.03)',
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-y'
         }}>
           {/* All Category Tab */}
           <div
@@ -664,6 +678,13 @@ const Plans = () => {
           display: none;
         }
         
+        /* Android Touch Fix - Prevent nested scroll trap */
+        body {
+          overflow-y: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          touch-action: pan-y !important;
+        }
+        
         /* MOBILE RESPONSIVE - Swiggy Marketplace Pattern */
         @media (max-width: 768px) {
           /* Vertical stack on mobile */
@@ -688,6 +709,7 @@ const Plans = () => {
             overflow-x: auto !important;
             overflow-y: hidden !important;
             -webkit-overflow-scrolling: touch !important;
+            touch-action: pan-x !important;
             box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
           }
           
