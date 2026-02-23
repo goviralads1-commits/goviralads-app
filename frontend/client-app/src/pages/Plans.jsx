@@ -148,33 +148,35 @@ const Plans = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", paddingBottom: '100px' }}>
       <Header />
       
       {/* Toast */}
       {toast && (
         <div style={{ 
           position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', 
-          backgroundColor: toast.type === 'error' ? '#dc3545' : '#28a745', 
-          color: '#fff', padding: '14px 28px', borderRadius: '16px', 
-          fontSize: '14px', fontWeight: '600', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', 
-          zIndex: 1000 
+          background: toast.type === 'error' ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+          color: '#fff', padding: '14px 28px', borderRadius: '14px', 
+          fontSize: '14px', fontWeight: '600', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', zIndex: 1000 
         }}>
           {toast.message}
         </div>
       )}
       
-      {/* Main Layout: Flex Container - Sidebar + Content */}
-      <div className="plans-layout" style={{ display: 'flex', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+      {/* Main Layout: Left Category Rail + Right Content (Admin Pattern) */}
+      <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
-        {/* LEFT VERTICAL CATEGORY RAIL - Fixed Width */}
-        <div className="category-rail" style={{ 
-          width: '100px',
-          flexShrink: 0,
+        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position (Admin Pattern) */}
+        <div style={{ 
+          width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
-          paddingTop: '16px',
-          paddingBottom: '80px',
+          position: 'sticky', top: '60px',
+          alignSelf: 'flex-start',
+          maxHeight: 'calc(100vh - 140px)',
+          overflowY: 'auto', overflowX: 'hidden',
+          paddingTop: '16px', paddingBottom: '16px',
+          scrollbarWidth: 'none', msOverflowStyle: 'none',
           boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
         }}>
           {/* All Category Tab */}
@@ -269,13 +271,8 @@ const Plans = () => {
           })}
         </div>
         
-        {/* RIGHT CONTENT AREA - Flex 1 (Takes remaining space) */}
-        <div className="main-content-area" style={{ 
-          flex: 1, 
-          minWidth: 0,
-          padding: '24px 20px', 
-          paddingBottom: '100px'
-        }}>
+        {/* RIGHT CONTENT AREA (Admin Pattern) */}
+        <div style={{ flex: 1, padding: '24px 20px', paddingBottom: '100px', minWidth: 0 }}>
           
           {/* Header Section */}
           <div style={{ marginBottom: '24px' }}>
@@ -649,27 +646,26 @@ const Plans = () => {
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
-        /* Clean scrollbars */
-        .category-rail::-webkit-scrollbar,
-        .main-content-area::-webkit-scrollbar {
-          width: 4px;
-        }
-        .category-rail::-webkit-scrollbar-thumb,
-        .main-content-area::-webkit-scrollbar-thumb {
-          background: rgba(0,0,0,0.15);
-          border-radius: 4px;
+        /* Hide scrollbar on sidebar - Admin pattern */
+        div[style*="position: sticky"]::-webkit-scrollbar {
+          display: none;
         }
         
-        /* MOBILE RESPONSIVE - SWIGGY/ZOMATO PATTERN */
+        /* MOBILE RESPONSIVE - Swiggy Pattern */
         @media (max-width: 768px) {
-          /* Layout becomes vertical stack */
-          .plans-layout {
+          /* Make parent flex container vertical */
+          body > div > div > div[style*="display: flex"][style*="maxWidth: 1400px"] {
             flex-direction: column !important;
           }
           
-          /* Sidebar becomes horizontal scroll rail */
-          .category-rail {
+          /* Sidebar becomes horizontal scroll */
+          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
+            position: relative !important;
+            top: 0 !important;
             width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            max-height: none !important;
             border-right: none !important;
             border-bottom: 1px solid #eef2f6 !important;
             padding: 12px 16px !important;
@@ -679,37 +675,37 @@ const Plans = () => {
             overflow-x: auto !important;
             overflow-y: hidden !important;
             -webkit-overflow-scrolling: touch !important;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
           }
           
-          /* Category items inline - compact */
-          .category-rail > div {
+          /* Category items inline */
+          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] > div {
             flex-shrink: 0 !important;
             margin: 0 !important;
-            padding: 10px 12px !important;
+            padding: 10px 8px !important;
             min-width: 70px !important;
           }
           
-          /* Content area full width - uses body scroll */
-          .main-content-area {
-            width: 100% !important;
-            padding: 16px 12px 100px !important;
+          /* Content area full width */
+          body > div > div > div[style*="display: flex"] > div[style*="flex: 1"] {
+            padding: 16px 12px 120px !important;
           }
           
-          /* Mobile grid - 2 columns, tighter gap */
-          .plans-grid {
+          /* Grid 2 columns on mobile */
+          div[style*="gridTemplateColumns"][style*="repeat"] {
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 12px !important;
           }
         }
         
-        /* Tablet - Narrower sidebar but still vertical */
+        /* Tablet - narrower sidebar */
         @media (min-width: 769px) and (max-width: 1024px) {
-          .category-rail {
+          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
             width: 80px !important;
+            min-width: 80px !important;
+            max-width: 80px !important;
           }
           
-          .plans-grid {
+          div[style*="gridTemplateColumns"][style*="repeat"] {
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 16px !important;
           }
