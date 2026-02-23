@@ -15,8 +15,17 @@ const Plans = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sectionFilter, setSectionFilter] = useState('ALL');
+  
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Create Panel State
   const [showCreatePanel, setShowCreatePanel] = useState(false);
@@ -179,7 +188,7 @@ const Plans = () => {
     }
   };
 
-  // Filter plans
+  // Filter plans with debounced search
   const filteredPlans = plans.filter(plan => {
     if (selectedCategory !== 'ALL' && plan.categoryId !== selectedCategory) return false;
     if (statusFilter === 'ACTIVE' && !plan.isActivePlan) return false;
@@ -187,7 +196,7 @@ const Plans = () => {
     if (sectionFilter === 'FEATURED' && !plan.isFeatured) return false;
     if (sectionFilter === 'POPULAR' && !plan.isPopular) return false;
     if (sectionFilter === 'NEW' && !plan.isNew) return false;
-    if (searchQuery && !plan.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (debouncedSearch && !plan.title.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   });
 
@@ -288,8 +297,10 @@ const Plans = () => {
             }}>{plans.length}</span>
           </div>
           
-          {/* Dynamic Category Tabs */}
-          {categories.map(cat => {
+          {/* Dynamic Category Tabs - Filter out duplicate "All" */}
+          {categories
+            .filter(cat => cat.name && cat.name.toLowerCase() !== 'all')
+            .map(cat => {
             const catId = cat.id || cat._id;
             const count = plans.filter(p => p.categoryId === catId).length;
             const isSelected = selectedCategory === catId;

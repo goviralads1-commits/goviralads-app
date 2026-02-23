@@ -19,6 +19,15 @@ const Plans = () => {
   const [selectedCategory, setSelectedCategory] = useState(urlCategory || 'ALL');
   const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   
   // Media carousel state
   const [activeMediaIndex, setActiveMediaIndex] = useState({});
@@ -34,7 +43,7 @@ const Plans = () => {
     try {
       const params = { 
         categoryId: selectedCategory !== 'ALL' ? selectedCategory : undefined,
-        search: searchQuery || undefined
+        search: debouncedSearch || undefined
       };
       
       const [plansRes, categoriesRes] = await Promise.all([
@@ -50,7 +59,7 @@ const Plans = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, debouncedSearch]);
 
   useEffect(() => {
     setLoading(true);
@@ -215,8 +224,10 @@ const Plans = () => {
             }}>{plans.length}</span>
           </div>
           
-          {/* Dynamic Category Tabs */}
-          {categories.map(cat => {
+          {/* Dynamic Category Tabs - Filter out duplicate "All" */}
+          {categories
+            .filter(cat => cat.name && cat.name.toLowerCase() !== 'all')
+            .map(cat => {
             const catId = cat.id || cat._id;
             const count = plans.filter(p => p.categoryId === catId).length;
             const isSelected = selectedCategory === catId;
