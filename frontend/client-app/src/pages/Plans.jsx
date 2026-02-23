@@ -164,21 +164,18 @@ const Plans = () => {
         </div>
       )}
       
-      {/* Main Layout: Left Category Rail + Right Content */}
+      {/* Main Layout: Responsive Sidebar + Content */}
       <div style={{ display: 'flex', maxWidth: '1200px', margin: '0 auto' }}>
         
-        {/* LEFT VERTICAL CATEGORY RAIL - Premium Style (matches Admin) */}
+        {/* LEFT VERTICAL CATEGORY RAIL - Responsive */}
         <div className="category-rail" style={{ 
           width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
-          position: 'sticky', top: '60px',
           alignSelf: 'flex-start',
-          maxHeight: 'calc(100vh - 140px)',
-          overflowY: 'auto', overflowX: 'hidden',
           paddingTop: '16px', paddingBottom: '16px',
-          scrollbarWidth: 'none', msOverflowStyle: 'none',
-          boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
+          boxShadow: '4px 0 24px rgba(0,0,0,0.03)',
+          overflowX: 'hidden'
         }}>
           {/* All Category Tab */}
           <div
@@ -350,10 +347,10 @@ const Plans = () => {
             )}
           </div>
         ) : (
-          /* Premium Grocery Grid */
-          <div style={{ 
+          /* Responsive Premium Grid */
+          <div className="plans-grid" style={{ 
             display: viewMode === 'grid' ? 'grid' : 'flex', 
-            gridTemplateColumns: viewMode === 'grid' ? 'repeat(2, 1fr)' : undefined,
+            gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(240px, 1fr))' : undefined,
             flexDirection: viewMode === 'list' ? 'column' : undefined,
             gap: '20px'
           }}>
@@ -646,7 +643,48 @@ const Plans = () => {
         @keyframes shimmer { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        /* Hide scrollbars but allow scrolling */
         div::-webkit-scrollbar { display: none; }
+        
+        /* MOBILE RESPONSIVE FIXES */
+        @media (max-width: 768px) {
+          /* Hide sidebar on mobile */
+          .category-rail {
+            display: none !important;
+          }
+          
+          /* Full width content on mobile */
+          .main-content-area {
+            width: 100% !important;
+            padding: 16px 12px 100px !important;
+          }
+          
+          /* Mobile grid - Always 2 columns */
+          .plans-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 12px !important;
+          }
+          
+          /* Ensure proper scroll behavior on mobile */
+          body {
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            touch-action: auto !important;
+          }
+        }
+        
+        /* Tablet */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .category-rail {
+            width: 80px !important;
+            min-width: 80px !important;
+          }
+          
+          .plans-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
       `}</style>
     </div>
   );
