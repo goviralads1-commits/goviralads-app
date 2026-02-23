@@ -1796,10 +1796,20 @@ router.post('/notices', async (req, res) => {
       return res.status(400).json({ error: 'Notice content is required' });
     }
 
-    // Convert targetClients strings to ObjectIds
+    // Convert targetClients strings to ObjectIds with validation
     let processedTargetClients = [];
     if (targetType === 'SELECTED' && Array.isArray(targetClients) && targetClients.length > 0) {
-      processedTargetClients = targetClients.map(id => mongoose.Types.ObjectId(id));
+      for (const id of targetClients) {
+        if (mongoose.Types.ObjectId.isValid(id)) {
+          processedTargetClients.push(new mongoose.Types.ObjectId(id));
+        } else {
+          console.warn(`[NOTICE] Invalid client ID skipped: ${id}`);
+        }
+      }
+      
+      if (processedTargetClients.length === 0) {
+        return res.status(400).json({ error: 'No valid client IDs provided for SELECTED target type' });
+      }
     }
 
     const notice = await Notice.create({
@@ -1830,8 +1840,9 @@ router.post('/notices', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Failed to create notice:', err);
-    return res.status(500).json({ error: 'Failed to create notice' });
+    console.error('[NOTICE CREATION ERROR]', err.message);
+    console.error('[NOTICE CREATION STACK]', err.stack);
+    return res.status(500).json({ error: `Failed to create notice: ${err.message}` });
   }
 });
 
