@@ -452,9 +452,18 @@ const Dashboard = () => {
           </div>
           <div style={{ 
             background: banners[currentBanner].gradient,
-            borderRadius: '24px', padding: '32px 24px', minHeight: '140px',
-            display: 'flex', flexDirection: 'column', justifyContent: 'center',
-            transition: 'background 0.5s ease', overflow: 'hidden', position: 'relative'
+            borderRadius: '24px',
+            padding: '32px 24px',
+            aspectRatio: '8 / 3',
+            minHeight: '180px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            transition: 'background 0.5s ease',
+            overflow: 'hidden',
+            position: 'relative',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
           }}>
             <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
             <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
