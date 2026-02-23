@@ -726,10 +726,44 @@ const Plans = () => {
             padding: 20px 16px 140px !important;
           }
           
-          /* Grid 2 columns, better gap */
+          /* Grid 2 columns - clean responsive */
           div[style*="gridTemplateColumns"][style*="repeat"] {
             grid-template-columns: repeat(2, 1fr) !important;
-            gap: 16px !important;
+            gap: 14px !important;
+          }
+          
+          /* Mobile Card Adjustments - Proportional & Premium */
+          .plans-grid > div {
+            border-radius: 16px !important;
+          }
+          
+          /* Mobile Card Content Padding */
+          .plans-grid > div > div:last-child {
+            padding: 16px !important;
+          }
+          
+          /* Mobile Title Size */
+          .plans-grid h3 {
+            font-size: 14px !important;
+            line-height: 1.3 !important;
+            margin: 0 0 6px !important;
+          }
+          
+          /* Mobile Price Size */
+          .plans-grid h3 + div span[style*="fontSize: '20px'"] {
+            font-size: 18px !important;
+          }
+          
+          /* Mobile Button Container */
+          .plans-grid > div > div:last-child > div:last-child {
+            gap: 8px !important;
+          }
+          
+          /* Mobile Buttons */
+          .plans-grid button {
+            padding: 10px 8px !important;
+            font-size: 12px !important;
+            border-radius: 10px !important;
           }
         }
         
