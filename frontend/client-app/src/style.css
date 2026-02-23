@@ -9,18 +9,18 @@
 /* CRITICAL: Ensure native scroll is NEVER blocked */
 html, body {
   /* Allow vertical scroll, block horizontal */
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
+  overflow-x: hidden;
+  overflow-y: visible;
   
   /* NEVER lock height */
-  height: auto !important;
+  height: auto;
   min-height: 100%;
   
   /* iOS Safari smooth scroll */
   -webkit-overflow-scrolling: touch;
   
-  /* Ensure touch gestures work */
-  touch-action: auto;
+  /* Ensure touch gestures work - vertical scroll only */
+  touch-action: pan-y;
   
   /* Prevent text size adjust but allow scroll */
   -webkit-text-size-adjust: 100%;
@@ -44,13 +44,13 @@ body {
   min-height: 100%;
   padding-bottom: 80px; /* Space for bottom nav */
   /* Ensure scroll is not blocked */
-  overflow: visible !important;
+  overflow: visible;
 }
 
 /* App wrapper - MUST allow scroll */
 .App {
   min-height: 100%;
-  overflow: visible !important;
+  overflow: visible;
 }
 
 /* Modal scroll lock - ONLY when modal is open */

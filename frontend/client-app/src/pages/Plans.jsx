@@ -674,13 +674,6 @@ const Plans = () => {
           display: none;
         }
         
-        /* Single scroll container - body natural scroll */
-        html, body {
-          overflow-x: hidden;
-          overflow-y: visible;
-          -webkit-overflow-scrolling: touch;
-        }
-        
         /* MOBILE RESPONSIVE - Swiggy Marketplace Pattern */
         @media (max-width: 768px) {
           /* Vertical stack on mobile */
