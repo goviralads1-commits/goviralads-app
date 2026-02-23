@@ -166,7 +166,7 @@ const Plans = () => {
       {/* Main Layout: Left Category Rail + Right Content (Admin Pattern) */}
       <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
-        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position (Admin Pattern) */}
+        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position (Marketplace Feel) */}
         <div style={{ 
           width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
@@ -175,7 +175,7 @@ const Plans = () => {
           alignSelf: 'flex-start',
           maxHeight: 'calc(100vh - 140px)',
           overflowY: 'auto', overflowX: 'hidden',
-          paddingTop: '16px', paddingBottom: '16px',
+          paddingTop: '20px', paddingBottom: '20px',
           scrollbarWidth: 'none', msOverflowStyle: 'none',
           boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
         }}>
@@ -184,10 +184,11 @@ const Plans = () => {
             onClick={() => setSelectedCategory('ALL')}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              padding: '16px 10px', margin: '6px 8px', borderRadius: '16px',
-              cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+              padding: '16px 10px', margin: '0 8px 14px', borderRadius: '18px',
+              cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               background: selectedCategory === 'ALL' ? 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)' : 'transparent',
-              boxShadow: selectedCategory === 'ALL' ? '0 4px 16px rgba(59, 130, 246, 0.15), inset 0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none'
+              boxShadow: selectedCategory === 'ALL' ? '0 4px 20px rgba(59, 130, 246, 0.2), inset 0 0 0 2px rgba(59, 130, 246, 0.3)' : 'none',
+              transform: selectedCategory === 'ALL' ? 'scale(1.02)' : 'scale(1)'
             }}
           >
             <div style={{ 
@@ -227,10 +228,11 @@ const Plans = () => {
                 onClick={() => setSelectedCategory(catId)}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  padding: '16px 10px', margin: '6px 8px', borderRadius: '16px',
-                  cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  padding: '16px 10px', margin: '0 8px 14px', borderRadius: '18px',
+                  cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   backgroundColor: isSelected ? `${themeColor}12` : 'transparent',
-                  boxShadow: isSelected ? `0 4px 16px ${themeColor}20, inset 0 0 0 2px ${themeColor}30` : 'none'
+                  boxShadow: isSelected ? `0 4px 20px ${themeColor}25, inset 0 0 0 2px ${themeColor}35` : 'none',
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)'
                 }}
               >
                 <div style={{ 
@@ -271,8 +273,8 @@ const Plans = () => {
           })}
         </div>
         
-        {/* RIGHT CONTENT AREA (Admin Pattern) */}
-        <div style={{ flex: 1, padding: '24px 20px', paddingBottom: '100px', minWidth: 0 }}>
+        {/* RIGHT CONTENT AREA - Marketplace Experience */}
+        <div style={{ flex: 1, padding: '28px 24px', paddingBottom: '120px', minWidth: 0 }}>
           
           {/* Header Section */}
           <div style={{ marginBottom: '24px' }}>
@@ -349,12 +351,12 @@ const Plans = () => {
             )}
           </div>
         ) : (
-          /* Responsive Premium Grid */
+          /* Responsive Premium Grid - Marketplace Spacing */
           <div className="plans-grid" style={{ 
             display: viewMode === 'grid' ? 'grid' : 'flex', 
-            gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(240px, 1fr))' : undefined,
+            gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(260px, 1fr))' : undefined,
             flexDirection: viewMode === 'list' ? 'column' : undefined,
-            gap: '20px'
+            gap: '24px'
           }}>
             {plans.map((plan, planIndex) => {
               const countdown = formatCountdown(plan.countdownEndDate);
@@ -385,21 +387,21 @@ const Plans = () => {
                   onClick={() => navigate(`/plans/${plan.id}`)}
                   style={{
                     backgroundColor: '#ffffff', 
-                    borderRadius: '18px', 
+                    borderRadius: '20px', 
                     overflow: 'hidden',
-                    boxShadow: '0 2px 20px rgba(0,0,0,0.06)',
+                    boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
                     cursor: 'pointer',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     display: viewMode === 'list' ? 'flex' : 'block',
-                    border: '1px solid rgba(0,0,0,0.04)'
+                    border: '1px solid rgba(0,0,0,0.06)'
                   }}
                   onMouseEnter={(e) => { 
-                    e.currentTarget.style.transform = 'translateY(-6px)';
-                    e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.12)';
+                    e.currentTarget.style.transform = 'translateY(-8px)';
+                    e.currentTarget.style.boxShadow = '0 24px 48px rgba(0,0,0,0.15)';
                   }}
                   onMouseLeave={(e) => { 
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 20px rgba(0,0,0,0.06)';
+                    e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.08)';
                   }}
                 >
                   {/* Image Section - Premium Design */}
@@ -544,8 +546,8 @@ const Plans = () => {
                     )}
                   </div>
 
-                  {/* Content Section - Premium Typography */}
-                  <div style={{ padding: viewMode === 'list' ? '18px' : '18px', flex: 1 }}>
+                  {/* Content Section - Premium Typography & Spacing */}
+                  <div style={{ padding: viewMode === 'list' ? '20px' : '20px', flex: 1 }}>
                     <h3 style={{ 
                       fontSize: viewMode === 'list' ? '16px' : '15px', 
                       fontWeight: '600', 
@@ -646,19 +648,19 @@ const Plans = () => {
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
-        /* Hide scrollbar on sidebar - Admin pattern */
+        /* Hide scrollbar on sidebar - Premium feel */
         div[style*="position: sticky"]::-webkit-scrollbar {
           display: none;
         }
         
-        /* MOBILE RESPONSIVE - Swiggy Pattern */
+        /* MOBILE RESPONSIVE - Swiggy Marketplace Pattern */
         @media (max-width: 768px) {
-          /* Make parent flex container vertical */
+          /* Vertical stack on mobile */
           body > div > div > div[style*="display: flex"][style*="maxWidth: 1400px"] {
             flex-direction: column !important;
           }
           
-          /* Sidebar becomes horizontal scroll */
+          /* Sidebar horizontal scroll */
           body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
             position: relative !important;
             top: 0 !important;
@@ -668,46 +670,47 @@ const Plans = () => {
             max-height: none !important;
             border-right: none !important;
             border-bottom: 1px solid #eef2f6 !important;
-            padding: 12px 16px !important;
+            padding: 16px !important;
             display: flex !important;
             flex-direction: row !important;
-            gap: 12px !important;
+            gap: 10px !important;
             overflow-x: auto !important;
             overflow-y: hidden !important;
             -webkit-overflow-scrolling: touch !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
           }
           
-          /* Category items inline */
+          /* Category items compact on mobile */
           body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] > div {
             flex-shrink: 0 !important;
             margin: 0 !important;
-            padding: 10px 8px !important;
-            min-width: 70px !important;
+            padding: 12px 10px !important;
+            min-width: 75px !important;
           }
           
-          /* Content area full width */
+          /* Content area mobile spacing */
           body > div > div > div[style*="display: flex"] > div[style*="flex: 1"] {
-            padding: 16px 12px 120px !important;
+            padding: 20px 16px 140px !important;
           }
           
-          /* Grid 2 columns on mobile */
-          div[style*="gridTemplateColumns"][style*="repeat"] {
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 12px !important;
-          }
-        }
-        
-        /* Tablet - narrower sidebar */
-        @media (min-width: 769px) and (max-width: 1024px) {
-          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
-            width: 80px !important;
-            min-width: 80px !important;
-            max-width: 80px !important;
-          }
-          
+          /* Grid 2 columns, better gap */
           div[style*="gridTemplateColumns"][style*="repeat"] {
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 16px !important;
+          }
+        }
+        
+        /* Tablet - Premium spacing maintained */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
+            width: 90px !important;
+            min-width: 90px !important;
+            max-width: 90px !important;
+          }
+          
+          div[style*="gridTemplateColumns"][style*="repeat"] {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
           }
         }
       `}</style>
