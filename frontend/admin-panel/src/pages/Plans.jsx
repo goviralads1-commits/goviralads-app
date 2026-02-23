@@ -249,17 +249,22 @@ const Plans = () => {
       {/* Main Layout: Left Category Rail + Right Content */}
       <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
-        {/* LEFT VERTICAL CATEGORY RAIL - Premium Style (matches Client) */}
-        <div style={{ 
+        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position */}
+        <div className="category-rail" style={{ 
           width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
-          position: 'sticky', top: '60px',
+          position: 'sticky', 
+          top: '60px',
           alignSelf: 'flex-start',
-          maxHeight: 'calc(100vh - 140px)',
-          overflowY: 'auto', overflowX: 'hidden',
-          paddingTop: '16px', paddingBottom: '16px',
-          scrollbarWidth: 'none', msOverflowStyle: 'none',
+          height: 'fit-content',
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto', 
+          overflowX: 'hidden',
+          paddingTop: '16px', 
+          paddingBottom: '16px',
+          scrollbarWidth: 'none', 
+          msOverflowStyle: 'none',
           boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
         }}>
           {/* All Category Tab */}
