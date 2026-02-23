@@ -1147,19 +1147,7 @@ router.get('/notices', async (req, res) => {
     const { page = 1, limit = 10, viewAll = false } = req.query;
 
     // Build filter for notices targeting this client or ALL
-    const filter = {
-      isActive: true,
-      $or: [
-        { targetType: 'ALL' },
-        { targetType: 'SELECTED', targetClients: clientId },
-      ],
-      $or: [
-        { expiresAt: null },
-        { expiresAt: { $gt: new Date() } },
-      ],
-    };
-
-    // Combine $or conditions properly
+    // Combine targeting filter AND expiration filter using $and
     const effectiveFilter = {
       isActive: true,
       $and: [

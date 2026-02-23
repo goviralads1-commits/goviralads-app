@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Wallet = require('../models/Wallet');
 const { WalletTransaction, TRANSACTION_TYPES } = require('../models/WalletTransaction');
 const { RechargeRequest, RECHARGE_STATUS } = require('../models/RechargeRequest');
@@ -1795,13 +1796,19 @@ router.post('/notices', async (req, res) => {
       return res.status(400).json({ error: 'Notice content is required' });
     }
 
+    // Convert targetClients strings to ObjectIds
+    let processedTargetClients = [];
+    if (targetType === 'SELECTED' && Array.isArray(targetClients) && targetClients.length > 0) {
+      processedTargetClients = targetClients.map(id => mongoose.Types.ObjectId(id));
+    }
+
     const notice = await Notice.create({
       title: title.trim(),
       content: content.trim(),
       type: type || 'NOTICE',
       priority: priority || 'NORMAL',
       targetType: targetType || 'ALL',
-      targetClients: targetType === 'SELECTED' && Array.isArray(targetClients) ? targetClients : [],
+      targetClients: processedTargetClients,
       responseRequired: responseRequired || false,
       responseType: responseType || 'NONE',
       isActive: isActive !== false,
