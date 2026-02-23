@@ -161,10 +161,7 @@ const Plans = () => {
       minHeight: '100vh', 
       backgroundColor: '#f5f7fa', 
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", 
-      paddingBottom: '100px',
-      overflowX: 'hidden',
-      overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch'
+      paddingBottom: '100px'
     }}>
       <Header />
       
@@ -183,14 +180,15 @@ const Plans = () => {
       {/* Main Layout: Left Category Rail + Right Content (Admin Pattern) */}
       <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
-        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position (No Nested Scroll) */}
-        <div style={{ 
+        {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position */}
+        <div className="category-rail" style={{ 
           width: '100px', minWidth: '100px', maxWidth: '100px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
           position: 'sticky', 
           top: '60px',
           alignSelf: 'flex-start',
+          height: 'fit-content',
           maxHeight: 'calc(100vh - 80px)',
           overflowY: 'auto',
           overflowX: 'hidden',
@@ -198,9 +196,7 @@ const Plans = () => {
           paddingBottom: '20px',
           scrollbarWidth: 'none', 
           msOverflowStyle: 'none',
-          boxShadow: '4px 0 24px rgba(0,0,0,0.03)',
-          WebkitOverflowScrolling: 'touch',
-          touchAction: 'pan-y'
+          boxShadow: '4px 0 24px rgba(0,0,0,0.03)'
         }}>
           {/* All Category Tab */}
           <div
@@ -674,15 +670,15 @@ const Plans = () => {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         
         /* Hide scrollbar on sidebar - Premium feel */
-        div[style*="position: sticky"]::-webkit-scrollbar {
+        .category-rail::-webkit-scrollbar {
           display: none;
         }
         
-        /* Android Touch Fix - Prevent nested scroll trap */
-        body {
-          overflow-y: auto !important;
-          -webkit-overflow-scrolling: touch !important;
-          touch-action: pan-y !important;
+        /* Single scroll container - body natural scroll */
+        html, body {
+          overflow-x: hidden;
+          overflow-y: visible;
+          -webkit-overflow-scrolling: touch;
         }
         
         /* MOBILE RESPONSIVE - Swiggy Marketplace Pattern */
@@ -693,12 +689,13 @@ const Plans = () => {
           }
           
           /* Sidebar horizontal scroll */
-          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
+          .category-rail {
             position: relative !important;
             top: 0 !important;
             width: 100% !important;
             min-width: 100% !important;
             max-width: 100% !important;
+            height: auto !important;
             max-height: none !important;
             border-right: none !important;
             border-bottom: 1px solid #eef2f6 !important;
@@ -709,12 +706,11 @@ const Plans = () => {
             overflow-x: auto !important;
             overflow-y: hidden !important;
             -webkit-overflow-scrolling: touch !important;
-            touch-action: pan-x !important;
             box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
           }
           
           /* Category items compact on mobile */
-          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] > div {
+          .category-rail > div {
             flex-shrink: 0 !important;
             margin: 0 !important;
             padding: 12px 10px !important;
@@ -727,7 +723,7 @@ const Plans = () => {
           }
           
           /* Grid 2 columns - clean responsive */
-          div[style*="gridTemplateColumns"][style*="repeat"] {
+          .plans-grid {
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 14px !important;
           }
@@ -769,13 +765,13 @@ const Plans = () => {
         
         /* Tablet - Premium spacing maintained */
         @media (min-width: 769px) and (max-width: 1024px) {
-          body > div > div > div[style*="display: flex"] > div[style*="position: sticky"] {
+          .category-rail {
             width: 90px !important;
             min-width: 90px !important;
             max-width: 90px !important;
           }
           
-          div[style*="gridTemplateColumns"][style*="repeat"] {
+          .plans-grid {
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 20px !important;
           }
