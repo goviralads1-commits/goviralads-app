@@ -279,17 +279,13 @@ const OfficeCMS = () => {
                   <input type="url" value={bannerForm.imageUrl} onChange={e => setBannerForm({...bannerForm, imageUrl: e.target.value})} placeholder="https://..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
                   {/* HELPER TEXT - Image Size Recommendations */}
                   <div style={{ marginTop: '8px', padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <p style={{ fontSize: '11px', fontWeight: '600', color: '#475569', margin: '0 0 6px 0' }}>📐 Recommended Banner Sizes:</p>
+                    <p style={{ fontSize: '11px', fontWeight: '600', color: '#475569', margin: '0 0 6px 0' }}>📐 Recommended Banner Size:</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>Desktop:</span>
-                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#0f172a' }}>1600×600 px (8:3)</span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>Optimal:</span>
+                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#0f172a' }}>1920×720 px (16:6)</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>Mobile:</span>
-                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#0f172a' }}>800×1000 px (4:5)</span>
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', fontStyle: 'italic' }}>Format: JPG or WebP • Max: 500KB</div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', fontStyle: 'italic' }}>Format: JPG or WebP • Max: 500KB • Slim horizontal strip</div>
                     </div>
                   </div>
                 </div>
