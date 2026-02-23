@@ -150,7 +150,7 @@ const Plans = () => {
       if (formData.offerPrice) payload.offerPrice = Number(formData.offerPrice);
       if (formData.originalPrice) payload.originalPrice = Number(formData.originalPrice);
 
-      const response = await api.post('/admin/tasks', payload);
+      const response = await api.post('/admin/tasks/assign', payload);
       
       if (response.data.mode === 'PLAN') {
         setToast({ type: 'success', message: 'Plan created!' });
