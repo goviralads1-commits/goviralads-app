@@ -38,7 +38,7 @@ body {
 
 /* Root container - Main scroll container for Android compatibility */
 #root {
-  min-height: 100vh;
+  min-height: 100%;
   padding-bottom: 80px; /* Space for bottom nav */
   /* Main scroll container - Android requires explicit container */
   overflow-y: auto;
