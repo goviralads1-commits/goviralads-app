@@ -143,34 +143,53 @@ const Dashboard = () => {
         {/* BANNER CAROUSEL */}
         {banners.length > 0 && (
         <div style={{ position: 'relative', marginBottom: '24px' }}>
-          <div style={{ 
-            background: banners[currentBanner]?.imageUrl ? `url(${banners[currentBanner].imageUrl}) center/cover` : (banners[currentBanner]?.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
-            borderRadius: '24px',
-            padding: '32px 24px',
-            aspectRatio: '16 / 6',
-            minHeight: '140px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            transition: 'background 0.5s ease',
-            overflow: 'hidden',
-            position: 'relative',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-          }}>
+          <div 
+            className="banner-container"
+            style={{ 
+              background: banners[currentBanner]?.imageUrl ? `url(${banners[currentBanner].imageUrl}) center/cover` : (banners[currentBanner]?.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
+              borderRadius: '24px',
+              padding: '32px 24px',
+              aspectRatio: '16 / 6',
+              minHeight: '140px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              transition: 'background 0.5s ease',
+              overflow: 'hidden',
+              position: 'relative',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }}
+          >
+            <style>{`
+              @media (max-width: 768px) {
+                .banner-container {
+                  aspect-ratio: 16 / 7 !important;
+                  background-size: contain !important;
+                  min-height: 160px !important;
+                }
+              }
+            `}</style>
             <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
-            <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
-              {banners[currentBanner]?.title}
-            </h2>
-            <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.9)', margin: '0 0 16px', position: 'relative', zIndex: 1 }}>
-              {banners[currentBanner]?.subtitle}
-            </p>
-            <button 
-              onClick={() => handleCtaClick(banners[currentBanner])}
-              style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', cursor: 'pointer', position: 'relative', zIndex: 1 }}
-            >
-              {banners[currentBanner]?.ctaText || 'Explore Now'}
-            </button>
+            {banners[currentBanner]?.title && (
+              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
+                {banners[currentBanner].title}
+              </h2>
+            )}
+            {banners[currentBanner]?.subtitle && (
+              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.9)', margin: '0 0 16px', position: 'relative', zIndex: 1 }}>
+                {banners[currentBanner].subtitle}
+              </p>
+            )}
+            {(banners[currentBanner]?.ctaText && banners[currentBanner]?.ctaLink) && (
+              <button 
+                onClick={() => handleCtaClick(banners[currentBanner])}
+                style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', cursor: 'pointer', position: 'relative', zIndex: 1 }}
+              >
+                {banners[currentBanner].ctaText}
+              </button>
+            )}
           </div>
           {banners.length > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '14px' }}>

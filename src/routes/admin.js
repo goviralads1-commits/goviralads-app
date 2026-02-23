@@ -3734,19 +3734,17 @@ router.post('/office-config/banners', async (req, res) => {
   try {
     const { title, subtitle, gradient, imageUrl, ctaText, ctaLink, ctaLinkType } = req.body;
     
-    if (!title) {
-      return res.status(400).json({ error: 'Banner title is required' });
-    }
+    // Title is now optional - no validation required
     
     const config = await OfficeConfig.getConfig();
     const newBanner = {
       id: `banner_${Date.now()}`,
-      title,
+      title: title || '',
       subtitle: subtitle || '',
       gradient: gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       imageUrl: imageUrl || '',
-      ctaText: ctaText || 'Explore Now',
-      ctaLink: ctaLink || '/plans',
+      ctaText: ctaText || '',
+      ctaLink: ctaLink || '',
       ctaLinkType: ctaLinkType || 'internal',
       isActive: true,
       order: config.banners.length

@@ -51,11 +51,11 @@ const OfficeCMS = () => {
 
   // Banner handlers
   const handleAddBanner = async () => {
-    if (!bannerForm.title.trim()) { showToast('error', 'Title required'); return; }
+    // Title is now optional - no validation required
     try {
       const res = await api.post('/admin/office-config/banners', bannerForm);
       setConfig(res.data.config);
-      setBannerForm({ title: '', subtitle: '', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', imageUrl: '', ctaText: 'Explore Now', ctaLink: '/plans', ctaLinkType: 'internal' });
+      setBannerForm({ title: '', subtitle: '', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', imageUrl: '', ctaText: '', ctaLink: '', ctaLinkType: 'internal' });
       setEditingBanner(null);
       showToast('success', 'Banner added');
     } catch (err) {
@@ -239,11 +239,11 @@ const OfficeCMS = () => {
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Title *</label>
-                  <input type="text" value={bannerForm.title} onChange={e => setBannerForm({...bannerForm, title: e.target.value})} placeholder="Banner heading..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Title (optional)</label>
+                  <input type="text" value={bannerForm.title} onChange={e => setBannerForm({...bannerForm, title: e.target.value})} placeholder="Banner heading (leave empty for image-only)..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Subtitle</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Subtitle (optional)</label>
                   <input type="text" value={bannerForm.subtitle} onChange={e => setBannerForm({...bannerForm, subtitle: e.target.value})} placeholder="Short description..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
                 </div>
               </div>
@@ -258,11 +258,11 @@ const OfficeCMS = () => {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>CTA Button Text</label>
-                  <input type="text" value={bannerForm.ctaText} onChange={e => setBannerForm({...bannerForm, ctaText: e.target.value})} placeholder="Explore Now" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>CTA Button Text (optional)</label>
+                  <input type="text" value={bannerForm.ctaText} onChange={e => setBannerForm({...bannerForm, ctaText: e.target.value})} placeholder="Leave empty to hide button" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>CTA Link</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>CTA Link (optional)</label>
                   <input type="text" value={bannerForm.ctaLink} onChange={e => setBannerForm({...bannerForm, ctaLink: e.target.value})} placeholder="/plans or https://..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
                 </div>
               </div>

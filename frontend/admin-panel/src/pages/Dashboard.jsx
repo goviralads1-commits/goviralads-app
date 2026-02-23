@@ -450,28 +450,45 @@ const Dashboard = () => {
           <div style={{ position: 'absolute', top: '-10px', left: '16px', zIndex: 10, backgroundColor: '#6366f1', color: '#fff', padding: '4px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700' }}>
             BANNER PREVIEW
           </div>
-          <div style={{ 
-            background: banners[currentBanner].gradient,
-            borderRadius: '24px',
-            padding: '32px 24px',
-            aspectRatio: '16 / 6',
-            minHeight: '140px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            transition: 'background 0.5s ease',
-            overflow: 'hidden',
-            position: 'relative',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-          }}>
+          <div 
+            className="banner-preview"
+            style={{ 
+              background: banners[currentBanner].gradient,
+              borderRadius: '24px',
+              padding: '32px 24px',
+              aspectRatio: '16 / 6',
+              minHeight: '140px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              transition: 'background 0.5s ease',
+              overflow: 'hidden',
+              position: 'relative',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }}
+          >
+            <style>{`
+              @media (max-width: 768px) {
+                .banner-preview {
+                  aspect-ratio: 16 / 7 !important;
+                  background-size: contain !important;
+                  min-height: 160px !important;
+                }
+              }
+            `}</style>
             <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
-            <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
-              {banners[currentBanner].title}
-            </h2>
-            <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.9)', margin: '0 0 16px', position: 'relative', zIndex: 1 }}>
-              {banners[currentBanner].subtitle}
-            </p>
+            {banners[currentBanner].title && (
+              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
+                {banners[currentBanner].title}
+              </h2>
+            )}
+            {banners[currentBanner].subtitle && (
+              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.9)', margin: '0 0 16px', position: 'relative', zIndex: 1 }}>
+                {banners[currentBanner].subtitle}
+              </p>
+            )}
             <button style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', position: 'relative', zIndex: 1 }}>
               Explore Now
             </button>
