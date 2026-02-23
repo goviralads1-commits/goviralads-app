@@ -146,7 +146,7 @@ const Dashboard = () => {
           <div 
             className="banner-container"
             style={{ 
-              background: banners[currentBanner]?.imageUrl ? `url(${banners[currentBanner].imageUrl}) center/cover` : (banners[currentBanner]?.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
+              background: banners[currentBanner]?.imageUrl ? `url(${banners[currentBanner].imageUrl})` : (banners[currentBanner]?.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
               borderRadius: '24px',
               padding: '32px 24px',
               aspectRatio: '16 / 6',
@@ -167,7 +167,6 @@ const Dashboard = () => {
                 .banner-container {
                   aspect-ratio: 16 / 7 !important;
                   background-size: contain !important;
-                  min-height: 160px !important;
                 }
               }
             `}</style>

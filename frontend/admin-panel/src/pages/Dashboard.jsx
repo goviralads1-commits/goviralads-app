@@ -474,7 +474,6 @@ const Dashboard = () => {
                 .banner-preview {
                   aspect-ratio: 16 / 7 !important;
                   background-size: contain !important;
-                  min-height: 160px !important;
                 }
               }
             `}</style>
