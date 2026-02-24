@@ -425,10 +425,10 @@ const Plans = () => {
                     e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.08)';
                   }}
                 >
-                  {/* Image Section - Premium Design */}
+                  {/* Image Section - Compact Design */}
                   <div style={{ 
                     width: viewMode === 'list' ? '160px' : '100%',
-                    aspectRatio: viewMode === 'list' ? undefined : '1/1',
+                    aspectRatio: viewMode === 'list' ? undefined : '4/5',
                     height: viewMode === 'list' ? '160px' : undefined,
                     background: coverUrl ? '#f1f5f9' : fallbackGradient, 
                     position: 'relative',
@@ -567,8 +567,8 @@ const Plans = () => {
                     )}
                   </div>
 
-                  {/* Content Section - Premium Typography & Spacing */}
-                  <div style={{ padding: viewMode === 'list' ? '20px' : '20px', flex: 1 }}>
+                  {/* Content Section - Compact Typography */}
+                  <div style={{ padding: viewMode === 'list' ? '16px' : '14px', flex: 1 }}>
                     <h3 style={{ 
                       fontSize: viewMode === 'list' ? '16px' : '15px', 
                       fontWeight: '600', 
@@ -614,14 +614,14 @@ const Plans = () => {
                       ) : null}
                     </div>
 
-                    {/* Action Buttons - Premium Style */}
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    {/* Action Buttons - Compact Style */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                         onClick={(e) => { e.stopPropagation(); navigate(`/plans/${plan.id}`); }}
                         style={{
-                          flex: 1, padding: '12px 10px', backgroundColor: '#f1f5f9', color: '#475569',
-                          fontSize: '13px', fontWeight: '600', borderRadius: '12px', border: '1px solid #e2e8f0',
-                          cursor: 'pointer', transition: 'all 0.2s'
+                          flex: 1, padding: '10px 8px', backgroundColor: '#f1f5f9', color: '#475569',
+                          fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: '1px solid #e2e8f0',
+                          cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
                         }}
                       >
                         Details
@@ -630,27 +630,27 @@ const Plans = () => {
                         onClick={(e) => handlePurchase(plan.id, e)}
                         disabled={purchasing === plan.id}
                         style={{
-                          flex: 1.5, padding: '12px 10px', 
+                          flex: 1, padding: '10px 8px', 
                           background: purchasing === plan.id ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
                           color: '#fff',
-                          fontSize: '13px', fontWeight: '600', borderRadius: '12px', border: 'none',
+                          fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
                           cursor: purchasing === plan.id ? 'not-allowed' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                          boxShadow: purchasing !== plan.id ? '0 4px 14px rgba(59, 130, 246, 0.35)' : 'none',
-                          transition: 'all 0.2s'
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                          boxShadow: purchasing !== plan.id ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none',
+                          transition: 'all 0.2s', whiteSpace: 'nowrap'
                         }}
                       >
                         {purchasing === plan.id ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
                             <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
                             <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
                           </svg>
                         ) : (
                           <>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 4.6c-.3.5 0 1.1.6 1.4H19M16 21a1 1 0 100-2 1 1 0 000 2zM9 21a1 1 0 100-2 1 1 0 000 2z" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
-                            Buy Now
+                            Buy
                           </>
                         )}
                       </button>
