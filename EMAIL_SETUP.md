@@ -1,34 +1,20 @@
 # EMAIL REMINDER SYSTEM SETUP
 
-## SMTP Configuration Required
+## Resend API Configuration
 
-Update `.env` file with your SMTP credentials:
+Update `.env` file with your Resend credentials:
 
-### Option 1: Gmail
 ```
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-gmail-app-password
-SMTP_FROM=your-email@gmail.com
-SMTP_FROM_NAME=TaskFlow Pro
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+EMAIL_FROM=noreply@goviralads.com
+EMAIL_FROM_NAME=Go Viral Ads
 ```
 
-**Gmail App Password:**
-1. Go to Google Account settings
-2. Enable 2-factor authentication
-3. Generate app-specific password
-4. Use that password in SMTP_PASS
-
-### Option 2: Brevo (Free)
-```
-SMTP_HOST=smtp-relay.brevo.com
-SMTP_PORT=587
-SMTP_USER=your-brevo-email
-SMTP_PASS=your-brevo-api-key
-SMTP_FROM=your-verified-sender@domain.com
-SMTP_FROM_NAME=TaskFlow Pro
-```
+**Setup Steps:**
+1. Sign up at https://resend.com (free tier: 100 emails/day)
+2. Verify your domain (goviralads.com)
+3. Generate API key from dashboard
+4. Add to your `.env` file
 
 ## Testing Reminders
 
@@ -103,9 +89,30 @@ Content-Type: application/json
 - **Task Overdue Reminder:** Daily at 10:00 AM  
 - **Plan Expiry Reminder:** Daily at 8:00 AM
 
-## 4 Email Types Implemented
+## Email Types Implemented
 
 1. ✅ Task Deadline Reminder (Client)
 2. ✅ Task Overdue Reminder (Client + Admin)
 3. ✅ Plan Expiry Reminder (Client)
 4. ✅ Ticket Reply Email (Admin ↔ Client)
+5. ✅ Recharge Approved/Rejected (Client)
+6. ✅ Task Assigned (Client)
+7. ✅ New Notice (Client)
+
+## Startup Log
+
+When configured correctly, server logs:
+```
+[EMAIL SERVICE] ========================================
+[EMAIL SERVICE] ✅ Resend API Configured
+[EMAIL SERVICE]   From: noreply@goviralads.com
+[EMAIL SERVICE]   From Name: Go Viral Ads
+[EMAIL SERVICE] ========================================
+```
+
+If not configured:
+```
+[EMAIL SERVICE] ========================================
+[EMAIL SERVICE] ❌ Resend NOT Configured - emails disabled
+[EMAIL SERVICE] ========================================
+```
