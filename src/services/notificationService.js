@@ -95,7 +95,7 @@ async function triggerNotificationEmail(notifData) {
   try {
     // Check if email is configured first
     if (!emailService.isConfigured()) {
-      console.log('[NOTIF EMAIL] SMTP not configured - skipping email');
+      console.log('[NOTIF EMAIL] Resend not configured - skipping email');
       return;
     }
     

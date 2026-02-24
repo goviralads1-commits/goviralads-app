@@ -80,6 +80,16 @@ const sendEmail = async ({ to, subject, html, text }) => {
     const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
     const fromName = process.env.EMAIL_FROM_NAME || 'Go Viral Ads';
     
+    // DEBUG: Log full send parameters
+    console.log('[EMAIL DEBUG] Pre-send details:', {
+      to,
+      from: `${fromName} <${fromEmail}>`,
+      subject,
+      environment: process.env.NODE_ENV,
+      fromEmailVar: process.env.EMAIL_FROM,
+      fromNameVar: process.env.EMAIL_FROM_NAME
+    });
+    
     const { data, error } = await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: [to],
@@ -90,17 +100,20 @@ const sendEmail = async ({ to, subject, html, text }) => {
     
     if (error) {
       console.error('[EMAIL SEND] ❌ FAILED!');
-      console.error('[EMAIL SEND]   Error:', error.message);
-      console.error('[EMAIL SEND]   Code:', error.name);
+      console.error('[EMAIL SEND]   Error object:', JSON.stringify(error, null, 2));
+      console.error('[EMAIL SEND]   Error message:', error.message);
+      console.error('[EMAIL SEND]   Error name:', error.name);
       return { success: false, error: error.message, code: error.name };
     }
     
     console.log('[EMAIL SEND] ✅ SUCCESS!');
     console.log('[EMAIL SEND]   Message ID:', data?.id);
+    console.log('[EMAIL SEND]   Full response:', JSON.stringify(data, null, 2));
     return { success: true, messageId: data?.id };
   } catch (error) {
     console.error('[EMAIL SEND] ❌ FAILED!');
-    console.error('[EMAIL SEND]   Error:', error.message);
+    console.error('[EMAIL SEND]   Catch error:', error.message);
+    console.error('[EMAIL SEND]   Stack:', error.stack);
     return { success: false, error: error.message };
   }
 };
