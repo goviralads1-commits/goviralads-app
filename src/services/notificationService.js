@@ -70,11 +70,17 @@ async function createNotification(notificationData) {
   // Create notification in database
   const notification = await Notification.create(notifData);
   
+  // Log email trigger decision
+  console.log(`[NOTIF] Created notification: ${notifData.type || 'GENERAL'} | notifyByEmail: ${notifyByEmail}`);
+  
   // Trigger email if requested (async, non-blocking)
   if (notifyByEmail && notifData.recipientId) {
+    console.log(`[NOTIF EMAIL] Email trigger requested for ${notifData.type} to recipient ${notifData.recipientId}`);
     triggerNotificationEmail(notifData).catch(err => {
       console.error('[NOTIF EMAIL] Error sending email (non-fatal):', err.message);
     });
+  } else if (notifyByEmail && !notifData.recipientId) {
+    console.log('[NOTIF EMAIL] Email requested but no recipientId provided - skipping');
   }
   
   return notification;
@@ -82,7 +88,17 @@ async function createNotification(notificationData) {
 
 // Async email trigger helper
 async function triggerNotificationEmail(notifData) {
+  console.log('[NOTIF EMAIL] ====== EMAIL TRIGGER START ======');
+  console.log('[NOTIF EMAIL] Type:', notifData.type);
+  console.log('[NOTIF EMAIL] RecipientId:', notifData.recipientId);
+  
   try {
+    // Check if email is configured first
+    if (!emailService.isConfigured()) {
+      console.log('[NOTIF EMAIL] SMTP not configured - skipping email');
+      return;
+    }
+    
     // Fetch recipient email
     const user = await User.findById(notifData.recipientId).select('email identifier').exec();
     if (!user) {
@@ -91,6 +107,8 @@ async function triggerNotificationEmail(notifData) {
     }
     
     const recipientEmail = user.email || user.identifier;
+    console.log('[NOTIF EMAIL] Recipient email resolved:', recipientEmail);
+    
     if (!emailService.isValidEmail(recipientEmail)) {
       console.log('[NOTIF EMAIL] Invalid recipient email:', recipientEmail);
       return;
