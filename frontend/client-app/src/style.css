@@ -8,13 +8,19 @@
 
 /* CRITICAL: Ensure native scroll is NEVER blocked */
 html, body {
-  /* Natural scroll - no overflow restrictions */
-  height: auto;
+  /* Allow vertical scroll, block horizontal */
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  
+  /* NEVER lock height */
+  height: auto !important;
   min-height: 100%;
-  overflow-y: auto;
   
   /* iOS Safari smooth scroll */
   -webkit-overflow-scrolling: touch;
+  
+  /* Ensure touch gestures work */
+  touch-action: auto;
   
   /* Prevent text size adjust but allow scroll */
   -webkit-text-size-adjust: 100%;
@@ -33,17 +39,18 @@ body {
   overscroll-behavior-y: contain;
 }
 
-/* Root container - Allow natural content flow */
+/* Root container - MUST allow scroll */
 #root {
   min-height: 100%;
   padding-bottom: 80px; /* Space for bottom nav */
-  overflow: visible;
+  /* Ensure scroll is not blocked */
+  overflow: visible !important;
 }
 
 /* App wrapper - MUST allow scroll */
 .App {
   min-height: 100%;
-  overflow: visible;
+  overflow: visible !important;
 }
 
 /* Modal scroll lock - ONLY when modal is open */
