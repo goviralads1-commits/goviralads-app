@@ -31,6 +31,10 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       default: 'INFO',
     },
+    relatedEntity: {
+      entityType: { type: String },
+      entityId: { type: mongoose.Schema.Types.ObjectId },
+    },
   },
   {
     timestamps: true,

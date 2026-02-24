@@ -1829,6 +1829,38 @@ router.post('/notices', async (req, res) => {
       expiresAt: expiresAt ? new Date(expiresAt) : null,
     });
 
+    // --- Notification Hook: Notify clients about new notice ---
+    try {
+      let clientsToNotify = [];
+      
+      if ((targetType || 'ALL') === 'ALL') {
+        // Get all active clients
+        const allClients = await User.find({ role: 'CLIENT', status: 'ACTIVE' }).select('_id').exec();
+        clientsToNotify = allClients.map(c => c._id);
+      } else if (targetType === 'SELECTED' && processedTargetClients.length > 0) {
+        clientsToNotify = processedTargetClients;
+      }
+      
+      console.log(`[NEW_NOTICE] Creating notifications for ${clientsToNotify.length} client(s)`);
+      
+      for (const clientId of clientsToNotify) {
+        await createNotification({
+          recipientId: clientId,
+          type: NOTIFICATION_TYPES.NEW_NOTICE,
+          title: 'New Announcement',
+          message: `${title.trim().substring(0, 100)}${title.length > 100 ? '...' : ''}`,
+          relatedEntity: {
+            entityType: ENTITY_TYPES.NOTICE,
+            entityId: notice._id,
+          },
+        });
+      }
+      
+      console.log(`[NEW_NOTICE] Notifications created successfully`);
+    } catch (notifErr) {
+      console.error('[NEW_NOTICE] Notification error (non-fatal):', notifErr.message);
+    }
+
     return res.status(201).json({
       success: true,
       notice: {
@@ -2489,6 +2521,23 @@ router.post('/users/:userId/notice', async (req, res) => {
       responseType: responseType || 'NONE',
       isActive: true,
     });
+
+    // --- Notification Hook: Notify client about new notice ---
+    try {
+      await createNotification({
+        recipientId: userId,
+        type: NOTIFICATION_TYPES.NEW_NOTICE,
+        title: 'New Announcement',
+        message: `${title.trim().substring(0, 100)}${title.length > 100 ? '...' : ''}`,
+        relatedEntity: {
+          entityType: ENTITY_TYPES.NOTICE,
+          entityId: notice._id,
+        },
+      });
+      console.log(`[NEW_NOTICE] Notification sent to client ${userId}`);
+    } catch (notifErr) {
+      console.error('[NEW_NOTICE] Notification error (non-fatal):', notifErr.message);
+    }
 
     return res.status(201).json({
       success: true,

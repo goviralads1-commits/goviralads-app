@@ -82,7 +82,27 @@ const Header = ({ title }) => {
     navigate('/login');
   };
 
-  const handleNotificationClick = (notif) => {
+  const handleNotificationClick = async (notif) => {
+    // Optimistic UI: Mark as read immediately
+    if (!notif.isRead) {
+      setNotifications(prev => prev.map(n => 
+        n.id === notif.id ? { ...n, isRead: true } : n
+      ));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      // Call API in background
+      try {
+        await api.patch(`/client/notifications/${notif.id}/read`);
+      } catch (err) {
+        console.log('[NOTIFICATION] Mark as read error:', err.message);
+        // Revert on error
+        setNotifications(prev => prev.map(n => 
+          n.id === notif.id ? { ...n, isRead: false } : n
+        ));
+        setUnreadCount(prev => prev + 1);
+      }
+    }
+    
     setShowNotifications(false);
     // Navigate based on entity type
     if (notif.relatedEntity?.entityType === 'TASK') {
@@ -254,7 +274,7 @@ const Header = ({ title }) => {
                     ))
                   )}
                   <div style={{ padding: '12px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
-                    <Link to="/dashboard" onClick={() => setShowNotifications(false)} style={{ fontSize: '13px', fontWeight: '600', color: '#22c55e', textDecoration: 'none' }}>
+                    <Link to="/notifications" onClick={() => setShowNotifications(false)} style={{ fontSize: '13px', fontWeight: '600', color: '#22c55e', textDecoration: 'none' }}>
                       View All →
                     </Link>
                   </div>

@@ -80,7 +80,27 @@ const Header = ({ title }) => {
     navigate('/login');
   };
 
-  const handleNotificationClick = (notif) => {
+  const handleNotificationClick = async (notif) => {
+    // Optimistic UI: Mark as read immediately
+    if (!notif.isRead) {
+      setNotifications(prev => prev.map(n => 
+        n.id === notif.id ? { ...n, isRead: true } : n
+      ));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      // Call API in background
+      try {
+        await api.patch(`/admin/notifications/${notif.id}/read`);
+      } catch (err) {
+        console.log('[NOTIFICATION] Mark as read error:', err.message);
+        // Revert on error
+        setNotifications(prev => prev.map(n => 
+          n.id === notif.id ? { ...n, isRead: false } : n
+        ));
+        setUnreadCount(prev => prev + 1);
+      }
+    }
+    
     setShowNotifications(false);
     // Navigate based on entity type
     if (notif.relatedEntity?.entityType === 'TASK') {
