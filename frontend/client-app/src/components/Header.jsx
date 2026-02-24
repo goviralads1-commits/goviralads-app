@@ -214,22 +214,45 @@ const Header = ({ title }) => {
               
               {/* Notifications Dropdown - Portal to body with fixed positioning */}
               {showNotifications && ReactDOM.createPortal(
-                <div
-                  data-notification-dropdown
-                  style={{
-                    position: 'fixed',
-                    top: dropdownPosition.top,
-                    right: dropdownPosition.right,
-                    width: 'min(320px, calc(100vw - 32px))',
-                    maxHeight: '70vh',
-                    overflowY: 'auto',
-                    backgroundColor: '#fff',
-                    borderRadius: '16px',
-                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-                    border: '1px solid #f1f5f9',
-                    zIndex: 9999
-                  }}
-                >
+                <>
+                  {/* Backdrop for mobile */}
+                  <div 
+                    onClick={() => setShowNotifications(false)}
+                    style={{
+                      position: 'fixed',
+                      inset: 0,
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      zIndex: 9998,
+                      display: window.innerWidth < 768 ? 'block' : 'none'
+                    }}
+                  />
+                  <div
+                    data-notification-dropdown
+                    className="notification-dropdown"
+                    style={{
+                      position: 'fixed',
+                      ...(window.innerWidth < 768 ? {
+                        top: '70px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 'min(92vw, 420px)',
+                        right: 'auto'
+                      } : {
+                        top: dropdownPosition.top,
+                        right: dropdownPosition.right,
+                        width: 'min(340px, calc(100vw - 32px))',
+                        transform: 'none'
+                      }),
+                      maxHeight: '70vh',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      backgroundColor: '#fff',
+                      borderRadius: '16px',
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+                      border: '1px solid #f1f5f9',
+                      zIndex: 9999
+                    }}
+                  >
                   <div style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>Notifications</span>
                     {unreadCount > 0 && (
@@ -278,7 +301,8 @@ const Header = ({ title }) => {
                       View All →
                     </Link>
                   </div>
-                </div>,
+                </div>
+                </>,
                 document.body
               )}
             </div>

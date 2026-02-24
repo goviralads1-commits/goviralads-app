@@ -259,6 +259,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
           entityType: ENTITY_TYPES.RECHARGE_REQUEST,
           entityId: updatedRequest._id,
         },
+        notifyByEmail: true, // Email trigger for important event
       });
     } catch (err) {
       console.error('Failed to notify client of recharge approval:', err.message);
@@ -354,6 +355,7 @@ router.post('/recharge-requests/:id/reject', async (req, res) => {
           entityType: ENTITY_TYPES.RECHARGE_REQUEST,
           entityId: updatedRequest._id,
         },
+        notifyByEmail: true, // Email trigger for important event
       });
     } catch (err) {
       console.error('Failed to notify client of recharge rejection:', err.message);
@@ -700,6 +702,7 @@ router.post('/tasks/assign', async (req, res) => {
           entityType: ENTITY_TYPES.TASK,
           entityId: result.task._id,
         },
+        notifyByEmail: true, // Email trigger for important event
       });
       console.log('[NOTIFICATION DEBUG] Notification created successfully:', notifResult._id, 'for recipient:', clientId);
     } catch (err) {
@@ -952,6 +955,7 @@ router.patch('/tasks/:taskId/approve', async (req, res) => {
           entityType: ENTITY_TYPES.TASK,
           entityId: task._id,
         },
+        notifyByEmail: true, // Email trigger for important event
       });
     } catch (err) {
       console.error('Failed to notify client of task approval:', err.message);
@@ -1853,6 +1857,7 @@ router.post('/notices', async (req, res) => {
             entityType: ENTITY_TYPES.NOTICE,
             entityId: notice._id,
           },
+          notifyByEmail: true, // Email trigger for important event
         });
       }
       
@@ -2533,6 +2538,7 @@ router.post('/users/:userId/notice', async (req, res) => {
           entityType: ENTITY_TYPES.NOTICE,
           entityId: notice._id,
         },
+        notifyByEmail: true, // Email trigger for important event
       });
       console.log(`[NEW_NOTICE] Notification sent to client ${userId}`);
     } catch (notifErr) {
