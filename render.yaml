@@ -20,11 +20,9 @@ services:
         sync: false
       - key: ADMIN_EMAIL
         sync: false
-      - key: SMTP_HOST
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PORT
+      - key: EMAIL_FROM
         sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
+      - key: EMAIL_FROM_NAME
         sync: false

@@ -1,17 +1,14 @@
 /**
  * Email Notification Service
- * Uses Nodemailer with configurable SMTP (Gmail, Brevo, Zoho, etc.)
+ * Uses Resend API for reliable email delivery
  * 
  * Environment Variables Required:
- * - SMTP_HOST (e.g., smtp.gmail.com, smtp-relay.brevo.com)
- * - SMTP_PORT (e.g., 587, 465)
- * - SMTP_USER (email or API key)
- * - SMTP_PASS (password or API key)
- * - SMTP_FROM (sender email)
- * - SMTP_FROM_NAME (sender name)
+ * - RESEND_API_KEY (from resend.com dashboard)
+ * - EMAIL_FROM (verified sender email, e.g., noreply@goviralads.com)
+ * - EMAIL_FROM_NAME (sender display name)
  */
 
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,103 +19,89 @@ const isValidEmail = (email) => {
   return EMAIL_REGEX.test(email.trim());
 };
 
-// Create transporter with environment config
-const createTransporter = () => {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  const secure = port === 465;
-  
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    },
-    // Gmail specific settings
-    ...(host.includes('gmail') && {
-      tls: { rejectUnauthorized: false }
-    })
-  });
-};
-
 // Check if email is configured
 const isEmailConfigured = () => {
-  const configured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const configured = !!process.env.RESEND_API_KEY;
   if (!configured) {
-    console.error('[EMAIL CONFIG] ❌ SMTP NOT CONFIGURED! Emails will NOT be sent.');
+    console.error('[EMAIL CONFIG] ❌ RESEND NOT CONFIGURED! Emails will NOT be sent.');
     console.error('[EMAIL CONFIG]   Required environment variables:');
-    console.error('[EMAIL CONFIG]   - SMTP_HOST:', process.env.SMTP_HOST || '❌ NOT SET');
-    console.error('[EMAIL CONFIG]   - SMTP_PORT:', process.env.SMTP_PORT || '❌ NOT SET');
-    console.error('[EMAIL CONFIG]   - SMTP_USER:', process.env.SMTP_USER ? '✅ SET' : '❌ NOT SET');
-    console.error('[EMAIL CONFIG]   - SMTP_PASS:', process.env.SMTP_PASS ? '✅ SET' : '❌ NOT SET');
-    console.error('[EMAIL CONFIG]   - SMTP_FROM:', process.env.SMTP_FROM || '❌ NOT SET');
+    console.error('[EMAIL CONFIG]   - RESEND_API_KEY:', process.env.RESEND_API_KEY ? '✅ SET' : '❌ NOT SET');
+    console.error('[EMAIL CONFIG]   - EMAIL_FROM:', process.env.EMAIL_FROM || '❌ NOT SET');
   }
   return configured;
 };
 
-// Log SMTP config status on startup
-const logSmtpStatus = () => {
+// Create Resend client
+let resendClient = null;
+const getResendClient = () => {
+  if (!resendClient && process.env.RESEND_API_KEY) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendClient;
+};
+
+// Log config status on startup
+const logEmailStatus = () => {
   console.log('[EMAIL SERVICE] ========================================');
   if (isEmailConfigured()) {
-    console.log('[EMAIL SERVICE] ✅ SMTP Configured');
-    console.log('[EMAIL SERVICE]   Host:', process.env.SMTP_HOST);
-    console.log('[EMAIL SERVICE]   Port:', process.env.SMTP_PORT);
-    console.log('[EMAIL SERVICE]   From:', process.env.SMTP_FROM || process.env.SMTP_USER);
+    console.log('[EMAIL SERVICE] ✅ Resend API Configured');
+    console.log('[EMAIL SERVICE]   From:', process.env.EMAIL_FROM || 'onboarding@resend.dev');
+    console.log('[EMAIL SERVICE]   From Name:', process.env.EMAIL_FROM_NAME || 'Go Viral Ads');
   } else {
-    console.log('[EMAIL SERVICE] ❌ SMTP NOT Configured - emails disabled');
+    console.log('[EMAIL SERVICE] ❌ Resend NOT Configured - emails disabled');
   }
   console.log('[EMAIL SERVICE] ========================================');
 };
 
 // Call on module load
-logSmtpStatus();
+logEmailStatus();
 
-// Send email helper
+// Send email helper using Resend API
 const sendEmail = async ({ to, subject, html, text }) => {
-  // 1. Check SMTP config
+  // 1. Check Resend config
   if (!isEmailConfigured()) {
-    console.error('[EMAIL SEND] ❌ FAILED: SMTP not configured');
-    return { success: false, reason: 'smtp_not_configured' };
+    console.error('[EMAIL SEND] ❌ FAILED: Resend not configured');
+    return { success: false, reason: 'resend_not_configured' };
   }
   
   // 2. Validate recipient email
   if (!isValidEmail(to)) {
     console.error('[EMAIL SEND] ❌ FAILED: Invalid recipient email:', to);
-    console.error('[EMAIL SEND]   The recipient address does not appear to be a valid email.');
-    console.error('[EMAIL SEND]   Tip: Check if User.identifier is an email address.');
     return { success: false, reason: 'invalid_recipient_email', providedValue: to };
   }
   
-  // 3. Attempt to send
+  // 3. Attempt to send via Resend
   try {
-    console.log('[EMAIL SEND] Attempting to send email...');
+    console.log('[EMAIL SEND] Attempting to send email via Resend...');
     console.log('[EMAIL SEND]   To:', to);
     console.log('[EMAIL SEND]   Subject:', subject);
     
-    const transporter = createTransporter();
+    const resend = getResendClient();
+    const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+    const fromName = process.env.EMAIL_FROM_NAME || 'Go Viral Ads';
     
-    const info = await transporter.sendMail({
-      from: `"${process.env.SMTP_FROM_NAME || 'TaskFlow Pro'}" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-      to,
+    const { data, error } = await resend.emails.send({
+      from: `${fromName} <${fromEmail}>`,
+      to: [to],
       subject,
-      text: text || subject,
-      html
+      html,
+      text: text || subject
     });
     
+    if (error) {
+      console.error('[EMAIL SEND] ❌ FAILED!');
+      console.error('[EMAIL SEND]   Error:', error.message);
+      console.error('[EMAIL SEND]   Code:', error.name);
+      return { success: false, error: error.message, code: error.name };
+    }
+    
     console.log('[EMAIL SEND] ✅ SUCCESS!');
-    console.log('[EMAIL SEND]   Message ID:', info.messageId);
-    console.log('[EMAIL SEND]   Accepted:', info.accepted);
-    return { success: true, messageId: info.messageId, accepted: info.accepted };
+    console.log('[EMAIL SEND]   Message ID:', data?.id);
+    return { success: true, messageId: data?.id };
   } catch (error) {
     console.error('[EMAIL SEND] ❌ FAILED!');
     console.error('[EMAIL SEND]   Error:', error.message);
-    console.error('[EMAIL SEND]   Code:', error.code);
-    if (error.responseCode) {
-      console.error('[EMAIL SEND]   SMTP Response Code:', error.responseCode);
-    }
-    return { success: false, error: error.message, code: error.code };
+    return { success: false, error: error.message };
   }
 };
 
@@ -129,7 +112,7 @@ const sendEmail = async ({ to, subject, html, text }) => {
 const templates = {
   // Welcome Email
   welcome: (data) => ({
-    subject: `Welcome to ${data.appName || 'TaskFlow Pro'}!`,
+    subject: `Welcome to ${data.appName || 'Go Viral Ads'}!`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -149,7 +132,7 @@ const templates = {
             </a>
           </div>
           <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">${data.appName || 'TaskFlow Pro'}</p>
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">${data.appName || 'Go Viral Ads'}</p>
           </div>
         </div>
       </body>
