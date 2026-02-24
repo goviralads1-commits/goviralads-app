@@ -8,13 +8,10 @@
 
 /* CRITICAL: Ensure native scroll is NEVER blocked */
 html, body {
-  /* Block horizontal scroll */
-  overflow-x: hidden;
-  overflow-y: visible;
-  
-  /* NEVER lock height */
+  /* Natural scroll - no overflow restrictions */
   height: auto;
   min-height: 100%;
+  overflow-y: auto;
   
   /* iOS Safari smooth scroll */
   -webkit-overflow-scrolling: touch;
@@ -36,15 +33,11 @@ body {
   overscroll-behavior-y: contain;
 }
 
-/* Root container - Main scroll container for Android compatibility */
+/* Root container - Allow natural content flow */
 #root {
   min-height: 100%;
   padding-bottom: 80px; /* Space for bottom nav */
-  /* Main scroll container - Android requires explicit container */
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  overflow: visible;
 }
 
 /* App wrapper - MUST allow scroll */

@@ -178,7 +178,7 @@ const Plans = () => {
       )}
       
       {/* Main Layout: Left Category Rail + Right Content (Admin Pattern) */}
-      <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
+      <div className="plans-layout" style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
         {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position */}
         <div className="category-rail" style={{ 
@@ -295,7 +295,7 @@ const Plans = () => {
         </div>
         
         {/* RIGHT CONTENT AREA - Marketplace Experience */}
-        <div style={{ flex: 1, padding: '28px 24px', paddingBottom: '120px', minWidth: 0 }}>
+        <div className="plans-content" style={{ flex: 1, padding: '28px 24px', paddingBottom: '120px', minWidth: 0 }}>
           
           {/* Header Section */}
           <div style={{ marginBottom: '24px' }}>
@@ -677,7 +677,7 @@ const Plans = () => {
         /* MOBILE RESPONSIVE - Swiggy Marketplace Pattern */
         @media (max-width: 768px) {
           /* Vertical stack on mobile */
-          body > div > div > div[style*="display: flex"][style*="maxWidth: 1400px"] {
+          .plans-layout {
             flex-direction: column !important;
           }
           
@@ -711,7 +711,7 @@ const Plans = () => {
           }
           
           /* Content area mobile spacing */
-          body > div > div > div[style*="display: flex"] > div[style*="flex: 1"] {
+          .plans-content {
             padding: 20px 16px 140px !important;
           }
           
