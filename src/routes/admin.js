@@ -2891,7 +2891,7 @@ router.get('/profile', async (req, res) => {
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
         // Branding
-        appName: user.branding?.appName || 'TaskFlow Pro',
+        appName: user.branding?.appName || 'Go Viral Ads',
         logoUrl: user.branding?.logoUrl || '',
         tagline: user.branding?.tagline || '',
         accentColor: user.branding?.accentColor || '#6366f1',
@@ -2958,7 +2958,7 @@ router.patch('/profile', async (req, res) => {
         designation: user.profile?.designation || '',
         timezone: user.profile?.timezone || 'UTC',
         language: user.profile?.language || 'en',
-        appName: user.branding?.appName || 'TaskFlow Pro',
+        appName: user.branding?.appName || 'Go Viral Ads',
         logoUrl: user.branding?.logoUrl || '',
         tagline: user.branding?.tagline || '',
         accentColor: user.branding?.accentColor || '#6366f1',

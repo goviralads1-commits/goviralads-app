@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taskflow-pro-v1';
+const CACHE_NAME = 'goviralads-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -84,7 +84,7 @@ self.addEventListener('fetch', (event) => {
                 <head>
                   <meta charset="UTF-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Offline - TaskFlow Pro</title>
+                  <title>Offline - Go Viral Ads</title>
                   <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
                     body {
@@ -163,7 +163,7 @@ self.addEventListener('push', (event) => {
   };
   
   event.waitUntil(
-    self.registration.showNotification(data.title || 'TaskFlow Pro', options)
+    self.registration.showNotification(data.title || 'Go Viral Ads', options)
   );
 });
 

@@ -97,7 +97,7 @@ app.get('/public/branding', async (_req, res) => {
     const admin = await User.findOne({ role: 'ADMIN', isDeleted: false });
     if (admin && admin.branding) {
       res.json({
-        appName: admin.branding.appName || 'TaskFlow Pro',
+        appName: admin.branding.appName || 'Go Viral Ads',
         logoUrl: admin.branding.logoUrl || '',
         tagline: admin.branding.tagline || '',
         accentColor: admin.branding.accentColor || '#6366f1',
@@ -105,7 +105,7 @@ app.get('/public/branding', async (_req, res) => {
       });
     } else {
       res.json({
-        appName: 'TaskFlow Pro',
+        appName: 'Go Viral Ads',
         logoUrl: '',
         tagline: '',
         accentColor: '#6366f1',
@@ -114,7 +114,7 @@ app.get('/public/branding', async (_req, res) => {
     }
   } catch (err) {
     res.json({
-      appName: 'TaskFlow Pro',
+      appName: 'Go Viral Ads',
       logoUrl: '',
       tagline: '',
       accentColor: '#6366f1',

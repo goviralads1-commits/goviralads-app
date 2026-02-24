@@ -68,7 +68,7 @@ legalPageSchema.statics.ensureDefaults = async function() {
 
 <h3>7. Contact Us</h3>
 <p>If you have questions about this Privacy Policy, please contact us.</p>`,
-      metaDescription: 'Privacy Policy for TaskFlow Pro - Learn how we collect, use, and protect your data.'
+      metaDescription: 'Privacy Policy for Go Viral Ads - Learn how we collect, use, and protect your data.'
     },
     {
       slug: 'terms-of-service',
@@ -77,7 +77,7 @@ legalPageSchema.statics.ensureDefaults = async function() {
 <p>Last updated: ${new Date().toLocaleDateString()}</p>
 
 <h3>1. Acceptance of Terms</h3>
-<p>By accessing or using TaskFlow Pro, you agree to be bound by these Terms of Service and all applicable laws and regulations.</p>
+<p>By accessing or using Go Viral Ads, you agree to be bound by these Terms of Service and all applicable laws and regulations.</p>
 
 <h3>2. Use of Service</h3>
 <p>You agree to use our service only for lawful purposes and in accordance with these Terms. You are responsible for maintaining the confidentiality of your account.</p>
@@ -89,7 +89,7 @@ legalPageSchema.statics.ensureDefaults = async function() {
 <p>Certain features require payment. All payments are processed securely. Prices are subject to change with notice.</p>
 
 <h3>5. Intellectual Property</h3>
-<p>All content, features, and functionality of TaskFlow Pro are owned by us and are protected by copyright, trademark, and other laws.</p>
+<p>All content, features, and functionality of Go Viral Ads are owned by us and are protected by copyright, trademark, and other laws.</p>
 
 <h3>6. Limitation of Liability</h3>
 <p>We shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of the service.</p>
@@ -99,7 +99,7 @@ legalPageSchema.statics.ensureDefaults = async function() {
 
 <h3>8. Changes to Terms</h3>
 <p>We reserve the right to modify these Terms at any time. Your continued use of the service constitutes acceptance of the modified Terms.</p>`,
-      metaDescription: 'Terms of Service for TaskFlow Pro - Read our terms and conditions for using the platform.'
+      metaDescription: 'Terms of Service for Go Viral Ads - Read our terms and conditions for using the platform.'
     },
     {
       slug: 'refund-policy',
@@ -108,7 +108,7 @@ legalPageSchema.statics.ensureDefaults = async function() {
 <p>Last updated: ${new Date().toLocaleDateString()}</p>
 
 <h3>1. Credit Refunds</h3>
-<p>Credits purchased on TaskFlow Pro are generally non-refundable once added to your wallet balance.</p>
+<p>Credits purchased on Go Viral Ads are generally non-refundable once added to your wallet balance.</p>
 
 <h3>2. Service Issues</h3>
 <p>If you experience issues with a service or task that was not delivered as described, you may request a review within 7 days of completion.</p>
@@ -136,7 +136,7 @@ legalPageSchema.statics.ensureDefaults = async function() {
 
 <h3>6. Contact</h3>
 <p>For refund inquiries, please contact our support team.</p>`,
-      metaDescription: 'Refund Policy for TaskFlow Pro - Learn about our refund and cancellation policies.'
+      metaDescription: 'Refund Policy for Go Viral Ads - Learn about our refund and cancellation policies.'
     },
     {
       slug: 'contact-us',
@@ -148,11 +148,11 @@ legalPageSchema.statics.ensureDefaults = async function() {
 
 <h3>Support</h3>
 <p>For technical support or service-related inquiries:</p>
-<p>Email: support@taskflowpro.com</p>
+<p>Email: support@goviralads.com</p>
 
 <h3>Business Inquiries</h3>
 <p>For business partnerships or collaborations:</p>
-<p>Email: business@taskflowpro.com</p>
+<p>Email: business@goviralads.com</p>
 
 <h3>Office Address</h3>
 <p>[Your Business Address]</p>
@@ -165,15 +165,15 @@ legalPageSchema.statics.ensureDefaults = async function() {
 
 <h3>Response Time</h3>
 <p>We aim to respond to all inquiries within 24-48 business hours.</p>`,
-      metaDescription: 'Contact TaskFlow Pro - Get in touch with our support team for help and inquiries.'
+      metaDescription: 'Contact Go Viral Ads - Get in touch with our support team for help and inquiries.'
     },
     {
       slug: 'about',
       title: 'About Us',
-      content: `<h2>About TaskFlow Pro</h2>
+      content: `<h2>About Go Viral Ads</h2>
 
 <h3>Our Mission</h3>
-<p>TaskFlow Pro is dedicated to simplifying task management and connecting businesses with efficient service solutions.</p>
+<p>Go Viral Ads is dedicated to simplifying task management and connecting businesses with efficient service solutions.</p>
 
 <h3>What We Do</h3>
 <p>We provide a comprehensive platform for managing tasks, projects, and services. Our goal is to streamline workflows and enhance productivity for businesses of all sizes.</p>
@@ -187,11 +187,11 @@ legalPageSchema.statics.ensureDefaults = async function() {
 </ul>
 
 <h3>Why Choose Us</h3>
-<p>TaskFlow Pro offers a secure, reliable, and user-friendly platform for managing your business needs. With features designed for efficiency and ease of use, we help you focus on what matters most - growing your business.</p>
+<p>Go Viral Ads offers a secure, reliable, and user-friendly platform for managing your business needs. With features designed for efficiency and ease of use, we help you focus on what matters most - growing your business.</p>
 
 <h3>Join Us</h3>
-<p>Experience the difference with TaskFlow Pro. Sign up today and take control of your tasks.</p>`,
-      metaDescription: 'About TaskFlow Pro - Learn about our mission, values, and what makes us different.'
+<p>Experience the difference with Go Viral Ads. Sign up today and take control of your tasks.</p>`,
+      metaDescription: 'About Go Viral Ads - Learn about our mission, values, and what makes us different.'
     }
   ];
 

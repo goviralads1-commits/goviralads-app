@@ -129,7 +129,7 @@ const Profile = () => {
         company: p.company || '',
         timezone: p.timezone || 'UTC',
         language: p.language || 'en',
-        appName: p.appName || 'TaskFlow Pro',
+        appName: p.appName || 'Go Viral Ads',
         logoUrl: p.logoUrl || '',
         tagline: p.tagline || '',
         accentColor: p.accentColor || '#6366f1',
@@ -649,7 +649,7 @@ const Profile = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>App Name</label>
-                        <input type="text" value={profileForm.appName} onChange={e => setProfileForm({...profileForm, appName: e.target.value})} placeholder="TaskFlow Pro" style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none' }} />
+                        <input type="text" value={profileForm.appName} onChange={e => setProfileForm({...profileForm, appName: e.target.value})} placeholder="Go Viral Ads" style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Logo URL</label>
@@ -690,7 +690,7 @@ const Profile = () => {
                             </div>
                           )}
                           <div>
-                            <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: 0 }}>{profileForm.appName || 'TaskFlow Pro'}</p>
+                            <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: 0 }}>{profileForm.appName || 'Go Viral Ads'}</p>
                             <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>{profileForm.tagline || 'Your productivity partner'}</p>
                           </div>
                         </div>
@@ -712,7 +712,7 @@ const Profile = () => {
                         </div>
                       )}
                       <div>
-                        <p style={{ fontWeight: '700', fontSize: '20px', color: '#0f172a', margin: 0 }}>{profileForm.appName || 'TaskFlow Pro'}</p>
+                        <p style={{ fontWeight: '700', fontSize: '20px', color: '#0f172a', margin: 0 }}>{profileForm.appName || 'Go Viral Ads'}</p>
                         {profileForm.tagline && <p style={{ color: '#64748b', fontSize: '14px', margin: '4px 0 0' }}>{profileForm.tagline}</p>}
                       </div>
                     </div>

@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema(
     },
     // Branding settings (admin only)
     branding: {
-      appName: { type: String, default: 'TaskFlow Pro' },
+      appName: { type: String, default: 'Go Viral Ads' },
       logoUrl: { type: String, default: '' },
       tagline: { type: String, default: '' },
       accentColor: { type: String, default: '#6366f1' },

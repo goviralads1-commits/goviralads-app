@@ -9,7 +9,7 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [branding, setBranding] = useState({ appName: 'TaskFlow Pro', tagline: 'Admin Portal', logoUrl: '' });
+  const [branding, setBranding] = useState({ appName: 'Go Viral Ads', tagline: 'Admin Portal', logoUrl: '' });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,7 +19,7 @@ const LoginForm = () => {
         const res = await api.get('/public/branding');
         if (res.data) {
           setBranding({
-            appName: res.data.appName || 'TaskFlow Pro',
+            appName: res.data.appName || 'Go Viral Ads',
             tagline: res.data.tagline || 'Admin Portal',
             logoUrl: res.data.logoUrl || '',
             accentColor: res.data.accentColor || '#6366f1',
@@ -124,7 +124,7 @@ const LoginForm = () => {
             margin: '0 0 8px 0',
             letterSpacing: '-0.025em'
           }}>
-            {branding.appName || 'TaskFlow Pro'}
+            {branding.appName || 'Go Viral Ads'}
           </h1>
           <p style={{
             fontSize: '15px',
@@ -354,7 +354,7 @@ const LoginForm = () => {
           color: '#94a3b8',
           marginTop: '24px'
         }}>
-          Secure Admin Access • {branding.appName || 'TaskFlow Pro'}
+          Secure Admin Access • {branding.appName || 'Go Viral Ads'}
         </p>
       </div>
 
