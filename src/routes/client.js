@@ -9,10 +9,14 @@ const Subscription = require('../models/Subscription');
 const Notice = require('../models/Notice');
 const User = require('../models/User');
 const OfficeConfig = require('../models/OfficeConfig');
+const { Invoice } = require('../models/Invoice');
+const { Receipt } = require('../models/Receipt');
 const { hashPassword, verifyPassword } = require('../services/passwordService');
 const { purchaseTaskFromTemplate, updateTaskProgressAutomatically } = require('../services/taskService');
 const { getClientWalletSummary, getClientTaskSummary, getClientRecentActivity } = require('../services/reportingService');
 const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsRead, createNotification, getUnreadCount, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
+const billingService = require('../services/billingService');
+const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireClient } = require('../middleware/authorization');
 
@@ -169,6 +173,93 @@ router.get('/tasks/:taskId', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // === SAME PROCESSING LOGIC AS GET /tasks LIST ===
+    const now = new Date();
+    let needsSave = false;
+    let currentStatus = task.status;
+    let currentProgress = task.progress;
+    let currentMilestones = task.milestones || [];
+
+    // Auto-start scheduled tasks if startDate has passed
+    if (currentStatus === 'PENDING' && task.startDate && new Date(task.startDate) <= now) {
+      task.status = 'ACTIVE';
+      currentStatus = 'ACTIVE';
+      needsSave = true;
+      console.log(`[SINGLE-TASK] Task ${task._id} auto-started`);
+    }
+
+    // Recalculate progress for AUTO mode tasks
+    if (task.progressMode === 'AUTO' && task.startDate && task.endDate) {
+      const start = new Date(task.startDate);
+      const end = new Date(task.endDate);
+      const cap = task.autoCompletionCap || 100;
+      
+      if (now < start) {
+        currentProgress = 0;
+      } else if (now >= end) {
+        currentProgress = cap;
+      } else {
+        const totalDuration = end - start;
+        const elapsed = now - start;
+        currentProgress = Math.min((elapsed / totalDuration) * 100, cap);
+      }
+      currentProgress = Math.round(currentProgress * 10) / 10;
+      
+      if (Math.abs(currentProgress - task.progress) > 0.1) {
+        task.progress = currentProgress;
+        needsSave = true;
+      }
+    } else if (task.progressMode === 'MANUAL' && task.progressTarget > 0) {
+      // Recalculate MANUAL progress from target/achieved
+      currentProgress = Math.round(((task.progressAchieved || 0) / task.progressTarget) * 1000) / 10;
+      if (Math.abs(currentProgress - task.progress) > 0.1) {
+        task.progress = currentProgress;
+        needsSave = true;
+      }
+    }
+
+    // Evaluate milestones based on current progress
+    if (currentMilestones.length > 0) {
+      let milestonesChanged = false;
+      currentMilestones = currentMilestones.map(m => {
+        const shouldBeReached = currentProgress >= m.percentage;
+        if (shouldBeReached && !m.reached) {
+          milestonesChanged = true;
+          return { ...m.toObject ? m.toObject() : m, reached: true, reachedAt: now };
+        } else if (!shouldBeReached && m.reached) {
+          milestonesChanged = true;
+          return { ...m.toObject ? m.toObject() : m, reached: false, reachedAt: null };
+        }
+        return m.toObject ? m.toObject() : m;
+      });
+      if (milestonesChanged) {
+        task.milestones = currentMilestones;
+        needsSave = true;
+      }
+    }
+
+    // Auto-update status based on progress
+    if (currentStatus !== 'CANCELLED' && currentStatus !== 'PENDING_APPROVAL') {
+      if (currentProgress >= 100 && currentStatus !== 'COMPLETED') {
+        task.status = 'COMPLETED';
+        currentStatus = 'COMPLETED';
+        needsSave = true;
+      } else if (currentProgress > 0 && currentStatus === 'PENDING') {
+        task.status = 'ACTIVE';
+        currentStatus = 'ACTIVE';
+        needsSave = true;
+      }
+    }
+
+    // Save if any changes detected
+    if (needsSave) {
+      await task.save();
+      console.log(`[SINGLE-TASK SYNC] Task ${task._id} updated: status=${task.status}, progress=${task.progress}`);
+    }
+
+    // Log milestones for verification
+    console.log(`[SINGLE-TASK] Task ${task._id} milestones:`, JSON.stringify(currentMilestones));
+
     return res.status(200).json({
       task: {
         id: task._id.toString(),
@@ -181,8 +272,11 @@ router.get('/tasks/:taskId', async (req, res) => {
         endDate: task.endDate,
         publicNotes: task.publicNotes,
         progressMode: task.progressMode,
-        progress: task.progress,
-        status: task.status,
+        progress: currentProgress,
+        progressTarget: task.progressTarget,
+        progressAchieved: task.progressAchieved,
+        showProgressDetails: task.showProgressDetails,
+        status: currentStatus,
         deadline: task.deadline || task.endDate,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
@@ -194,9 +288,18 @@ router.get('/tasks/:taskId', async (req, res) => {
         offerPrice: task.offerPrice,
         originalPrice: task.originalPrice,
         countdownEndDate: task.countdownEndDate,
+        // MILESTONES - CRITICAL FIX
+        milestones: currentMilestones.map(m => ({
+          name: m.name,
+          percentage: m.percentage,
+          color: m.color,
+          reached: m.reached || false,
+          reachedAt: m.reachedAt || null,
+        })),
       },
     });
   } catch (err) {
+    console.error('[SINGLE-TASK ERROR]', err);
     return res.status(500).json({ error: 'Failed to retrieve task' });
   }
 });
@@ -876,8 +979,95 @@ router.get('/tasks', async (req, res) => {
     console.log('Filter:', JSON.stringify(filter));
     const tasks = await Task.find(filter).sort({ createdAt: -1 }).exec();
     console.log('Tasks found:', tasks.length);
-    return res.status(200).json({
-      tasks: tasks.map((t) => ({
+
+    const now = new Date();
+    const processedTasks = [];
+
+    for (const t of tasks) {
+      let needsSave = false;
+      let currentStatus = t.status;
+      let currentProgress = t.progress;
+      let currentMilestones = t.milestones || [];
+
+      // FIX #2: Auto-start scheduled tasks if startDate has passed
+      // PENDING = Scheduled, ACTIVE = In Progress
+      if (currentStatus === 'PENDING' && t.startDate && new Date(t.startDate) <= now) {
+        t.status = 'ACTIVE';
+        currentStatus = 'ACTIVE';
+        needsSave = true;
+        console.log(`[AUTO-START] Task ${t._id} started: startDate ${t.startDate} <= now`);
+      }
+
+      // Recalculate progress for AUTO mode tasks
+      if (t.progressMode === 'AUTO' && t.startDate && t.endDate) {
+        const start = new Date(t.startDate);
+        const end = new Date(t.endDate);
+        const cap = t.autoCompletionCap || 100;
+        
+        if (now < start) {
+          currentProgress = 0;
+        } else if (now >= end) {
+          currentProgress = cap;
+        } else {
+          const totalDuration = end - start;
+          const elapsed = now - start;
+          currentProgress = Math.min((elapsed / totalDuration) * 100, cap);
+        }
+        currentProgress = Math.round(currentProgress * 10) / 10;
+        
+        if (Math.abs(currentProgress - t.progress) > 0.1) {
+          t.progress = currentProgress;
+          needsSave = true;
+        }
+      } else if (t.progressMode === 'MANUAL' && t.progressTarget > 0) {
+        // Recalculate MANUAL progress from target/achieved
+        currentProgress = Math.round(((t.progressAchieved || 0) / t.progressTarget) * 1000) / 10;
+        if (Math.abs(currentProgress - t.progress) > 0.1) {
+          t.progress = currentProgress;
+          needsSave = true;
+        }
+      }
+
+      // FIX #1: Evaluate milestones based on current progress
+      if (currentMilestones.length > 0) {
+        let milestonesChanged = false;
+        currentMilestones = currentMilestones.map(m => {
+          const shouldBeReached = currentProgress >= m.percentage;
+          if (shouldBeReached && !m.reached) {
+            milestonesChanged = true;
+            return { ...m.toObject ? m.toObject() : m, reached: true, reachedAt: now };
+          } else if (!shouldBeReached && m.reached) {
+            milestonesChanged = true;
+            return { ...m.toObject ? m.toObject() : m, reached: false, reachedAt: null };
+          }
+          return m.toObject ? m.toObject() : m;
+        });
+        if (milestonesChanged) {
+          t.milestones = currentMilestones;
+          needsSave = true;
+        }
+      }
+
+      // FIX #3: Auto-update status based on progress (only if not cancelled/completed manually)
+      if (currentStatus !== 'CANCELLED' && currentStatus !== 'PENDING_APPROVAL') {
+        if (currentProgress >= 100 && currentStatus !== 'COMPLETED') {
+          t.status = 'COMPLETED';
+          currentStatus = 'COMPLETED';
+          needsSave = true;
+        } else if (currentProgress > 0 && currentStatus === 'PENDING') {
+          t.status = 'ACTIVE';
+          currentStatus = 'ACTIVE';
+          needsSave = true;
+        }
+      }
+
+      // Save if any changes detected
+      if (needsSave) {
+        await t.save();
+        console.log(`[TASK SYNC] Task ${t._id} updated: status=${t.status}, progress=${t.progress}`);
+      }
+
+      processedTasks.push({
         id: t._id.toString(),
         title: t.title,
         description: t.description,
@@ -888,8 +1078,11 @@ router.get('/tasks', async (req, res) => {
         endDate: t.endDate,
         publicNotes: t.publicNotes,
         progressMode: t.progressMode,
-        progress: t.progress,
-        status: t.status,
+        progress: currentProgress,
+        progressTarget: t.progressTarget,
+        progressAchieved: t.progressAchieved,
+        showProgressDetails: t.showProgressDetails,
+        status: currentStatus,
         deadline: t.deadline || t.endDate,
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
@@ -900,8 +1093,18 @@ router.get('/tasks', async (req, res) => {
         offerPrice: t.offerPrice,
         originalPrice: t.originalPrice,
         countdownEndDate: t.countdownEndDate,
-      })),
-    });
+        // FIX #1: Include milestones in response
+        milestones: currentMilestones.map(m => ({
+          name: m.name,
+          percentage: m.percentage,
+          color: m.color,
+          reached: m.reached || false,
+          reachedAt: m.reachedAt || null,
+        })),
+      });
+    }
+
+    return res.status(200).json({ tasks: processedTasks });
   } catch (err) {
     console.error('Client tasks error:', err);
     return res.status(500).json({ error: 'Failed to retrieve tasks' });
@@ -1390,6 +1593,18 @@ router.get('/profile', async (req, res) => {
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
       },
+      billing: {
+        name: user.billing?.name || '',
+        email: user.billing?.email || user.identifier || '',
+        phone: user.billing?.phone || user.profile?.phone || '',
+        address: user.billing?.address || '',
+        city: user.billing?.city || '',
+        state: user.billing?.state || '',
+        pincode: user.billing?.pincode || '',
+        country: user.billing?.country || 'India',
+        gstNumber: user.billing?.gstNumber || '',
+        companyName: user.billing?.companyName || user.profile?.company || '',
+      },
       stats: {
         walletBalance: wallet?.balance || 0,
         activeTasks,
@@ -1409,7 +1624,7 @@ router.get('/profile', async (req, res) => {
 router.patch('/profile', async (req, res) => {
   try {
     const clientId = req.user.id;
-    const { name, phone, photoUrl, company, timezone, language, preferences } = req.body || {};
+    const { name, phone, photoUrl, company, timezone, language, preferences, billing } = req.body || {};
 
     const user = await User.findById(clientId).exec();
     if (!user) {
@@ -1431,6 +1646,21 @@ router.patch('/profile', async (req, res) => {
       if (preferences.marketingEmails !== undefined) user.preferences.marketingEmails = preferences.marketingEmails;
     }
 
+    // Update billing details
+    if (billing) {
+      if (!user.billing) user.billing = {};
+      if (billing.name !== undefined) user.billing.name = billing.name.trim();
+      if (billing.email !== undefined) user.billing.email = billing.email.trim();
+      if (billing.phone !== undefined) user.billing.phone = billing.phone.trim();
+      if (billing.address !== undefined) user.billing.address = billing.address.trim();
+      if (billing.city !== undefined) user.billing.city = billing.city.trim();
+      if (billing.state !== undefined) user.billing.state = billing.state.trim();
+      if (billing.pincode !== undefined) user.billing.pincode = billing.pincode.trim();
+      if (billing.country !== undefined) user.billing.country = billing.country.trim();
+      if (billing.gstNumber !== undefined) user.billing.gstNumber = billing.gstNumber.trim();
+      if (billing.companyName !== undefined) user.billing.companyName = billing.companyName.trim();
+    }
+
     user.lastActivityAt = new Date();
     await user.save();
 
@@ -1446,6 +1676,18 @@ router.patch('/profile', async (req, res) => {
         timezone: user.profile?.timezone || 'UTC',
         language: user.profile?.language || 'en',
         preferences: user.preferences || {},
+      },
+      billing: {
+        name: user.billing?.name || '',
+        email: user.billing?.email || '',
+        phone: user.billing?.phone || '',
+        address: user.billing?.address || '',
+        city: user.billing?.city || '',
+        state: user.billing?.state || '',
+        pincode: user.billing?.pincode || '',
+        country: user.billing?.country || 'India',
+        gstNumber: user.billing?.gstNumber || '',
+        companyName: user.billing?.companyName || '',
       },
     });
   } catch (err) {
@@ -1902,6 +2144,153 @@ router.get('/office-config', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to fetch office config' });
+  }
+});
+
+// =============================================
+// BILLING ROUTES (CLIENT)
+// =============================================
+
+// GET /client/billing/invoices - List my invoices
+router.get('/billing/invoices', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const invoices = await Invoice.find({ clientId })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return res.status(200).json({
+      invoices: invoices.map(inv => ({
+        id: inv._id.toString(),
+        invoiceNumber: inv.invoiceNumber,
+        amount: inv.amount,
+        paymentMethod: inv.paymentMethod,
+        paymentReference: inv.paymentReference,
+        status: inv.status,
+        isDownloadable: inv.isDownloadableByClient,
+        createdAt: inv.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('Failed to get client invoices:', err);
+    return res.status(500).json({ error: 'Failed to get invoices' });
+  }
+});
+
+// GET /client/billing/receipts - List my receipts
+router.get('/billing/receipts', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const receipts = await Receipt.find({ clientId })
+      .populate('taskId', 'title')
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return res.status(200).json({
+      receipts: receipts.map(rcp => ({
+        id: rcp._id.toString(),
+        receiptNumber: rcp.receiptNumber,
+        taskId: rcp.taskId?._id?.toString(),
+        taskTitle: rcp.taskTitle || rcp.taskId?.title,
+        creditsUsed: rcp.creditsUsed,
+        status: rcp.status,
+        isDownloadable: rcp.isDownloadableByClient,
+        createdAt: rcp.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('Failed to get client receipts:', err);
+    return res.status(500).json({ error: 'Failed to get receipts' });
+  }
+});
+
+// GET /client/tasks/:taskId/receipt - Get receipt for specific task
+router.get('/tasks/:taskId/receipt', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { taskId } = req.params;
+
+    // Verify task belongs to this client
+    const task = await Task.findOne({ _id: taskId, clientId }).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const receipt = await Receipt.findOne({ taskId, clientId }).exec();
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found for this task' });
+    }
+
+    return res.status(200).json({
+      receipt: {
+        id: receipt._id.toString(),
+        receiptNumber: receipt.receiptNumber,
+        taskTitle: receipt.taskTitle || task.title,
+        creditsUsed: receipt.creditsUsed,
+        status: receipt.status,
+        isDownloadable: receipt.isDownloadableByClient,
+        createdAt: receipt.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('Failed to get task receipt:', err);
+    return res.status(500).json({ error: 'Failed to get receipt' });
+  }
+});
+
+// GET /client/billing/invoices/:id/pdf - Download invoice PDF (if allowed)
+router.get('/billing/invoices/:id/pdf', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const invoice = await Invoice.findOne({ _id: req.params.id, clientId }).exec();
+    
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    
+    if (!invoice.isDownloadableByClient) {
+      return res.status(403).json({ error: 'Invoice download not allowed. Please contact admin.' });
+    }
+
+    // Get full invoice with populated fields
+    const fullInvoice = await billingService.getInvoiceById(req.params.id);
+    const pdfBuffer = await pdfService.generateInvoicePDF(fullInvoice);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Failed to generate invoice PDF:', err);
+    return res.status(500).json({ error: 'Failed to generate invoice PDF' });
+  }
+});
+
+// GET /client/billing/receipts/:id/pdf - Download receipt PDF (if allowed)
+router.get('/billing/receipts/:id/pdf', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const receipt = await Receipt.findOne({ _id: req.params.id, clientId }).exec();
+    
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+    
+    if (!receipt.isDownloadableByClient) {
+      return res.status(403).json({ error: 'Receipt download not allowed. Please contact admin.' });
+    }
+
+    // Get full receipt with populated fields
+    const fullReceipt = await billingService.getReceiptById(req.params.id);
+    const pdfBuffer = await pdfService.generateReceiptPDF(fullReceipt);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${receipt.receiptNumber}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Failed to generate receipt PDF:', err);
+    return res.status(500).json({ error: 'Failed to generate receipt PDF' });
   }
 });
 
