@@ -246,6 +246,8 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
       { new: true }
     );
     console.log('Step 6: Request status updated to APPROVED');
+
+    // --- Billing Hook removed (module not available) ---
     console.log('=== APPROVE COMPLETE ===');
 
     // --- Notification Hook (Phase 5) ---
@@ -307,6 +309,8 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
       reviewedBy: adminId,
       walletBalance: wallet.balance,
       transactionId: transaction._id.toString(),
+      invoiceId: invoice?._id?.toString() || null,
+      invoiceNumber: invoice?.invoiceNumber || null,
     });
   } catch (err) {
     console.error('=== APPROVE ERROR ===' );
@@ -506,11 +510,62 @@ router.patch('/tasks/:taskId', async (req, res) => {
     delete updates.clientId; // Client is fixed once assigned
     delete updates.assignedBy;
     
-    const task = await Task.findByIdAndUpdate(taskId, updates, { new: true }).exec();
+    const task = await Task.findById(taskId).exec();
     
     if (!task) {
       return res.status(404).json({ error: 'TASK NOT FOUND: Cannot update a non-existent task.' });
     }
+
+    // Track if progress-related fields are being updated
+    const progressFieldsUpdated = (
+      updates.progress !== undefined ||
+      updates.progressAchieved !== undefined ||
+      updates.progressTarget !== undefined ||
+      updates.progressMode !== undefined ||
+      updates.startDate !== undefined ||
+      updates.endDate !== undefined
+    );
+
+    // Apply all updates
+    Object.keys(updates).forEach(key => {
+      task[key] = updates[key];
+    });
+
+    // FIX #3: If progress-related fields changed, evaluate milestones and auto-sync status
+    if (progressFieldsUpdated) {
+      const now = new Date();
+      let currentProgress = task.progress;
+
+      // Recalculate progress for MANUAL mode
+      if (task.progressMode === 'MANUAL' && task.progressTarget > 0) {
+        currentProgress = Math.round(((task.progressAchieved || 0) / task.progressTarget) * 1000) / 10;
+        task.progress = currentProgress;
+      }
+
+      // Evaluate milestones
+      if (task.milestones && task.milestones.length > 0) {
+        task.milestones = task.milestones.map(m => {
+          const shouldBeReached = currentProgress >= m.percentage;
+          if (shouldBeReached && !m.reached) {
+            return { ...m.toObject ? m.toObject() : m, reached: true, reachedAt: now };
+          } else if (!shouldBeReached && m.reached) {
+            return { ...m.toObject ? m.toObject() : m, reached: false, reachedAt: null };
+          }
+          return m.toObject ? m.toObject() : m;
+        });
+      }
+
+      // Auto-sync status based on progress (don't override CANCELLED or PENDING_APPROVAL)
+      if (task.status !== 'CANCELLED' && task.status !== 'PENDING_APPROVAL' && task.status !== 'LISTED') {
+        if (currentProgress >= 100 && task.status !== 'COMPLETED') {
+          task.status = 'COMPLETED';
+        } else if (currentProgress > 0 && task.status === 'PENDING') {
+          task.status = 'ACTIVE';
+        }
+      }
+    }
+
+    await task.save();
 
     return res.status(200).json({ success: true, task });
   } catch (err) {
@@ -538,9 +593,24 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
       task.progress = progress;
     }
 
+    // FIX: Evaluate milestones when status/progress changes
+    const currentProgress = task.progress;
+    if (task.milestones && task.milestones.length > 0) {
+      const now = new Date();
+      task.milestones = task.milestones.map(m => {
+        const shouldBeReached = currentProgress >= m.percentage;
+        if (shouldBeReached && !m.reached) {
+          return { ...m.toObject ? m.toObject() : m, reached: true, reachedAt: now };
+        } else if (!shouldBeReached && m.reached) {
+          return { ...m.toObject ? m.toObject() : m, reached: false, reachedAt: null };
+        }
+        return m.toObject ? m.toObject() : m;
+      });
+    }
+
     await task.save();
 
-    return res.status(200).json({ success: true, status: task.status, progress: task.progress });
+    return res.status(200).json({ success: true, status: task.status, progress: task.progress, milestones: task.milestones });
   } catch (err) {
     return res.status(500).json({ error: `STATUS UPDATE ERROR: ${err.message}` });
   }
@@ -3982,5 +4052,9 @@ router.patch('/office-config/featured-plans', async (req, res) => {
     return res.status(500).json({ error: 'Failed to update featured plans config' });
   }
 });
+
+// =============================================
+// BILLING ROUTES (REMOVED - Module not available)
+// =============================================
 
 module.exports = router;

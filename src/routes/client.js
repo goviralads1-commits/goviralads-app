@@ -9,14 +9,10 @@ const Subscription = require('../models/Subscription');
 const Notice = require('../models/Notice');
 const User = require('../models/User');
 const OfficeConfig = require('../models/OfficeConfig');
-const { Invoice } = require('../models/Invoice');
-const { Receipt } = require('../models/Receipt');
 const { hashPassword, verifyPassword } = require('../services/passwordService');
 const { purchaseTaskFromTemplate, updateTaskProgressAutomatically } = require('../services/taskService');
 const { getClientWalletSummary, getClientTaskSummary, getClientRecentActivity } = require('../services/reportingService');
 const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsRead, createNotification, getUnreadCount, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
-const billingService = require('../services/billingService');
-const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireClient } = require('../middleware/authorization');
 
@@ -2144,153 +2140,6 @@ router.get('/office-config', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to fetch office config' });
-  }
-});
-
-// =============================================
-// BILLING ROUTES (CLIENT)
-// =============================================
-
-// GET /client/billing/invoices - List my invoices
-router.get('/billing/invoices', async (req, res) => {
-  try {
-    const clientId = req.user.id;
-    const invoices = await Invoice.find({ clientId })
-      .sort({ createdAt: -1 })
-      .exec();
-
-    return res.status(200).json({
-      invoices: invoices.map(inv => ({
-        id: inv._id.toString(),
-        invoiceNumber: inv.invoiceNumber,
-        amount: inv.amount,
-        paymentMethod: inv.paymentMethod,
-        paymentReference: inv.paymentReference,
-        status: inv.status,
-        isDownloadable: inv.isDownloadableByClient,
-        createdAt: inv.createdAt,
-      })),
-    });
-  } catch (err) {
-    console.error('Failed to get client invoices:', err);
-    return res.status(500).json({ error: 'Failed to get invoices' });
-  }
-});
-
-// GET /client/billing/receipts - List my receipts
-router.get('/billing/receipts', async (req, res) => {
-  try {
-    const clientId = req.user.id;
-    const receipts = await Receipt.find({ clientId })
-      .populate('taskId', 'title')
-      .sort({ createdAt: -1 })
-      .exec();
-
-    return res.status(200).json({
-      receipts: receipts.map(rcp => ({
-        id: rcp._id.toString(),
-        receiptNumber: rcp.receiptNumber,
-        taskId: rcp.taskId?._id?.toString(),
-        taskTitle: rcp.taskTitle || rcp.taskId?.title,
-        creditsUsed: rcp.creditsUsed,
-        status: rcp.status,
-        isDownloadable: rcp.isDownloadableByClient,
-        createdAt: rcp.createdAt,
-      })),
-    });
-  } catch (err) {
-    console.error('Failed to get client receipts:', err);
-    return res.status(500).json({ error: 'Failed to get receipts' });
-  }
-});
-
-// GET /client/tasks/:taskId/receipt - Get receipt for specific task
-router.get('/tasks/:taskId/receipt', async (req, res) => {
-  try {
-    const clientId = req.user.id;
-    const { taskId } = req.params;
-
-    // Verify task belongs to this client
-    const task = await Task.findOne({ _id: taskId, clientId }).exec();
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    const receipt = await Receipt.findOne({ taskId, clientId }).exec();
-    if (!receipt) {
-      return res.status(404).json({ error: 'Receipt not found for this task' });
-    }
-
-    return res.status(200).json({
-      receipt: {
-        id: receipt._id.toString(),
-        receiptNumber: receipt.receiptNumber,
-        taskTitle: receipt.taskTitle || task.title,
-        creditsUsed: receipt.creditsUsed,
-        status: receipt.status,
-        isDownloadable: receipt.isDownloadableByClient,
-        createdAt: receipt.createdAt,
-      },
-    });
-  } catch (err) {
-    console.error('Failed to get task receipt:', err);
-    return res.status(500).json({ error: 'Failed to get receipt' });
-  }
-});
-
-// GET /client/billing/invoices/:id/pdf - Download invoice PDF (if allowed)
-router.get('/billing/invoices/:id/pdf', async (req, res) => {
-  try {
-    const clientId = req.user.id;
-    const invoice = await Invoice.findOne({ _id: req.params.id, clientId }).exec();
-    
-    if (!invoice) {
-      return res.status(404).json({ error: 'Invoice not found' });
-    }
-    
-    if (!invoice.isDownloadableByClient) {
-      return res.status(403).json({ error: 'Invoice download not allowed. Please contact admin.' });
-    }
-
-    // Get full invoice with populated fields
-    const fullInvoice = await billingService.getInvoiceById(req.params.id);
-    const pdfBuffer = await pdfService.generateInvoicePDF(fullInvoice);
-    
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-    return res.send(pdfBuffer);
-  } catch (err) {
-    console.error('Failed to generate invoice PDF:', err);
-    return res.status(500).json({ error: 'Failed to generate invoice PDF' });
-  }
-});
-
-// GET /client/billing/receipts/:id/pdf - Download receipt PDF (if allowed)
-router.get('/billing/receipts/:id/pdf', async (req, res) => {
-  try {
-    const clientId = req.user.id;
-    const receipt = await Receipt.findOne({ _id: req.params.id, clientId }).exec();
-    
-    if (!receipt) {
-      return res.status(404).json({ error: 'Receipt not found' });
-    }
-    
-    if (!receipt.isDownloadableByClient) {
-      return res.status(403).json({ error: 'Receipt download not allowed. Please contact admin.' });
-    }
-
-    // Get full receipt with populated fields
-    const fullReceipt = await billingService.getReceiptById(req.params.id);
-    const pdfBuffer = await pdfService.generateReceiptPDF(fullReceipt);
-    
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${receipt.receiptNumber}.pdf"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
-    return res.send(pdfBuffer);
-  } catch (err) {
-    console.error('Failed to generate receipt PDF:', err);
-    return res.status(500).json({ error: 'Failed to generate receipt PDF' });
   }
 });
 

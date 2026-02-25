@@ -67,6 +67,8 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
       description: `Purchased task: ${template.name}`,
       referenceId: task._id,
     });
+
+    // --- Billing Hook removed (module not available) ---
   } catch (err) {
     console.error('Purchase task partial error:', err.message);
     if (!task) {
@@ -169,6 +171,9 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
       referenceId: task._id,
     });
     console.log('Step 6: Transaction created:', transaction._id.toString());
+
+    // --- Billing Hook removed (module not available) ---
+    console.log('Step 7: Billing hook skipped');
     
     console.log('=== TASK SERVICE: ASSIGN COMPLETE ===' );
   } catch (err) {
