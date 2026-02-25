@@ -7,13 +7,19 @@ const TaskDetail = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
   const [task, setTask] = useState(null);
+  const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
 
   const fetchTask = useCallback(async () => {
     try {
-      const response = await api.get(`/client/tasks/${taskId}`);
-      setTask(response.data.task);
+      const [taskResponse, receiptResponse] = await Promise.all([
+        api.get(`/client/tasks/${taskId}`),
+        api.get(`/client/tasks/${taskId}/receipt`).catch(() => ({ data: { receipt: null } }))
+      ]);
+      setTask(taskResponse.data.task);
+      setReceipt(receiptResponse.data.receipt);
       setError('');
     } catch (err) {
       console.error('Task detail error:', err.response?.data || err.message);
@@ -22,6 +28,29 @@ const TaskDetail = () => {
       setLoading(false);
     }
   }, [taskId]);
+
+  const handleDownloadReceipt = async () => {
+    if (!receipt) return;
+    setDownloadingReceipt(true);
+    try {
+      const response = await api.get(`/client/billing/receipts/${receipt._id}/pdf`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `receipt-${receipt.receiptNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Receipt download error:', err);
+      // Silent fail - user can try again
+    } finally {
+      setDownloadingReceipt(false);
+    }
+  };
 
   useEffect(() => {
     fetchTask();
@@ -43,33 +72,33 @@ const TaskDetail = () => {
   const getActiveMilestone = (milestones, progress) => {
     if (!milestones || milestones.length === 0) return null;
     
-    // Find the highest milestone that's been reached
+    // First try to find highest reached milestone (from backend)
+    const reachedMilestones = milestones.filter(m => m.reached).sort((a, b) => b.percentage - a.percentage);
+    if (reachedMilestones.length > 0) return reachedMilestones[0];
+    
+    // Fallback: Find the highest milestone that's been reached based on progress
     const sortedMilestones = [...milestones].sort((a, b) => b.percentage - a.percentage);
     return sortedMilestones.find(m => progress >= m.percentage) || null;
   };
 
-  // Get next milestone
-  const getNextMilestone = (milestones, progress) => {
-    if (!milestones || milestones.length === 0) return null;
-    
-    const sortedMilestones = [...milestones].sort((a, b) => a.percentage - b.percentage);
-    return sortedMilestones.find(m => progress < m.percentage) || null;
+  // Progress color based on progress percentage (clean gradient)
+  const getProgressColor = (progress) => {
+    if (progress >= 100) return '#22c55e'; // Green
+    if (progress >= 75) return '#84cc16';  // Lime
+    if (progress >= 50) return '#f59e0b';  // Amber
+    if (progress >= 25) return '#f97316';  // Orange
+    return '#6366f1'; // Indigo
   };
 
-  // Progress color based on milestone or fallback
-  const getProgressColor = (task) => {
-    const progress = task.progress || 0;
-    const activeMilestone = getActiveMilestone(task.milestones, progress);
-    
-    if (activeMilestone) {
-      return activeMilestone.color;
-    }
-    
-    // Fallback gradient
-    if (progress >= 100) return '#22c55e';
-    if (progress >= 70) return '#3b82f6';
-    if (progress >= 40) return '#6366f1';
-    return '#8b5cf6';
+  // Get milestone flag color based on percentage position (journey gradient)
+  const getMilestoneFlagColor = (percentage, isReached) => {
+    if (!isReached) return '#d1d5db'; // Gray for unreached
+    // Color journey: Dark Red → Orange → Light Green → Green
+    if (percentage >= 100) return '#22c55e'; // Green (final)
+    if (percentage >= 75) return '#84cc16';  // Lime green
+    if (percentage >= 50) return '#f59e0b';  // Amber/Orange
+    if (percentage >= 25) return '#f97316';  // Orange
+    return '#dc2626'; // Dark red (early)
   };
 
   // Format date for display
@@ -195,9 +224,8 @@ const TaskDetail = () => {
 
   const humanStatus = getHumanStatus(task.status);
   const progress = task.progress || 0;
-  const progressColor = getProgressColor(task);
+  const progressColor = getProgressColor(progress);
   const activeMilestone = getActiveMilestone(task.milestones, progress);
-  const nextMilestone = getNextMilestone(task.milestones, progress);
   const isOverachieving = progress > 100;
 
   // Build milestones from task if available
@@ -216,7 +244,7 @@ const TaskDetail = () => {
           style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '0',
             backgroundColor: 'transparent', border: 'none', fontSize: '14px', fontWeight: '500',
-            color: '#666', cursor: 'pointer', marginBottom: '32px'
+            color: '#666', cursor: 'pointer', marginBottom: '24px'
           }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -225,21 +253,79 @@ const TaskDetail = () => {
           All Tasks
         </button>
 
+        {/* Feature Image Header - If Available */}
+        {task.featureImage && (
+          <div style={{
+            borderRadius: '24px', overflow: 'hidden', marginBottom: '20px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', position: 'relative'
+          }}>
+            <img 
+              src={task.featureImage} 
+              alt="" 
+              style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }}
+              onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+            />
+            <div style={{
+              position: 'absolute', bottom: '16px', left: '20px',
+              display: 'flex', alignItems: 'center', gap: '12px'
+            }}>
+              <span style={{ 
+                fontSize: '36px', 
+                filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))' 
+              }}>
+                {task.icon || '📝'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Hero Card - Title + Status */}
         <div style={{
           backgroundColor: '#fff', borderRadius: '28px', padding: '36px 32px', marginBottom: '20px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
         }}>
-          {/* Status Chip */}
+          {/* Status Chip - Dynamic based on progress */}
           <div style={{ marginBottom: '20px' }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-              backgroundColor: humanStatus.bg, color: humanStatus.color
-            }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: humanStatus.color }} />
-              {humanStatus.label}
-            </span>
+            {(() => {
+              const isStarted = progress > 0;
+              // If task has started and has an active milestone, show milestone as status
+              if (isStarted && activeMilestone) {
+                return (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
+                    backgroundColor: `${activeMilestone.color}15`, color: activeMilestone.color
+                  }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: activeMilestone.color }} />
+                    🚩 {activeMilestone.name}
+                  </span>
+                );
+              }
+              // If started but no milestone, show "In Progress"
+              if (isStarted && !activeMilestone) {
+                return (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
+                    backgroundColor: '#eff6ff', color: '#3b82f6'
+                  }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
+                    In Progress
+                  </span>
+                );
+              }
+              // Default: show original humanStatus (Scheduled, Pending Approval, etc.)
+              return (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
+                  backgroundColor: humanStatus.bg, color: humanStatus.color
+                }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: humanStatus.color }} />
+                  {humanStatus.label}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Title */}
@@ -267,14 +353,14 @@ const TaskDetail = () => {
           )}
         </div>
 
-        {/* SMART PROGRESS CARD */}
+        {/* PROGRESS CARD - Clean Client View */}
         <div style={{
           backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
         }}>
           {/* Section Header */}
           <div style={{ marginBottom: '24px' }}>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Smart Progress</span>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Progress</span>
           </div>
 
           {isPendingApproval ? (
@@ -287,161 +373,134 @@ const TaskDetail = () => {
             </div>
           ) : (
             <>
-              {/* Progress Display */}
-              <div style={{ marginBottom: '28px' }}>
-                {/* Header with Active Milestone */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {activeMilestone && (
-                      <div style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 14px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                        backgroundColor: `${activeMilestone.color}15`, color: activeMilestone.color
-                      }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: activeMilestone.color }} />
-                        {activeMilestone.name}
-                      </div>
-                    )}
-                    {task.progressMode && (
-                      <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>
-                        {task.progressMode === 'AUTO' && 'Time-based progress'}
-                        {task.progressMode === 'MANUAL' && 'Number-based progress'}
-                      </span>
-                    )}
+              {/* Progress Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                {/* Current Stage - Only show if milestone exists */}
+                {activeMilestone ? (
+                  <div>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500', margin: '0 0 4px 0' }}>Current Stage</p>
+                    <p style={{ fontSize: '16px', fontWeight: '700', color: '#1a1a1a', margin: 0 }}>
+                      🚩 {activeMilestone.name}
+                    </p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isOverachieving && (
-                      <span style={{ 
-                        fontSize: '11px', fontWeight: '800', color: '#10b981', 
-                        textTransform: 'uppercase', letterSpacing: '0.05em',
-                        backgroundColor: '#dcfce7', padding: '4px 8px', borderRadius: '6px',
-                        marginRight: '4px'
-                      }}>
-                        Overachieving
-                      </span>
-                    )}
-                    <span style={{ fontSize: '36px', fontWeight: '700', color: progressColor }}>{Math.round(progress)}%</span>
-                    {isOverachieving && <span style={{ fontSize: '24px' }}>🎉</span>}
+                ) : (
+                  <div>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500', margin: '0 0 4px 0' }}>Status</p>
+                    <p style={{ fontSize: '16px', fontWeight: '700', color: '#1a1a1a', margin: 0 }}>
+                      {progress === 0 ? 'Getting Started' : progress >= 100 ? 'Completed' : 'In Progress'}
+                    </p>
                   </div>
+                )}
+                
+                {/* Progress Percentage */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {isOverachieving && (
+                    <span style={{ 
+                      fontSize: '11px', fontWeight: '800', color: '#10b981', 
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      backgroundColor: '#dcfce7', padding: '4px 8px', borderRadius: '6px'
+                    }}>
+                      Overachieving
+                    </span>
+                  )}
+                  <span style={{ fontSize: '36px', fontWeight: '700', color: progressColor }}>{Math.round(progress)}%</span>
+                  {isOverachieving && <span style={{ fontSize: '24px' }}>🎉</span>}
                 </div>
+              </div>
 
-                {/* Progress Bar */}
+              {/* Progress Bar with Flag Markers */}
+              <div style={{ position: 'relative', marginBottom: milestones.length > 0 ? '48px' : '0' }}>
+                {/* Main Progress Bar */}
                 <div style={{
-                  width: '100%', height: '12px', backgroundColor: '#f0f0f0', borderRadius: '6px', overflow: 'visible', position: 'relative'
+                  width: '100%', height: '14px', backgroundColor: '#f0f0f0', borderRadius: '7px', 
+                  overflow: 'visible', position: 'relative'
                 }}>
+                  {/* Progress Fill */}
                   <div style={{
-                    width: `${Math.min(progress, 100)}%`, height: '100%', backgroundColor: progressColor,
-                    borderRadius: '6px', transition: 'all 0.6s ease',
-                    boxShadow: progress > 0 ? `0 0 12px ${progressColor}50` : 'none'
+                    width: `${Math.min(progress, 100)}%`, height: '100%', 
+                    background: `linear-gradient(90deg, #6366f1 0%, ${progressColor} 100%)`,
+                    borderRadius: '7px', transition: 'all 0.6s ease',
+                    boxShadow: progress > 0 ? `0 0 12px ${progressColor}40` : 'none'
                   }} />
+                  
+                  {/* Overachieving Indicator */}
                   {isOverachieving && (
                     <div style={{
-                      position: 'absolute', right: '-6px', top: '50%', transform: 'translateY(-50%)',
-                      width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#22c55e',
+                      position: 'absolute', right: '-8px', top: '50%', transform: 'translateY(-50%)',
+                      width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#22c55e',
                       border: '3px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                       animation: 'pulse-ring 2s infinite'
                     }} />
                   )}
-                </div>
-
-                {/* Next Milestone Indicator */}
-                {nextMilestone && (
-                  <div style={{ marginTop: '14px', fontSize: '12px', color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>→ Next:</span>
-                    <strong style={{ color: '#1a1a1a' }}>{nextMilestone.name}</strong>
-                    <span>at {nextMilestone.percentage}%</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Manual Mode: Target & Achieved Details */}
-              {task.progressMode === 'MANUAL' && task.showProgressDetails && task.progressTarget && (
-                <div style={{
-                  padding: '20px', backgroundColor: '#fef3c7', borderRadius: '16px', marginBottom: '28px',
-                  border: '2px dashed #fbbf24'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '24px' }}>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <p style={{ fontSize: '11px', color: '#92400e', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Target (Goal)</p>
-                      <p style={{ fontSize: '28px', fontWeight: '700', color: '#92400e', margin: 0 }}>{task.progressTarget}</p>
-                    </div>
-                    <div style={{ width: '2px', height: '40px', backgroundColor: '#fbbf24' }} />
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <p style={{ fontSize: '11px', color: '#15803d', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Achieved (Current)</p>
-                      <p style={{ fontSize: '28px', fontWeight: '700', color: '#15803d', margin: 0 }}>{task.progressAchieved || 0}</p>
-                    </div>
-                  </div>
-                  {isOverachieving && (
-                    <div style={{ marginTop: '16px', textAlign: 'center', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '10px' }}>
-                      <p style={{ fontSize: '13px', fontWeight: '700', color: '#15803d', margin: 0 }}>
-                        🎉 Overachieving! You're doing amazing work!
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Milestones Timeline */}
-              {milestones.length > 0 && (
-                <div>
-                  <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Milestones</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {milestones
-                      .sort((a, b) => a.percentage - b.percentage)
-                      .map((milestone, idx) => {
-                        const reached = progress >= milestone.percentage;
-                        return (
-                          <div key={idx} style={{
-                            display: 'flex', alignItems: 'center', gap: '14px', padding: '16px 18px',
-                            backgroundColor: reached ? `${milestone.color}10` : '#fafafa',
-                            borderRadius: '14px',
-                            border: reached ? `2px solid ${milestone.color}30` : '1px solid #e5e5e5',
+                  
+                  {/* Milestone Flag Markers */}
+                  {milestones.length > 0 && milestones
+                    .sort((a, b) => a.percentage - b.percentage)
+                    .map((milestone, idx) => {
+                      const isReached = milestone.reached !== undefined ? milestone.reached : (progress >= milestone.percentage);
+                      const flagColor = getMilestoneFlagColor(milestone.percentage, isReached);
+                      
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            position: 'absolute',
+                            left: `${milestone.percentage}%`,
+                            top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: isReached ? 3 : 2,
+                            cursor: 'default'
+                          }}
+                          title={milestone.name}
+                        >
+                          {/* Flag Icon */}
+                          <div style={{
+                            width: '28px', height: '28px', borderRadius: '50%',
+                            backgroundColor: flagColor,
+                            border: `3px solid ${isReached ? '#fff' : '#e5e7eb'}`,
+                            boxShadow: isReached ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                             transition: 'all 0.3s ease'
                           }}>
-                            {/* Milestone Icon */}
-                            <div style={{
-                              width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-                              backgroundColor: reached ? milestone.color : '#e5e5e5',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              transition: 'all 0.3s ease'
-                            }}>
-                              {reached ? (
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
-                                  <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              ) : (
-                                <span style={{ fontSize: '14px', fontWeight: '700', color: '#999' }}>{idx + 1}</span>
-                              )}
-                            </div>
-                            
-                            {/* Milestone Info */}
-                            <div style={{ flex: 1 }}>
-                              <p style={{
-                                fontSize: '14px', fontWeight: '600', margin: '0 0 2px 0',
-                                color: reached ? '#1a1a1a' : '#666'
-                              }}>
-                                {milestone.name}
-                              </p>
-                              {reached && milestone.reachedAt && (
-                                <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>
-                                  Reached on {formatDateTime(milestone.reachedAt)}
-                                </p>
-                              )}
-                            </div>
-                            
-                            {/* Percentage Badge */}
-                            <div style={{
-                              padding: '6px 12px', borderRadius: '8px',
-                              backgroundColor: reached ? milestone.color : '#f5f5f5',
-                              fontSize: '13px', fontWeight: '700',
-                              color: reached ? '#fff' : '#999'
-                            }}>
-                              {milestone.percentage}%
-                            </div>
+                            <span style={{ fontSize: '12px' }}>🚩</span>
                           </div>
-                        );
-                      })}
-                  </div>
+                          
+                          {/* Milestone Label Below */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '32px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            whiteSpace: 'nowrap',
+                            textAlign: 'center'
+                          }}>
+                            <p style={{
+                              fontSize: '10px', fontWeight: '600', margin: 0,
+                              color: isReached ? '#1a1a1a' : '#9ca3af',
+                              maxWidth: '70px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {milestone.name}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+              </div>
+
+              {/* Overachieving Message */}
+              {isOverachieving && (
+                <div style={{ 
+                  marginTop: '16px', padding: '12px 16px', 
+                  backgroundColor: '#dcfce7', borderRadius: '12px', 
+                  textAlign: 'center' 
+                }}>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#15803d', margin: 0 }}>
+                    🎉 Overachieving! You're doing amazing work!
+                  </p>
                 </div>
               )}
             </>
@@ -499,13 +558,14 @@ const TaskDetail = () => {
               )}
 
               {/* Credits - CONDITIONAL */}
-              {(task.creditCost || task.creditsUsed) && task.showCreditsToClient !== false && (
+              {/* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */}
+              {(task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
                   <div>
                     <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Credits Used</span>
                     <span style={{ fontSize: '12px', color: '#15803d' }}>Deducted from wallet</span>
                   </div>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>₹{task.creditCost || task.creditsUsed || 0}</span>
+                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>₹{task.creditsUsed || task.creditCost || 0}</span>
                 </div>
               )}
 
@@ -535,6 +595,60 @@ const TaskDetail = () => {
             <p style={{ fontSize: '20px', fontWeight: '700', color: '#dc2626', margin: 0 }}>
               {formatDateTime(task.countdownEndDate)}
             </p>
+          </div>
+        )}
+
+        {/* Receipt Card - CONDITIONAL */}
+        {receipt && (
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #e0e7ff'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Service Receipt</p>
+              <span style={{
+                padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700',
+                backgroundColor: '#dcfce7', color: '#15803d'
+              }}>
+                Paid via Wallet
+              </span>
+            </div>
+            
+            <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderRadius: '16px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span style={{ fontSize: '14px', color: '#64748b' }}>Receipt Number</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{receipt.receiptNumber}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <span style={{ fontSize: '14px', color: '#64748b' }}>Credits Used</span>
+                <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>₹{receipt.creditsUsed?.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#64748b' }}>Date</span>
+                <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>
+                  {new Date(receipt.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+            </div>
+
+            {receipt.isDownloadableByClient && (
+              <button
+                onClick={handleDownloadReceipt}
+                disabled={downloadingReceipt}
+                style={{
+                  width: '100%', padding: '14px 20px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: '#fff', fontSize: '14px', fontWeight: '600',
+                  borderRadius: '14px', border: 'none',
+                  cursor: downloadingReceipt ? 'not-allowed' : 'pointer',
+                  opacity: downloadingReceipt ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                }}
+              >
+                <span>📄</span>
+                {downloadingReceipt ? 'Downloading...' : 'Download Receipt PDF'}
+              </button>
+            )}
           </div>
         )}
 
