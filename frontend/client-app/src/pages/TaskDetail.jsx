@@ -409,7 +409,7 @@ const TaskDetail = () => {
               </div>
 
               {/* Progress Bar with Flag Markers */}
-              <div style={{ position: 'relative', marginBottom: milestones.length > 0 ? '48px' : '0' }}>
+              <div style={{ position: 'relative', marginBottom: '16px' }}>
                 {/* Main Progress Bar */}
                 <div style={{
                   width: '100%', height: '14px', backgroundColor: '#f0f0f0', borderRadius: '7px', 
@@ -464,32 +464,26 @@ const TaskDetail = () => {
                           }}>
                             <span style={{ fontSize: '12px' }}>🚩</span>
                           </div>
-                          
-                          {/* Milestone Label Below */}
-                          <div style={{
-                            position: 'absolute',
-                            top: '32px',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            whiteSpace: 'nowrap',
-                            textAlign: 'center'
-                          }}>
-                            <p style={{
-                              fontSize: '10px', fontWeight: '600', margin: 0,
-                              color: isReached ? '#1a1a1a' : '#9ca3af',
-                              maxWidth: '70px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}>
-                              {milestone.name}
-                            </p>
-                          </div>
                         </div>
                       );
                     })
                   }
                 </div>
               </div>
+
+              {/* Current Milestone Label - Clean minimal display */}
+              {milestones.length > 0 && (
+                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                  <p style={{ 
+                    fontSize: '15px', 
+                    fontWeight: '500', 
+                    color: activeMilestone ? (activeMilestone.color || '#1a1a1a') : '#f59e0b', 
+                    margin: 0 
+                  }}>
+                    {activeMilestone ? `🚩 ${activeMilestone.name}` : 'Scheduled'}
+                  </p>
+                </div>
+              )}
 
               {/* Overachieving Message */}
               {isOverachieving && (
