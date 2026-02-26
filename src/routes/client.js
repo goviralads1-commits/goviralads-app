@@ -2143,4 +2143,152 @@ router.get('/office-config', async (req, res) => {
   }
 });
 
+// POST /client/purchase-cart - Batch purchase multiple plans
+router.post('/purchase-cart', async (req, res) => {
+  try {
+    const { planIds } = req.body;
+    const clientId = req.user.id;
+
+    console.log('=== CART PURCHASE START ===');
+    console.log('Client ID:', clientId);
+    console.log('Plan IDs:', planIds);
+
+    // 1. Validate input
+    if (!planIds || !Array.isArray(planIds) || planIds.length === 0) {
+      return res.status(400).json({ error: 'planIds array is required' });
+    }
+
+    // 2. Fetch all plans
+    const plans = await Task.find({ _id: { $in: planIds } }).exec();
+
+    if (plans.length !== planIds.length) {
+      return res.status(404).json({ error: 'One or more plans not found' });
+    }
+
+    // 3. Validate all plans
+    for (const plan of plans) {
+      if (!plan.isListedInPlans) {
+        return res.status(400).json({ error: `${plan.title} is not a purchasable plan` });
+      }
+      if (plan.clientId !== null) {
+        return res.status(400).json({ error: `${plan.title} is no longer available` });
+      }
+      if (!plan.isActivePlan) {
+        return res.status(400).json({ error: `${plan.title} is not active` });
+      }
+      const visibility = plan.visibility || 'PUBLIC';
+      if (visibility === 'HIDDEN') {
+        return res.status(400).json({ error: `${plan.title} is not available` });
+      }
+      if (visibility === 'SELECTED') {
+        const allowedClients = plan.allowedClients || [];
+        const isAllowed = allowedClients.some(id => id.toString() === clientId);
+        if (!isAllowed) {
+          return res.status(403).json({ error: `You are not eligible for ${plan.title}` });
+        }
+      }
+      if (plan.targetClients && plan.targetClients.length > 0) {
+        const isTargeted = plan.targetClients.some(targetId => targetId.toString() === clientId);
+        if (!isTargeted) {
+          return res.status(403).json({ error: `You are not eligible for ${plan.title}` });
+        }
+      }
+    }
+
+    // 4. Calculate total price
+    const totalPrice = plans.reduce((sum, plan) => {
+      const price = plan.offerPrice || plan.creditCost || 0;
+      return sum + price;
+    }, 0);
+
+    console.log('Total price:', totalPrice);
+
+    // 5. Get wallet
+    const wallet = await Wallet.findOne({ clientId }).exec();
+
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found' });
+    }
+
+    console.log('Wallet balance before:', wallet.balance);
+
+    // 6. Check balance
+    if (wallet.balance < totalPrice) {
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+
+    // 7. Deduct wallet (ATOMIC)
+    wallet.balance -= totalPrice;
+    await wallet.save();
+
+    console.log('Wallet balance after:', wallet.balance);
+
+    // 8. Create wallet transaction
+    await WalletTransaction.create({
+      walletId: wallet._id,
+      type: 'PLAN_PURCHASE',
+      amount: -totalPrice,
+      description: `Cart Purchase: ${plans.length} plan(s)`,
+      referenceId: null,
+    });
+
+    // 9. Create tasks for all plans
+    const createdTasks = [];
+    for (const plan of plans) {
+      const price = plan.offerPrice || plan.creditCost || 0;
+      const newTask = await Task.create({
+        title: plan.title,
+        description: plan.description,
+        creditCost: plan.creditCost,
+        creditsUsed: price,
+        priority: plan.priority,
+        startDate: null,
+        endDate: null,
+        publicNotes: plan.publicNotes,
+        internalNotes: plan.internalNotes,
+        progressMode: plan.progressMode,
+        progress: 0,
+        progressTarget: plan.progressTarget,
+        progressAchieved: 0,
+        status: TASK_STATUS.PENDING_APPROVAL,
+        deadline: null,
+        planId: plan._id,
+        categoryId: plan.categoryId,
+        clientId: clientId,
+        quantity: plan.quantity,
+        showQuantityToClient: plan.showQuantityToClient,
+        showCreditsToClient: plan.showCreditsToClient,
+        isListedInPlans: false,
+        isActivePlan: false,
+        targetClients: null,
+        featureImage: plan.featureImage,
+        planMedia: plan.planMedia,
+        offerPrice: plan.offerPrice,
+        originalPrice: plan.originalPrice,
+        countdownEndDate: null,
+        milestones: plan.milestones || [],
+        autoCompletionCap: plan.autoCompletionCap || 100
+      });
+      createdTasks.push({
+        id: newTask._id.toString(),
+        title: newTask.title,
+        status: newTask.status,
+        creditsUsed: newTask.creditsUsed,
+      });
+    }
+
+    console.log(`Created ${createdTasks.length} tasks`);
+    console.log('=== CART PURCHASE COMPLETE ===');
+
+    return res.status(201).json({
+      success: true,
+      tasks: createdTasks,
+      walletBalance: wallet.balance,
+    });
+  } catch (err) {
+    console.error('Cart purchase error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to purchase cart' });
+  }
+});
+
 module.exports = router;
