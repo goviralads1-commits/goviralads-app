@@ -390,73 +390,45 @@ const TaskDetail = () => {
                 </div>
               </div>
 
-              {/* Progress Bar with Flag Markers - Responsive */}
-              <div style={{ position: 'relative', width: '100%', overflow: 'hidden', marginBottom: '16px' }}>
-                {/* Main Progress Bar - Thinner */}
+              {/* Progress Bar - Single Moving Flag */}
+              <div style={{ position: 'relative', width: '100%', overflow: 'hidden', marginBottom: '24px', paddingTop: '16px' }}>
+                {/* Track */}
                 <div style={{
-                  width: '100%', height: '6px', backgroundColor: '#f0f0f0', borderRadius: '4px', 
-                  position: 'relative', overflow: 'visible'
+                  width: '100%', height: '8px', backgroundColor: '#f0f0f0', borderRadius: '4px', 
+                  position: 'relative'
                 }}>
-                  {/* Progress Fill */}
+                  {/* Fill */}
                   <div style={{
                     width: `${Math.min(progress, 100)}%`, height: '100%', 
                     background: `linear-gradient(90deg, #6366f1 0%, ${progressColor} 100%)`,
-                    borderRadius: '4px', transition: 'all 0.6s ease',
+                    borderRadius: '4px', transition: 'width 0.6s ease',
                     boxShadow: progress > 0 ? `0 0 8px ${progressColor}40` : 'none'
                   }} />
                   
-                  {/* Overachieving Indicator */}
-                  {isOverachieving && (
+                  {/* Single Moving Flag - positioned at progress % */}
+                  <div style={{
+                    position: 'absolute',
+                    left: `${Math.min(Math.max(progress, 0), 100)}%`,
+                    top: '-12px',
+                    transform: 'translateX(-50%)',
+                    transition: 'left 0.6s ease',
+                    zIndex: 10
+                  }}>
                     <div style={{
-                      position: 'absolute', right: '-6px', top: '50%', transform: 'translateY(-50%)',
-                      width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#22c55e',
-                      border: '2px solid #fff', boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-                      animation: 'pulse-ring 2s infinite'
-                    }} />
-                  )}
-                  
-                  {/* Milestone Flag Markers - Adaptive size */}
-                  {milestones.length > 0 && milestones
-                    .sort((a, b) => a.percentage - b.percentage)
-                    .map((milestone, idx) => {
-                      const isReached = milestone.reached !== undefined ? milestone.reached : (progress >= milestone.percentage);
-                      const flagColor = getMilestoneFlagColor(milestone.percentage, isReached);
-                      // Adaptive flag size based on milestone count
-                      const flagSize = milestones.length > 8 ? 18 : milestones.length > 5 ? 22 : 24;
-                      
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            position: 'absolute',
-                            left: `${Math.min(Math.max(milestone.percentage, 2), 98)}%`,
-                            top: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: isReached ? 3 : 2,
-                            cursor: 'default'
-                          }}
-                          title={milestone.name}
-                        >
-                          {/* Flag Icon - Adaptive */}
-                          <div style={{
-                            width: `${flagSize}px`, height: `${flagSize}px`, borderRadius: '50%',
-                            backgroundColor: flagColor,
-                            border: `2px solid ${isReached ? '#fff' : '#e5e7eb'}`,
-                            boxShadow: isReached ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transition: 'all 0.3s ease'
-                          }}>
-                            <span style={{ fontSize: milestones.length > 8 ? '8px' : '10px' }}>🚩</span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  }
+                      width: '28px', height: '28px', borderRadius: '50%',
+                      backgroundColor: progressColor,
+                      border: '3px solid #fff',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <span style={{ fontSize: '12px' }}>🚩</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Current Milestone Label - Single clean display */}
-              <div style={{ textAlign: 'center', marginTop: '12px', marginBottom: '8px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '8px' }}>
                 <p style={{ 
                   fontSize: '14px', 
                   fontWeight: '500', 
