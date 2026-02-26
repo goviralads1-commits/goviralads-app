@@ -165,7 +165,38 @@ const checkPlanExpiry = async () => {
   }
 };
 
-// 4) Already handled in ticket reply endpoints, but we export the function
+// 4) SCHEDULED TASK AUTO-START - Runs every 10 minutes
+const autoStartScheduledTasks = async () => {
+  try {
+    const now = new Date();
+    
+    // Find all PENDING tasks where startDate has passed
+    const tasks = await Task.find({
+      status: 'PENDING',
+      startDate: { $lte: now },
+      clientId: { $ne: null } // Only client tasks, not plans
+    });
+    
+    if (tasks.length === 0) {
+      console.log('[CRON AUTO-START] No scheduled tasks to start');
+      return;
+    }
+    
+    console.log(`[CRON AUTO-START] Found ${tasks.length} task(s) ready to start`);
+    
+    for (const task of tasks) {
+      task.status = 'ACTIVE';
+      await task.save();
+      console.log(`[CRON AUTO-START] Task ${task._id} started (${task.title})`);
+    }
+    
+    console.log(`[CRON AUTO-START] Successfully started ${tasks.length} task(s)`);
+  } catch (error) {
+    console.error('[CRON AUTO-START] Error auto-starting scheduled tasks:', error.message);
+  }
+};
+
+// 5) Already handled in ticket reply endpoints, but we export the function
 const sendTicketReplyEmail = async (ticket, replyMessage, recipientRole) => {
   try {
     const recipient = recipientRole === 'CLIENT' 
@@ -211,10 +242,14 @@ const startSchedulers = () => {
   // Plan expiry reminder - Daily at 8:00 AM
   cron.schedule('0 8 * * *', checkPlanExpiry);
   
+  // Auto-start scheduled tasks - Every 10 minutes
+  cron.schedule('*/10 * * * *', autoStartScheduledTasks);
+  
   console.log('[REMINDER] Schedulers started successfully');
   console.log('[REMINDER] - Task deadlines: Daily at 9:00 AM');
   console.log('[REMINDER] - Task overdue: Daily at 10:00 AM');
   console.log('[REMINDER] - Plan expiry: Daily at 8:00 AM');
+  console.log('[REMINDER] - Auto-start scheduled tasks: Every 10 minutes');
 };
 
 // Manual trigger for testing
@@ -230,6 +265,9 @@ const triggerNow = async (type) => {
     case 'expiry':
       await checkPlanExpiry();
       break;
+    case 'autostart':
+      await autoStartScheduledTasks();
+      break;
     default:
       console.log('[REMINDER] Unknown type');
   }
@@ -240,5 +278,6 @@ module.exports = {
   triggerNow,
   sendTicketReplyEmail,
   getSettings,
-  updateSettings
+  updateSettings,
+  autoStartScheduledTasks // Export for manual testing
 };
