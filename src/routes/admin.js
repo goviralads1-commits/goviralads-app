@@ -536,8 +536,16 @@ router.patch('/tasks/:taskId', async (req, res) => {
       const now = new Date();
       let currentProgress = task.progress;
 
-      // Recalculate progress for MANUAL mode
-      if (task.progressMode === 'MANUAL' && task.progressTarget > 0) {
+      // Only recalculate progress for MANUAL mode when progressAchieved/progressTarget changed
+      // NOT when admin directly sets progress field
+      const shouldRecalculateProgress = (
+        task.progressMode === 'MANUAL' && 
+        task.progressTarget > 0 &&
+        (updates.progressAchieved !== undefined || updates.progressTarget !== undefined) &&
+        updates.progress === undefined  // Admin didn't directly set progress
+      );
+
+      if (shouldRecalculateProgress) {
         currentProgress = Math.round(((task.progressAchieved || 0) / task.progressTarget) * 1000) / 10;
         task.progress = currentProgress;
       }

@@ -390,38 +390,38 @@ const TaskDetail = () => {
                 </div>
               </div>
 
-              {/* Progress Bar - Single Moving Flag */}
-              <div style={{ position: 'relative', width: '100%', overflow: 'hidden', marginBottom: '24px', paddingTop: '16px' }}>
+              {/* Progress Bar - Single Moving Indicator */}
+              <div style={{ position: 'relative', width: '100%', overflow: 'hidden', marginBottom: '24px', paddingTop: '14px' }}>
                 {/* Track */}
                 <div style={{
-                  width: '100%', height: '8px', backgroundColor: '#f0f0f0', borderRadius: '4px', 
+                  width: '100%', height: '6px', backgroundColor: '#f0f0f0', borderRadius: '999px', 
                   position: 'relative'
                 }}>
                   {/* Fill */}
                   <div style={{
                     width: `${Math.min(progress, 100)}%`, height: '100%', 
                     background: `linear-gradient(90deg, #6366f1 0%, ${progressColor} 100%)`,
-                    borderRadius: '4px', transition: 'width 0.6s ease',
+                    borderRadius: '999px', transition: 'width 0.6s ease',
                     boxShadow: progress > 0 ? `0 0 8px ${progressColor}40` : 'none'
                   }} />
                   
-                  {/* Single Moving Flag - positioned at progress % */}
+                  {/* Single Moving Indicator - positioned at progress % */}
                   <div style={{
                     position: 'absolute',
                     left: `${Math.min(Math.max(progress, 0), 100)}%`,
-                    top: '-12px',
-                    transform: 'translateX(-50%)',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
                     transition: 'left 0.6s ease',
                     zIndex: 10
                   }}>
                     <div style={{
-                      width: '28px', height: '28px', borderRadius: '50%',
-                      backgroundColor: progressColor,
+                      width: '22px', height: '22px', borderRadius: '50%',
+                      backgroundColor: activeMilestone ? '#22c55e' : progressColor,
                       border: '3px solid #fff',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                      <span style={{ fontSize: '12px' }}>🚩</span>
+                      <span style={{ fontSize: '10px' }}>🚩</span>
                     </div>
                   </div>
                 </div>
