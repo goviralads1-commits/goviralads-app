@@ -2,7 +2,9 @@ const cron = require('node-cron');
 const Task = require('../models/Task');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
+const Notification = require('../models/Notification');
 const emailService = require('./emailService');
+const { createNotification, ENTITY_TYPES } = require('./notificationService');
 
 // Reminder Settings (stored in-memory, can be moved to DB later)
 let reminderSettings = {
@@ -72,55 +74,70 @@ const checkTaskDeadlines = async () => {
   }
 };
 
-// 2) TASK OVERDUE REMINDER - Runs daily at 10 AM
+// 2) TASK OVERDUE DETECTION - Runs daily at 10 AM (Admin only, fire once)
 const checkOverdueTasks = async () => {
   if (!reminderSettings.taskOverdue.enabled) return;
   
   try {
     const now = new Date();
+    now.setHours(0, 0, 0, 0); // Start of today
     
+    // Find overdue tasks: endDate < today, status not COMPLETED/CANCELLED
     const tasks = await Task.find({
-      mode: 'TASK',
       clientId: { $ne: null },
-      deadline: { $lt: now },
-      status: { $nin: ['COMPLETE', 'CANCELLED'] }
+      endDate: { $lt: now },
+      status: { $nin: ['COMPLETED', 'CANCELLED'] }
     }).populate('clientId', 'identifier');
     
-    console.log(`[REMINDER] Found ${tasks.length} overdue tasks`);
+    console.log(`[OVERDUE] Found ${tasks.length} overdue tasks`);
     
-    // Get admin email
-    const admin = await User.findOne({ role: 'ADMIN' });
-    const adminEmail = admin?.identifier;
+    if (tasks.length === 0) return;
+    
+    // Get admin user
+    const { mainAdminIdentifier } = require('../config');
+    const adminUser = await User.findOne({ identifier: mainAdminIdentifier }).exec();
+    
+    if (!adminUser) {
+      console.log('[OVERDUE] No admin user found');
+      return;
+    }
     
     for (const task of tasks) {
-      if (!task.clientId || !task.clientId.identifier) continue;
+      // Check if overdue notification already sent for this task
+      const existingNotification = await Notification.findOne({
+        recipientId: adminUser._id,
+        type: 'TASK_OVERDUE',
+        'relatedEntity.entityId': task._id
+      }).exec();
       
-      const daysOverdue = Math.ceil((now - new Date(task.deadline)) / (1000 * 60 * 60 * 24));
-      
-      // Send to client
-      await emailService.sendTaskReminder(task.clientId.identifier, {
-        taskTitle: task.title,
-        deadline: new Date(task.deadline).toLocaleDateString(),
-        daysLeft: -daysOverdue,
-        customMessage: reminderSettings.taskOverdue.message,
-        taskUrl: `http://localhost:5175/tasks/${task._id}`
-      });
-      
-      // Send to admin
-      if (adminEmail) {
-        await emailService.sendOverdueAlert(adminEmail, {
-          taskTitle: task.title,
-          clientEmail: task.clientId.identifier,
-          deadline: new Date(task.deadline).toLocaleDateString(),
-          daysOverdue,
-          taskUrl: `http://localhost:5173/tasks/${task._id}`
-        });
+      if (existingNotification) {
+        console.log(`[OVERDUE] Already notified for task ${task._id}, skipping`);
+        continue;
       }
       
-      console.log(`[REMINDER] Sent overdue alert for task ${task.title}`);
+      const daysOverdue = Math.ceil((now - new Date(task.endDate)) / (1000 * 60 * 60 * 24));
+      const clientName = task.clientId?.identifier || 'Unknown';
+      
+      // Notify Admin (in-app notification only)
+      try {
+        await createNotification({
+          recipientId: adminUser._id,
+          type: 'TASK_OVERDUE',
+          title: 'Task Overdue',
+          message: `Task "${task.title}" for ${clientName} is ${daysOverdue} day(s) overdue.`,
+          relatedEntity: {
+            entityType: ENTITY_TYPES.TASK,
+            entityId: task._id,
+          },
+          notifyByEmail: false,
+        });
+        console.log(`[OVERDUE] Notified admin for task ${task._id} (${task.title})`);
+      } catch (notifErr) {
+        console.error('[OVERDUE] Failed to notify admin:', notifErr.message);
+      }
     }
   } catch (error) {
-    console.error('[REMINDER] Error checking overdue tasks:', error.message);
+    console.error('[OVERDUE] Error checking overdue tasks:', error.message);
   }
 };
 
