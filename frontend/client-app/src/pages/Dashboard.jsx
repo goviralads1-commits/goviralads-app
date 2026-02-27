@@ -8,6 +8,7 @@ const Dashboard = () => {
   const [config, setConfig] = useState(null);
   const [featuredPlans, setFeaturedPlans] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentBanner, setCurrentBanner] = useState(0);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -17,13 +18,15 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, noticesRes] = await Promise.all([
+      const [configRes, noticesRes, tasksRes] = await Promise.all([
         api.get('/client/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
-        api.get('/client/notices').catch(() => ({ data: { notices: [] } }))
+        api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
+        api.get('/client/tasks').catch(() => ({ data: { tasks: [] } }))
       ]);
       setConfig(configRes.data.config);
       setFeaturedPlans(configRes.data.featuredPlans || []);
       setNotices(noticesRes.data.notices || []);
+      setTasks(tasksRes.data.tasks || []);
     } catch (err) {
       // Silent fail - show empty states
     } finally {
@@ -80,6 +83,11 @@ const Dashboard = () => {
 
   const updates = notices.filter(n => n.type === 'UPDATE').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
   const requirements = notices.filter(n => n.type === 'REQUIREMENT').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+
+  // Filter tasks by status
+  const pendingTasks = tasks.filter(t => t.status === 'PENDING_APPROVAL');
+  const activeTasks = tasks.filter(t => ['ACTIVE', 'IN_PROGRESS', 'PENDING', 'SCHEDULED'].includes(t.status));
+  const completedTasks = tasks.filter(t => t.status === 'COMPLETED').slice(0, 3); // Show only recent 3
 
   // Get banners from config or fallback
   const banners = config?.banners?.length > 0 ? config.banners : [
@@ -253,6 +261,106 @@ const Dashboard = () => {
           >
             {config?.seeMoreButtonConfig?.text || 'See More Plans'}
           </button>
+        </div>
+        )}
+
+        {/* PENDING ADMIN REVIEW TASKS */}
+        {pendingTasks.length > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <span style={{ fontSize: '20px' }}>⏳</span>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Admin Review</h3>
+            <span style={{ backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{pendingTasks.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {pendingTasks.map(task => (
+              <div 
+                key={task.id || task._id} 
+                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
+                style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #f59e0b', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'transform 0.2s' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    <p style={{ fontSize: '12px', color: '#d97706', margin: 0 }}>Waiting for admin to start your task</p>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>₹{task.creditsUsed || task.creditCost || 0}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
+
+        {/* ACTIVE TASKS */}
+        {activeTasks.length > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '20px' }}>🟢</span>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Active Tasks</h3>
+              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{activeTasks.length}</span>
+            </div>
+            <button onClick={() => navigate('/tasks')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
+              View All →
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {activeTasks.slice(0, 3).map(task => (
+              <div 
+                key={task.id || task._id} 
+                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
+                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #22c55e', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ flex: 1, height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${task.progress || 0}%`, height: '100%', backgroundColor: '#22c55e', borderRadius: '3px', transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#22c55e' }}>{task.progress || 0}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
+
+        {/* RECENTLY COMPLETED TASKS */}
+        {completedTasks.length > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '20px' }}>✅</span>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recently Completed</h3>
+            </div>
+            <button onClick={() => navigate('/tasks')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
+              View All →
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {completedTasks.map(task => (
+              <div 
+                key={task.id || task._id} 
+                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
+                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #94a3b8', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s', opacity: 0.8 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ''}</p>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#22c55e', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '8px' }}>Done</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         )}
 
