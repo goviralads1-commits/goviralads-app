@@ -391,7 +391,7 @@ const TaskDetail = () => {
               </div>
 
               {/* Progress Bar - Single Moving Indicator */}
-              <div style={{ position: 'relative', width: '100%', overflow: 'hidden', marginBottom: '24px', paddingTop: '14px' }}>
+              <div style={{ position: 'relative', width: '100%', overflow: 'visible', marginBottom: '24px', paddingTop: '20px' }}>
                 {/* Track */}
                 <div style={{
                   width: '100%', height: '6px', backgroundColor: '#f0f0f0', borderRadius: '999px', 

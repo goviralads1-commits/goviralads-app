@@ -487,11 +487,20 @@ router.get('/tasks/:taskId', async (req, res) => {
         showQuantityToClient: task.showQuantityToClient,
         showCreditsToClient: task.showCreditsToClient,
         isListedInPlans: task.isListedInPlans,
+        isActivePlan: task.isActivePlan,
         targetClients: task.targetClients,
         featureImage: task.featureImage,
+        planMedia: task.planMedia || [],
         offerPrice: task.offerPrice,
         originalPrice: task.originalPrice,
         countdownEndDate: task.countdownEndDate,
+        progressTarget: task.progressTarget,
+        progressAchieved: task.progressAchieved,
+        isFeatured: task.isFeatured,
+        isPopular: task.isPopular,
+        isNew: task.isNew,
+        visibility: task.visibility,
+        allowedClients: task.allowedClients,
       }
     });
   } catch (err) {
