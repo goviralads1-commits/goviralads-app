@@ -741,13 +741,13 @@ const Dashboard = () => {
 
       {/* Notice Form Modal */}
       {showNoticeForm && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowNoticeForm(false); }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', animation: 'slideIn 0.3s ease' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setShowNoticeForm(false); }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: 'min(90vh, calc(100vh - 100px))', overflow: 'hidden', animation: 'slideIn 0.3s ease', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{editingNotice ? 'Edit Notice' : 'Create Notice'}</h3>
               <button onClick={() => { setShowNoticeForm(false); resetForm(); }} style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}>✕</button>
             </div>
-            <div style={{ padding: '20px', maxHeight: 'calc(90vh - 160px)', overflowY: 'auto' }}>
+            <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Type</label>
@@ -829,7 +829,7 @@ const Dashboard = () => {
                 </label>
               </div>
             </div>
-            <div style={{ padding: '20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div style={{ padding: '20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexShrink: 0, backgroundColor: '#fff' }}>
               <button onClick={() => { setShowNoticeForm(false); resetForm(); }} style={{ padding: '12px 24px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleCreateNotice} style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}>{editingNotice ? 'Update' : 'Create'}</button>
             </div>
@@ -839,13 +839,13 @@ const Dashboard = () => {
 
       {/* Notice Detail Modal */}
       {selectedNotice && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setSelectedNotice(null); }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', animation: 'slideIn 0.3s ease' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s ease' }} onClick={(e) => { if (e.target === e.currentTarget) setSelectedNotice(null); }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', width: '100%', maxWidth: '600px', maxHeight: 'min(90vh, calc(100vh - 100px))', overflow: 'hidden', animation: 'slideIn 0.3s ease', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Notice Details</h3>
               <button onClick={() => setSelectedNotice(null)} style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}>✕</button>
             </div>
-            <div style={{ padding: '20px', maxHeight: 'calc(90vh - 100px)', overflowY: 'auto' }}>
+            <div style={{ padding: '20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', flex: 1, overflowY: 'auto' }}>
               <h4 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>{selectedNotice.title}</h4>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
                 <span style={{ fontSize: '12px', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '4px 10px', borderRadius: '8px', fontWeight: '600' }}>{selectedNotice.type}</span>

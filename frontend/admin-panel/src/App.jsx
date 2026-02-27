@@ -17,6 +17,7 @@ import TaskDetail from './pages/TaskDetail';
 import PlanDetail from './pages/PlanDetail';
 import PlanPreview from './pages/PlanPreview';
 import Wallet from './pages/Wallet';
+import Billing from './pages/Billing';
 import OfficeCMS from './pages/OfficeCMS';
 import NotFound from './pages/NotFound';
 
@@ -110,6 +111,11 @@ const App = () => {
           <Route path="/wallet" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Wallet />
+            </ProtectedRoute>
+          } />
+          <Route path="/billing" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Billing />
             </ProtectedRoute>
           } />
           <Route path="/office-cms" element={

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const PlanDetail = () => {
   const { planId } = useParams();
@@ -13,6 +15,7 @@ const PlanDetail = () => {
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [mediaChanged, setMediaChanged] = useState(false); // Track if media was intentionally modified
 
   const [formData, setFormData] = useState({
     title: '',
@@ -105,6 +108,7 @@ const PlanDetail = () => {
       planMedia: [...prev.planMedia, { type: 'image', url: '' }]
     }));
     setHasChanges(true);
+    setMediaChanged(true);
   };
 
   const handleMediaChange = (index, field, value) => {
@@ -112,6 +116,7 @@ const PlanDetail = () => {
     updated[index] = { ...updated[index], [field]: value };
     setFormData(prev => ({ ...prev, planMedia: updated }));
     setHasChanges(true);
+    setMediaChanged(true);
   };
 
   const handleRemoveMedia = (index) => {
@@ -120,6 +125,7 @@ const PlanDetail = () => {
       planMedia: prev.planMedia.filter((_, i) => i !== index)
     }));
     setHasChanges(true);
+    setMediaChanged(true);
   };
 
   const handleSave = async () => {
@@ -131,10 +137,8 @@ const PlanDetail = () => {
 
     setSaving(true);
     try {
-      // Clean media array - remove empty URLs
-      const cleanMedia = formData.planMedia.filter(m => m.url && m.url.trim());
-      
-      await api.patch(`/admin/tasks/${planId}`, {
+      // Build payload - only include fields that should be updated
+      const payload = {
         title: formData.title.trim(),
         description: formData.description,
         creditCost: Number(formData.creditCost) || 0,
@@ -147,17 +151,25 @@ const PlanDetail = () => {
         showCreditsToClient: formData.showCreditsToClient,
         isActivePlan: formData.isActivePlan,
         publicNotes: formData.publicNotes,
-        planMedia: cleanMedia,
         countdownEndDate: formData.countdownEndDate || null,
         // Section assignments
         isFeatured: formData.isFeatured,
         isPopular: formData.isPopular,
         isNew: formData.isNew
-      });
+      };
+      
+      // Only include planMedia if it was intentionally modified
+      if (mediaChanged) {
+        const cleanMedia = formData.planMedia.filter(m => m.url && m.url.trim());
+        payload.planMedia = cleanMedia;
+      }
+      
+      await api.patch(`/admin/tasks/${planId}`, payload);
       
       setToast({ type: 'success', message: 'Plan updated successfully' });
       setTimeout(() => setToast(null), 3000);
       setHasChanges(false);
+      setMediaChanged(false);
       fetchData();
     } catch (err) {
       console.error('Update error:', err);
@@ -304,10 +316,27 @@ const PlanDetail = () => {
             <input type="text" value={formData.title} onChange={(e) => handleInputChange('title', e.target.value)} placeholder="Plan title" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e9ecef', borderRadius: '14px', outline: 'none' }} />
           </div>
 
-          {/* Description */}
+          {/* Description - Rich Text Editor */}
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '8px' }}>Description</label>
-            <textarea value={formData.description} onChange={(e) => handleInputChange('description', e.target.value)} placeholder="What's included in this plan?" rows={4} style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e9ecef', borderRadius: '14px', outline: 'none', resize: 'vertical' }} />
+            <div className="quill-wrapper" style={{ borderRadius: '14px', overflow: 'hidden', border: '2px solid #e9ecef' }}>
+              <ReactQuill
+                theme="snow"
+                value={formData.description}
+                onChange={(value) => handleInputChange('description', value)}
+                placeholder="What's included in this plan? Add headings, lists, and formatting..."
+                modules={{
+                  toolbar: [
+                    [{ 'header': [4, 5, false] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    ['clean']
+                  ]
+                }}
+                formats={['header', 'bold', 'italic', 'underline', 'list', 'bullet']}
+                style={{ backgroundColor: '#fff' }}
+              />
+            </div>
           </div>
 
           {/* Category */}
@@ -423,6 +452,35 @@ const PlanDetail = () => {
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        /* Quill Editor Styling */
+        .quill-wrapper .ql-toolbar {
+          border: none !important;
+          border-bottom: 1px solid #e9ecef !important;
+          background: #f8fafc !important;
+          border-radius: 14px 14px 0 0 !important;
+          padding: 10px 12px !important;
+        }
+        .quill-wrapper .ql-container {
+          border: none !important;
+          font-family: inherit !important;
+          font-size: 15px !important;
+        }
+        .quill-wrapper .ql-editor {
+          min-height: 150px !important;
+          padding: 14px 16px !important;
+        }
+        .quill-wrapper .ql-editor.ql-blank::before {
+          color: #94a3b8 !important;
+          font-style: normal !important;
+          left: 16px !important;
+        }
+        .quill-wrapper .ql-snow .ql-picker {
+          font-size: 14px !important;
+        }
+        .quill-wrapper .ql-toolbar .ql-formats {
+          margin-right: 12px !important;
+        }
       `}</style>
     </div>
   );

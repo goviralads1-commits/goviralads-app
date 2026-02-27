@@ -54,6 +54,19 @@ const userSchema = new mongoose.Schema(
       timezone: { type: String, default: 'UTC' },
       language: { type: String, default: 'en' },
     },
+    // Billing details (for invoices)
+    billing: {
+      name: { type: String, trim: true, default: '' },
+      email: { type: String, trim: true, default: '' },
+      phone: { type: String, trim: true, default: '' },
+      address: { type: String, trim: true, default: '' },
+      city: { type: String, trim: true, default: '' },
+      state: { type: String, trim: true, default: '' },
+      pincode: { type: String, trim: true, default: '' },
+      country: { type: String, trim: true, default: 'India' },
+      gstNumber: { type: String, trim: true, default: '' },
+      companyName: { type: String, trim: true, default: '' },
+    },
     // Branding settings (admin only)
     branding: {
       appName: { type: String, default: 'Go Viral Ads' },

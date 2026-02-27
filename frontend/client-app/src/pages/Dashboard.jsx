@@ -384,7 +384,7 @@ const Dashboard = () => {
               )}
               
               {/* Response Section */}
-              {selectedNotice.responseRequired && !selectedNotice.hasResponded && (
+              {selectedNotice.responseType && selectedNotice.responseType !== 'NONE' && !selectedNotice.hasResponded && (
                 <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#fef3c7', borderRadius: '16px' }}>
                   <p style={{ fontSize: '14px', fontWeight: '700', color: '#92400e', margin: '0 0 16px 0' }}>⚠️ Your response is required</p>
                   
@@ -416,9 +416,31 @@ const Dashboard = () => {
                   
                   {selectedNotice.responseType === 'TEXT' && (
                     <div>
-                      <textarea value={responseValue} onChange={(e) => setResponseValue(e.target.value)} placeholder="Type your response..." rows={4} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '14px', resize: 'none', marginBottom: '12px' }} />
+                      <textarea value={responseValue} onChange={(e) => setResponseValue(e.target.value)} placeholder="Type your response..." rows={4} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '14px', resize: 'none', marginBottom: '12px', boxSizing: 'border-box' }} />
                       <button onClick={() => handleSubmitResponse('TEXT', responseValue)} disabled={responding || !responseValue.trim()} style={{ width: '100%', padding: '14px', backgroundColor: '#6366f1', color: '#fff', borderRadius: '12px', border: 'none', fontSize: '15px', fontWeight: '700', cursor: (responding || !responseValue.trim()) ? 'not-allowed' : 'pointer', opacity: (responding || !responseValue.trim()) ? 0.7 : 1 }}>
                         Submit Response
+                      </button>
+                    </div>
+                  )}
+                  
+                  {selectedNotice.responseType === 'FILE' && (
+                    <div>
+                      <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', border: '2px dashed #d97706', borderRadius: '12px', backgroundColor: '#fffbeb', cursor: 'pointer', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '32px', marginBottom: '8px' }}>📎</span>
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>
+                          {responseValue ? responseValue : 'Click to upload file'}
+                        </span>
+                        <input
+                          type="file"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) setResponseValue(file.name);
+                          }}
+                        />
+                      </label>
+                      <button onClick={() => handleSubmitResponse('FILE', responseValue)} disabled={responding || !responseValue} style={{ width: '100%', padding: '14px', backgroundColor: '#6366f1', color: '#fff', borderRadius: '12px', border: 'none', fontSize: '15px', fontWeight: '700', cursor: (responding || !responseValue) ? 'not-allowed' : 'pointer', opacity: (responding || !responseValue) ? 0.7 : 1 }}>
+                        Upload File
                       </button>
                     </div>
                   )}

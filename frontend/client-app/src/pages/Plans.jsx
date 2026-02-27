@@ -2,17 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
+import DOMPurify from 'dompurify';
+import { useCart } from '../context/CartContext';
 
 const Plans = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlCategory = searchParams.get('category');
+  const { addToCart, isInCart, cartCount } = useCart();
   
   const [plans, setPlans] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [purchasing, setPurchasing] = useState(null);
   const [toast, setToast] = useState(null);
   
   // Filters & View
@@ -66,20 +68,21 @@ const Plans = () => {
     fetchData();
   }, [fetchData]);
 
-  const handlePurchase = async (planId, e) => {
+  const handleAddToCart = (plan, e) => {
     e.stopPropagation();
-    setPurchasing(planId);
-    
-    try {
-      await api.post(`/client/plans/${planId}/purchase`);
-      setToast({ type: 'success', message: 'Plan purchased! Awaiting approval.' });
-      setTimeout(() => setToast(null), 2000);
-      setTimeout(() => navigate('/tasks'), 1000);
-    } catch (err) {
-      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to purchase' });
-      setTimeout(() => setToast(null), 4000);
-      setPurchasing(null);
-    }
+    addToCart({
+      id: plan.id || plan._id,
+      title: plan.title,
+      offerPrice: plan.offerPrice,
+      creditCost: plan.creditCost,
+      price: plan.offerPrice || plan.creditCost || 0,
+      originalPrice: plan.originalPrice,
+      icon: plan.icon,
+      featureImage: plan.featureImage,
+      categoryName: plan.categoryName,
+    });
+    setToast({ type: 'success', message: 'Added to cart!' });
+    setTimeout(() => setToast(null), 2000);
   };
 
   const formatCountdown = (dateStr) => {
@@ -584,13 +587,14 @@ const Plans = () => {
                     </h3>
 
                     {plan.description && viewMode === 'list' && (
-                      <p style={{ 
-                        fontSize: '13px', color: '#64748b', margin: '0 0 12px',
-                        lineHeight: 1.55,
-                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                      }}>
-                        {plan.description}
-                      </p>
+                      <div 
+                        style={{ 
+                          fontSize: '13px', color: '#64748b', margin: '0 0 12px',
+                          lineHeight: 1.55,
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                        }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(plan.description) }}
+                      />
                     )}
 
                     {/* Pricing - Premium Style */}
@@ -625,34 +629,47 @@ const Plans = () => {
                       >
                         Details
                       </button>
-                      <button
-                        onClick={(e) => handlePurchase(plan.id, e)}
-                        disabled={purchasing === plan.id}
-                        style={{
-                          flex: 1, padding: '10px 8px', 
-                          background: purchasing === plan.id ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
-                          color: '#fff',
-                          fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
-                          cursor: purchasing === plan.id ? 'not-allowed' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                          boxShadow: purchasing !== plan.id ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none',
-                          transition: 'all 0.2s', whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {purchasing === plan.id ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
-                            <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                            <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                      {isInCart(plan.id || plan._id) ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate('/cart'); }}
+                          style={{
+                            flex: 1, padding: '10px 8px', 
+                            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 
+                            color: '#fff',
+                            fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                            transition: 'all 0.2s', whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="9" cy="21" r="1" />
+                            <circle cx="20" cy="21" r="1" />
+                            <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                        ) : (
-                          <>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 4.6c-.3.5 0 1.1.6 1.4H19M16 21a1 1 0 100-2 1 1 0 000 2zM9 21a1 1 0 100-2 1 1 0 000 2z" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Buy
-                          </>
-                        )}
-                      </button>
+                          Cart {cartCount > 0 && `(${cartCount})`}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => handleAddToCart(plan, e)}
+                          style={{
+                            flex: 1, padding: '10px 8px', 
+                            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', 
+                            color: '#fff',
+                            fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                            transition: 'all 0.2s', whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          Add
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -671,6 +688,27 @@ const Plans = () => {
         /* Hide scrollbar on sidebar - Premium feel */
         .category-rail::-webkit-scrollbar {
           display: none;
+        }
+        
+        /* Rich text description styling in list cards */
+        .plans-grid div[dangerouslysetinnerhtml] h4,
+        .plans-grid div[dangerouslysetinnerhtml] h5 {
+          font-size: 13px !important;
+          margin: 0 !important;
+          font-weight: 500 !important;
+          display: inline;
+        }
+        .plans-grid div[dangerouslysetinnerhtml] ul,
+        .plans-grid div[dangerouslysetinnerhtml] ol {
+          margin: 0 !important;
+          padding-left: 16px !important;
+        }
+        .plans-grid div[dangerouslysetinnerhtml] li {
+          margin: 0 !important;
+        }
+        .plans-grid div[dangerouslysetinnerhtml] p {
+          margin: 0 !important;
+          display: inline;
         }
         
         /* MOBILE RESPONSIVE - Swiggy Marketplace Pattern */

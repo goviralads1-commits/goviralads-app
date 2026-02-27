@@ -3,11 +3,13 @@ import ReactDOM from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout } from '../services/authService';
 import api from '../services/api';
+import { useCart } from '../context/CartContext';
 
 const Header = ({ title }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = getCurrentUser();
+  const { cartCount } = useCart();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -182,6 +184,37 @@ const Header = ({ title }) => {
           {/* Right: Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             
+            {/* Cart Icon */}
+            <button
+              onClick={() => navigate('/cart')}
+              style={{
+                width: '44px', height: '44px', borderRadius: '12px',
+                backgroundColor: location.pathname === '/cart' ? '#f0fdf4' : '#f8fafc',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', transition: 'all 0.2s'
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={location.pathname === '/cart' ? '#22c55e' : '#64748b'} strokeWidth="2">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {cartCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: '6px', right: '6px',
+                  minWidth: '18px', height: '18px', borderRadius: '50%',
+                  backgroundColor: '#22c55e', color: '#fff',
+                  fontSize: '10px', fontWeight: '700',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(34,197,94,0.4)',
+                  padding: '0 4px'
+                }}>
+                  {cartCount > 9 ? '9+' : cartCount}
+                </span>
+              )}
+            </button>
+
             {/* Notification Bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>
               <button

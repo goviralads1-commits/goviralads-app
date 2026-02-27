@@ -5,6 +5,7 @@ import Header from '../components/Header';
 const Wallet = () => {
   const [walletData, setWalletData] = useState(null);
   const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
@@ -12,18 +13,21 @@ const Wallet = () => {
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [paymentRef, setPaymentRef] = useState('');
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'recharge'
+  const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'recharge' | 'invoices'
+  const [downloadingInvoice, setDownloadingInvoice] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [walletResponse, requestsResponse] = await Promise.all([
+        const [walletResponse, requestsResponse, invoicesResponse] = await Promise.all([
           api.get('/client/wallet'),
-          api.get('/client/wallet/recharge-requests')
+          api.get('/client/wallet/recharge-requests'),
+          api.get('/client/billing/invoices')
         ]);
         
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
+        setInvoices(invoicesResponse.data.invoices || []);
       } catch (err) {
         setError('Failed to load wallet data');
       } finally {
@@ -33,6 +37,31 @@ const Wallet = () => {
 
     fetchData();
   }, []);
+
+  const handleDownloadInvoice = async (invoiceId) => {
+    setDownloadingInvoice(invoiceId);
+    try {
+      const response = await api.get(`/client/billing/invoices/${invoiceId}/pdf`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${invoiceId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      const errorMsg = err.response?.status === 403 
+        ? 'Invoice download not allowed. Please contact admin.'
+        : 'Failed to download invoice';
+      setToast(errorMsg);
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setDownloadingInvoice(null);
+    }
+  };
 
   const handleRechargeSubmit = async (e) => {
     e.preventDefault();
@@ -275,7 +304,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            Transaction History
+            Transactions
           </button>
           <button
             onClick={() => setActiveTab('recharge')}
@@ -292,7 +321,24 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            Recharge Requests
+            Recharge
+          </button>
+          <button
+            onClick={() => setActiveTab('invoices')}
+            style={{
+              flex: 1,
+              padding: '14px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'invoices' ? '#6366f1' : 'transparent',
+              color: activeTab === 'invoices' ? '#fff' : '#64748b',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Invoices
           </button>
         </div>
 
@@ -404,6 +450,75 @@ const Wallet = () => {
                       }}>
                         {req.status === 'APPROVED' ? 'Approved' : req.status === 'REJECTED' ? 'Rejected' : 'Pending'}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Invoices Tab */}
+          {activeTab === 'invoices' && (
+            <>
+              {invoices.length === 0 ? (
+                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No invoices yet</p>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                  {invoices.map((inv, idx) => (
+                    <div key={inv._id || idx} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '14px 16px',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: '12px'
+                    }}>
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <p style={{fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0'}}>
+                          {inv.invoiceNumber}
+                        </p>
+                        <p style={{fontSize: '16px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0'}}>
+                          ₹{inv.amount?.toFixed(2) || '0.00'}
+                        </p>
+                        <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
+                          {new Date(inv.createdAt).toLocaleString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                      <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                        <span style={{
+                          padding: '6px 14px',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          whiteSpace: 'nowrap',
+                          backgroundColor: inv.status === 'FINALIZED' ? '#dcfce7' : inv.status === 'CANCELLED' ? '#fee2e2' : '#e0e7ff',
+                          color: inv.status === 'FINALIZED' ? '#15803d' : inv.status === 'CANCELLED' ? '#dc2626' : '#4338ca'
+                        }}>
+                          {inv.status}
+                        </span>
+                        {inv.isDownloadableByClient && (
+                          <button
+                            onClick={() => handleDownloadInvoice(inv._id)}
+                            disabled={downloadingInvoice === inv._id}
+                            style={{
+                              padding: '8px 14px',
+                              backgroundColor: '#6366f1',
+                              color: '#fff',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              borderRadius: '8px',
+                              border: 'none',
+                              cursor: downloadingInvoice === inv._id ? 'not-allowed' : 'pointer',
+                              opacity: downloadingInvoice === inv._id ? 0.6 : 1,
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {downloadingInvoice === inv._id ? '...' : '📄 PDF'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import DOMPurify from 'dompurify';
+import MediaUploader from '../components/MediaUploader';
 
 const Plans = () => {
   const navigate = useNavigate();
@@ -662,9 +666,10 @@ const Plans = () => {
                       )}
                       
                       {plan.description && viewMode === 'list' && (
-                        <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 12px', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          {plan.description}
-                        </p>
+                        <div 
+                          style={{ fontSize: '13px', color: '#64748b', margin: '0 0 12px', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(plan.description) }}
+                        />
                       )}
                       
                       {/* Pricing */}
@@ -727,7 +732,7 @@ const Plans = () => {
           style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }} 
           onClick={(e) => { if (e.target === e.currentTarget) setShowCreatePanel(false); }}
         >
-          <div style={{ width: '100%', maxWidth: '520px', height: '100%', backgroundColor: '#fff', overflowY: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.15)' }}>
+          <div className="plans-create-panel" style={{ width: '100%', maxWidth: '520px', height: '100%', backgroundColor: '#fff', overflowY: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.15)' }}>
             {/* Panel Header */}
             <div style={{ position: 'sticky', top: 0, backgroundColor: '#fff', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
               <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Create New Plan</h2>
@@ -739,50 +744,15 @@ const Plans = () => {
             </div>
             
             <div style={{ padding: '24px' }}>
-              {/* Media Section */}
+              {/* Media Section - Using MediaUploader component */}
               <div style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <label style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>Media (max 4)</label>
-                  <button onClick={handleAddMedia} disabled={formData.planMedia.length >= 4} style={{ padding: '8px 16px', background: formData.planMedia.length >= 4 ? '#e2e8f0' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: formData.planMedia.length >= 4 ? '#94a3b8' : '#fff', borderRadius: '10px', border: 'none', cursor: formData.planMedia.length >= 4 ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: '600' }}>
-                    + Add
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {formData.planMedia.map((media, idx) => (
-                    <div key={idx} style={{ border: '2px solid #e2e8f0', borderRadius: '14px', overflow: 'hidden' }}>
-                      <div style={{ height: '90px', backgroundColor: '#f1f5f9', position: 'relative' }}>
-                        {media.url ? (
-                          media.type === 'video' ? (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: '#fff', fontSize: '24px' }}>
-                              <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21" /></svg>
-                            </div>
-                          ) : (
-                            <img src={media.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          )
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <rect x="3" y="3" width="18" height="18" rx="2" />
-                              <circle cx="8.5" cy="8.5" r="1.5" />
-                              <path d="M21 15l-5-5L5 21" />
-                            </svg>
-                          </div>
-                        )}
-                        <button onClick={() => handleRemoveMedia(idx)} style={{ position: 'absolute', top: '6px', right: '6px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>×</button>
-                      </div>
-                      <div style={{ padding: '10px' }}>
-                        <select value={media.type} onChange={(e) => handleMediaChange(idx, 'type', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '8px' }}>
-                          <option value="image">Image</option>
-                          <option value="video">Video</option>
-                        </select>
-                        <input type="text" placeholder="Paste URL..." value={media.url} onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {formData.planMedia.length === 0 && (
-                  <p style={{ fontSize: '13px', color: '#94a3b8', margin: '8px 0 0' }}>Click + Add to add images or videos</p>
-                )}
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '12px' }}>Media (max 4)</label>
+                <MediaUploader
+                  media={formData.planMedia}
+                  onChange={(media) => handleInputChange('planMedia', media)}
+                  maxItems={4}
+                  allowVideo={true}
+                />
               </div>
 
               {/* Title */}
@@ -791,10 +761,27 @@ const Plans = () => {
                 <input type="text" value={formData.title} onChange={(e) => handleInputChange('title', e.target.value)} placeholder="Plan name" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
               </div>
 
-              {/* Description */}
+              {/* Description - Rich Text Editor */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Description</label>
-                <textarea value={formData.description} onChange={(e) => handleInputChange('description', e.target.value)} placeholder="What's included?" rows={3} style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', resize: 'vertical' }} />
+                <div className="quill-wrapper" style={{ borderRadius: '12px', overflow: 'hidden', border: '2px solid #e2e8f0' }}>
+                  <ReactQuill
+                    theme="snow"
+                    value={formData.description}
+                    onChange={(value) => handleInputChange('description', value)}
+                    placeholder="What's included? Add headings, lists, and formatting..."
+                    modules={{
+                      toolbar: [
+                        [{ 'header': [4, 5, false] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                        ['clean']
+                      ]
+                    }}
+                    formats={['header', 'bold', 'italic', 'underline', 'list', 'bullet']}
+                    style={{ backgroundColor: '#fff' }}
+                  />
+                </div>
               </div>
 
               {/* Category with link */}
@@ -959,6 +946,49 @@ const Plans = () => {
         @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         div::-webkit-scrollbar { display: none; }
+        
+        /* Quill Editor Styling */
+        .quill-wrapper .ql-toolbar {
+          border: none !important;
+          border-bottom: 1px solid #e2e8f0 !important;
+          background: #f8fafc !important;
+          border-radius: 12px 12px 0 0 !important;
+          padding: 10px 12px !important;
+        }
+        .quill-wrapper .ql-container {
+          border: none !important;
+          font-family: inherit !important;
+          font-size: 15px !important;
+        }
+        .quill-wrapper .ql-editor {
+          min-height: 120px !important;
+          padding: 14px 16px !important;
+        }
+        .quill-wrapper .ql-editor.ql-blank::before {
+          color: #94a3b8 !important;
+          font-style: normal !important;
+          left: 16px !important;
+        }
+        .quill-wrapper .ql-snow .ql-picker {
+          font-size: 14px !important;
+        }
+        .quill-wrapper .ql-toolbar .ql-formats {
+          margin-right: 12px !important;
+        }
+        /* RESPONSIVE: Mobile-first form styles */
+        @media (max-width: 640px) {
+          .plans-create-panel {
+            max-width: 100% !important;
+          }
+          .plans-create-panel input,
+          .plans-create-panel select {
+            min-height: 44px;
+            font-size: 16px !important;
+          }
+          .plans-media-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
       `}</style>
     </div>
   );

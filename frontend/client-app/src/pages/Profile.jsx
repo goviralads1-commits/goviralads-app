@@ -13,6 +13,8 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({});
+  const [billingData, setBillingData] = useState({});
+  const [billingEditMode, setBillingEditMode] = useState(false);
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
@@ -26,10 +28,25 @@ const Profile = () => {
   const [newTicket, setNewTicket] = useState({ subject: '', category: 'GENERAL', priority: 'NORMAL', message: '' });
   const [ticketReply, setTicketReply] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Wallet state for real-time data
+  const [walletData, setWalletData] = useState({ balance: null, transactions: [] });
+  const [walletLoading, setWalletLoading] = useState(false);
+  // Activity fetch flag
+  const [activityFetched, setActivityFetched] = useState(false);
+  // Toast/error state
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchProfile = async () => {
     try {
@@ -46,6 +63,8 @@ const Profile = () => {
         emailNotifications: res.data.profile.preferences?.emailNotifications ?? true,
         inAppNotifications: res.data.profile.preferences?.inAppNotifications ?? true,
       });
+      // Set billing data
+      setBillingData(res.data.billing || {});
     } catch (err) {
       // Silent fail - show empty state
     } finally {
@@ -59,20 +78,43 @@ const Profile = () => {
       const res = await api.get('/client/profile/activity');
       setActivity(res.data);
     } catch (err) {
-      // Silent fail
+      console.error('Failed to fetch activity:', err);
     } finally {
       setActivityLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'activity' && activity.tasks.length === 0) {
-      fetchActivity();
+  // Fetch wallet data
+  const fetchWallet = async () => {
+    try {
+      setWalletLoading(true);
+      const res = await api.get('/client/wallet');
+      setWalletData({ 
+        balance: res.data.balance, 
+        transactions: res.data.transactions || [] 
+      });
+    } catch (err) {
+      console.error('Failed to fetch wallet:', err);
+    } finally {
+      setWalletLoading(false);
     }
+  };
+
+  useEffect(() => {
+    // Wallet tab - always fetch fresh data
+    if (activeTab === 'wallet') {
+      fetchWallet();
+    }
+    // Activity tab - fetch once
+    if (activeTab === 'activity' && !activityFetched) {
+      fetchActivity();
+      setActivityFetched(true);
+    }
+    // Support tab - fetch tickets if not loaded
     if (activeTab === 'support' && tickets.length === 0) {
       fetchTickets();
     }
-  }, [activeTab]);
+  }, [activeTab, activityFetched]);
 
   // Fetch tickets
   const fetchTickets = async () => {
@@ -99,15 +141,20 @@ const Profile = () => {
 
   // Create new ticket
   const handleCreateTicket = async () => {
-    if (!newTicket.subject || !newTicket.message) return;
+    if (!newTicket.subject || !newTicket.message) {
+      setToast({ type: 'error', message: 'Please fill in subject and message' });
+      return;
+    }
     try {
       setSubmitting(true);
       await api.post('/client/tickets', newTicket);
       setShowNewTicket(false);
       setNewTicket({ subject: '', category: 'GENERAL', priority: 'NORMAL', message: '' });
+      setToast({ type: 'success', message: 'Ticket created successfully!' });
       fetchTickets();
     } catch (err) {
-      // Silent fail
+      console.error('Ticket creation failed:', err);
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to create ticket' });
     } finally {
       setSubmitting(false);
     }
@@ -122,7 +169,8 @@ const Profile = () => {
       setTicketReply('');
       fetchTicketDetails(selectedTicket.id);
     } catch (err) {
-      // Silent fail
+      console.error('Reply failed:', err);
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to send reply' });
     } finally {
       setSubmitting(false);
     }
@@ -151,6 +199,20 @@ const Profile = () => {
       setEditMode(false);
     } catch (err) {
       // Silent fail - error handled via UI
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveBilling = async () => {
+    try {
+      setSaving(true);
+      await api.patch('/client/profile', { billing: billingData });
+      await fetchProfile();
+      setBillingEditMode(false);
+      setToast({ type: 'success', message: 'Billing details saved!' });
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to save billing details' });
     } finally {
       setSaving(false);
     }
@@ -207,6 +269,7 @@ const Profile = () => {
 
   const tabs = [
     { id: 'profile', label: 'My Profile', icon: '👤' },
+    { id: 'billing', label: 'Billing', icon: '🧾' },
     { id: 'wallet', label: 'My Wallet', icon: '💰' },
     { id: 'activity', label: 'My Activity', icon: '📊' },
     { id: 'support', label: 'Support', icon: '🎧' },
@@ -349,22 +412,157 @@ const Profile = () => {
           </div>
         )}
 
+        {/* BILLING TAB */}
+        {activeTab === 'billing' && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '28px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0' }}>Billing Details</h2>
+                <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Required for invoice generation</p>
+              </div>
+              {!billingEditMode ? (
+                <button onClick={() => setBillingEditMode(true)} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#f1f5f9', color: '#6366f1', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}>
+                  Edit
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => setBillingEditMode(false)} style={{ padding: '8px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#fff', color: '#64748b', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveBilling} disabled={saving} style={{ padding: '8px 16px', borderRadius: '10px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Billing Completeness Check */}
+            {(!billingData.name || !billingData.address || !billingData.email) && (
+              <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '12px', marginBottom: '20px', border: '1px solid #fcd34d' }}>
+                <p style={{ margin: 0, fontSize: '14px', color: '#92400e', fontWeight: '600' }}>
+                  ⚠️ Complete your billing details to download invoices
+                </p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#a16207' }}>
+                  Required: Name, Email, and Billing Address
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Billing Name */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Full Name *</label>
+                {billingEditMode ? (
+                  <input type="text" value={billingData.name || ''} onChange={e => setBillingData({...billingData, name: e.target.value})} placeholder="Name as on invoice" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                ) : (
+                  <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.name ? '#0f172a' : '#94a3b8' }}>{billingData.name || 'Not set'}</div>
+                )}
+              </div>
+
+              {/* Billing Email */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Billing Email *</label>
+                {billingEditMode ? (
+                  <input type="email" value={billingData.email || ''} onChange={e => setBillingData({...billingData, email: e.target.value})} placeholder="billing@example.com" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                ) : (
+                  <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.email ? '#0f172a' : '#94a3b8' }}>{billingData.email || 'Not set'}</div>
+                )}
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Phone</label>
+                {billingEditMode ? (
+                  <input type="tel" value={billingData.phone || ''} onChange={e => setBillingData({...billingData, phone: e.target.value})} placeholder="+91 1234567890" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                ) : (
+                  <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.phone ? '#0f172a' : '#94a3b8' }}>{billingData.phone || 'Not set'}</div>
+                )}
+              </div>
+
+              {/* Address */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Billing Address *</label>
+                {billingEditMode ? (
+                  <textarea value={billingData.address || ''} onChange={e => setBillingData({...billingData, address: e.target.value})} placeholder="Street address, building, etc." rows={2} style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                ) : (
+                  <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.address ? '#0f172a' : '#94a3b8', minHeight: '48px' }}>{billingData.address || 'Not set'}</div>
+                )}
+              </div>
+
+              {/* City, State, Pincode Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>City</label>
+                  {billingEditMode ? (
+                    <input type="text" value={billingData.city || ''} onChange={e => setBillingData({...billingData, city: e.target.value})} placeholder="City" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                  ) : (
+                    <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.city ? '#0f172a' : '#94a3b8' }}>{billingData.city || '-'}</div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>State</label>
+                  {billingEditMode ? (
+                    <input type="text" value={billingData.state || ''} onChange={e => setBillingData({...billingData, state: e.target.value})} placeholder="State" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                  ) : (
+                    <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.state ? '#0f172a' : '#94a3b8' }}>{billingData.state || '-'}</div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Pincode</label>
+                  {billingEditMode ? (
+                    <input type="text" value={billingData.pincode || ''} onChange={e => setBillingData({...billingData, pincode: e.target.value})} placeholder="123456" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                  ) : (
+                    <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.pincode ? '#0f172a' : '#94a3b8' }}>{billingData.pincode || '-'}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Optional: Company & GST */}
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '8px' }}>
+                <p style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8', marginBottom: '16px', textTransform: 'uppercase' }}>Optional (for businesses)</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Company Name</label>
+                    {billingEditMode ? (
+                      <input type="text" value={billingData.companyName || ''} onChange={e => setBillingData({...billingData, companyName: e.target.value})} placeholder="Company Ltd." style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                    ) : (
+                      <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.companyName ? '#0f172a' : '#94a3b8' }}>{billingData.companyName || '-'}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>GST Number</label>
+                    {billingEditMode ? (
+                      <input type="text" value={billingData.gstNumber || ''} onChange={e => setBillingData({...billingData, gstNumber: e.target.value})} placeholder="22AAAAA0000A1Z5" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                    ) : (
+                      <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.gstNumber ? '#0f172a' : '#94a3b8' }}>{billingData.gstNumber || '-'}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* MY WALLET TAB */}
         {activeTab === 'wallet' && (
           <div>
             {/* Balance Card */}
             <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '24px', padding: '28px', marginBottom: '20px', color: '#fff' }}>
               <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>Current Balance</p>
-              <h2 style={{ fontSize: '36px', fontWeight: '800', margin: '0 0 20px 0' }}>
-                {stats?.walletBalance?.toLocaleString() || 0} <span style={{ fontSize: '18px', fontWeight: '500' }}>credits</span>
-              </h2>
+              {walletLoading ? (
+                <div style={{ width: '150px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
+              ) : (
+                <h2 style={{ fontSize: '36px', fontWeight: '800', margin: '0 0 20px 0' }}>
+                  {(walletData.balance ?? stats?.walletBalance ?? 0).toLocaleString()} <span style={{ fontSize: '18px', fontWeight: '500' }}>credits</span>
+                </h2>
+              )}
               <button onClick={() => navigate('/wallet')} style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', backdropFilter: 'blur(10px)' }}>
                 Manage Wallet →
               </button>
             </div>
 
             {/* Quick Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>Active Tasks</p>
                 <p style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{stats?.activeTasks || 0}</p>
@@ -381,6 +579,35 @@ const Profile = () => {
                 <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>Responses</p>
                 <p style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b', margin: 0 }}>{stats?.responseCount || 0}</p>
               </div>
+            </div>
+
+            {/* Recent Transactions */}
+            <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>💳 Recent Transactions</h3>
+                <button onClick={() => navigate('/wallet')} style={{ fontSize: '13px', color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>View All →</button>
+              </div>
+              {walletLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[1,2,3].map(i => (<div key={i} style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '12px' }}><div style={{ width: '60%', height: '14px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginBottom: '6px', animation: 'pulse 1.5s infinite' }} /><div style={{ width: '30%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px', animation: 'pulse 1.5s infinite' }} /></div>))}
+                </div>
+              ) : walletData.transactions.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>No transactions yet</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {walletData.transactions.slice(0, 5).map((txn, idx) => (
+                    <div key={txn._id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                      <div>
+                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0' }}>{txn.description || txn.type}</p>
+                        <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{new Date(txn.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <span style={{ fontWeight: '700', fontSize: '14px', color: txn.amount > 0 ? '#15803d' : '#dc2626' }}>
+                        {txn.amount > 0 ? '+' : ''}{txn.amount}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -682,6 +909,14 @@ const Profile = () => {
           Client Portal v1.0.0
         </p>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', padding: '14px 24px', borderRadius: '12px', backgroundColor: toast.type === 'success' ? '#dcfce7' : '#fef2f2', color: toast.type === 'success' ? '#15803d' : '#dc2626', fontWeight: '600', fontSize: '14px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', marginLeft: '8px', color: 'inherit' }}>×</button>
+        </div>
+      )}
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
     </div>

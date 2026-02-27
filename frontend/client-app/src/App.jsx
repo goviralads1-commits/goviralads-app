@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { isAuthenticated, getUserRole } from './services/authService';
+import { CartProvider } from './context/CartContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoginForm from './components/LoginForm';
 import Header from './components/Header';
@@ -10,6 +11,7 @@ import Wallet from './pages/Wallet';
 import Tasks from './pages/Tasks';
 import Plans from './pages/Plans';
 import PlanDetail from './pages/PlanDetail';
+import Cart from './pages/Cart';
 import Subscriptions from './pages/Subscriptions';
 import Profile from './pages/Profile';
 import TaskDetail from './pages/TaskDetail';
@@ -39,15 +41,16 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 const App = () => {
   return (
     <ErrorBoundary>
-      <Router>
-        <div className="App">
-          <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginForm />} />
-          <Route path="/legal/:slug" element={<LegalPage />} />
-          
-          {/* Protected CLIENT Routes */}
-          <Route path="/dashboard" element={
+      <CartProvider>
+        <Router>
+          <div className="App">
+            <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<LoginForm />} />
+            <Route path="/legal/:slug" element={<LegalPage />} />
+            
+            {/* Protected CLIENT Routes */}
+            <Route path="/dashboard" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <Dashboard />
             </ProtectedRoute>
@@ -102,6 +105,11 @@ const App = () => {
               <Notifications />
             </ProtectedRoute>
           } />
+          <Route path="/cart" element={
+            <ProtectedRoute allowedRoles={['CLIENT']}>
+              <Cart />
+            </ProtectedRoute>
+          } />
           
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<NotFound />} />
@@ -109,6 +117,7 @@ const App = () => {
           <CookieConsent />
         </div>
       </Router>
+    </CartProvider>
     </ErrorBoundary>
   );
 };

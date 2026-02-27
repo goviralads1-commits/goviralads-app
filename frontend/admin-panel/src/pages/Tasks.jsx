@@ -3,9 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import IconPicker from '../components/IconPicker';
-import MediaUploader from '../components/MediaUploader';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -75,34 +72,16 @@ const Tasks = () => {
       { name: 'Delivered', percentage: 100, color: '#059669' },
       { name: 'Overachieved', percentage: 120, color: '#10b981' },
     ],
-    // PLAN SYSTEM EXTENSIONS (OPTIONAL)
+    // QUANTITY & VISIBILITY
     quantity: '',
     showQuantityToClient: true,
     showCreditsToClient: true,
-    isListedInPlans: false,
-    isActivePlan: true,
-    targetClients: [],
-    featureImage: '',
-    planMedia: [],  // Array of { type: 'image'|'video', url: string }
-    offerPrice: '',
-    originalPrice: '',
-    countdownEndDate: '',
-    categoryId: ''
+    offerPrice: ''
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
-  const [visibleToAll, setVisibleToAll] = useState(true);
-
-  useEffect(() => {
-    // Sync visibleToAll with targetClients
-    if (formData.targetClients && formData.targetClients.length > 0) {
-      setVisibleToAll(false);
-    } else {
-      setVisibleToAll(true);
-    }
-  }, [formData.targetClients]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -138,32 +117,6 @@ const Tasks = () => {
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: null }));
     }
-    // Log mode changes and reset mode-specific fields
-    if (field === 'isListedInPlans') {
-      // Reset mode-specific fields when switching modes
-      if (value === true) {
-        // Switching to PLAN mode - clear task-specific fields
-        setFormData(prev => ({
-          ...prev,
-          isListedInPlans: true,
-          clientId: '',
-          startDate: '',
-          endDate: '',
-          deadline: '',
-          status: 'LISTED'
-        }));
-      } else {
-        // Switching to TASK mode - clear plan-specific fields
-        setFormData(prev => ({
-          ...prev,
-          isListedInPlans: false,
-          targetClients: [],
-          originalPrice: '',
-          countdownEndDate: '',
-          status: 'PENDING'
-        }));
-      }
-    }
   };
 
   const validateForm = () => {
@@ -171,54 +124,33 @@ const Tasks = () => {
     
     if (!formData.title.trim()) errors.title = 'Title is required';
     
-
-    // STRICT SEPARATION: PLAN and TASK are mutually exclusive
-    // PLAN MODE: clientId must be empty, PLAN fields required
-    if (formData.isListedInPlans) {
-      if (formData.clientId) {
-        errors.clientId = 'Cannot assign client when creating a PLAN.';
+    // TASK validation
+    if (!formData.clientId) {
+      errors.clientId = 'Client is required';
+    }
+    
+    if (!formData.startDate) {
+      errors.startDate = 'Start Date is required';
+    }
+    
+    // Validate Original Amount
+    if (formData.creditCost === undefined || formData.creditCost === null || formData.creditCost < 0) {
+      errors.creditCost = 'Valid Credit Cost is required';
+    }
+    
+    // Validate Offer Price if provided
+    if (formData.offerPrice !== '' && formData.offerPrice !== undefined && formData.offerPrice !== null) {
+      if (formData.offerPrice < 0) {
+        errors.offerPrice = 'Offer Price cannot be negative';
       }
-      // Example: Require at least a base price for PLAN
-      if (formData.creditCost === undefined || formData.creditCost === null || formData.creditCost < 0) {
-        errors.creditCost = 'Base price required for PLAN.';
-      }
-      // Target is REQUIRED for Plan (represents the promise)
-      if (!formData.progressTarget || formData.progressTarget <= 0) {
-        errors.progressTarget = 'Target Goal is required for PLAN.';
-      }
-    } else {
-      // TASK MODE: clientId required, PLAN fields must be empty
-      if (!formData.clientId) {
-        errors.clientId = 'Client is required for TASK.';
-      }
-      
-      if (!formData.startDate) {
-        errors.startDate = 'Start Date is required for TASK.';
-      }
-      
-      // Validate Original Amount
-      if (formData.creditCost === undefined || formData.creditCost === null || formData.creditCost < 0) {
-        errors.creditCost = 'Valid Credit Cost is required for TASK.';
-      }
-      
-      // Validate Offer Price if provided
-      if (formData.offerPrice !== '' && formData.offerPrice !== undefined && formData.offerPrice !== null) {
-        if (formData.offerPrice < 0) {
-          errors.offerPrice = 'Offer Price cannot be negative';
-        }
-      }
-      
-      // Hard block for insufficient credits (only if assigning to client)
-      if (formData.clientId && formData.creditCost >= 0) {
-        const selectedClient = clients.find(c => (c.id || c._id) === formData.clientId);
-        const actualCharge = (formData.offerPrice && formData.offerPrice > 0) ? formData.offerPrice : formData.creditCost;
-        if (selectedClient && (selectedClient.walletBalance || 0) < actualCharge) {
-          errors.creditCost = 'Insufficient client balance';
-        }
-      }
-      // No PLAN fields allowed in TASK mode
-      if (formData.targetClients?.length > 0 || formData.featureImage || formData.originalPrice || formData.countdownEndDate) {
-        errors.planFields = 'PLAN fields must be empty in TASK mode.';
+    }
+    
+    // Hard block for insufficient credits
+    if (formData.clientId && formData.creditCost >= 0) {
+      const selectedClient = clients.find(c => (c.id || c._id) === formData.clientId);
+      const actualCharge = (formData.offerPrice && formData.offerPrice > 0) ? formData.offerPrice : formData.creditCost;
+      if (selectedClient && (selectedClient.walletBalance || 0) < actualCharge) {
+        errors.creditCost = 'Insufficient client balance';
       }
     }
     
@@ -290,103 +222,36 @@ const Tasks = () => {
     }
     setSubmitting(true);
     try {
-      // Construct payload matching backend expectations
-      let payload;
-      if (formData.isListedInPlans) {
-        // PLAN MODE: clientId must be null, PLAN fields only
-        payload = {
-          clientId: null,
-          status: 'LISTED',
-          title: formData.title.trim(),
-          description: formData.description || '',
-          creditCost: Number(formData.creditCost) || 0,
-          priority: formData.priority || 'Medium',
-          startDate: null,
-          endDate: null,
-          progressMode: formData.progressMode || 'AUTO',
-          // SMART PROGRESS SYSTEM (Config snapshot)
-          progressTarget: Number(formData.progressTarget) || 100,
-          progressAchieved: 0,
-          showProgressDetails: formData.showProgressDetails || false,
-          autoCompletionCap: Number(formData.autoCompletionCap) || 100,
-          milestones: formData.milestones || [],
-          // PLAN FIELDS & VISIBILITY
-          ...(formData.quantity && { quantity: Number(formData.quantity) }),
-          showQuantityToClient: formData.showQuantityToClient,
-          showCreditsToClient: formData.showCreditsToClient,
-          isListedInPlans: true,
-          isActivePlan: formData.isActivePlan !== false,
-          planMedia: formData.planMedia,
-          ...(formData.categoryId && { categoryId: formData.categoryId }),
-          ...(formData.targetClients?.length > 0 && { targetClients: formData.targetClients }),
-          ...(formData.offerPrice && { offerPrice: Number(formData.offerPrice) }),
-          ...(formData.originalPrice && { originalPrice: Number(formData.originalPrice) }),
-          ...(formData.countdownEndDate && { countdownEndDate: formData.countdownEndDate })
-        };
-      } else {
-        // TASK MODE: clientId required, PLAN fields must be empty
-        payload = {
-          clientId: formData.clientId,
-          title: formData.title.trim(),
-          description: formData.description || '',
-          creditCost: Number(formData.creditCost) || 0,
-          ...(formData.offerPrice && formData.offerPrice > 0 && { offerPrice: Number(formData.offerPrice) }),
-          priority: formData.priority || 'Medium',
-          startDate: formData.startDate || new Date().toISOString(),
-          endDate: formData.deadline || formData.endDate || null,
-          publicNotes: formData.publicNotes || '',
-          internalNotes: formData.internalNotes || '',
-          progressMode: formData.progressMode || 'AUTO',
-          // SMART PROGRESS SYSTEM
-          progressTarget: Number(formData.progressTarget) || 100,
-          progressAchieved: Number(formData.progressAchieved) || 0,
-          showProgressDetails: formData.showProgressDetails || false,
-          autoCompletionCap: Number(formData.autoCompletionCap) || 100,
-          milestones: formData.milestones || [],
-          // QUANTITY & VISIBILITY
-          ...(formData.quantity && { quantity: Number(formData.quantity) }),
-          showQuantityToClient: formData.showQuantityToClient,
-          showCreditsToClient: formData.showCreditsToClient,
-          isListedInPlans: false
-        };
-      }
+      // TASK MODE ONLY: Plans must be created from Plans.jsx
+      const payload = {
+        clientId: formData.clientId,
+        title: formData.title.trim(),
+        description: formData.description || '',
+        creditCost: Number(formData.creditCost) || 0,
+        ...(formData.offerPrice && formData.offerPrice > 0 && { offerPrice: Number(formData.offerPrice) }),
+        priority: formData.priority || 'Medium',
+        startDate: formData.startDate || new Date().toISOString(),
+        endDate: formData.deadline || formData.endDate || null,
+        publicNotes: formData.publicNotes || '',
+        internalNotes: formData.internalNotes || '',
+        progressMode: formData.progressMode || 'AUTO',
+        // SMART PROGRESS SYSTEM
+        progressTarget: Number(formData.progressTarget) || 100,
+        progressAchieved: Number(formData.progressAchieved) || 0,
+        showProgressDetails: formData.showProgressDetails || false,
+        autoCompletionCap: Number(formData.autoCompletionCap) || 100,
+        milestones: formData.milestones || [],
+        // QUANTITY & VISIBILITY
+        ...(formData.quantity && { quantity: Number(formData.quantity) }),
+        showQuantityToClient: formData.showQuantityToClient,
+        showCreditsToClient: formData.showCreditsToClient,
+        isListedInPlans: false
+      };
       
       const response = await api.post('/admin/tasks/assign', payload);
-      
-      const { mode, task, plan, walletBalance } = response.data;
+      const { task } = response.data;
 
-      if (mode === 'PLAN') {
-        setToast('Plan created successfully');
-        setShowCreatePanel(false);
-        // Reset form for Plans
-        setFormData({
-          title: '', description: '', clientId: '', startDate: '', endDate: '',
-          deadline: '', progressMode: 'AUTO', progress: 0, priority: 'Medium',
-          status: 'PENDING', creditCost: 0, creditsUsed: 0, publicNotes: '', internalNotes: '',
-          icon: '📝', showOfferPrice: false,
-          progressTarget: 100, progressAchieved: 0, showProgressDetails: false, autoCompletionCap: 100,
-          milestones: [
-            { name: 'Work Started', percentage: 10, color: '#8b5cf6' },
-            { name: 'First Draft', percentage: 30, color: '#6366f1' },
-            { name: 'Review Phase', percentage: 60, color: '#3b82f6' },
-            { name: 'Almost Ready', percentage: 80, color: '#0ea5e9' },
-            { name: 'Delivered', percentage: 100, color: '#059669' },
-            { name: 'Overachieved', percentage: 120, color: '#10b981' },
-          ],
-          quantity: '', showQuantityToClient: true, showCreditsToClient: true,
-          isListedInPlans: false, isActivePlan: true, targetClients: [], featureImage: '',
-          planMedia: [],
-          offerPrice: '', originalPrice: '', countdownEndDate: '', categoryId: ''
-        });
-        
-        // Refresh data without redirect
-        const tasksRes = await api.get('/admin/tasks');
-        setTasks(tasksRes.data.tasks || []);
-        setTimeout(() => setToast(null), 3000);
-        return; 
-      }
-
-      // --- TASK SUCCESS FLOW ---
+      // TASK SUCCESS FLOW
       setToast('Task created successfully');
       setShowCreatePanel(false);
       

@@ -31,7 +31,7 @@ const taskSchema = new mongoose.Schema(
     description: {
       type: String,
       default: '',
-      trim: true,
+      // Note: trim removed to preserve HTML formatting from rich text editor
     },
     creditCost: {
       type: Number,
