@@ -1,8 +1,10 @@
-const CACHE_NAME = 'goviralads-v2';
+const CACHE_NAME = 'goviralads-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/gva-icon-192.png',
+  '/gva-icon-512.png',
 ];
 
 // Install event - cache static assets

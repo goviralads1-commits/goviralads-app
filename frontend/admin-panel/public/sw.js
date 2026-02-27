@@ -1,8 +1,10 @@
-const CACHE_NAME = 'gva-admin-v1';
+const CACHE_NAME = 'gva-admin-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/gva-icon-192.png',
+  '/gva-icon-512.png',
 ];
 
 // Install event - cache static assets
