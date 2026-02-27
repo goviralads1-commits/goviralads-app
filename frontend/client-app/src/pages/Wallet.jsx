@@ -19,15 +19,23 @@ const Wallet = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [walletResponse, requestsResponse, invoicesResponse] = await Promise.all([
-          api.get('/client/wallet'),
-          api.get('/client/wallet/recharge-requests'),
-          api.get('/client/billing/invoices')
-        ]);
+        // Required: wallet and recharge requests must succeed
+        const walletResponse = await api.get('/client/wallet');
+        const requestsResponse = await api.get('/client/wallet/recharge-requests');
+        
+        // Optional: invoices endpoint may not exist yet
+        let invoicesData = [];
+        try {
+          const invoicesResponse = await api.get('/client/billing/invoices');
+          invoicesData = invoicesResponse.data.invoices || [];
+        } catch (invoiceErr) {
+          // Silently ignore if billing route not implemented
+          console.log('[Wallet] Invoices endpoint not available');
+        }
         
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
-        setInvoices(invoicesResponse.data.invoices || []);
+        setInvoices(invoicesData);
       } catch (err) {
         setError('Failed to load wallet data');
       } finally {
