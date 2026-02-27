@@ -1,22 +1,22 @@
 {
   "name": "Go Viral Ads",
-  "short_name": "Go Viral",
+  "short_name": "GVA",
   "description": "Professional social media marketing and task management platform",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#f8fafc",
-  "theme_color": "#22c55e",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#5B5BFF",
   "categories": ["productivity", "business", "utilities"],
   "icons": [
     {
-      "src": "/logo192.png",
+      "src": "/gva-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/logo512.png",
+      "src": "/gva-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -28,14 +28,14 @@
       "short_name": "Tasks",
       "description": "View your tasks",
       "url": "/tasks",
-      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/gva-icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Browse Plans",
       "short_name": "Plans",
       "description": "Browse available plans",
       "url": "/plans",
-      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/gva-icon-192.png", "sizes": "192x192" }]
     }
   ],
   "related_applications": [],
