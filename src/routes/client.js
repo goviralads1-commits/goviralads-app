@@ -205,13 +205,10 @@ router.get('/tasks/:taskId', async (req, res) => {
         task.progress = currentProgress;
         needsSave = true;
       }
-    } else if (task.progressMode === 'MANUAL' && task.progressTarget > 0) {
-      // Recalculate MANUAL progress from target/achieved
-      currentProgress = Math.round(((task.progressAchieved || 0) / task.progressTarget) * 1000) / 10;
-      if (Math.abs(currentProgress - task.progress) > 0.1) {
-        task.progress = currentProgress;
-        needsSave = true;
-      }
+    } else if (task.progressMode === 'MANUAL') {
+      // MANUAL mode: progress is admin-controlled.
+      // Do NOT recalculate from progressAchieved.
+      currentProgress = task.progress || 0;
     }
 
     // Evaluate milestones based on current progress
@@ -1015,13 +1012,10 @@ router.get('/tasks', async (req, res) => {
           t.progress = currentProgress;
           needsSave = true;
         }
-      } else if (t.progressMode === 'MANUAL' && t.progressTarget > 0) {
-        // Recalculate MANUAL progress from target/achieved
-        currentProgress = Math.round(((t.progressAchieved || 0) / t.progressTarget) * 1000) / 10;
-        if (Math.abs(currentProgress - t.progress) > 0.1) {
-          t.progress = currentProgress;
-          needsSave = true;
-        }
+      } else if (t.progressMode === 'MANUAL') {
+        // MANUAL mode: progress is admin-controlled.
+        // Do NOT recalculate from progressAchieved.
+        currentProgress = t.progress || 0;
       }
 
       // FIX #1: Evaluate milestones based on current progress
