@@ -10,6 +10,7 @@ const PlanDetail = () => {
   const navigate = useNavigate();
   const [plan, setPlan] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [users, setUsers] = useState([]); // For client selection
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -35,14 +36,18 @@ const PlanDetail = () => {
     // Section assignments
     isFeatured: false,
     isPopular: false,
-    isNew: false
+    isNew: false,
+    // Visibility
+    visibility: 'PUBLIC',
+    allowedClients: []
   });
 
   const fetchData = useCallback(async () => {
     try {
-      const [planRes, categoriesRes] = await Promise.all([
+      const [planRes, categoriesRes, usersRes] = await Promise.all([
         api.get(`/admin/tasks/${planId}`),
-        api.get('/admin/categories').catch(() => ({ data: { categories: [] } }))
+        api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
+        api.get('/admin/users').catch(() => ({ data: { users: [] } }))
       ]);
       
       const planData = planRes.data.task;
@@ -56,6 +61,12 @@ const PlanDetail = () => {
       
       setPlan(planData);
       setCategories(categoriesRes.data.categories || []);
+      setUsers(usersRes.data.users || []);
+      
+      // Extract allowedClients IDs from populated data
+      const allowedClientIds = (planData.allowedClients || []).map(c => 
+        typeof c === 'string' ? c : (c._id || c.id || c)
+      );
       
       setFormData({
         title: planData.title || '',
@@ -75,7 +86,10 @@ const PlanDetail = () => {
         // Section assignments
         isFeatured: planData.isFeatured ?? false,
         isPopular: planData.isPopular ?? false,
-        isNew: planData.isNew ?? false
+        isNew: planData.isNew ?? false,
+        // Visibility
+        visibility: planData.visibility || 'PUBLIC',
+        allowedClients: allowedClientIds
       });
       
       setError(null);
@@ -155,7 +169,10 @@ const PlanDetail = () => {
         // Section assignments
         isFeatured: formData.isFeatured,
         isPopular: formData.isPopular,
-        isNew: formData.isNew
+        isNew: formData.isNew,
+        // Visibility
+        visibility: formData.visibility,
+        allowedClients: formData.visibility === 'SELECTED' ? formData.allowedClients : []
       };
       
       // Only include planMedia if it was intentionally modified
@@ -390,10 +407,55 @@ const PlanDetail = () => {
             <textarea value={formData.publicNotes} onChange={(e) => handleInputChange('publicNotes', e.target.value)} placeholder="List what the client gets..." rows={3} style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', resize: 'vertical' }} />
           </div>
 
-          {/* Visibility Toggles */}
+          {/* Visibility Controls */}
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '12px' }}>Visibility</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#1a1a2e', marginBottom: '8px' }}>Plan Visibility</label>
+            <select 
+              value={formData.visibility} 
+              onChange={(e) => handleInputChange('visibility', e.target.value)}
+              style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', backgroundColor: '#fff', cursor: 'pointer', marginBottom: '12px' }}
+            >
+              <option value="PUBLIC">Public (All Clients)</option>
+              <option value="SELECTED">Selected Clients Only</option>
+              <option value="HIDDEN">Hidden (Draft)</option>
+            </select>
+            
+            {formData.visibility === 'SELECTED' && (
+              <div style={{ marginTop: '12px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '2px solid #e2e8f0' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '10px' }}>Select Clients Who Can See This Plan</label>
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {users.filter(u => u.role === 'CLIENT').length === 0 ? (
+                    <p style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', padding: '12px' }}>No clients available</p>
+                  ) : (
+                    users.filter(u => u.role === 'CLIENT').map(user => (
+                      <label key={user.id || user._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', cursor: 'pointer', borderRadius: '8px', transition: 'background 0.15s' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={formData.allowedClients.includes(user.id || user._id)} 
+                          onChange={(e) => {
+                            const userId = user.id || user._id;
+                            if (e.target.checked) {
+                              handleInputChange('allowedClients', [...formData.allowedClients, userId]);
+                            } else {
+                              handleInputChange('allowedClients', formData.allowedClients.filter(id => id !== userId));
+                            }
+                          }}
+                          style={{ width: '18px', height: '18px', accentColor: '#3b82f6' }} 
+                        />
+                        <span style={{ fontSize: '14px', color: '#334155' }}>{user.name || user.identifier || user.email}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {formData.allowedClients.length > 0 && (
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '10px 0 0' }}>
+                    {formData.allowedClients.length} client{formData.allowedClients.length > 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '16px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={formData.isActivePlan} onChange={(e) => handleInputChange('isActivePlan', e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#28a745' }} />
                 <span style={{ fontSize: '14px', fontWeight: '500', color: '#475569' }}>Live on Marketplace</span>
