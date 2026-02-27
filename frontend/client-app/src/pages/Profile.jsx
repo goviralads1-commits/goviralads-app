@@ -888,6 +888,27 @@ const Profile = () => {
                 </label>
               </div>
 
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px', marginTop: '12px' }}>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Notification Sound</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Play sound for new notifications</p>
+                </div>
+                <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '28px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={localStorage.getItem('notificationSoundEnabled') !== 'false'} 
+                    onChange={e => {
+                      localStorage.setItem('notificationSoundEnabled', e.target.checked ? 'true' : 'false');
+                      setFormData({...formData}); // Force re-render
+                    }} 
+                    style={{ opacity: 0, width: 0, height: 0 }} 
+                  />
+                  <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, backgroundColor: localStorage.getItem('notificationSoundEnabled') !== 'false' ? '#6366f1' : '#e2e8f0', borderRadius: '28px', transition: '0.3s' }}>
+                    <span style={{ position: 'absolute', height: '22px', width: '22px', left: localStorage.getItem('notificationSoundEnabled') !== 'false' ? '23px' : '3px', bottom: '3px', backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s' }} />
+                  </span>
+                </label>
+              </div>
+
               <button onClick={handleSaveProfile} disabled={saving} style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
                 {saving ? 'Saving...' : 'Save Preferences'}
               </button>

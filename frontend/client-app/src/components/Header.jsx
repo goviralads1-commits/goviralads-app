@@ -19,6 +19,47 @@ const Header = ({ title }) => {
   const profileRef = useRef(null);
   const notifRef = useRef(null);
   const bellButtonRef = useRef(null);
+  
+  // Notification sound refs
+  const prevUnreadCountRef = useRef(0);
+  const lastSoundPlayedRef = useRef(0);
+
+  // Play notification sound (soft beep using Web Audio API)
+  const playNotificationSound = useCallback(() => {
+    try {
+      // Check if sound is enabled (default: ON)
+      if (localStorage.getItem('notificationSoundEnabled') === 'false') return;
+      
+      // Check if tab is active
+      if (document.visibilityState !== 'visible') return;
+      
+      // Max once per 30 seconds
+      const now = Date.now();
+      if (now - lastSoundPlayedRef.current < 30000) return;
+      lastSoundPlayedRef.current = now;
+      
+      // Create soft notification sound using Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800; // Soft tone
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Low volume
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+      
+      console.log('[NOTIFICATION SOUND] Played');
+    } catch (err) {
+      console.log('[NOTIFICATION SOUND] Failed:', err.message);
+    }
+  }, []);
 
   // CRITICAL FIX: Fetch from /client/notifications (NOT /client/notices)
   const fetchNotifications = useCallback(async () => {
@@ -36,12 +77,20 @@ const Header = ({ title }) => {
         relatedEntity: n.relatedEntity
       }));
       setNotifications(notifs.slice(0, 10));
-      setUnreadCount(notifs.filter(n => !n.isRead).length);
-      console.log('[CLIENT NOTIFICATIONS] Loaded:', notifs.length, 'notifications,', notifs.filter(n => !n.isRead).length, 'unread');
+      const newUnreadCount = notifs.filter(n => !n.isRead).length;
+      
+      // Play sound if new unread notifications arrived
+      if (newUnreadCount > prevUnreadCountRef.current && prevUnreadCountRef.current >= 0) {
+        playNotificationSound();
+      }
+      prevUnreadCountRef.current = newUnreadCount;
+      
+      setUnreadCount(newUnreadCount);
+      console.log('[CLIENT NOTIFICATIONS] Loaded:', notifs.length, 'notifications,', newUnreadCount, 'unread');
     } catch (err) {
       console.log('[CLIENT NOTIFICATIONS] Fetch error:', err.message);
     }
-  }, []);
+  }, [playNotificationSound]);
 
   useEffect(() => {
     fetchNotifications();
