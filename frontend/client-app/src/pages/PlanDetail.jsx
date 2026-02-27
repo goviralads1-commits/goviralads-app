@@ -2,16 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
+import DOMPurify from 'dompurify';
+import { useCart } from '../context/CartContext';
 
 const PlanDetail = () => {
   const { planId } = useParams();
   const navigate = useNavigate();
+  const { addToCart, isInCart, cartCount } = useCart();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [purchasing, setPurchasing] = useState(false);
   const [toast, setToast] = useState(null);
   const [currentMediaIdx, setCurrentMediaIdx] = useState(0);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const fetchPlan = useCallback(async () => {
     try {
@@ -29,18 +32,28 @@ const PlanDetail = () => {
     fetchPlan();
   }, [fetchPlan]);
 
-  const handlePurchase = async () => {
-    setPurchasing(true);
-    try {
-      await api.post(`/client/plans/${planId}/purchase`);
-      setToast({ type: 'success', message: 'Plan purchased! Awaiting approval.' });
-      setTimeout(() => setToast(null), 2000);
-      setTimeout(() => navigate('/tasks'), 1500);
-    } catch (err) {
-      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to purchase' });
-      setTimeout(() => setToast(null), 4000);
-      setPurchasing(false);
+  // Check if already in cart when plan loads
+  useEffect(() => {
+    if (plan && isInCart(plan._id || plan.id || planId)) {
+      setAddedToCart(true);
     }
+  }, [plan, planId, isInCart]);
+
+  const handleAddToCart = () => {
+    if (!plan) return;
+    addToCart({
+      id: plan._id || plan.id || planId,
+      title: plan.title,
+      offerPrice: plan.offerPrice,
+      creditCost: plan.creditCost,
+      originalPrice: plan.originalPrice,
+      icon: plan.icon,
+      featureImage: plan.featureImage,
+      categoryName: plan.categoryName,
+    });
+    setAddedToCart(true);
+    setToast({ type: 'success', message: 'Added to cart!' });
+    setTimeout(() => setToast(null), 2000);
   };
 
   const formatCountdown = (dateStr) => {
@@ -264,9 +277,11 @@ const PlanDetail = () => {
           </h1>
 
           {plan.description && (
-            <p style={{ fontSize: '16px', color: '#495057', margin: '0 0 24px', lineHeight: 1.7 }}>
-              {plan.description}
-            </p>
+            <div 
+              className="plan-description"
+              style={{ fontSize: '16px', color: '#495057', margin: '0 0 24px', lineHeight: 1.7 }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(plan.description) }}
+            />
           )}
 
           {/* Quantity Badge - Client-safe info only */}
@@ -328,11 +343,11 @@ const PlanDetail = () => {
         </div>
       </div>
 
-      {/* Fixed Bottom CTA */}
+      {/* Fixed Bottom CTA - positioned above nav bar */}
       <div style={{ 
-        position: 'fixed', bottom: 0, left: 0, right: 0, 
+        position: 'fixed', bottom: '64px', left: 0, right: 0, 
         backgroundColor: '#fff', 
-        padding: '16px 20px calc(16px + env(safe-area-inset-bottom))', 
+        padding: '16px 20px',
         boxShadow: '0 -4px 24px rgba(0,0,0,0.1)',
         zIndex: 100
       }}>
@@ -341,41 +356,140 @@ const PlanDetail = () => {
             <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '2px' }}>Total Price</div>
             <div style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>₹{displayPrice}</div>
           </div>
-          <button
-            onClick={handlePurchase}
-            disabled={purchasing}
-            style={{
-              flex: 1.5, padding: '18px 24px', 
-              backgroundColor: purchasing ? '#6c757d' : '#28a745', 
-              color: '#fff',
-              fontSize: '16px', fontWeight: '700', borderRadius: '16px', border: 'none',
-              cursor: purchasing ? 'not-allowed' : 'pointer', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-              boxShadow: purchasing ? 'none' : '0 6px 20px rgba(40,167,69,0.4)',
-              transition: 'all 0.2s'
-            }}
-          >
-            {purchasing ? (
-              <>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
-                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                </svg>
-                Processing...
-              </>
-            ) : (
-              <>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Buy Now
-              </>
-            )}
-          </button>
+          {addedToCart || isInCart(plan._id || plan.id || planId) ? (
+            <button
+              onClick={() => navigate('/cart')}
+              style={{
+                flex: 1.5, padding: '18px 24px', 
+                backgroundColor: '#6366f1', 
+                color: '#fff',
+                fontSize: '16px', fontWeight: '700', borderRadius: '16px', border: 'none',
+                cursor: 'pointer', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                boxShadow: '0 6px 20px rgba(99,102,241,0.4)',
+                transition: 'all 0.2s'
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Go to Cart {cartCount > 0 && `(${cartCount})`}
+            </button>
+          ) : (
+            <button
+              onClick={handleAddToCart}
+              style={{
+                flex: 1.5, padding: '18px 24px', 
+                backgroundColor: '#28a745', 
+                color: '#fff',
+                fontSize: '16px', fontWeight: '700', borderRadius: '16px', border: 'none',
+                cursor: 'pointer', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                boxShadow: '0 6px 20px rgba(40,167,69,0.4)',
+                transition: 'all 0.2s'
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Add to Cart
+            </button>
+          )}
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        /* Rich Text Description Styling */
+        .plan-description {
+          white-space: pre-wrap;
+          word-wrap: break-word;
+        }
+        .plan-description h1, .plan-description h2, .plan-description h3 {
+          font-weight: 700;
+          color: #1a1a2e;
+          margin: 20px 0 12px;
+          line-height: 1.3;
+        }
+        .plan-description h1 { font-size: 22px; }
+        .plan-description h2 { font-size: 19px; }
+        .plan-description h3 { font-size: 17px; }
+        .plan-description h4 {
+          font-size: 16px;
+          font-weight: 600;
+          color: #1a1a2e;
+          margin: 18px 0 10px;
+          line-height: 1.4;
+        }
+        .plan-description h1:first-child,
+        .plan-description h2:first-child,
+        .plan-description h3:first-child,
+        .plan-description h4:first-child {
+          margin-top: 0;
+        }
+        .plan-description h5 {
+          font-size: 15px;
+          font-weight: 600;
+          color: #334155;
+          margin: 16px 0 8px;
+          line-height: 1.4;
+        }
+        .plan-description ul, .plan-description ol {
+          margin: 14px 0;
+          padding-left: 24px;
+        }
+        .plan-description li {
+          margin: 8px 0;
+          line-height: 1.65;
+        }
+        .plan-description p {
+          margin: 14px 0;
+          line-height: 1.7;
+        }
+        .plan-description p:first-child {
+          margin-top: 0;
+        }
+        .plan-description p:last-child {
+          margin-bottom: 0;
+        }
+        .plan-description strong, .plan-description b {
+          font-weight: 600;
+          color: #1a1a2e;
+        }
+        .plan-description em, .plan-description i {
+          font-style: italic;
+        }
+        .plan-description u {
+          text-decoration: underline;
+        }
+        .plan-description a {
+          color: #6366f1;
+          text-decoration: underline;
+        }
+        .plan-description blockquote {
+          border-left: 4px solid #e2e8f0;
+          margin: 16px 0;
+          padding: 12px 16px;
+          background: #f8fafc;
+          color: #475569;
+        }
+        .plan-description pre, .plan-description code {
+          background: #f1f5f9;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: monospace;
+          font-size: 14px;
+        }
+        .plan-description pre {
+          padding: 12px 16px;
+          overflow-x: auto;
+        }
+      `}</style>
     </div>
   );
 };
