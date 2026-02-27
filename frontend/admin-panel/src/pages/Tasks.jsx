@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import IconPicker from '../components/IconPicker';
+import MediaUploader from '../components/MediaUploader';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -1038,7 +1042,7 @@ const Tasks = () => {
           />
           
           {/* Panel */}
-          <div style={{
+          <div className="create-panel" style={{
             position: 'fixed',
             top: 0,
             right: 0,
@@ -1055,7 +1059,7 @@ const Tasks = () => {
             animation: 'slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
           }}>
             {/* Panel Header */}
-            <div style={{
+            <div className="create-panel-header" style={{
               padding: '28px 28px 24px',
               borderBottom: '1px solid #f1f5f9',
               background: 'linear-gradient(to bottom, #ffffff, #fafbfc)'
@@ -1090,7 +1094,7 @@ const Tasks = () => {
             </div>
 
             {/* Panel Content - Scrollable */}
-            <div style={{flex: 1, overflowY: 'auto', padding: '28px'}}>
+            <div className="create-panel-content" style={{flex: 1, overflowY: 'auto', padding: '28px'}}>
               {formErrors.submit && (
                 <div style={{padding: '14px 18px', backgroundColor: '#fef2f2', borderRadius: '14px', marginBottom: '24px', border: '1px solid #fecaca'}}>
                   <p style={{fontSize: '13px', color: '#dc2626', margin: 0, fontWeight: '500'}}>{formErrors.submit}</p>
@@ -1151,16 +1155,11 @@ const Tasks = () => {
                         <h2 style={{fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0, marginBottom: '4px'}}>Create New Task</h2>
                         <p style={{fontSize: '14px', color: '#64748b', margin: 0}}>Assign real client work</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const icon = prompt('Enter an emoji icon:', formData.icon || '📝');
-                          if (icon) handleInputChange('icon', icon);
-                        }}
-                        style={{padding: '10px 20px', fontSize: '13px', fontWeight: '600', color: '#6366f1', backgroundColor: '#ffffff', border: '2px solid #6366f1', borderRadius: '8px', cursor: 'pointer'}}
-                      >
-                        Choose Icon
-                      </button>
+                      <IconPicker
+                        value={formData.icon}
+                        onChange={(icon) => handleInputChange('icon', icon)}
+                        defaultIcon="📝"
+                      />
                     </div>
                   </div>
 
@@ -1634,16 +1633,11 @@ const Tasks = () => {
                         <h2 style={{fontSize: '24px', fontWeight: '700', color: '#0c4a6e', margin: 0, marginBottom: '4px'}}>Create New Plan</h2>
                         <p style={{fontSize: '14px', color: '#0369a1', margin: 0}}>Create a marketplace product listing</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const icon = prompt('Enter an emoji icon:', formData.icon || '📦');
-                          if (icon) handleInputChange('icon', icon);
-                        }}
-                        style={{padding: '10px 20px', fontSize: '13px', fontWeight: '600', color: '#0369a1', backgroundColor: '#ffffff', border: '2px solid #0369a1', borderRadius: '8px', cursor: 'pointer'}}
-                      >
-                        Choose Icon
-                      </button>
+                      <IconPicker
+                        value={formData.icon}
+                        onChange={(icon) => handleInputChange('icon', icon)}
+                        defaultIcon="📦"
+                      />
                     </div>
                   </div>
 
@@ -1651,119 +1645,17 @@ const Tasks = () => {
                   <div style={{marginBottom: '28px'}}>
                     <h3 style={{fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px'}}>🖼️ MEDIA & IDENTITY</h3>
                     
-                    {/* MEDIA SYSTEM: Array of items (1-4 allowed) */}
+                    {/* MEDIA SYSTEM: Using MediaUploader component */}
                     <div style={{marginBottom: '20px'}}>
                       <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '12px'}}>
                         Plan Media <span style={{fontSize: '11px', color: '#64748b', fontWeight: '400'}}>(1-4 items)</span>
                       </label>
-                      
-                      {/* Current Media Items */}
-                      {formData.planMedia && formData.planMedia.length > 0 && (
-                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px'}}>
-                          {formData.planMedia.map((media, idx) => (
-                            <div key={idx} style={{
-                              position: 'relative',
-                              borderRadius: '12px',
-                              border: '2px solid #e2e8f0',
-                              overflow: 'hidden',
-                              backgroundColor: '#f8fafc'
-                            }}>
-                              {media.type === 'image' ? (
-                                <img 
-                                  src={media.url} 
-                                  alt={`Media ${idx + 1}`}
-                                  style={{width: '100%', height: '120px', objectFit: 'cover'}}
-                                  loading="lazy"
-                                  onError={(e) => { e.target.style.display = 'none'; }}
-                                />
-                              ) : (
-                                <div style={{
-                                  width: '100%', height: '120px', 
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  backgroundColor: '#1e293b', color: '#fff'
-                                }}>
-                                  <div style={{textAlign: 'center'}}>
-                                    <span style={{fontSize: '24px'}}>🎬</span>
-                                    <p style={{fontSize: '11px', margin: '4px 0 0', opacity: 0.8}}>Video</p>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Remove Button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = [...formData.planMedia];
-                                  updated.splice(idx, 1);
-                                  handleInputChange('planMedia', updated);
-                                }}
-                                style={{
-                                  position: 'absolute', top: '6px', right: '6px',
-                                  width: '24px', height: '24px',
-                                  borderRadius: '50%', border: 'none',
-                                  backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff',
-                                  cursor: 'pointer', fontSize: '12px', fontWeight: '700'
-                                }}
-                              >✕</button>
-                              {/* Type Badge */}
-                              <div style={{
-                                position: 'absolute', bottom: '6px', left: '6px',
-                                padding: '2px 8px', borderRadius: '4px',
-                                backgroundColor: media.type === 'image' ? '#6366f1' : '#ef4444',
-                                color: '#fff', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase'
-                              }}>{media.type}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Add Media Button (if < 4 items) */}
-                      {(!formData.planMedia || formData.planMedia.length < 4) && (
-                        <div style={{marginBottom: '12px'}}>
-                          <div style={{display: 'flex', gap: '8px'}}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const url = prompt('Enter Image URL:');
-                                if (url && url.trim()) {
-                                  const updated = [...(formData.planMedia || []), { type: 'image', url: url.trim() }];
-                                  handleInputChange('planMedia', updated);
-                                }
-                              }}
-                              style={{
-                                flex: 1, padding: '14px',
-                                fontSize: '13px', fontWeight: '600',
-                                backgroundColor: '#eff6ff', color: '#6366f1',
-                                border: '2px dashed #6366f1', borderRadius: '10px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              + Add Image URL
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const url = prompt('Enter Video URL (YouTube, Vimeo, MP4):');
-                                if (url && url.trim()) {
-                                  const updated = [...(formData.planMedia || []), { type: 'video', url: url.trim() }];
-                                  handleInputChange('planMedia', updated);
-                                }
-                              }}
-                              style={{
-                                flex: 1, padding: '14px',
-                                fontSize: '13px', fontWeight: '600',
-                                backgroundColor: '#fef2f2', color: '#ef4444',
-                                border: '2px dashed #ef4444', borderRadius: '10px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              + Add Video URL
-                            </button>
-                          </div>
-                          <p style={{fontSize: '11px', color: '#64748b', marginTop: '8px', textAlign: 'center'}}>
-                            {formData.planMedia?.length || 0}/4 media added • Any combination of images and videos allowed
-                          </p>
-                        </div>
-                      )}
+                      <MediaUploader
+                        media={formData.planMedia || []}
+                        onChange={(media) => handleInputChange('planMedia', media)}
+                        maxItems={4}
+                        allowVideo={true}
+                      />
                     </div>
 
                     {/* Plan Title */}
@@ -1779,16 +1671,27 @@ const Tasks = () => {
                       {formErrors.title && <p style={{fontSize: '12px', color: '#ef4444', marginTop: '6px', margin: 0}}>{formErrors.title}</p>}
                     </div>
 
-                    {/* Description */}
+                    {/* Description - Rich Text Editor */}
                     <div style={{marginBottom: '16px'}}>
                       <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Marketplace Description</label>
-                      <textarea
-                        value={formData.description}
-                        onChange={(e) => handleInputChange('description', e.target.value)}
-                        placeholder="Public description for the marketplace..."
-                        rows={3}
-                        style={{width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none', resize: 'vertical'}}
-                      />
+                      <div className="quill-wrapper-plan" style={{ borderRadius: '10px', overflow: 'hidden', border: '2px solid #e2e8f0' }}>
+                        <ReactQuill
+                          theme="snow"
+                          value={formData.description}
+                          onChange={(value) => handleInputChange('description', value)}
+                          placeholder="What's included? Add headings, lists, and formatting..."
+                          modules={{
+                            toolbar: [
+                              [{ 'header': [4, 5, false] }],
+                              ['bold', 'italic', 'underline'],
+                              [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                              ['clean']
+                            ]
+                          }}
+                          formats={['header', 'bold', 'italic', 'underline', 'list', 'bullet']}
+                          style={{ backgroundColor: '#fff' }}
+                        />
+                      </div>
                     </div>
 
                     {/* Category Selector */}
@@ -2496,6 +2399,57 @@ const Tasks = () => {
           background: linear-gradient(135deg, #6366f1, #4f46e5);
           cursor: pointer;
           box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+        }
+        /* RESPONSIVE: Mobile-first form styles */
+        @media (max-width: 640px) {
+          .create-panel {
+            max-width: 100% !important;
+            border-radius: 0 !important;
+          }
+          .create-panel-header {
+            padding: 20px 16px !important;
+          }
+          .create-panel-content {
+            padding: 16px !important;
+          }
+          .form-section-header {
+            font-size: 12px !important;
+          }
+          .form-input {
+            min-height: 44px;
+            font-size: 16px !important; /* Prevents iOS zoom */
+          }
+          .form-row-2col {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        /* Quill Editor Styling for PLAN mode */
+        .quill-wrapper-plan .ql-toolbar {
+          border: none !important;
+          border-bottom: 1px solid #e2e8f0 !important;
+          background: #f8fafc !important;
+          border-radius: 10px 10px 0 0 !important;
+          padding: 10px 12px !important;
+        }
+        .quill-wrapper-plan .ql-container {
+          border: none !important;
+          font-family: inherit !important;
+          font-size: 15px !important;
+        }
+        .quill-wrapper-plan .ql-editor {
+          min-height: 120px !important;
+          padding: 14px 16px !important;
+        }
+        .quill-wrapper-plan .ql-editor.ql-blank::before {
+          color: #94a3b8 !important;
+          font-style: normal !important;
+          left: 16px !important;
+        }
+        .quill-wrapper-plan .ql-snow .ql-picker {
+          font-size: 14px !important;
+        }
+        .quill-wrapper-plan .ql-toolbar .ql-formats {
+          margin-right: 12px !important;
         }
       `}</style>
     </div>
