@@ -642,6 +642,32 @@ router.patch('/tasks/:taskId', async (req, res) => {
       }
     }
 
+    // --- Milestone Reached Notification (Client only) ---
+    if (task.clientId && task.milestones && task.milestones.length > 0) {
+      const newProgress = task.progress || 0;
+      for (const milestone of task.milestones) {
+        const crossed = oldProgress < milestone.percentage && newProgress >= milestone.percentage;
+        if (crossed && milestone.name) {
+          console.log(`[MILESTONE] Task ${taskId} reached milestone "${milestone.name}" at ${milestone.percentage}%`);
+          try {
+            await createNotification({
+              recipientId: task.clientId,
+              type: 'MILESTONE_REACHED',
+              title: 'Milestone Reached',
+              message: `Your task "${task.title}" reached milestone: ${milestone.name} (${milestone.percentage}%)`,
+              relatedEntity: {
+                entityType: ENTITY_TYPES.TASK,
+                entityId: task._id,
+              },
+              notifyByEmail: false,
+            });
+          } catch (notifErr) {
+            console.error('[MILESTONE] Failed to notify client:', notifErr.message);
+          }
+        }
+      }
+    }
+
     return res.status(200).json({ success: true, task });
   } catch (err) {
     return res.status(500).json({ error: `UPDATE ERROR: ${err.message}` });
@@ -732,6 +758,32 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
         }
       } catch (notifErr) {
         console.error('[TASK_COMPLETE] Failed to notify admin:', notifErr.message);
+      }
+    }
+
+    // --- Milestone Reached Notification (Status Route - Client only) ---
+    if (task.clientId && task.milestones && task.milestones.length > 0) {
+      const newProgress = task.progress || 0;
+      for (const milestone of task.milestones) {
+        const crossed = oldProgress < milestone.percentage && newProgress >= milestone.percentage;
+        if (crossed && milestone.name) {
+          console.log(`[MILESTONE] Task ${taskId} reached milestone "${milestone.name}" at ${milestone.percentage}%`);
+          try {
+            await createNotification({
+              recipientId: task.clientId,
+              type: 'MILESTONE_REACHED',
+              title: 'Milestone Reached',
+              message: `Your task "${task.title}" reached milestone: ${milestone.name} (${milestone.percentage}%)`,
+              relatedEntity: {
+                entityType: ENTITY_TYPES.TASK,
+                entityId: task._id,
+              },
+              notifyByEmail: false,
+            });
+          } catch (notifErr) {
+            console.error('[MILESTONE] Failed to notify client:', notifErr.message);
+          }
+        }
       }
     }
 
