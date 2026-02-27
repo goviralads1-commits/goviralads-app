@@ -430,6 +430,8 @@ router.get('/tasks', async (req, res) => {
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
         // PLAN SYSTEM EXTENSIONS
+        icon: t.icon,
+        planId: t.planId ? t.planId.toString() : null,
         quantity: t.quantity,
         showQuantityToClient: t.showQuantityToClient,
         showCreditsToClient: t.showCreditsToClient,
@@ -439,6 +441,9 @@ router.get('/tasks', async (req, res) => {
         offerPrice: t.offerPrice,
         originalPrice: t.originalPrice,
         countdownEndDate: t.countdownEndDate,
+        milestones: t.milestones,
+        autoCompletionCap: t.autoCompletionCap,
+        progressTarget: t.progressTarget,
       })),
     });
   } catch (err) {

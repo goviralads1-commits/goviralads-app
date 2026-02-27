@@ -35,6 +35,25 @@ const Dashboard = () => {
     expiresAt: '',
   });
 
+  const [rejectingOrderId, setRejectingOrderId] = useState(null);
+  const [rejectLoading, setRejectLoading] = useState(false);
+
+  const handleRejectOrder = async (orderId) => {
+    if (!confirm('Are you sure you want to reject this order? The client will be refunded.')) return;
+    
+    setRejectLoading(true);
+    try {
+      await api.post(`/admin/tasks/${orderId}/reject`, { reason: 'Rejected by admin from dashboard' });
+      showToast('success', 'Order rejected and wallet refunded');
+      fetchData();
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to reject order');
+    } finally {
+      setRejectLoading(false);
+      setRejectingOrderId(null);
+    }
+  };
+
   // Banner data - matches client
   const banners = [
     { id: 1, title: 'Premium Services', subtitle: 'Get started with our top plans', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
@@ -406,6 +425,88 @@ const Dashboard = () => {
             <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Total Credits</p>
           </div>
         </div>
+
+        {/* PENDING PLAN ORDERS PANEL */}
+        {(() => {
+          const pendingPlanOrders = tasks.filter(t => 
+            t.status === 'PENDING_APPROVAL' && 
+            !t.isListedInPlans && 
+            t.planId
+          );
+          
+          if (pendingPlanOrders.length === 0) return null;
+          
+          return (
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2L2 7v8a2 2 0 002 2h10a2 2 0 002-2V7l-7-5z"/><path d="M9 22V12"/></svg>
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Plan Orders</h3>
+                <span style={{ backgroundColor: '#eef2ff', color: '#6366f1', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{pendingPlanOrders.length} awaiting review</span>
+              </div>
+              <div style={{ backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #e0e7ff', overflow: 'hidden', boxShadow: '0 4px 16px rgba(99,102,241,0.08)' }}>
+                {/* Table Header */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 180px', gap: '12px', padding: '14px 20px', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9', fontWeight: '600', fontSize: '12px', color: '#64748b', textTransform: 'uppercase' }}>
+                  <span>Client</span>
+                  <span>Plan</span>
+                  <span>Purchase Date</span>
+                  <span>Price</span>
+                  <span style={{ textAlign: 'center' }}>Actions</span>
+                </div>
+                {/* Table Rows */}
+                {pendingPlanOrders.map((order, idx) => (
+                  <div
+                    key={order.id}
+                    style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 180px', gap: '12px', padding: '16px 20px', borderBottom: idx < pendingPlanOrders.length - 1 ? '1px solid #f1f5f9' : 'none', alignItems: 'center', transition: 'background 0.2s' }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fafaff'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    {/* Client Name */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700', color: '#6366f1' }}>
+                        {(order.clientIdentifier || 'C')[0].toUpperCase()}
+                      </div>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>{order.clientIdentifier || `Client #${order.clientId?.slice(-6)}`}</span>
+                    </div>
+                    {/* Plan Title */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '18px' }}>{order.icon || '📦'}</span>
+                      <span style={{ fontSize: '14px', color: '#374151', fontWeight: '500' }}>{order.title}</span>
+                    </div>
+                    {/* Purchase Date */}
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    {/* Price */}
+                    <span style={{ fontSize: '15px', fontWeight: '700', color: '#22c55e' }}>₹{order.creditCost}</span>
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => navigate('/tasks')}
+                        style={{ padding: '7px 12px', backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        title="Review & Approve"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectOrder(order.id)}
+                        disabled={rejectLoading}
+                        style={{ padding: '7px 12px', backgroundColor: rejectLoading ? '#94a3b8' : '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: rejectLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        title="Reject & Refund"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '10px', textAlign: 'center' }}>
+                Approve to review task details • Reject will refund wallet
+              </p>
+            </div>
+          );
+        })()}
 
         {/* URGENT WORK PANEL */}
         {urgentTasks.length > 0 && (
