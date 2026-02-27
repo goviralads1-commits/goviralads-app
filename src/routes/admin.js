@@ -1137,6 +1137,65 @@ router.post('/tasks/:taskId/reject', async (req, res) => {
   }
 });
 
+// DELETE /admin/plans/:planId - Safe delete a plan
+router.delete('/plans/:planId', async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    const plan = await Task.findById(planId).exec();
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    // Must be a Plan (isListedInPlans: true)
+    if (!plan.isListedInPlans) {
+      return res.status(400).json({ error: 'This is not a plan. Only plans can be deleted from here.' });
+    }
+
+    // Count tasks that reference this plan (purchased tasks)
+    const referencingTasksCount = await Task.countDocuments({
+      planId: planId,
+      isListedInPlans: false
+    }).exec();
+
+    if (referencingTasksCount > 0) {
+      // Soft delete: Archive the plan
+      plan.visibility = 'HIDDEN';
+      plan.isActivePlan = false;
+      await plan.save();
+
+      return res.status(200).json({
+        success: true,
+        action: 'archived',
+        message: `Plan archived due to ${referencingTasksCount} existing task(s). Clients can no longer see or purchase this plan.`,
+        plan: {
+          id: plan._id.toString(),
+          title: plan.title,
+          visibility: plan.visibility,
+          isActivePlan: plan.isActivePlan
+        }
+      });
+    }
+
+    // Hard delete: No tasks reference this plan
+    await Task.findByIdAndDelete(planId).exec();
+
+    return res.status(200).json({
+      success: true,
+      action: 'deleted',
+      message: 'Plan permanently deleted.',
+      plan: {
+        id: planId,
+        title: plan.title
+      }
+    });
+  } catch (err) {
+    console.error('Failed to delete plan:', err.message);
+    return res.status(500).json({ error: 'Failed to delete plan' });
+  }
+});
+
 // GET /admin/plans - Return all Product Listings (isListedInPlans: true)
 router.get('/plans', async (req, res) => {
   console.log('[FORENSIC] ===== GET /admin/plans CALLED =====');

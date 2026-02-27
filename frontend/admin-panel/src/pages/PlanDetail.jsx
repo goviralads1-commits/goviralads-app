@@ -17,6 +17,9 @@ const PlanDetail = () => {
   const [toast, setToast] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [mediaChanged, setMediaChanged] = useState(false); // Track if media was intentionally modified
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState(null); // { action: 'archived'|'deleted', message: string }
 
   const [formData, setFormData] = useState({
     title: '',
@@ -197,6 +200,36 @@ const PlanDetail = () => {
     }
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const response = await api.delete(`/admin/plans/${planId}`);
+      const { action, message } = response.data;
+      
+      setDeleteResult({ action, message });
+      
+      // If deleted, redirect after showing message
+      if (action === 'deleted') {
+        setTimeout(() => {
+          navigate('/plans');
+        }, 2000);
+      } else {
+        // If archived, refresh data to show new status
+        setShowDeleteModal(false);
+        fetchData();
+        setToast({ type: 'success', message });
+        setTimeout(() => setToast(null), 4000);
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to delete plan' });
+      setTimeout(() => setToast(null), 4000);
+      setShowDeleteModal(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getVideoEmbedUrl = (url) => {
     if (!url) return null;
     const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
@@ -266,10 +299,19 @@ const PlanDetail = () => {
             Back
           </button>
           
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', padding: '8px 18px', backgroundColor: plan?.isActivePlan ? '#e8f5e9' : '#f8f9fa', color: plan?.isActivePlan ? '#2e7d32' : '#6c757d', borderRadius: '12px', fontSize: '13px', fontWeight: '700' }}>
               {plan?.isActivePlan ? 'LIVE' : 'DRAFT'}
             </span>
+            <button 
+              onClick={() => setShowDeleteModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Delete
+            </button>
           </div>
         </div>
 
@@ -510,6 +552,75 @@ const PlanDetail = () => {
           </div>
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <>
+          <div 
+            onClick={() => !deleting && !deleteResult && setShowDeleteModal(false)}
+            style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 100 }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            backgroundColor: '#fff', borderRadius: '20px', padding: '32px', width: '90%', maxWidth: '420px',
+            zIndex: 110, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+          }}>
+            {deleteResult ? (
+              // Result view
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: deleteResult.action === 'deleted' ? '#dcfce7' : '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '28px' }}>
+                  {deleteResult.action === 'deleted' ? '✅' : '📦'}
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>
+                  {deleteResult.action === 'deleted' ? 'Plan Deleted' : 'Plan Archived'}
+                </h3>
+                <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px', lineHeight: 1.6 }}>
+                  {deleteResult.message}
+                </p>
+                {deleteResult.action === 'deleted' ? (
+                  <p style={{ fontSize: '13px', color: '#94a3b8' }}>Redirecting to plans...</p>
+                ) : (
+                  <button 
+                    onClick={() => { setShowDeleteModal(false); setDeleteResult(null); }}
+                    style={{ padding: '12px 24px', backgroundColor: '#6366f1', color: '#fff', borderRadius: '12px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
+            ) : (
+              // Confirmation view
+              <>
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '28px' }}>
+                    🗑️
+                  </div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Delete Plan?</h3>
+                  <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6 }}>
+                    If this plan has been purchased by clients, it will be <strong>archived</strong> (hidden) instead of deleted. Existing tasks will not be affected.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button 
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    style={{ flex: 1, padding: '14px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '12px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    style={{ flex: 1, padding: '14px', backgroundColor: '#dc2626', color: '#fff', borderRadius: '12px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: deleting ? 'not-allowed' : 'pointer' }}
+                  >
+                    {deleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
       
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
