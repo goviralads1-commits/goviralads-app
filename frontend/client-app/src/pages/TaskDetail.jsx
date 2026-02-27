@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import ProgressWithFlag from '../components/ProgressWithFlag';
 
 const TaskDetail = () => {
   const { taskId } = useParams();
@@ -372,86 +373,13 @@ const TaskDetail = () => {
               </p>
             </div>
           ) : (
-            <>
-              {/* Progress Header - Only percentage on right */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {isOverachieving && (
-                    <span style={{ 
-                      fontSize: '11px', fontWeight: '800', color: '#10b981', 
-                      textTransform: 'uppercase', letterSpacing: '0.05em',
-                      backgroundColor: '#dcfce7', padding: '4px 8px', borderRadius: '6px'
-                    }}>
-                      Overachieving
-                    </span>
-                  )}
-                  <span style={{ fontSize: '36px', fontWeight: '700', color: progressColor }}>{Math.round(progress)}%</span>
-                  {isOverachieving && <span style={{ fontSize: '24px' }}>🎉</span>}
-                </div>
-              </div>
-
-              {/* Progress Bar - Single Moving Indicator */}
-              <div style={{ position: 'relative', width: '100%', overflow: 'visible', marginBottom: '24px', paddingTop: '20px' }}>
-                {/* Track */}
-                <div style={{
-                  width: '100%', height: '6px', backgroundColor: '#f0f0f0', borderRadius: '999px', 
-                  position: 'relative'
-                }}>
-                  {/* Fill */}
-                  <div style={{
-                    width: `${Math.min(progress, 100)}%`, height: '100%', 
-                    background: `linear-gradient(90deg, #6366f1 0%, ${progressColor} 100%)`,
-                    borderRadius: '999px', transition: 'width 0.6s ease',
-                    boxShadow: progress > 0 ? `0 0 8px ${progressColor}40` : 'none'
-                  }} />
-                  
-                  {/* Single Moving Indicator - positioned at progress % */}
-                  <div style={{
-                    position: 'absolute',
-                    left: `${Math.min(Math.max(progress, 0), 100)}%`,
-                    top: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    transition: 'left 0.6s ease',
-                    zIndex: 10
-                  }}>
-                    <div style={{
-                      width: '22px', height: '22px', borderRadius: '50%',
-                      backgroundColor: activeMilestone ? '#22c55e' : progressColor,
-                      border: '3px solid #fff',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <span style={{ fontSize: '10px' }}>🚩</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Current Milestone Label - Single clean display */}
-              <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-                <p style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '500', 
-                  color: activeMilestone ? (activeMilestone.color || '#1a1a1a') : '#f59e0b', 
-                  margin: 0 
-                }}>
-                  {activeMilestone ? `🚩 ${activeMilestone.name}` : 'Scheduled'}
-                </p>
-              </div>
-
-              {/* Overachieving Message */}
-              {isOverachieving && (
-                <div style={{ 
-                  marginTop: '16px', padding: '12px 16px', 
-                  backgroundColor: '#dcfce7', borderRadius: '12px', 
-                  textAlign: 'center' 
-                }}>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#15803d', margin: 0 }}>
-                    🎉 Overachieving! You're doing amazing work!
-                  </p>
-                </div>
-              )}
-            </>
+            <ProgressWithFlag 
+              progress={progress} 
+              milestones={milestones} 
+              size="default"
+              showLabel={true}
+              showPercentage={true}
+            />
           )}
         </div>
 

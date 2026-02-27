@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import ProgressWithFlag from '../components/ProgressWithFlag';
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -281,75 +282,14 @@ const Tasks = () => {
                 {/* SMART PROGRESS SYSTEM */}
                 {!isPendingApproval ? (
                   <div style={{ marginBottom: '12px' }}>
-                  {/* Progress Header - Clean client view (no internal mode labels) */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {/* Show current milestone name if exists, otherwise show simple "Progress" label */}
-                      {activeMilestone ? (
-                        <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 8px', borderRadius: '4px', backgroundColor: `${activeMilestone.color}15`, color: activeMilestone.color }}>
-                          🚩 {activeMilestone.name}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Progress</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {isOverachieving && (
-                        <span style={{ 
-                          fontSize: '10px', fontWeight: '800', color: '#10b981', 
-                          textTransform: 'uppercase', letterSpacing: '0.04em',
-                          backgroundColor: '#dcfce7', padding: '2px 6px', borderRadius: '4px'
-                        }}>
-                          Overachieving
-                        </span>
-                      )}
-                      <span style={{ fontSize: '16px', fontWeight: '700', color: progressColor }}>{Math.round(progress)}%</span>
-                      {isOverachieving && <span style={{ fontSize: '16px' }}>🎉</span>}
-                    </div>
+                    <ProgressWithFlag 
+                      progress={progress} 
+                      milestones={task.milestones || []} 
+                      size="compact"
+                      showLabel={true}
+                      showPercentage={true}
+                    />
                   </div>
-                  
-                  {/* Progress Bar */}
-                  <div style={{
-                    width: '100%', height: '8px', backgroundColor: '#f0f0f0', borderRadius: '4px', overflow: 'visible', position: 'relative'
-                  }}>
-                    <div style={{
-                      width: `${Math.min(progress, 100)}%`, height: '100%', backgroundColor: progressColor,
-                      borderRadius: '4px', transition: 'all 0.5s ease',
-                      boxShadow: progress > 0 ? `0 0 8px ${progressColor}40` : 'none'
-                    }} />
-                    {isOverachieving && (
-                      <div style={{
-                        position: 'absolute', right: '-4px', top: '50%', transform: 'translateY(-50%)',
-                        width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#22c55e',
-                        border: '2px solid #fff', boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
-                      }} />
-                    )}
-                  </div>
-
-                  {/* Milestone Chips - Always show if milestones exist */}
-                  {task.milestones && task.milestones.length > 0 && (
-                    <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {task.milestones
-                        .sort((a, b) => a.percentage - b.percentage)
-                        .map((m, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 20,
-                              fontSize: 12,
-                              background: m.reached ? (m.color || '#16a34a') : '#e5e7eb',
-                              color: m.reached ? '#fff' : '#374151',
-                              fontWeight: 500
-                            }}
-                          >
-                            {m.name} ({m.percentage}%)
-                          </div>
-                        ))
-                      }
-                    </div>
-                  )}
-                </div>
                 ) : (
                   <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#eff6ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
                     <p style={{ fontSize: '13px', color: '#1e40af', margin: 0, fontWeight: '500' }}>

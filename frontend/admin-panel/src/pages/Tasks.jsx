@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import IconPicker from '../components/IconPicker';
+import ProgressWithFlag from '../components/ProgressWithFlag';
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -806,19 +807,13 @@ const Tasks = () => {
 
                 {/* Row 4: Progress */}
                 <div style={{marginBottom: '16px'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-                    <span style={{fontSize: '11px', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Progress</span>
-                    <span style={{fontSize: '13px', fontWeight: '700', color: '#111827'}}>{task.progress || 0}%</span>
-                  </div>
-                  <div style={{width: '100%', height: '6px', backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: '9999px', overflow: 'hidden'}}>
-                    <div style={{
-                      width: `${Math.min(task.progress || 0, 100)}%`,
-                      height: '100%',
-                      backgroundColor: isOverdue ? '#ef4444' : task.status === 'COMPLETED' ? '#22c55e' : '#6366f1',
-                      borderRadius: '9999px',
-                      transition: 'width 0.5s ease'
-                    }}></div>
-                  </div>
+                  <ProgressWithFlag 
+                    progress={task.progress || 0} 
+                    milestones={task.milestones || []} 
+                    size="compact"
+                    showLabel={true}
+                    showPercentage={true}
+                  />
                 </div>
 
                 {/* Row 5: Price + Priority */}
