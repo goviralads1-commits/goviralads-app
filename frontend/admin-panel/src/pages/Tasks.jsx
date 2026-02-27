@@ -40,6 +40,9 @@ const Tasks = () => {
     specialInstructions: ''
   });
   const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -323,6 +326,32 @@ const Tasks = () => {
       setTimeout(() => setToast(null), 4000);
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleRejectTask = async () => {
+    setRejecting(true);
+    try {
+      const taskId = approvalModal.task.id || approvalModal.task._id;
+      
+      await api.post(`/admin/tasks/${taskId}/reject`, { reason: rejectReason });
+      
+      setToast('Task rejected and wallet refunded');
+      setApprovalModal({ open: false, task: null });
+      setShowRejectConfirm(false);
+      setRejectReason('');
+      
+      // Refresh tasks
+      const tasksResponse = await api.get('/admin/tasks');
+      setTasks(tasksResponse.data.tasks || []);
+      
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      console.error('Rejection error:', err.response?.data || err.message);
+      setToast(err.response?.data?.error || 'Failed to reject task');
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -1908,7 +1937,7 @@ const Tasks = () => {
       {approvalModal.open && approvalModal.task && (
         <>
           <div 
-            onClick={() => !approving && setApprovalModal({ open: false, task: null })}
+            onClick={() => { if (!approving && !rejecting) { setApprovalModal({ open: false, task: null }); setShowRejectConfirm(false); setRejectReason(''); }}}
             style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', zIndex: 100 }}
           />
           <div style={{
@@ -1923,7 +1952,7 @@ const Tasks = () => {
                 <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Review & Approve Task</h2>
                 <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>Configure the real task details before starting</p>
               </div>
-              <button onClick={() => setApprovalModal({ open: false, task: null })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+              <button onClick={() => { setApprovalModal({ open: false, task: null }); setShowRejectConfirm(false); setRejectReason(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
             </div>
@@ -2100,20 +2129,57 @@ const Tasks = () => {
             </div>
 
             {/* Footer Actions */}
-            <div style={{ padding: '24px 32px', borderTop: '1px solid #f1f5f9', backgroundColor: '#fff', display: 'flex', gap: '16px', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={handleApproveTask}
-                disabled={approving}
-                style={{ 
-                  padding: '12px 32px', backgroundColor: '#6366f1', color: '#fff', borderRadius: '12px', border: 'none', 
-                  fontWeight: '700', cursor: approving ? 'not-allowed' : 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.4)',
-                  flex: 1, maxWidth: '300px'
-                }}
-              >
-                {approving ? 'Starting Task...' : 'Approve & Start Task'}
-              </button>
-              <button disabled style={{ padding: '12px 24px', backgroundColor: '#f1f5f9', color: '#94a3b8', borderRadius: '12px', border: 'none', fontWeight: '600', cursor: 'not-allowed' }}>Hold</button>
-              <button disabled style={{ padding: '12px 24px', backgroundColor: '#f1f5f9', color: '#94a3b8', borderRadius: '12px', border: 'none', fontWeight: '600', cursor: 'not-allowed' }}>Reject</button>
+            <div style={{ padding: '24px 32px', borderTop: '1px solid #f1f5f9', backgroundColor: '#fff' }}>
+              {showRejectConfirm ? (
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#dc2626', marginBottom: '12px' }}>
+                    Are you sure you want to reject this task? The client will be refunded ₹{approvalModal.task?.creditsUsed || approvalModal.task?.creditCost || 0}.
+                  </p>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Reason for rejection (optional but recommended)..."
+                    rows={2}
+                    style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #fecaca', marginBottom: '16px', resize: 'none' }}
+                  />
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <button 
+                      onClick={() => { setShowRejectConfirm(false); setRejectReason(''); }}
+                      disabled={rejecting}
+                      style={{ padding: '10px 20px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '10px', border: 'none', fontWeight: '600', cursor: 'pointer' }}
+                    >Cancel</button>
+                    <button 
+                      onClick={handleRejectTask}
+                      disabled={rejecting}
+                      style={{ padding: '10px 20px', backgroundColor: '#dc2626', color: '#fff', borderRadius: '10px', border: 'none', fontWeight: '600', cursor: rejecting ? 'not-allowed' : 'pointer' }}
+                    >
+                      {rejecting ? 'Rejecting...' : 'Confirm Reject & Refund'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end' }}>
+                  <button 
+                    onClick={handleApproveTask}
+                    disabled={approving || rejecting}
+                    style={{ 
+                      padding: '12px 32px', backgroundColor: '#6366f1', color: '#fff', borderRadius: '12px', border: 'none', 
+                      fontWeight: '700', cursor: approving ? 'not-allowed' : 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.4)',
+                      flex: 1, maxWidth: '300px'
+                    }}
+                  >
+                    {approving ? 'Starting Task...' : 'Approve & Start Task'}
+                  </button>
+                  <button 
+                    onClick={() => setShowRejectConfirm(true)}
+                    disabled={approving || rejecting}
+                    style={{ 
+                      padding: '12px 24px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '12px', 
+                      border: '1px solid #fecaca', fontWeight: '600', cursor: 'pointer'
+                    }}
+                  >Reject</button>
+                </div>
+              )}
             </div>
           </div>
         </>

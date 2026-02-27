@@ -1056,6 +1056,87 @@ router.patch('/tasks/:taskId/approve', async (req, res) => {
   }
 });
 
+// POST /admin/tasks/:taskId/reject - Reject a booked task and refund wallet
+router.post('/tasks/:taskId/reject', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { reason } = req.body || {};
+
+    const task = await Task.findById(taskId).exec();
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (task.status !== TASK_STATUS.PENDING_APPROVAL) {
+      return res.status(400).json({ error: 'Only tasks pending approval can be rejected' });
+    }
+
+    // Calculate refund amount (what client paid)
+    const refundAmount = task.creditsUsed || task.creditCost || 0;
+
+    // Refund wallet if any amount was charged
+    if (refundAmount > 0 && task.clientId) {
+      const Wallet = require('../models/Wallet');
+      const WalletTransaction = require('../models/WalletTransaction');
+      
+      const wallet = await Wallet.findOne({ clientId: task.clientId }).exec();
+      if (wallet) {
+        // Credit refund
+        wallet.balance += refundAmount;
+        await wallet.save();
+
+        // Log transaction
+        await WalletTransaction.create({
+          walletId: wallet._id,
+          clientId: task.clientId,
+          type: 'CREDIT',
+          amount: refundAmount,
+          description: `Refund for rejected task: ${task.title}`,
+          reference: `REFUND-TASK-${task._id}`,
+          balanceAfter: wallet.balance
+        });
+      }
+    }
+
+    // Update task status
+    task.status = TASK_STATUS.CANCELLED;
+    task.rejectionReason = reason || 'Task rejected by admin';
+    await task.save();
+
+    // Notify Client
+    try {
+      await createNotification({
+        recipientId: task.clientId,
+        type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
+        title: 'Task Rejected',
+        message: `Your task "${task.title}" has been rejected. ${refundAmount > 0 ? `₹${refundAmount} has been refunded to your wallet.` : ''} ${reason ? `Reason: ${reason}` : ''}`,
+        relatedEntity: {
+          entityType: ENTITY_TYPES.TASK,
+          entityId: task._id,
+        },
+        notifyByEmail: true,
+      });
+    } catch (err) {
+      console.error('Failed to notify client of task rejection:', err.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Task rejected and wallet refunded',
+      refundAmount,
+      task: {
+        id: task._id.toString(),
+        title: task.title,
+        status: task.status,
+      },
+    });
+  } catch (err) {
+    console.error('Failed to reject task:', err.message);
+    return res.status(500).json({ error: 'Failed to reject task' });
+  }
+});
+
 // GET /admin/plans - Return all Product Listings (isListedInPlans: true)
 router.get('/plans', async (req, res) => {
   console.log('[FORENSIC] ===== GET /admin/plans CALLED =====');
