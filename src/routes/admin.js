@@ -533,6 +533,10 @@ router.patch('/tasks/:taskId', async (req, res) => {
       return res.status(404).json({ error: 'TASK NOT FOUND: Cannot update a non-existent task.' });
     }
 
+    // Track old values for completion notification
+    const oldProgress = task.progress || 0;
+    const oldStatus = task.status;
+
     // Track if progress-related fields are being updated
     const progressFieldsUpdated = (
       updates.progress !== undefined ||
@@ -592,6 +596,52 @@ router.patch('/tasks/:taskId', async (req, res) => {
 
     await task.save();
 
+    // --- Task Completion Notification ---
+    const newProgress = task.progress || 0;
+    const newStatus = task.status;
+    const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
+    
+    if (crossedCompletion && task.clientId) {
+      console.log(`[TASK_COMPLETE] Task ${taskId} completed - notifying client and admin`);
+      
+      // Notify Client
+      try {
+        await createNotification({
+          recipientId: task.clientId,
+          type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
+          title: 'Task Completed',
+          message: `Your task "${task.title}" has been completed!`,
+          relatedEntity: {
+            entityType: ENTITY_TYPES.TASK,
+            entityId: task._id,
+          },
+          notifyByEmail: true,
+        });
+      } catch (notifErr) {
+        console.error('[TASK_COMPLETE] Failed to notify client:', notifErr.message);
+      }
+      
+      // Notify Admin
+      try {
+        const { mainAdminIdentifier } = require('../config');
+        const adminUser = await User.findOne({ identifier: mainAdminIdentifier }).exec();
+        if (adminUser) {
+          await createNotification({
+            recipientId: adminUser._id,
+            type: 'TASK_COMPLETED',
+            title: 'Task Completed',
+            message: `Task "${task.title}" has been completed.`,
+            relatedEntity: {
+              entityType: ENTITY_TYPES.TASK,
+              entityId: task._id,
+            },
+          });
+        }
+      } catch (notifErr) {
+        console.error('[TASK_COMPLETE] Failed to notify admin:', notifErr.message);
+      }
+    }
+
     return res.status(200).json({ success: true, task });
   } catch (err) {
     return res.status(500).json({ error: `UPDATE ERROR: ${err.message}` });
@@ -612,6 +662,10 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     if (!task) {
       return res.status(404).json({ error: 'TASK NOT FOUND' });
     }
+
+    // Track old values for completion notification
+    const oldProgress = task.progress || 0;
+    const oldStatus = task.status;
 
     task.status = status;
     if (progress !== undefined) {
@@ -634,6 +688,52 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     }
 
     await task.save();
+
+    // --- Task Completion Notification (Status Route) ---
+    const newProgress = task.progress || 0;
+    const newStatus = task.status;
+    const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
+    
+    if (crossedCompletion && task.clientId) {
+      console.log(`[TASK_COMPLETE] Task ${taskId} completed via status change - notifying client and admin`);
+      
+      // Notify Client
+      try {
+        await createNotification({
+          recipientId: task.clientId,
+          type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
+          title: 'Task Completed',
+          message: `Your task "${task.title}" has been completed!`,
+          relatedEntity: {
+            entityType: ENTITY_TYPES.TASK,
+            entityId: task._id,
+          },
+          notifyByEmail: true,
+        });
+      } catch (notifErr) {
+        console.error('[TASK_COMPLETE] Failed to notify client:', notifErr.message);
+      }
+      
+      // Notify Admin
+      try {
+        const { mainAdminIdentifier } = require('../config');
+        const adminUser = await User.findOne({ identifier: mainAdminIdentifier }).exec();
+        if (adminUser) {
+          await createNotification({
+            recipientId: adminUser._id,
+            type: 'TASK_COMPLETED',
+            title: 'Task Completed',
+            message: `Task "${task.title}" has been completed.`,
+            relatedEntity: {
+              entityType: ENTITY_TYPES.TASK,
+              entityId: task._id,
+            },
+          });
+        }
+      } catch (notifErr) {
+        console.error('[TASK_COMPLETE] Failed to notify admin:', notifErr.message);
+      }
+    }
 
     return res.status(200).json({ success: true, status: task.status, progress: task.progress, milestones: task.milestones });
   } catch (err) {
