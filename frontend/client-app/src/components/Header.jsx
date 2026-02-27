@@ -21,8 +21,9 @@ const Header = ({ title }) => {
   const bellButtonRef = useRef(null);
   
   // Notification sound refs
-  const prevUnreadCountRef = useRef(0);
+  const prevUnreadCountRef = useRef(null); // null = first load, not yet initialized
   const lastSoundPlayedRef = useRef(0);
+  const lastPlayedNotificationIdRef = useRef(null); // Track last notification that triggered sound
 
   // Play notification sound (soft beep using Web Audio API)
   const playNotificationSound = useCallback(() => {
@@ -79,9 +80,16 @@ const Header = ({ title }) => {
       setNotifications(notifs.slice(0, 10));
       const newUnreadCount = notifs.filter(n => !n.isRead).length;
       
-      // Play sound if new unread notifications arrived
-      if (newUnreadCount > prevUnreadCountRef.current && prevUnreadCountRef.current >= 0) {
+      // Play sound ONLY when a truly NEW notification arrives
+      const latestNotification = notifs.find(n => !n.isRead); // First unread
+      if (
+        prevUnreadCountRef.current !== null && // Not first load
+        newUnreadCount > prevUnreadCountRef.current && // Count increased
+        latestNotification && // Has unread notification
+        latestNotification.id !== lastPlayedNotificationIdRef.current // Not already played for this one
+      ) {
         playNotificationSound();
+        lastPlayedNotificationIdRef.current = latestNotification.id;
       }
       prevUnreadCountRef.current = newUnreadCount;
       
