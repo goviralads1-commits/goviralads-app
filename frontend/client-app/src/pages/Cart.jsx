@@ -38,17 +38,24 @@ const Cart = () => {
     setPurchasing(true);
 
     try {
-      // Use batch purchase endpoint
-      const planIds = cartItems.map(item => item.id);
-      const response = await api.post('/client/purchase-cart', { planIds });
+      // Send items with quantities for the new Order system
+      const items = cartItems.map(item => ({
+        planId: item.id,
+        quantity: item.quantity || 1
+      }));
+      const response = await api.post('/client/purchase-cart', { items });
 
       setShowConfirmModal(false);
       setPurchasing(false);
       clearCart();
 
+      // Handle new Order response
+      const orderInfo = response.data.order;
       setToast({ 
         type: 'success', 
-        message: `${response.data.tasks.length} plan(s) purchased successfully!` 
+        message: orderInfo 
+          ? `Order ${orderInfo.orderId} placed successfully! Awaiting approval.`
+          : `${response.data.tasks?.length || cartItems.length} plan(s) purchased successfully!` 
       });
 
       // Update wallet balance display
@@ -56,15 +63,16 @@ const Cart = () => {
 
       setTimeout(() => {
         setToast(null);
-        navigate('/tasks');
-      }, 2000);
+        // Navigate to orders page (when available) or dashboard
+        navigate('/dashboard');
+      }, 2500);
     } catch (err) {
       setShowConfirmModal(false);
       setPurchasing(false);
 
       setToast({ 
         type: 'error', 
-        message: err.response?.data?.error || 'Failed to purchase cart'
+        message: err.response?.data?.error || 'Failed to place order'
       });
       setTimeout(() => setToast(null), 5000);
     }
@@ -271,10 +279,10 @@ const Cart = () => {
             maxWidth: '440px', width: '100%', maxHeight: '80vh', overflowY: 'auto'
           }}>
             <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 8px 0', textAlign: 'center' }}>
-              Confirm Purchase
+              Confirm Order
             </h2>
             <p style={{ fontSize: '14px', color: '#6c757d', margin: '0 0 24px 0', textAlign: 'center' }}>
-              Are you sure you want to purchase these plans?
+              Place your order for these plans?
             </p>
 
             {/* Items List */}
@@ -292,7 +300,7 @@ const Cart = () => {
             </div>
 
             <p style={{ fontSize: '13px', color: '#6c757d', textAlign: 'center', marginBottom: '24px' }}>
-              Credits will be deducted from your wallet immediately
+              Credits will be deducted immediately. Order will be reviewed by admin.
             </p>
 
             <div style={{ display: 'flex', gap: '12px' }}>
@@ -326,7 +334,7 @@ const Cart = () => {
                     Processing...
                   </>
                 ) : (
-                  'Confirm Purchase'
+                  'Place Order'
                 )}
               </button>
             </div>

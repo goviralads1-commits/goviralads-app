@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Wallet = require('../models/Wallet');
 const { WalletTransaction, TRANSACTION_TYPES } = require('../models/WalletTransaction');
 const { RechargeRequest, RECHARGE_STATUS } = require('../models/RechargeRequest');
@@ -7,6 +8,7 @@ const { Category } = require('../models/Category');
 const TaskTemplate = require('../models/TaskTemplate');
 const Subscription = require('../models/Subscription');
 const Notice = require('../models/Notice');
+const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
 const User = require('../models/User');
 const OfficeConfig = require('../models/OfficeConfig');
 const { hashPassword, verifyPassword } = require('../services/passwordService');
@@ -2162,27 +2164,47 @@ router.get('/office-config', async (req, res) => {
   }
 });
 
-// POST /client/purchase-cart - Batch purchase multiple plans
+// POST /client/purchase-cart - Create order from cart (Phase 1: Order System)
+// FEATURES: Atomic MongoDB Transaction + Duplicate Order Protection
 router.post('/purchase-cart', async (req, res) => {
+  // Start MongoDB session for atomic transaction
+  const session = await mongoose.startSession();
+  
   try {
-    const { planIds } = req.body;
+    // Accept both old format (planIds) and new format (items with quantities)
+    let { planIds, items } = req.body;
     const clientId = req.user.id;
 
-    console.log('=== CART PURCHASE START ===');
+    console.log('=== ORDER CREATION START ===');
     console.log('Client ID:', clientId);
-    console.log('Plan IDs:', planIds);
+
+    // Convert old format to new format for backward compatibility
+    if (planIds && !items) {
+      items = planIds.map(id => ({ planId: id, quantity: 1 }));
+    }
 
     // 1. Validate input
-    if (!planIds || !Array.isArray(planIds) || planIds.length === 0) {
-      return res.status(400).json({ error: 'planIds array is required' });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items array is required' });
     }
+
+    // Extract unique plan IDs
+    const uniquePlanIds = [...new Set(items.map(item => item.planId))];
+    console.log('Plan IDs:', uniquePlanIds);
+    console.log('Items with quantities:', items);
 
     // 2. Fetch all plans
-    const plans = await Task.find({ _id: { $in: planIds } }).exec();
+    const plans = await Task.find({ _id: { $in: uniquePlanIds } }).populate('categoryId').exec();
 
-    if (plans.length !== planIds.length) {
+    if (plans.length !== uniquePlanIds.length) {
       return res.status(404).json({ error: 'One or more plans not found' });
     }
+
+    // Create a map for quick plan lookup
+    const planMap = {};
+    plans.forEach(plan => {
+      planMap[plan._id.toString()] = plan;
+    });
 
     // 3. Validate all plans
     for (const plan of plans) {
@@ -2214,15 +2236,70 @@ router.post('/purchase-cart', async (req, res) => {
       }
     }
 
-    // 4. Calculate total price
-    const totalPrice = plans.reduce((sum, plan) => {
-      const price = plan.offerPrice || plan.creditCost || 0;
-      return sum + price;
-    }, 0);
+    // 4. Build order items and calculate total price
+    const orderItems = [];
+    let totalPrice = 0;
+
+    for (const item of items) {
+      const plan = planMap[item.planId];
+      if (!plan) {
+        return res.status(404).json({ error: `Plan ${item.planId} not found` });
+      }
+
+      const quantity = Math.max(1, parseInt(item.quantity) || 1);
+      const unitPrice = plan.offerPrice || plan.creditCost || 0;
+      const itemTotalPrice = unitPrice * quantity;
+      totalPrice += itemTotalPrice;
+
+      orderItems.push({
+        planId: plan._id,
+        planTitle: plan.title,
+        planImage: plan.featureImage || (plan.planMedia && plan.planMedia[0]?.url) || null,
+        planIcon: plan.icon || '📦',
+        categoryId: plan.categoryId?._id || null,
+        categoryName: plan.categoryId?.name || null,
+        quantity: quantity,
+        unitPrice: unitPrice,
+        originalPrice: plan.originalPrice || plan.creditCost || null,
+        totalPrice: itemTotalPrice,
+        planSnapshot: {
+          description: plan.description || '',
+          creditCost: plan.creditCost || 0,
+          publicNotes: plan.publicNotes || '',
+          progressMode: plan.progressMode || 'AUTO',
+          progressTarget: plan.progressTarget || 100,
+          milestones: plan.milestones || [],
+          autoCompletionCap: plan.autoCompletionCap || 100,
+          internalNotes: plan.internalNotes || '',
+          priority: plan.priority || 'Medium',
+          showQuantityToClient: plan.showQuantityToClient !== false,
+          showCreditsToClient: plan.showCreditsToClient !== false,
+        },
+      });
+    }
 
     console.log('Total price:', totalPrice);
+    console.log('Order items count:', orderItems.length);
 
-    // 5. Get wallet
+    // 5. DUPLICATE ORDER PROTECTION (before wallet deduction)
+    // Check if same client has a PENDING_APPROVAL order within last 30 seconds with same totalAmount
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+    const duplicateOrder = await Order.findOne({
+      clientId: clientId,
+      orderStatus: ORDER_STATUS.PENDING_APPROVAL,
+      totalAmount: totalPrice,
+      createdAt: { $gte: thirtySecondsAgo },
+    }).exec();
+
+    if (duplicateOrder) {
+      console.log('Duplicate order detected:', duplicateOrder.orderId);
+      return res.status(409).json({ 
+        error: 'Duplicate order attempt detected.',
+        existingOrderId: duplicateOrder.orderId,
+      });
+    }
+
+    // 6. Get wallet (outside transaction for validation)
     const wallet = await Wallet.findOne({ clientId }).exec();
 
     if (!wallet) {
@@ -2231,82 +2308,133 @@ router.post('/purchase-cart', async (req, res) => {
 
     console.log('Wallet balance before:', wallet.balance);
 
-    // 6. Check balance
+    // 7. Check balance (outside transaction for fast rejection)
     if (wallet.balance < totalPrice) {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
-    // 7. Deduct wallet (ATOMIC)
-    wallet.balance -= totalPrice;
-    await wallet.save();
+    // ============================================================
+    // START ATOMIC TRANSACTION
+    // All database modifications happen inside this transaction
+    // ============================================================
+    session.startTransaction();
+    console.log('Transaction started');
 
-    console.log('Wallet balance after:', wallet.balance);
+    let order;
+    let transaction;
 
-    // 8. Create wallet transaction
-    await WalletTransaction.create({
-      walletId: wallet._id,
-      type: 'PLAN_PURCHASE',
-      amount: -totalPrice,
-      description: `Cart Purchase: ${plans.length} plan(s)`,
-      referenceId: null,
-    });
+    try {
+      // 8. Deduct wallet balance (INSIDE TRANSACTION)
+      const walletUpdate = await Wallet.findOneAndUpdate(
+        { _id: wallet._id },
+        { $inc: { balance: -totalPrice } },
+        { new: true, session }
+      );
 
-    // 9. Create tasks for all plans
-    const createdTasks = [];
-    for (const plan of plans) {
-      const price = plan.offerPrice || plan.creditCost || 0;
-      const newTask = await Task.create({
-        title: plan.title,
-        description: plan.description,
-        creditCost: plan.creditCost,
-        creditsUsed: price,
-        priority: plan.priority,
-        startDate: null,
-        endDate: null,
-        publicNotes: plan.publicNotes,
-        internalNotes: plan.internalNotes,
-        progressMode: plan.progressMode,
-        progress: 0,
-        progressTarget: plan.progressTarget,
-        progressAchieved: 0,
-        status: TASK_STATUS.PENDING_APPROVAL,
-        deadline: null,
-        planId: plan._id,
-        categoryId: plan.categoryId,
+      if (!walletUpdate) {
+        throw new Error('Failed to update wallet');
+      }
+
+      console.log('Wallet balance after deduction:', walletUpdate.balance);
+
+      // 9. Create Order with PENDING_APPROVAL status (INSIDE TRANSACTION)
+      const orderDocs = await Order.create([{
         clientId: clientId,
-        quantity: plan.quantity,
-        showQuantityToClient: plan.showQuantityToClient,
-        showCreditsToClient: plan.showCreditsToClient,
-        isListedInPlans: false,
-        isActivePlan: false,
-        targetClients: null,
-        featureImage: plan.featureImage,
-        planMedia: plan.planMedia,
-        offerPrice: plan.offerPrice,
-        originalPrice: plan.originalPrice,
-        countdownEndDate: null,
-        milestones: plan.milestones || [],
-        autoCompletionCap: plan.autoCompletionCap || 100
-      });
-      createdTasks.push({
-        id: newTask._id.toString(),
-        title: newTask.title,
-        status: newTask.status,
-        creditsUsed: newTask.creditsUsed,
-      });
+        items: orderItems,
+        subtotal: totalPrice,
+        discount: 0,
+        totalAmount: totalPrice,
+        paymentMethod: 'WALLET',
+        paymentStatus: PAYMENT_STATUS.PAID,
+        transactionId: null, // Will update after transaction creation
+        orderStatus: ORDER_STATUS.PENDING_APPROVAL,
+      }], { session });
+
+      order = orderDocs[0];
+      console.log('Order created:', order.orderId);
+
+      // 10. Create wallet transaction (INSIDE TRANSACTION)
+      const transactionDocs = await WalletTransaction.create([{
+        walletId: wallet._id,
+        type: 'ORDER_PAYMENT',
+        amount: -totalPrice,
+        description: `Order Payment: ${order.orderId}`,
+        referenceId: order._id,
+      }], { session });
+
+      transaction = transactionDocs[0];
+
+      // 11. Link transaction to order (INSIDE TRANSACTION)
+      order.transactionId = transaction._id;
+      await order.save({ session });
+
+      // ============================================================
+      // COMMIT TRANSACTION - All operations succeeded
+      // ============================================================
+      await session.commitTransaction();
+      console.log('Transaction committed successfully');
+
+    } catch (txError) {
+      // ============================================================
+      // ABORT TRANSACTION - Rollback all changes
+      // ============================================================
+      await session.abortTransaction();
+      console.error('Transaction aborted:', txError.message);
+      throw txError; // Re-throw to be caught by outer catch
     }
 
-    console.log(`Created ${createdTasks.length} tasks`);
-    console.log('=== CART PURCHASE COMPLETE ===');
+    // 12. Send notification to admin(s) (OUTSIDE TRANSACTION - non-critical)
+    try {
+      const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).exec();
+      for (const admin of admins) {
+        await createNotification({
+          userId: admin._id,
+          type: NOTIFICATION_TYPES.NEW_ORDER,
+          title: 'New Order Received',
+          message: `New order ${order.orderId} from client (${orderItems.length} item(s), ₹${totalPrice})`,
+          entityType: ENTITY_TYPES.ORDER,
+          entityId: order._id,
+          metadata: {
+            orderId: order.orderId,
+            clientId: clientId,
+            totalAmount: totalPrice,
+            itemCount: orderItems.length,
+          },
+        });
+      }
+    } catch (notifErr) {
+      console.error('Failed to send order notification:', notifErr);
+      // Don't fail the order creation if notification fails
+    }
 
+    console.log('=== ORDER CREATION COMPLETE ===');
+
+    // Get updated wallet balance for response
+    const updatedWallet = await Wallet.findOne({ clientId }).exec();
+
+    // Return order info (compatible response for frontend)
     return res.status(201).json({
       success: true,
-      tasks: createdTasks,
-      walletBalance: wallet.balance,
+      order: {
+        id: order._id.toString(),
+        orderId: order.orderId,
+        status: order.orderStatus,
+        totalAmount: order.totalAmount,
+        itemCount: orderItems.length,
+        createdAt: order.createdAt,
+      },
+      // Include tasks array for backward compatibility (empty since tasks created on approval)
+      tasks: [],
+      walletBalance: updatedWallet?.balance ?? 0,
+      message: 'Order placed successfully. Awaiting admin approval.',
     });
+
   } catch (err) {
-    console.error('Cart purchase error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to purchase cart' });
+    console.error('Order creation error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to create order' });
+  } finally {
+    // Always end the session
+    session.endSession();
   }
 });
 

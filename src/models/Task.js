@@ -143,6 +143,13 @@ const taskSchema = new mongoose.Schema(
       ref: 'Task',
       default: null,
     },
+    // Order linkage (for tasks created from order approval)
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Order',
+      default: null,
+      index: true,
+    },
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',

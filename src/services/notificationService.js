@@ -20,6 +20,11 @@ const NOTIFICATION_TYPES = Object.freeze({
   NEW_PROMOTION: 'NEW_PROMOTION',
   NOTICE_RESPONSE: 'NOTICE_RESPONSE',
   TASK_REMINDER: 'TASK_REMINDER',
+  // Order notifications
+  NEW_ORDER: 'NEW_ORDER',
+  ORDER_APPROVED: 'ORDER_APPROVED',
+  ORDER_REJECTED: 'ORDER_REJECTED',
+  ORDER_COMPLETED: 'ORDER_COMPLETED',
 });
 
 const ENTITY_TYPES = Object.freeze({
@@ -28,6 +33,7 @@ const ENTITY_TYPES = Object.freeze({
   WALLET: 'WALLET',
   TICKET: 'TICKET',
   NOTICE: 'NOTICE',
+  ORDER: 'ORDER',
 });
 
 async function getNotificationsForUser(userId, options = {}) {
