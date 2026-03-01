@@ -54,7 +54,7 @@ const Cart = () => {
       setToast({ 
         type: 'success', 
         message: orderInfo 
-          ? `Order ${orderInfo.orderId} placed successfully! Awaiting approval.`
+          ? `Order ${orderInfo.orderId} placed! Awaiting approval.`
           : `${response.data.tasks?.length || cartItems.length} plan(s) purchased successfully!` 
       });
 
@@ -63,9 +63,9 @@ const Cart = () => {
 
       setTimeout(() => {
         setToast(null);
-        // Navigate to orders page (when available) or dashboard
-        navigate('/dashboard');
-      }, 2500);
+        // Navigate to orders page to see the new order
+        navigate('/orders');
+      }, 2000);
     } catch (err) {
       setShowConfirmModal(false);
       setPurchasing(false);

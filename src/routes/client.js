@@ -2164,6 +2164,92 @@ router.get('/office-config', async (req, res) => {
   }
 });
 
+// --- Client Order Routes ---
+
+// GET /client/orders - Fetch client's own orders
+router.get('/orders', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { status } = req.query;
+    
+    const query = { clientId };
+    if (status && ORDER_STATUS[status]) {
+      query.orderStatus = status;
+    }
+    
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    return res.status(200).json({
+      orders: orders.map(order => ({
+        id: order._id.toString(),
+        orderId: order.orderId,
+        items: order.items,
+        subtotal: order.subtotal,
+        discount: order.discount,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        rejectionReason: order.rejectionReason,
+        taskIds: order.taskIds,
+        createdAt: order.createdAt,
+        approvedAt: order.approvedAt,
+        rejectedAt: order.rejectedAt,
+        completedAt: order.completedAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[CLIENT/ORDERS] Fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// GET /client/orders/:orderId - Fetch single order with linked tasks
+router.get('/orders/:orderId', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { orderId } = req.params;
+    
+    const order = await Order.findOne({ _id: orderId, clientId })
+      .populate('taskIds')
+      .lean();
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    return res.status(200).json({
+      order: {
+        id: order._id.toString(),
+        orderId: order.orderId,
+        items: order.items,
+        subtotal: order.subtotal,
+        discount: order.discount,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        rejectionReason: order.rejectionReason,
+        tasks: (order.taskIds || []).map(t => ({
+          id: t._id?.toString(),
+          title: t.title,
+          status: t.status,
+          progress: t.progress,
+        })),
+        createdAt: order.createdAt,
+        approvedAt: order.approvedAt,
+        rejectedAt: order.rejectedAt,
+        completedAt: order.completedAt,
+      },
+    });
+  } catch (err) {
+    console.error('[CLIENT/ORDERS] Fetch single error:', err);
+    return res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
 // POST /client/purchase-cart - Create order from cart (Phase 1: Order System)
 // FEATURES: Atomic MongoDB Transaction + Duplicate Order Protection
 router.post('/purchase-cart', async (req, res) => {

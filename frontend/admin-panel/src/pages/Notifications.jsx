@@ -15,7 +15,9 @@ const Notifications = () => {
       try {
         const params = filter === 'unread' ? { unreadOnly: true } : {};
         const response = await api.get('/admin/notifications', { params });
-        setNotifications(response.data);
+        // Handle both response formats: { notifications: [...] } or direct array
+        const notifs = response.data.notifications || response.data || [];
+        setNotifications(Array.isArray(notifs) ? notifs : []);
       } catch (err) {
         setError('Failed to load notifications');
         console.error('Notifications error:', err);

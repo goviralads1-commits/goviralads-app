@@ -12,6 +12,7 @@ import Tasks from './pages/Tasks';
 import Plans from './pages/Plans';
 import PlanDetail from './pages/PlanDetail';
 import Cart from './pages/Cart';
+import Orders from './pages/Orders';
 import Subscriptions from './pages/Subscriptions';
 import Profile from './pages/Profile';
 import TaskDetail from './pages/TaskDetail';
@@ -108,6 +109,11 @@ const App = () => {
           <Route path="/cart" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <Cart />
+            </ProtectedRoute>
+          } />
+          <Route path="/orders" element={
+            <ProtectedRoute allowedRoles={['CLIENT']}>
+              <Orders />
             </ProtectedRoute>
           } />
           
