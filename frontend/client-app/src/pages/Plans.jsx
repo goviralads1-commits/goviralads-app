@@ -9,7 +9,7 @@ const Plans = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlCategory = searchParams.get('category');
-  const { addToCart, isInCart, cartCount } = useCart();
+  const { addToCart, removeFromCart, updateCartItemQuantity, getCartItemQuantity, isInCart, cartCount } = useCart();
   
   const [plans, setPlans] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -68,22 +68,54 @@ const Plans = () => {
     fetchData();
   }, [fetchData]);
 
+  const [quantities, setQuantities] = useState({});
+  
+  const handleQuantityChange = (planId, newQuantity) => {
+    if (newQuantity <= 0) {
+      // If quantity becomes 0, remove from cart and reset quantity state
+      removeFromCart(planId);
+      setQuantities(prev => {
+        const newQuantities = {...prev};
+        delete newQuantities[planId];
+        return newQuantities;
+      });
+    } else {
+      updateCartItemQuantity(planId, newQuantity);
+      setQuantities(prev => ({
+        ...prev,
+        [planId]: newQuantity
+      }));
+    }
+  };
+  
   const handleAddToCart = (plan, e) => {
     e.stopPropagation();
-    addToCart({
-      id: plan.id || plan._id,
-      title: plan.title,
-      offerPrice: plan.offerPrice,
-      creditCost: plan.creditCost,
-      price: plan.offerPrice || plan.creditCost || 0,
-      originalPrice: plan.originalPrice,
-      icon: plan.icon,
-      featureImage: plan.featureImage,
-      categoryName: plan.categoryName,
-    });
+    const currentQuantity = getCartItemQuantity(plan.id || plan._id);
+    if (currentQuantity === 0) {
+      // First time adding, initialize with quantity 1
+      addToCart({
+        id: plan.id || plan._id,
+        title: plan.title,
+        offerPrice: plan.offerPrice,
+        creditCost: plan.creditCost,
+        price: plan.offerPrice || plan.creditCost || 0,
+        originalPrice: plan.originalPrice,
+        icon: plan.icon,
+        featureImage: plan.featureImage,
+        categoryName: plan.categoryName,
+      }, 1);
+      setQuantities(prev => ({
+        ...prev,
+        [plan.id || plan._id]: 1
+      }));
+    } else {
+      // Quantity already exists, increment
+      handleQuantityChange(plan.id || plan._id, currentQuantity + 1);
+    }
     setToast({ type: 'success', message: 'Added to cart!' });
     setTimeout(() => setToast(null), 2000);
   };
+
 
   const formatCountdown = (dateStr) => {
     if (!dateStr) return null;
@@ -617,23 +649,77 @@ const Plans = () => {
                       ) : null}
                     </div>
 
-                    {/* Action Buttons - Compact Style */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    {/* Action Buttons - Quantity Controls */}
+                    <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
                       <button
                         onClick={(e) => { e.stopPropagation(); navigate(`/plans/${plan.id}`); }}
                         style={{
-                          flex: 1, padding: '10px 8px', backgroundColor: '#f1f5f9', color: '#475569',
+                          width: '100%', padding: '10px 8px', backgroundColor: '#f1f5f9', color: '#475569',
                           fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: '1px solid #e2e8f0',
                           cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
                         }}
                       >
                         Details
                       </button>
-                      {isInCart(plan.id || plan._id) ? (
+                      
+                      {/* Quantity Control or Add Button */}
+                      {isInCart(plan.id || plan._id) && getCartItemQuantity(plan.id || plan._id) > 0 ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleQuantityChange(plan.id || plan._id, getCartItemQuantity(plan.id || plan._id) - 1); }}
+                            style={{
+                              width: '32px', height: '32px',
+                              backgroundColor: '#f1f5f9', color: '#475569',
+                              fontSize: '16px', fontWeight: '600', borderRadius: '8px', border: '1px solid #e2e8f0',
+                              cursor: 'pointer', transition: 'all 0.2s', display: 'flex',
+                              alignItems: 'center', justifyContent: 'center'
+                            }}
+                          >
+                            −
+                          </button>
+                          <span style={{ fontSize: '14px', fontWeight: '600', minWidth: '20px', textAlign: 'center' }}>
+                            {getCartItemQuantity(plan.id || plan._id)}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleQuantityChange(plan.id || plan._id, getCartItemQuantity(plan.id || plan._id) + 1); }}
+                            style={{
+                              width: '32px', height: '32px',
+                              backgroundColor: '#f1f5f9', color: '#475569',
+                              fontSize: '16px', fontWeight: '600', borderRadius: '8px', border: '1px solid #e2e8f0',
+                              cursor: 'pointer', transition: 'all 0.2s', display: 'flex',
+                              alignItems: 'center', justifyContent: 'center'
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => handleAddToCart(plan, e)}
+                          style={{
+                            width: '100%', padding: '10px 8px', 
+                            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', 
+                            color: '#fff',
+                            fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                            transition: 'all 0.2s', whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          Add
+                        </button>
+                      )}
+                      
+                      {/* View Cart Button - Visible when cart has items */}
+                      {cartCount > 0 && (
                         <button
                           onClick={(e) => { e.stopPropagation(); navigate('/cart'); }}
                           style={{
-                            flex: 1, padding: '10px 8px', 
+                            width: '100%', padding: '10px 8px', 
                             background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 
                             color: '#fff',
                             fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
@@ -648,26 +734,7 @@ const Plans = () => {
                             <circle cx="20" cy="21" r="1" />
                             <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                          Cart {cartCount > 0 && `(${cartCount})`}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => handleAddToCart(plan, e)}
-                          style={{
-                            flex: 1, padding: '10px 8px', 
-                            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', 
-                            color: '#fff',
-                            fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: 'none',
-                            cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                            boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
-                            transition: 'all 0.2s', whiteSpace: 'nowrap'
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          Add
+                          View Cart ({cartCount})
                         </button>
                       )}
                     </div>
