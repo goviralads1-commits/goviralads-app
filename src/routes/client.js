@@ -2386,21 +2386,20 @@ router.post('/purchase-cart', async (req, res) => {
     // 12. Send notification to admin(s) (OUTSIDE TRANSACTION - non-critical)
     try {
       const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).exec();
+      console.log(`[ORDER NOTIFICATION] Sending NEW_ORDER notification to ${admins.length} admin(s)`);
       for (const admin of admins) {
+        console.log(`[ORDER NOTIFICATION] Creating notification for admin: ${admin._id}`);
         await createNotification({
-          userId: admin._id,
+          recipientId: admin._id,  // FIXED: was 'userId'
           type: NOTIFICATION_TYPES.NEW_ORDER,
           title: 'New Order Received',
           message: `New order ${order.orderId} from client (${orderItems.length} item(s), ₹${totalPrice})`,
-          entityType: ENTITY_TYPES.ORDER,
-          entityId: order._id,
-          metadata: {
-            orderId: order.orderId,
-            clientId: clientId,
-            totalAmount: totalPrice,
-            itemCount: orderItems.length,
+          relatedEntity: {  // FIXED: was flat entityType/entityId
+            entityType: ENTITY_TYPES.ORDER,
+            entityId: order._id,
           },
         });
+        console.log(`[ORDER NOTIFICATION] Notification created for admin: ${admin._id}`);
       }
     } catch (notifErr) {
       console.error('Failed to send order notification:', notifErr);
