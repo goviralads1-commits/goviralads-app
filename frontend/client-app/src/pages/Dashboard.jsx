@@ -83,6 +83,7 @@ const Dashboard = () => {
 
   const updates = notices.filter(n => n.type === 'UPDATE').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
   const requirements = notices.filter(n => n.type === 'REQUIREMENT').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+  const promotions = notices.filter(n => n.type === 'PROMOTION').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 
   // Filter tasks by status
   const pendingTasks = tasks.filter(t => t.status === 'PENDING_APPROVAL');
@@ -461,6 +462,49 @@ const Dashboard = () => {
           )}
         </div>
         )}
+
+        {/* PROMOTIONS SECTION */}
+        {promotions.length > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <span style={{ fontSize: '20px' }}>🎁</span>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Promotions</h3>
+            <span style={{ backgroundColor: '#fed7aa', color: '#c2410c', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{promotions.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {promotions.map(notice => (
+              <div 
+                key={notice.id} 
+                onClick={() => handleViewNotice(notice)}
+                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #f97316', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <div style={{ width: '50px', height: '50px', borderRadius: '12px', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '22px' }}>🎁</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                      <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px' }}>{notice.title}</span>
+                      {notice.isPinned && <span style={{ fontSize: '11px', backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '6px' }}>📌</span>}
+                      {notice.responseRequired && !notice.hasResponded && (
+                        <span style={{ fontSize: '11px', backgroundColor: '#fee2e2', color: '#dc2626', padding: '2px 8px', borderRadius: '6px' }}>Action Required</span>
+                      )}
+                      {notice.hasResponded && (
+                        <span style={{ fontSize: '11px', backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px' }}>Responded</span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{notice.content}</p>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>{new Date(notice.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
+                    <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
       </div>
 
       {/* NOTICE DETAIL MODAL */}
@@ -468,7 +512,7 @@ const Dashboard = () => {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden' }}>
             <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{selectedNotice.type === 'REQUIREMENT' ? '📋 Requirement' : '🔄 Update'}</h3>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{selectedNotice.type === 'REQUIREMENT' ? '📋 Requirement' : selectedNotice.type === 'PROMOTION' ? '🎁 Promotion' : '🔄 Update'}</h3>
               <button 
                 onClick={() => setSelectedNotice(null)} 
                 style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}
