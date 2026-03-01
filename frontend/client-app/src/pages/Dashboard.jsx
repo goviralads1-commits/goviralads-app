@@ -101,6 +101,12 @@ const Dashboard = () => {
   const seeMoreSection = getSectionConfig('SEE_MORE_BUTTON');
   const updatesSection = getSectionConfig('UPDATES');
   const requirementsSection = getSectionConfig('REQUIREMENTS');
+  const promotionsSection = getSectionConfig('PROMOTIONS');
+  
+  // Get specific section configs
+  const updatesSectionConfig = config?.updatesSectionConfig || { title: 'Updates', icon: '🔄', emptyText: 'No updates at the moment', emptyIcon: '📭' };
+  const requirementsSectionConfig = config?.requirementsSectionConfig || { title: 'Requirements', icon: '📋', emptyText: 'All caught up! No requirements pending.', emptyIcon: '✅' };
+  const promotionsSectionConfig = config?.promotionsSectionConfig || { title: 'Promotions', icon: '🎁', emptyText: 'No promotions available', emptyIcon: '🎉' };
 
   // Handle CTA clicks
   const handleCtaClick = (banner) => {
@@ -464,13 +470,19 @@ const Dashboard = () => {
         )}
 
         {/* PROMOTIONS SECTION */}
-        {promotions.length > 0 && (
+        {promotionsSection.isEnabled && (
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <span style={{ fontSize: '20px' }}>🎁</span>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Promotions</h3>
+            <span style={{ fontSize: '20px' }}>{promotionsSectionConfig.icon}</span>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{promotionsSectionConfig.title}</h3>
             <span style={{ backgroundColor: '#fed7aa', color: '#c2410c', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{promotions.length}</span>
           </div>
+          {promotions.length === 0 ? (
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+              <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.5 }}>{promotionsSectionConfig.emptyIcon}</div>
+              <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{promotionsSectionConfig.emptyText}</p>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {promotions.map(notice => (
               <div 
@@ -480,7 +492,7 @@ const Dashboard = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ width: '50px', height: '50px', borderRadius: '12px', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '22px' }}>🎁</span>
+                    <span style={{ fontSize: '22px' }}>{notice.hasResponded ? '✅' : '🎁'}</span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
@@ -503,6 +515,7 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
+          )}
         </div>
         )}
       </div>

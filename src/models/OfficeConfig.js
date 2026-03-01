@@ -15,7 +15,7 @@ const bannerSchema = new mongoose.Schema({
 
 const sectionSchema = new mongoose.Schema({
   id: { type: String, required: true },
-  type: { type: String, enum: ['FEATURED_PLANS', 'UPDATES', 'REQUIREMENTS', 'SEE_MORE_BUTTON'], required: true },
+  type: { type: String, enum: ['FEATURED_PLANS', 'UPDATES', 'REQUIREMENTS', 'PROMOTIONS', 'SEE_MORE_BUTTON'], required: true },
   title: { type: String, required: true },
   icon: { type: String, default: '⭐' },
   isEnabled: { type: Boolean, default: true },
@@ -71,6 +71,14 @@ const officeConfigSchema = new mongoose.Schema({
     emptyIcon: { type: String, default: '✅' }
   },
   
+  // Promotions Section Config
+  promotionsSectionConfig: {
+    title: { type: String, default: 'Promotions' },
+    icon: { type: String, default: '🎁' },
+    emptyText: { type: String, default: 'No promotions available' },
+    emptyIcon: { type: String, default: '🎉' }
+  },
+  
   // Page Config
   pageTitle: { type: String, default: 'Office' },
   
@@ -94,7 +102,8 @@ officeConfigSchema.statics.getConfig = async function() {
         { id: 'featured', type: 'FEATURED_PLANS', title: 'Featured Plans', icon: '⭐', isEnabled: true, order: 0 },
         { id: 'seeMore', type: 'SEE_MORE_BUTTON', title: 'See More Plans', icon: '', isEnabled: true, order: 1 },
         { id: 'updates', type: 'UPDATES', title: 'Updates', icon: '🔄', isEnabled: true, order: 2 },
-        { id: 'requirements', type: 'REQUIREMENTS', title: 'Requirements', icon: '📋', isEnabled: true, order: 3 }
+        { id: 'requirements', type: 'REQUIREMENTS', title: 'Requirements', icon: '📋', isEnabled: true, order: 3 },
+        { id: 'promotions', type: 'PROMOTIONS', title: 'Promotions', icon: '🎁', isEnabled: true, order: 4 }
       ],
       featuredPlansConfig: { displayCount: 4, selectionMode: 'auto', manualPlanIds: [], showSeeAllButton: true, seeAllButtonText: 'See All' },
       seeMoreButtonConfig: { text: 'See More Plans', isEnabled: true, linkType: 'internal', link: '/plans' }
