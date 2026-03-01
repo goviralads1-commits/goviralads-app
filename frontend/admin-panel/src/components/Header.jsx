@@ -103,10 +103,14 @@ const Header = ({ title }) => {
     
     setShowNotifications(false);
     // Navigate based on entity type
-    if (notif.relatedEntity?.entityType === 'TASK') {
+    if (notif.relatedEntity?.entityType === 'ORDER') {
+      navigate(`/orders?orderId=${notif.relatedEntity.entityId}`);
+    } else if (notif.relatedEntity?.entityType === 'TASK') {
       navigate(`/tasks/${notif.relatedEntity.entityId}`);
     } else if (notif.relatedEntity?.entityType === 'TICKET') {
       navigate(`/tickets`);
+    } else if (notif.type === 'NEW_ORDER' || notif.type?.includes('ORDER')) {
+      navigate(`/orders`);
     } else if (notif.type === 'task' || notif.type?.includes('TASK')) {
       navigate(`/tasks/${notif.id}`);
     } else {
@@ -274,12 +278,12 @@ const Header = ({ title }) => {
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                           <div style={{
                             width: '36px', height: '36px', borderRadius: '10px',
-                            backgroundColor: notif.type?.includes('TASK') ? '#dbeafe' : notif.type?.includes('TICKET') ? '#fef3c7' : '#f0fdf4',
+                            backgroundColor: notif.type?.includes('ORDER') ? '#fef3c7' : notif.type?.includes('TASK') ? '#dbeafe' : notif.type?.includes('TICKET') ? '#fef3c7' : '#f0fdf4',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             flexShrink: 0
                           }}>
                             <span style={{ fontSize: '16px' }}>
-                              {notif.type?.includes('TASK') ? '📋' : notif.type?.includes('TICKET') ? '🎫' : '🔔'}
+                              {notif.type?.includes('ORDER') ? '📦' : notif.type?.includes('TASK') ? '📋' : notif.type?.includes('TICKET') ? '🎫' : '🔔'}
                             </span>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>

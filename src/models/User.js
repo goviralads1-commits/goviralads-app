@@ -95,6 +95,7 @@ const userSchema = new mongoose.Schema(
     lastActivityAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+    originalIdentifier: { type: String },  // Store original identifier for deleted users to allow email re-use,
   },
   {
     timestamps: true,

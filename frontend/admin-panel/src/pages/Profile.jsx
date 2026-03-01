@@ -66,6 +66,9 @@ const Profile = () => {
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [passwordResetData, setPasswordResetData] = useState({ newPassword: '', confirmPassword: '' });
+
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', confirmPassword: '', role: 'CLIENT', status: 'ACTIVE', name: '', phone: '', company: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -305,6 +308,33 @@ const Profile = () => {
       setSaving(false);
     }
   };
+
+  const handlePasswordReset = async () => {
+    if (passwordResetData.newPassword !== passwordResetData.confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+    
+    if (passwordResetData.newPassword.length < 6) {
+      showToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      await api.post(`/admin/users/${selectedUser.id}/reset-password`, {
+        newPassword: passwordResetData.newPassword
+      });
+      showToast('Password reset successfully');
+      setShowPasswordResetModal(false);
+      setPasswordResetData({ newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to reset password', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const handleWalletAction = async () => {
     if (!walletAction.amount || isNaN(parseFloat(walletAction.amount))) {
@@ -1140,7 +1170,7 @@ const Profile = () => {
 
         {/* USER DETAIL VIEW */}
         {activeView === 'userManager' && selectedUser && (
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', padding: '0 16px' }}>
             {/* Back Button */}
             <button
               onClick={handleBackToList}
@@ -1161,99 +1191,111 @@ const Profile = () => {
               <>
                 {/* Header Card - Client Info */}
                 <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '28px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    {/* Avatar */}
-                    <div style={{ position: 'relative' }}>
-                      {userDetail?.profile?.avatarUrl ? (
-                        <img src={userDetail.profile.avatarUrl} alt="User" style={{ width: '80px', height: '80px', borderRadius: '20px', objectFit: 'cover', border: '2px solid #e2e8f0' }} />
-                      ) : (
-                        <div style={{ width: '80px', height: '80px', borderRadius: '20px', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0' }}>
-                          <span style={{ fontSize: '32px', fontWeight: '700', color: '#fff' }}>
-                            {userDetail?.profile?.name?.charAt(0) || userDetail?.identifier?.charAt(0) || 'U'}
-                          </span>
-                        </div>
-                      )}
-                      <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '28px', height: '28px', borderRadius: '8px', background: userDetail?.status === 'ACTIVE' ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '3px solid #fff' }}>
-                        <span style={{ fontSize: '12px' }}>{userDetail?.status === 'ACTIVE' ? '✓' : '⏸'}</span>
-                      </div>
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ flex: 1 }}>
-                      <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px 0' }}>
-                        {userDetail?.profile?.name || userDetail?.identifier}
-                      </h2>
-                      <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 12px 0' }}>{userDetail?.identifier}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ padding: '6px 14px', backgroundColor: userDetail?.status === 'ACTIVE' ? '#ecfdf5' : '#fffbeb', color: userDetail?.status === 'ACTIVE' ? '#16a34a' : '#f59e0b', fontSize: '12px', fontWeight: '600', borderRadius: '20px', border: `1px solid ${userDetail?.status === 'ACTIVE' ? '#a7f3d0' : '#fde68a'}` }}>
-                          {userDetail?.status}
-                        </span>
-                        <span style={{ padding: '6px 14px', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: '500', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
-                          CLIENT
-                        </span>
-                        {userDetail?.profile?.company && (
-                          <span style={{ padding: '6px 14px', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: '500', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
-                            🏢 {userDetail.profile.company}
-                          </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
+                    {/* Avatar and Info */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }}>
+                      {/* Avatar */}
+                      <div style={{ position: 'relative' }}>
+                        {userDetail?.profile?.avatarUrl ? (
+                          <img src={userDetail.profile.avatarUrl} alt="User" style={{ width: '80px', height: '80px', borderRadius: '20px', objectFit: 'cover', border: '2px solid #e2e8f0' }} />
+                        ) : (
+                          <div style={{ width: '80px', height: '80px', borderRadius: '20px', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0' }}>
+                            <span style={{ fontSize: '32px', fontWeight: '700', color: '#fff' }}>
+                              {userDetail?.profile?.name?.charAt(0) || userDetail?.identifier?.charAt(0) || 'U'}
+                            </span>
+                          </div>
                         )}
+                        <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '28px', height: '28px', borderRadius: '8px', background: userDetail?.status === 'ACTIVE' ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '3px solid #fff' }}>
+                          <span style={{ fontSize: '12px' }}>{userDetail?.status === 'ACTIVE' ? '✓' : '⏸'}</span>
+                        </div>
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px 0', wordBreak: 'break-word' }}>
+                          {userDetail?.profile?.name || userDetail?.identifier}
+                        </h2>
+                        <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 12px 0', wordBreak: 'break-word' }}>{userDetail?.identifier}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ padding: '6px 14px', backgroundColor: userDetail?.status === 'ACTIVE' ? '#ecfdf5' : '#fffbeb', color: userDetail?.status === 'ACTIVE' ? '#16a34a' : '#f59e0b', fontSize: '12px', fontWeight: '600', borderRadius: '20px', border: `1px solid ${userDetail?.status === 'ACTIVE' ? '#a7f3d0' : '#fde68a'}` }}>
+                            {userDetail?.status}
+                          </span>
+                          <span style={{ padding: '6px 14px', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: '500', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+                            CLIENT
+                          </span>
+                          {userDetail?.profile?.company && (
+                            <span style={{ padding: '6px 14px', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: '500', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+                              🏢 {userDetail.profile.company}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {userDetail?.status === 'ACTIVE' ? (
+                          <button
+                            onClick={() => setShowSuspendModal(true)}
+                            disabled={saving}
+                            style={{ padding: '10px 18px', backgroundColor: '#fffbeb', color: '#f59e0b', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #fde68a', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
+                            onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#fef3c7')}
+                            onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#fffbeb')}
+                          >
+                            Suspend
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleActivateUser(selectedUser.id)}
+                            disabled={saving}
+                            style={{ padding: '10px 18px', backgroundColor: '#ecfdf5', color: '#16a34a', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #a7f3d0', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
+                            onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#d1fae5')}
+                            onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#ecfdf5')}
+                          >
+                            Activate
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowDeleteModal(true)}
+                          disabled={saving}
+                          style={{ padding: '10px 18px', backgroundColor: '#fef2f2', color: '#dc2626', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #fecaca', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
+                          onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#fee2e2')}
+                          onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#fef2f2')}
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => setShowPasswordResetModal(true)}
+                          disabled={saving}
+                          style={{ padding: '10px 18px', backgroundColor: '#ede9fe', color: '#7c3aed', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #ddd6fe', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
+                          onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#ddd6fe')}
+                          onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#ede9fe')}
+                        >
+                          Reset Password
+                        </button>
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {userDetail?.status === 'ACTIVE' ? (
-                        <button
-                          onClick={() => setShowSuspendModal(true)}
-                          disabled={saving}
-                          style={{ padding: '10px 18px', backgroundColor: '#fffbeb', color: '#f59e0b', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #fde68a', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
-                          onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#fef3c7')}
-                          onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#fffbeb')}
-                        >
-                          Suspend
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleActivateUser(selectedUser.id)}
-                          disabled={saving}
-                          style={{ padding: '10px 18px', backgroundColor: '#ecfdf5', color: '#16a34a', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #a7f3d0', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
-                          onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#d1fae5')}
-                          onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#ecfdf5')}
-                        >
-                          Activate
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setShowDeleteModal(true)}
-                        disabled={saving}
-                        style={{ padding: '10px 18px', backgroundColor: '#fef2f2', color: '#dc2626', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: '1px solid #fecaca', cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: saving ? 0.6 : 1 }}
-                        onMouseEnter={(e) => !saving && (e.target.style.backgroundColor = '#fee2e2')}
-                        onMouseLeave={(e) => !saving && (e.target.style.backgroundColor = '#fef2f2')}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Profile Details */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    <div>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone</div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{userDetail?.profile?.phone || 'Not set'}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Designation</div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{userDetail?.profile?.designation || 'Not set'}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Joined</div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                        {userDetail?.createdAt ? new Date(userDetail.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                    {/* Profile Details */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', width: '100%' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', wordBreak: 'break-word' }}>{userDetail?.profile?.phone || 'Not set'}</div>
                       </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Last Active</div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                        {userDetail?.lastActivityAt ? new Date(userDetail.lastActivityAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Designation</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b', wordBreak: 'break-word' }}>{userDetail?.profile?.designation || 'Not set'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Joined</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                          {userDetail?.createdAt ? new Date(userDetail.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Last Active</div>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                          {userDetail?.lastActivityAt ? new Date(userDetail.lastActivityAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1664,6 +1706,50 @@ const Profile = () => {
           </div>
         )}
 
+        {/* Password Reset Modal */}
+        {showPasswordResetModal && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+              <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '16px' }}>🔑</div>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#7c3aed', marginBottom: '12px', textAlign: 'center' }}>Reset User Password?</h3>
+              <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '20px', textAlign: 'center', lineHeight: '1.6' }}>
+                Enter a new password for this user. They will be able to log in with the new credentials.
+              </p>
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="password"
+                  placeholder="New Password"
+                  value={passwordResetData.newPassword}
+                  onChange={(e) => setPasswordResetData({...passwordResetData, newPassword: e.target.value})}
+                  style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', transition: 'all 0.2s' }}
+                  onFocus={(e) => e.target.style.borderColor = '#8b5cf6'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+              <div style={{ marginBottom: '24px' }}>
+                <input
+                  type="password"
+                  placeholder="Confirm Password"
+                  value={passwordResetData.confirmPassword}
+                  onChange={(e) => setPasswordResetData({...passwordResetData, confirmPassword: e.target.value})}
+                  style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', transition: 'all 0.2s' }}
+                  onFocus={(e) => e.target.style.borderColor = '#8b5cf6'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button onClick={() => {
+                  setShowPasswordResetModal(false);
+                  setPasswordResetData({ newPassword: '', confirmPassword: '' });
+                }} disabled={saving} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e2e8f0', backgroundColor: '#ffffff', fontSize: '14px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}>Cancel</button>
+                <button onClick={handlePasswordReset} disabled={saving} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#7c3aed', color: '#ffffff', fontSize: '14px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}>
+                  {saving ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Create User Modal */}
         {showCreateUserModal && (
           <div 
@@ -1983,6 +2069,93 @@ const Profile = () => {
         )}
       </div>
     </div>
+    <style>{`
+      @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      
+      /* MOBILE RESPONSIVE - User Detail View */
+      @media (max-width: 768px) {
+        /* User Detail Container */
+        [style*="maxWidth: '1200px'"] {
+          padding: 0 12px !important;
+        }
+        
+        /* User Detail Header */
+        [style*="display: 'flex'"][style*="alignItems: 'flex-start'"][style*="gap: '20px'"] {
+          flex-direction: column !important;
+          align-items: stretch !important;
+        }
+        
+        /* User Info Section */
+        [style*="flex: 1"][style*="minWidth: '200px'"] {
+          min-width: 0 !important;
+          margin-top: 12px !important;
+        }
+        
+        /* Action Buttons */
+        [style*="display: 'flex'"][style*="gap: '8px'"][style*="flexWrap: 'wrap'"] {
+          flex-direction: column !important;
+          margin-top: 16px !important;
+        }
+        
+        /* Action Buttons Inside */
+        [style*="display: 'flex'"][style*="gap: '8px'"][style*="flexWrap: 'wrap'"] > button {
+          width: 100% !important;
+          margin-bottom: 8px !important;
+        }
+        
+        /* Quick Actions Grid */
+        [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'"] {
+          grid-template-columns: 1fr !important;
+        }
+        
+        /* Stats Cards Grid */
+        [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'"] {
+          grid-template-columns: repeat(2, 1fr) !important;
+          gap: 8px !important;
+        }
+        
+        /* Stats Card Content */
+        [style*="fontSize: '32px'"][style*="fontWeight: '800'"] {
+          font-size: 24px !important;
+        }
+        
+        /* Tab Navigation */
+        [style*="display: 'flex'"][style*="gap: '6px'"] {
+          flex-wrap: wrap !important;
+          justify-content: center !important;
+        }
+        
+        [style*="padding: '10px 20px'"][style*="fontSize: '14px'"] {
+          padding: 8px 16px !important;
+          font-size: 12px !important;
+          margin-bottom: 4px !important;
+        }
+        
+        /* User Task List */
+        [style*="display: 'flex'"][style*="justifyContent: 'space-between'"] {
+          flex-direction: column !important;
+          gap: 8px !important;
+        }
+        
+        /* Task Status Badge */
+        [style*="textAlign: 'right'"] {
+          text-align: left !important;
+          margin-top: 8px !important;
+        }
+      }
+      
+      /* Tablet responsive */
+      @media (min-width: 769px) and (max-width: 1024px) {
+        [style*="maxWidth: '1200px'"] {
+          padding: 0 16px !important;
+        }
+        
+        /* Stats Cards */
+        [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'"] {
+          grid-template-columns: repeat(2, 1fr) !important;
+        }
+      }
+    `}</style>
   );
 };
 

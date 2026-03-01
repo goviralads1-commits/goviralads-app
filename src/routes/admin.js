@@ -17,6 +17,7 @@ const Notice = require('../models/Notice');
 const LegalPage = require('../models/LegalPage');
 const OfficeConfig = require('../models/OfficeConfig');
 const { ROLES } = require('../config');
+const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
 
@@ -1985,6 +1986,250 @@ router.get('/reports/clients/:clientId', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to retrieve client details' });
+  }
+});
+
+// --- Order Management Routes ---
+
+// GET /admin/orders - Fetch all orders with optional status filter
+router.get('/orders', async (req, res) => {
+  try {
+    const { status } = req.query;
+    const query = {};
+    
+    if (status && ORDER_STATUS[status]) {
+      query.orderStatus = status;
+    }
+    
+    const orders = await Order.find(query)
+      .populate('clientId', 'identifier email')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    return res.status(200).json({
+      orders: orders.map(order => ({
+        id: order._id.toString(),
+        orderId: order.orderId,
+        clientId: order.clientId?._id?.toString(),
+        clientEmail: order.clientId?.identifier || order.clientId?.email,
+        items: order.items,
+        subtotal: order.subtotal,
+        discount: order.discount,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.orderStatus,
+        adminNotes: order.adminNotes,
+        rejectionReason: order.rejectionReason,
+        taskIds: order.taskIds,
+        createdAt: order.createdAt,
+        approvedAt: order.approvedAt,
+        rejectedAt: order.rejectedAt,
+        completedAt: order.completedAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[ADMIN/ORDERS] Fetch error:', err);
+    return res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// GET /admin/orders/:orderId - Fetch single order details
+router.get('/orders/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const order = await Order.findById(orderId)
+      .populate('clientId', 'identifier email')
+      .populate('taskIds')
+      .lean();
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    return res.status(200).json({ order });
+  } catch (err) {
+    console.error('[ADMIN/ORDERS] Fetch single error:', err);
+    return res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
+// POST /admin/orders/:orderId/approve - Approve order and create tasks
+router.post('/orders/:orderId/approve', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const { orderId } = req.params;
+    const adminId = req.user.id;
+    
+    const order = await Order.findById(orderId).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    if (order.orderStatus !== ORDER_STATUS.PENDING_APPROVAL) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: `Cannot approve order with status: ${order.orderStatus}` });
+    }
+    
+    // Create tasks for each item in the order
+    const createdTaskIds = [];
+    
+    for (const item of order.items) {
+      // Create task(s) for this item based on quantity
+      for (let i = 0; i < item.quantity; i++) {
+        const taskData = {
+          clientId: order.clientId,
+          templateId: item.planId,
+          title: item.planTitle + (item.quantity > 1 ? ` (${i + 1}/${item.quantity})` : ''),
+          description: item.planSnapshot?.description || '',
+          creditCost: item.unitPrice,
+          status: TASK_STATUS.IN_PROGRESS,
+          progressMode: item.planSnapshot?.progressMode || 'AUTO',
+          progressTarget: item.planSnapshot?.progressTarget || 100,
+          milestones: item.planSnapshot?.milestones || [],
+          autoCompletionCap: item.planSnapshot?.autoCompletionCap || 100,
+          isPurchased: true,
+          orderId: order._id,
+          categoryId: item.categoryId,
+        };
+        
+        const task = await Task.create([taskData], { session });
+        createdTaskIds.push(task[0]._id);
+      }
+    }
+    
+    // Update order status
+    order.orderStatus = ORDER_STATUS.APPROVED;
+    order.approvedBy = adminId;
+    order.approvedAt = new Date();
+    order.taskIds = createdTaskIds;
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    
+    // Notify client (outside transaction)
+    try {
+      await createNotification({
+        recipientId: order.clientId,
+        type: NOTIFICATION_TYPES.ORDER_APPROVED || 'ORDER_APPROVED',
+        title: 'Order Approved!',
+        message: `Your order ${order.orderId} has been approved. Tasks are now in progress.`,
+        relatedEntity: {
+          entityType: ENTITY_TYPES.ORDER || 'ORDER',
+          entityId: order._id,
+        },
+      });
+    } catch (notifErr) {
+      console.error('[ADMIN/ORDERS] Notification error:', notifErr);
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: `Order approved! ${createdTaskIds.length} task(s) created.`,
+      order: {
+        orderId: order.orderId,
+        orderStatus: order.orderStatus,
+        taskCount: createdTaskIds.length,
+      },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('[ADMIN/ORDERS] Approve error:', err);
+    return res.status(500).json({ error: 'Failed to approve order' });
+  } finally {
+    session.endSession();
+  }
+});
+
+// POST /admin/orders/:orderId/reject - Reject order and refund
+router.post('/orders/:orderId/reject', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body || {};
+    const adminId = req.user.id;
+    
+    const order = await Order.findById(orderId).session(session);
+    if (!order) {
+      await session.abortTransaction();
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    if (order.orderStatus !== ORDER_STATUS.PENDING_APPROVAL) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: `Cannot reject order with status: ${order.orderStatus}` });
+    }
+    
+    // Find client's wallet and refund
+    const wallet = await Wallet.findOne({ clientId: order.clientId }).session(session);
+    if (!wallet) {
+      await session.abortTransaction();
+      return res.status(404).json({ error: 'Client wallet not found' });
+    }
+    
+    // Create refund transaction
+    const refundTx = await WalletTransaction.create([{
+      walletId: wallet._id,
+      type: TRANSACTION_TYPES.ORDER_REFUND || 'ORDER_REFUND',
+      amount: order.totalAmount,
+      description: `Refund for rejected order ${order.orderId}${reason ? ': ' + reason : ''}`,
+      referenceId: order._id,
+      referenceModel: 'Order',
+    }], { session });
+    
+    // Update wallet balance
+    wallet.balance += order.totalAmount;
+    await wallet.save({ session });
+    
+    // Update order status
+    order.orderStatus = ORDER_STATUS.REJECTED;
+    order.paymentStatus = PAYMENT_STATUS.REFUNDED;
+    order.rejectedBy = adminId;
+    order.rejectedAt = new Date();
+    order.rejectionReason = reason || 'Order rejected by admin';
+    order.refundedAt = new Date();
+    order.refundTransactionId = refundTx[0]._id;
+    await order.save({ session });
+    
+    await session.commitTransaction();
+    
+    // Notify client (outside transaction)
+    try {
+      await createNotification({
+        recipientId: order.clientId,
+        type: NOTIFICATION_TYPES.ORDER_REJECTED || 'ORDER_REJECTED',
+        title: 'Order Rejected',
+        message: `Your order ${order.orderId} was rejected. ₹${order.totalAmount} has been refunded to your wallet.${reason ? ' Reason: ' + reason : ''}`,
+        relatedEntity: {
+          entityType: ENTITY_TYPES.ORDER || 'ORDER',
+          entityId: order._id,
+        },
+      });
+    } catch (notifErr) {
+      console.error('[ADMIN/ORDERS] Notification error:', notifErr);
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: `Order rejected and ₹${order.totalAmount} refunded.`,
+      order: {
+        orderId: order.orderId,
+        orderStatus: order.orderStatus,
+        refundAmount: order.totalAmount,
+      },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('[ADMIN/ORDERS] Reject error:', err);
+    return res.status(500).json({ error: 'Failed to reject order' });
+  } finally {
+    session.endSession();
   }
 });
 

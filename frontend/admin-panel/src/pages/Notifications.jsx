@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 
 const Notifications = () => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,6 +51,32 @@ const Notifications = () => {
       })));
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    // Mark as read first
+    if (!notification.read && !notification.isRead) {
+      await markAsRead(notification._id);
+    }
+    
+    // Navigate based on entity type
+    if (notification.relatedEntity?.entityType === 'ORDER') {
+      navigate(`/orders?orderId=${notification.relatedEntity.entityId}`);
+    } else if (notification.relatedEntity?.entityType === 'TASK') {
+      navigate(`/tasks/${notification.relatedEntity.entityId}`);
+    } else if (notification.relatedEntity?.entityType === 'TICKET') {
+      navigate(`/tickets`);
+    } else if (notification.type === 'NEW_ORDER' || notification.type?.includes('ORDER')) {
+      navigate(`/orders`);
+    } else if (notification.type?.includes('TASK')) {
+      navigate(`/tasks`);
+    } else if (notification.type?.includes('TICKET')) {
+      navigate(`/tickets`);
+    } else if (notification.type?.includes('RECHARGE')) {
+      navigate(`/recharges`);
+    } else {
+      navigate('/dashboard');
     }
   };
 
@@ -122,17 +150,22 @@ const Notifications = () => {
                 </li>
               ) : (
                 notifications.map((notification) => (
-                  <li key={notification._id} className={`${!notification.read ? 'bg-blue-50' : ''}`}>
+                  <li 
+                    key={notification._id} 
+                    className={`${!notification.read && !notification.isRead ? 'bg-blue-50' : ''} cursor-pointer hover:bg-gray-50`}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
                     <div className="px-6 py-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
                           <div className={`flex-shrink-0 h-3 w-3 rounded-full ${
+                            notification.type === 'NEW_ORDER' ? 'bg-amber-500' :
                             notification.type === 'RECHARGE_REQUEST_SUBMITTED' ? 'bg-yellow-500' :
                             notification.type === 'TASK_PURCHASED' ? 'bg-green-500' :
                             notification.type === 'SYSTEM_ALERT' ? 'bg-red-500' : 'bg-gray-500'
                           }`}></div>
                           <div className="ml-4">
-                            <h3 className={`text-sm font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
+                            <h3 className={`text-sm font-medium ${!notification.read && !notification.isRead ? 'text-gray-900' : 'text-gray-700'}`}>
                               {notification.title}
                             </h3>
                             <p className="text-sm text-gray-500">
@@ -143,9 +176,9 @@ const Notifications = () => {
                             </p>
                           </div>
                         </div>
-                        {!notification.read && (
+                        {!notification.read && !notification.isRead && (
                           <button
-                            onClick={() => markAsRead(notification._id)}
+                            onClick={(e) => { e.stopPropagation(); markAsRead(notification._id); }}
                             className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                           >
                             Mark as Read
