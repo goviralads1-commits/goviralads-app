@@ -1255,15 +1255,13 @@ router.post('/tasks/:taskId/reject', async (req, res) => {
         wallet.balance += refundAmount;
         await wallet.save();
 
-        // Log transaction
+        // Log transaction (using only valid schema fields)
         await WalletTransaction.create({
           walletId: wallet._id,
-          clientId: task.clientId,
-          type: 'CREDIT',
+          type: 'REFUND',
           amount: refundAmount,
           description: `Refund for rejected task: ${task.title}`,
-          reference: `REFUND-TASK-${task._id}`,
-          balanceAfter: wallet.balance
+          referenceId: task._id,
         });
       }
     }
@@ -2672,7 +2670,46 @@ router.post('/users/:userId/activate', async (req, res) => {
   }
 });
 
-// DELETE /admin/users/:userId - Soft delete user
+// POST /admin/users/:userId/reset-password - Reset user password
+router.post('/users/:userId/reset-password', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findById(userId).exec();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.role === ROLES.ADMIN) {
+      return res.status(403).json({ error: 'Cannot reset admin password' });
+    }
+
+    // Hash the new password using password service
+    const { hashPassword } = require('../services/passwordService');
+    const passwordHash = await hashPassword(newPassword);
+    user.passwordHash = passwordHash;
+    
+    // Update last password change timestamp
+    user.lastPasswordChangeAt = new Date();
+    
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successfully',
+    });
+  } catch (err) {
+    console.error('Failed to reset user password:', err);
+    return res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// DELETE /admin/users/:userId - Soft delete user with email re-use capability
 router.delete('/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2686,7 +2723,10 @@ router.delete('/users/:userId', async (req, res) => {
       return res.status(403).json({ error: 'Cannot delete admin users' });
     }
 
-    // Soft delete
+    // Soft delete with email re-use capability
+    // Store original identifier for potential recovery, and change identifier to prevent conflicts
+    user.originalIdentifier = user.identifier;  // Keep for reference
+    user.identifier = `deleted_${Date.now()}_${user.identifier}`; // Change to allow re-registration
     user.isDeleted = true;
     user.deletedAt = new Date();
     user.status = 'DISABLED';

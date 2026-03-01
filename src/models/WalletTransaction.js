@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const TRANSACTION_TYPES = Object.freeze({
+  // Original types (backward compatibility)
   RECHARGE_APPROVED: 'RECHARGE_APPROVED',
   ADMIN_ADJUSTMENT: 'ADMIN_ADJUSTMENT',
   TASK_PURCHASE: 'TASK_PURCHASE',
@@ -10,6 +11,13 @@ const TRANSACTION_TYPES = Object.freeze({
   // Order system
   ORDER_PAYMENT: 'ORDER_PAYMENT',
   ORDER_REFUND: 'ORDER_REFUND',
+  // Admin wallet operations
+  MANUAL_CREDIT: 'MANUAL_CREDIT',
+  MANUAL_DEBIT: 'MANUAL_DEBIT',
+  // Legacy/fallback types (for backward compatibility)
+  CREDIT: 'CREDIT',
+  DEBIT: 'DEBIT',
+  REFUND: 'REFUND',
 });
 
 const walletTransactionSchema = new mongoose.Schema(

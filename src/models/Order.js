@@ -225,7 +225,8 @@ orderSchema.index({ clientId: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
 
 // Pre-save hook to ensure orderId is unique
-orderSchema.pre('save', async function(next) {
+// NOTE: Using async/await without next() for compatibility with session-based transactions
+orderSchema.pre('save', async function() {
   if (this.isNew && !this.orderId) {
     // Generate unique orderId with retry
     let attempts = 0;
@@ -236,7 +237,7 @@ orderSchema.pre('save', async function(next) {
       attempts++;
     }
   }
-  next();
+  // No next() call - async middleware resolves automatically
 });
 
 // Virtual for total items count (considering quantities)
