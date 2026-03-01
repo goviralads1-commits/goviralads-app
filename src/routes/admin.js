@@ -2235,10 +2235,32 @@ router.post('/notices', async (req, res) => {
       console.log(`[NEW_NOTICE] Creating notifications for ${clientsToNotify.length} client(s)`);
       
       for (const clientId of clientsToNotify) {
+        // Determine notification type and title based on notice type
+        let notificationType = NOTIFICATION_TYPES.NEW_NOTICE;
+        let notificationTitle = 'New Announcement';
+        
+        switch (notice.type) {
+          case 'UPDATE':
+            notificationType = NOTIFICATION_TYPES.NEW_UPDATE;
+            notificationTitle = 'New Update';
+            break;
+          case 'REQUIREMENT':
+            notificationType = NOTIFICATION_TYPES.NEW_REQUIREMENT;
+            notificationTitle = 'New Requirement';
+            break;
+          case 'PROMOTION':
+            notificationType = NOTIFICATION_TYPES.NEW_PROMOTION;
+            notificationTitle = 'New Promotion';
+            break;
+          default:
+            notificationType = NOTIFICATION_TYPES.NEW_NOTICE;
+            notificationTitle = 'New Announcement';
+        }
+        
         await createNotification({
           recipientId: clientId,
-          type: NOTIFICATION_TYPES.NEW_NOTICE,
-          title: 'New Announcement',
+          type: notificationType,
+          title: notificationTitle,
           message: `${title.trim().substring(0, 100)}${title.length > 100 ? '...' : ''}`,
           relatedEntity: {
             entityType: ENTITY_TYPES.NOTICE,

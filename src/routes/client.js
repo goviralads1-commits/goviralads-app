@@ -1519,6 +1519,31 @@ router.post('/notices/:noticeId/respond', async (req, res) => {
 
     await notice.save();
 
+    // --- Notification Hook: Notify admin about client response ---
+    try {
+      const { mainAdminIdentifier } = require('../config');
+      const User = require('../models/User');
+      
+      const adminUser = await User.findOne({ identifier: mainAdminIdentifier }).exec();
+      if (adminUser) {
+        await createNotification({
+          recipientId: adminUser._id,
+          type: NOTIFICATION_TYPES.NOTICE_RESPONSE,
+          title: 'Client Response Received',
+          message: `Client responded to notice: "${notice.title.substring(0, 50)}${notice.title.length > 50 ? '...' : ''}"`,
+          relatedEntity: {
+            entityType: ENTITY_TYPES.NOTICE,
+            entityId: notice._id,
+          },
+          notifyByEmail: false, // Admin usually doesn't need email for responses
+        });
+        
+        console.log(`[NOTICE_RESPONSE] Notification sent to admin for notice ${notice._id}`);
+      }
+    } catch (notifErr) {
+      console.error('[NOTICE_RESPONSE] Notification error (non-fatal):', notifErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Response submitted successfully',
