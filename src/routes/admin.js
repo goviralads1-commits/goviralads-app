@@ -2452,10 +2452,27 @@ router.post('/users', async (req, res) => {
     // Validate status if provided
     const userStatus = status && ['ACTIVE', 'SUSPENDED', 'DISABLED'].includes(status) ? status : 'ACTIVE';
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ identifier: identifier.trim().toLowerCase() }).exec();
+    // Check if user already exists (exclude soft-deleted users)
+    const existingUser = await User.findOne({ 
+      identifier: identifier.trim().toLowerCase(),
+      isDeleted: { $ne: true }  // Ignore deleted users
+    }).exec();
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email/identifier already exists' });
+    }
+
+    // Also check if there's a soft-deleted user with same identifier and fix them
+    // This handles users deleted before the email-release fix was deployed
+    const deletedUserWithSameEmail = await User.findOne({
+      identifier: identifier.trim().toLowerCase(),
+      isDeleted: true
+    }).exec();
+    if (deletedUserWithSameEmail) {
+      // Release the email from the deleted user
+      deletedUserWithSameEmail.originalIdentifier = deletedUserWithSameEmail.identifier;
+      deletedUserWithSameEmail.identifier = `deleted_${Date.now()}_${deletedUserWithSameEmail.identifier}`;
+      await deletedUserWithSameEmail.save();
+      console.log(`[USER CREATE] Released email from deleted user: ${deletedUserWithSameEmail.originalIdentifier}`);
     }
 
     // Hash password
@@ -3230,29 +3247,8 @@ router.post('/users/:userId/activate', async (req, res) => {
   }
 });
 
-// DELETE /admin/users/:userId - Soft delete user
-router.delete('/users/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const user = await User.findById(userId).exec();
-    if (!user || user.role !== ROLES.CLIENT) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-
-    user.isDeleted = true;
-    user.deletedAt = new Date();
-    await user.save();
-
-    return res.status(200).json({
-      success: true,
-      message: 'User deleted successfully',
-    });
-  } catch (err) {
-    console.error('Failed to delete user:', err);
-    return res.status(500).json({ error: 'Failed to delete user' });
-  }
-});
+// NOTE: DELETE /admin/users/:userId is defined earlier (line ~2712) with email re-use capability
+// Duplicate route removed to prevent confusion
 
 // POST /admin/users/:userId/wallet - Modify wallet balance
 router.post('/users/:userId/wallet', async (req, res) => {

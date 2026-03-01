@@ -31,7 +31,10 @@ router.post('/login', async (req, res) => {
     console.log('[LOGIN] Trimmed email:', cleanIdentifier);
     console.log('[LOGIN] Trimmed password length:', cleanPassword.length);
 
-    const user = await User.findOne({ identifier: cleanIdentifier }).exec();
+    const user = await User.findOne({ 
+      identifier: cleanIdentifier,
+      isDeleted: { $ne: true }  // Exclude soft-deleted users
+    }).exec();
     if (!user) {
       console.log('[LOGIN] ❌ User not found:', cleanIdentifier);
       return res.status(401).json({ error: 'Invalid credentials' });
