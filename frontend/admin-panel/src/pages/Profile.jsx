@@ -2067,95 +2067,14 @@ const Profile = () => {
             <span style={{ fontSize: '14px', fontWeight: '600' }}>{toast.message}</span>
           </div>
         )}
+
+        {/* Global Styles */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}} />
       </div>
     </div>
-    <style>{`
-      @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-      
-      /* MOBILE RESPONSIVE - User Detail View */
-      @media (max-width: 768px) {
-        /* User Detail Container */
-        [style*="maxWidth: '1200px'"] {
-          padding: 0 12px !important;
-        }
-        
-        /* User Detail Header */
-        [style*="display: 'flex'"][style*="alignItems: 'flex-start'"][style*="gap: '20px'"] {
-          flex-direction: column !important;
-          align-items: stretch !important;
-        }
-        
-        /* User Info Section */
-        [style*="flex: 1"][style*="minWidth: '200px'"] {
-          min-width: 0 !important;
-          margin-top: 12px !important;
-        }
-        
-        /* Action Buttons */
-        [style*="display: 'flex'"][style*="gap: '8px'"][style*="flexWrap: 'wrap'"] {
-          flex-direction: column !important;
-          margin-top: 16px !important;
-        }
-        
-        /* Action Buttons Inside */
-        [style*="display: 'flex'"][style*="gap: '8px'"][style*="flexWrap: 'wrap'"] > button {
-          width: 100% !important;
-          margin-bottom: 8px !important;
-        }
-        
-        /* Quick Actions Grid */
-        [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'"] {
-          grid-template-columns: 1fr !important;
-        }
-        
-        /* Stats Cards Grid */
-        [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'"] {
-          grid-template-columns: repeat(2, 1fr) !important;
-          gap: 8px !important;
-        }
-        
-        /* Stats Card Content */
-        [style*="fontSize: '32px'"][style*="fontWeight: '800'"] {
-          font-size: 24px !important;
-        }
-        
-        /* Tab Navigation */
-        [style*="display: 'flex'"][style*="gap: '6px'"] {
-          flex-wrap: wrap !important;
-          justify-content: center !important;
-        }
-        
-        [style*="padding: '10px 20px'"][style*="fontSize: '14px'"] {
-          padding: 8px 16px !important;
-          font-size: 12px !important;
-          margin-bottom: 4px !important;
-        }
-        
-        /* User Task List */
-        [style*="display: 'flex'"][style*="justifyContent: 'space-between'"] {
-          flex-direction: column !important;
-          gap: 8px !important;
-        }
-        
-        /* Task Status Badge */
-        [style*="textAlign: 'right'"] {
-          text-align: left !important;
-          margin-top: 8px !important;
-        }
-      }
-      
-      /* Tablet responsive */
-      @media (min-width: 769px) and (max-width: 1024px) {
-        [style*="maxWidth: '1200px'"] {
-          padding: 0 16px !important;
-        }
-        
-        /* Stats Cards */
-        [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'"] {
-          grid-template-columns: repeat(2, 1fr) !important;
-        }
-      }
-    `}</style>
   );
 };
 
