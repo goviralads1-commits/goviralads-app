@@ -90,12 +90,12 @@ const OfficeCMS = () => {
   const handleEditBanner = (banner) => {
     setEditingBanner(banner.id);
     setBannerForm({
-      title: banner.title,
+      title: banner.title || '',
       subtitle: banner.subtitle || '',
       gradient: banner.gradient || '',
       imageUrl: banner.imageUrl || '',
-      ctaText: banner.ctaText || 'Explore Now',
-      ctaLink: banner.ctaLink || '/plans',
+      ctaText: banner.ctaText || '',
+      ctaLink: banner.ctaLink || '',
       ctaLinkType: banner.ctaLinkType || 'internal'
     });
   };

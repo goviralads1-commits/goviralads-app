@@ -589,9 +589,11 @@ const Dashboard = () => {
                 {banners[currentBanner].subtitle}
               </p>
             )}
-            <button style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', position: 'relative', zIndex: 1 }}>
-              Explore Now
-            </button>
+            {(banners[currentBanner].ctaText && banners[currentBanner].ctaLink) && (
+              <button style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', position: 'relative', zIndex: 1 }}>
+                {banners[currentBanner].ctaText}
+              </button>
+            )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '14px' }}>
             {banners.map((_, idx) => (
