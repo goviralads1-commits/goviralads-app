@@ -2122,6 +2122,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           entityType: ENTITY_TYPES.ORDER || 'ORDER',
           entityId: order._id,
         },
+        notifyByEmail: true,
       });
     } catch (notifErr) {
       console.error('[ADMIN/ORDERS] Notification error:', notifErr);
@@ -2210,6 +2211,7 @@ router.post('/orders/:orderId/reject', async (req, res) => {
           entityType: ENTITY_TYPES.ORDER || 'ORDER',
           entityId: order._id,
         },
+        notifyByEmail: true,
       });
     } catch (notifErr) {
       console.error('[ADMIN/ORDERS] Notification error:', notifErr);
