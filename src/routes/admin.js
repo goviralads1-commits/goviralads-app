@@ -249,6 +249,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
     console.log('Step 6: Request status updated to APPROVED');
 
     // --- Billing Hook removed (module not available) ---
+    let invoice = null;
     console.log('=== APPROVE COMPLETE ===');
 
     // --- Notification Hook (Phase 5) ---
