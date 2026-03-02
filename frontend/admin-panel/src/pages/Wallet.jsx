@@ -381,14 +381,16 @@ const Wallet = () => {
                   {rechargeRequests.filter(r => r.status === 'PENDING').map(req => (
                     <div key={req.id} style={{
                       display: 'flex',
+                      flexWrap: 'wrap',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '16px 20px',
+                      gap: '12px',
+                      padding: '16px',
                       backgroundColor: '#fffbeb',
                       borderRadius: '12px',
                       border: '2px solid #fcd34d'
                     }}>
-                      <div>
+                      <div style={{flex: '1 1 200px', minWidth: 0}}>
                         <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0'}}>
                           {req.clientIdentifier}
                         </p>
@@ -399,12 +401,12 @@ const Wallet = () => {
                           Ref: {req.paymentReference} • {new Date(req.createdAt).toLocaleString()}
                         </p>
                       </div>
-                      <div style={{display: 'flex', gap: '8px'}}>
+                      <div style={{display: 'flex', gap: '8px', flexShrink: 0}}>
                         <button
                           onClick={() => handleReject(req.id)}
                           disabled={processingRequestId === req.id}
                           style={{
-                            padding: '10px 20px',
+                            padding: '8px 16px',
                             backgroundColor: '#fee2e2',
                             color: '#dc2626',
                             fontSize: '13px',
@@ -421,7 +423,7 @@ const Wallet = () => {
                           onClick={() => handleApprove(req.id)}
                           disabled={processingRequestId === req.id}
                           style={{
-                            padding: '10px 20px',
+                            padding: '8px 16px',
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                             color: '#fff',
                             fontSize: '13px',
