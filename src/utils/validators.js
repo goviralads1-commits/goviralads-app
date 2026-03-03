@@ -1,4 +1,9 @@
 const Wallet = require('../models/Wallet');
+
+// HTML sanitization utility for task descriptions
+function stripHtmlTags(input = '') {
+  return input.replace(/<\/?[^>]+(>|$)/g, '');
+}
 const { WalletTransaction, TRANSACTION_TYPES } = require('../models/WalletTransaction');
 const { RechargeRequest, RECHARGE_STATUS } = require('../models/RechargeRequest');
 const { Task, TASK_STATUS } = require('../models/Task');
@@ -152,4 +157,5 @@ module.exports = {
   validateTaskTransactionLinkage,
   validateTaskStatusTransitions,
   validateTemplateConsistency,
+  stripHtmlTags,
 };

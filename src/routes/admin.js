@@ -20,6 +20,7 @@ const { ROLES } = require('../config');
 const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
+const { stripHtmlTags } = require('../utils/validators');
 
 const router = express.Router();
 
@@ -2086,7 +2087,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           clientId: order.clientId,
           templateId: item.planId,
           title: item.planTitle + (item.quantity > 1 ? ` (${i + 1}/${item.quantity})` : ''),
-          description: item.planSnapshot?.description || '',
+          description: stripHtmlTags(item.planSnapshot?.description || ''),
           creditCost: item.unitPrice,
           status: TASK_STATUS.IN_PROGRESS,
           progressMode: item.planSnapshot?.progressMode || 'AUTO',
