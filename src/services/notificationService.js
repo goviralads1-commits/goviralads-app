@@ -149,6 +149,45 @@ async function triggerNotificationEmail(notifData) {
         content: notifData.message,
         dashboardUrl
       });
+    } else if (type === NOTIFICATION_TYPES.ORDER_APPROVED || type === NOTIFICATION_TYPES.ORDER_REJECTED) {
+      // Order-specific email templates
+      const isApproved = type === NOTIFICATION_TYPES.ORDER_APPROVED;
+      const icon = isApproved ? '✅' : '❌';
+      const statusText = isApproved ? 'Approved' : 'Rejected';
+      const gradient = isApproved ? '#22c55e, #16a34a' : '#ef4444, #dc2626';
+      const bodyText = isApproved 
+        ? 'Your order has been approved and work has started. You can track progress inside your dashboard.'
+        : 'Your order has been rejected. If applicable, your wallet has been refunded. Please check your dashboard for details.';
+      
+      console.log('[NOTIF EMAIL] Sending ORDER email:', { type, to: recipientEmail });
+      
+      await emailService.send({
+        to: recipientEmail,
+        subject: `${icon} Order ${statusText} - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, ${gradient}); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">Order ${statusText} ${icon}</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">Order ${statusText}</h2>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${bodyText}</p>
+                <a href="${dashboardUrl}/orders" style="display: inline-block; padding: 14px 32px; background: ${isApproved ? '#22c55e' : '#6366f1'}; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
+                  View Orders
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
     } else {
       // Generic notification email
       await emailService.send({
