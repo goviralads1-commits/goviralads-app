@@ -546,7 +546,7 @@ const TaskDetail = () => {
                 {/* Priority */}
                 <div style={{ marginBottom: '24px' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '12px' }}>Priority</label>
-                  <div style={{ display: 'flex', gap: '10px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
                     {['Low', 'Medium', 'High'].map(priority => {
                       const pStyle = getPriorityStyle(priority);
                       const isSelected = formData.priority === priority;
@@ -601,7 +601,7 @@ const TaskDetail = () => {
                   <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Timeline</h2>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Start Date</label>
                     <input
@@ -690,7 +690,7 @@ const TaskDetail = () => {
                         .map((milestone, idx) => {
                           const originalIdx = formData.milestones.findIndex(m => m === milestone);
                           return (
-                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                               {/* Color Picker */}
                               <input
                                 type="color"
@@ -878,7 +878,7 @@ const TaskDetail = () => {
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         backgroundColor: '#fff', borderTop: '1px solid #e2e8f0',
-        padding: '16px 24px', boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
+        padding: '16px', boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         zIndex: 50
       }}>

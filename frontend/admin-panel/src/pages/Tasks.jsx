@@ -392,7 +392,7 @@ const Tasks = () => {
             <div style={{width: '130px', height: '48px', backgroundColor: '#e2e8f0', borderRadius: '10px', animation: 'pulse 1.5s infinite'}}></div>
           </div>
           {/* Skeleton Cards */}
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '24px'}}>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '24px'}}>
             {[1,2,3,4,5,6].map(i => (
               <div key={i} style={{backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '16px'}}>
@@ -681,7 +681,7 @@ const Tasks = () => {
         </div>
 
         {/* Tasks Card Grid */}
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '24px'}}>
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '24px'}}>
           {getFilteredTasks().map((task) => {
             const formatDate = (date) => {
               if (!date) return '';
