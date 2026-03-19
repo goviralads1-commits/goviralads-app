@@ -24,6 +24,13 @@ const Tasks = () => {
     sort: 'newest'
   });
   
+  // Bulk selection state (Phase 7)
+  const [selectedTasks, setSelectedTasks] = useState([]);
+  const [bulkApproving, setBulkApproving] = useState(false);
+  
+  // Quick filter tab (Phase 7)
+  const [quickFilter, setQuickFilter] = useState('ALL');
+  
   // Status change modal
   const [statusModal, setStatusModal] = useState({ open: false, task: null });
   const [changingStatus, setChangingStatus] = useState(false);
@@ -165,7 +172,21 @@ const Tasks = () => {
   const getFilteredTasks = () => {
     let filtered = [...tasks];
     
-    // Status filter
+    // Exclude plan templates from task list
+    filtered = filtered.filter(t => !t.isListedInPlans);
+    
+    // PHASE 7: Quick filter (takes precedence)
+    if (quickFilter !== 'ALL') {
+      if (quickFilter === 'PENDING') {
+        filtered = filtered.filter(t => t.status === 'PENDING_APPROVAL');
+      } else if (quickFilter === 'OVERDUE') {
+        filtered = filtered.filter(t => isOverdue(t));
+      } else {
+        filtered = filtered.filter(t => t.status === quickFilter);
+      }
+    }
+    
+    // Status filter (dropdown)
     if (filters.status !== 'ALL') {
       if (filters.status === 'OVERDUE') {
         const now = new Date();
@@ -356,6 +377,96 @@ const Tasks = () => {
     }
   };
 
+  // PHASE 7: Quick Approve (no modal)
+  const handleQuickApprove = async (task) => {
+    try {
+      const taskId = task.id || task._id;
+      await api.patch(`/admin/tasks/${taskId}/approve`, {
+        title: task.title,
+        description: task.description,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+        priority: task.priority || 'Medium',
+        status: 'ACTIVE'
+      });
+      setToast('Task approved!');
+      const tasksResponse = await api.get('/admin/tasks');
+      setTasks(tasksResponse.data.tasks || []);
+      setTimeout(() => setToast(null), 2000);
+    } catch (err) {
+      setToast(err.response?.data?.error || 'Failed to approve');
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  // PHASE 7: Quick Reject (no modal)
+  const handleQuickReject = async (task) => {
+    if (!window.confirm('Reject this task and refund credits?')) return;
+    try {
+      const taskId = task.id || task._id;
+      await api.post(`/admin/tasks/${taskId}/reject`, { reason: 'Rejected by admin' });
+      setToast('Task rejected, credits refunded');
+      const tasksResponse = await api.get('/admin/tasks');
+      setTasks(tasksResponse.data.tasks || []);
+      setTimeout(() => setToast(null), 2000);
+    } catch (err) {
+      setToast(err.response?.data?.error || 'Failed to reject');
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  // PHASE 7: Bulk Select Toggle
+  const toggleTaskSelection = (taskId) => {
+    setSelectedTasks(prev => 
+      prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
+    );
+  };
+
+  // PHASE 7: Select All Pending
+  const selectAllPending = () => {
+    const pendingIds = tasks.filter(t => t.status === 'PENDING_APPROVAL').map(t => t.id || t._id);
+    setSelectedTasks(prev => prev.length === pendingIds.length ? [] : pendingIds);
+  };
+
+  // PHASE 7: Bulk Approve Selected
+  const handleBulkApprove = async () => {
+    if (selectedTasks.length === 0) return;
+    setBulkApproving(true);
+    let successCount = 0;
+    for (const taskId of selectedTasks) {
+      try {
+        const task = tasks.find(t => (t.id || t._id) === taskId);
+        if (task && task.status === 'PENDING_APPROVAL') {
+          await api.patch(`/admin/tasks/${taskId}/approve`, {
+            title: task.title,
+            description: task.description,
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+            priority: task.priority || 'Medium',
+            status: 'ACTIVE'
+          });
+          successCount++;
+        }
+      } catch (err) {
+        console.log(`Failed to approve task ${taskId}`);
+      }
+    }
+    setSelectedTasks([]);
+    setBulkApproving(false);
+    const tasksResponse = await api.get('/admin/tasks');
+    setTasks(tasksResponse.data.tasks || []);
+    setToast(`${successCount} task(s) approved!`);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // PHASE 7: Check if task is overdue
+  const isOverdue = (task) => {
+    if (task.status === 'COMPLETED' || task.status === 'CANCELLED') return false;
+    const endDate = task.endDate || task.deadline;
+    if (!endDate) return false;
+    return new Date(endDate) < new Date() && task.status !== 'COMPLETED';
+  };
+
   // Handle status change
   const handleStatusChange = async (taskId, newStatus) => {
     setChangingStatus(true);
@@ -461,36 +572,87 @@ const Tasks = () => {
                 {tasks.filter(t => t.status === 'PENDING_APPROVAL').length}
               </span>
               Pending Approvals
+              {/* Select All Toggle */}
+              <button
+                onClick={selectAllPending}
+                style={{
+                  marginLeft: 'auto', padding: '6px 12px', fontSize: '12px', fontWeight: '600',
+                  backgroundColor: selectedTasks.length === tasks.filter(t => t.status === 'PENDING_APPROVAL').length && selectedTasks.length > 0 ? '#6366f1' : '#f1f5f9',
+                  color: selectedTasks.length === tasks.filter(t => t.status === 'PENDING_APPROVAL').length && selectedTasks.length > 0 ? '#fff' : '#64748b',
+                  border: 'none', borderRadius: '8px', cursor: 'pointer'
+                }}
+              >
+                {selectedTasks.length === tasks.filter(t => t.status === 'PENDING_APPROVAL').length && selectedTasks.length > 0 ? 'Deselect All' : 'Select All'}
+              </button>
             </h2>
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px'}}>
               {tasks.filter(t => t.status === 'PENDING_APPROVAL').map(task => (
                 <div key={task.id || task._id} style={{
-                  backgroundColor: '#fff', border: '2px solid #6366f1', borderRadius: '16px', padding: '20px',
+                  backgroundColor: selectedTasks.includes(task.id || task._id) ? '#f0f0ff' : '#fff',
+                  border: `2px solid ${selectedTasks.includes(task.id || task._id) ? '#4f46e5' : '#6366f1'}`,
+                  borderRadius: '16px', padding: '20px',
                   boxShadow: '0 4px 12px rgba(99,102,241,0.1)', display: 'flex', flexDirection: 'column', gap: '12px'
                 }}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
-                    <div>
-                      <h3 style={{fontSize: '16px', fontWeight: '700', color: '#1e293b', margin: 0}}>{task.title}</h3>
-                      <p style={{fontSize: '13px', color: '#64748b', margin: '4px 0 0 0'}}>
-                        Client: <strong>{task.clientName || task.client?.name || `Client #${task.clientId?.slice(-6)}`}</strong>
-                      </p>
+                  {/* Checkbox + Title Row */}
+                  <div style={{display: 'flex', alignItems: 'flex-start', gap: '12px'}}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTasks.includes(task.id || task._id)}
+                      onChange={() => toggleTaskSelection(task.id || task._id)}
+                      style={{ width: '18px', height: '18px', marginTop: '2px', cursor: 'pointer', accentColor: '#6366f1' }}
+                    />
+                    <div style={{flex: 1}}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                        <div>
+                          <h3 style={{fontSize: '16px', fontWeight: '700', color: '#1e293b', margin: 0}}>{task.title}</h3>
+                          <p style={{fontSize: '13px', color: '#64748b', margin: '4px 0 0 0'}}>
+                            Client: <strong>{task.clientName || task.client?.name || `Client #${task.clientId?.slice(-6)}`}</strong>
+                          </p>
+                        </div>
+                        <span style={{fontSize: '18px', fontWeight: '800', color: '#6366f1'}}>₹{task.creditCost}</span>
+                      </div>
                     </div>
-                    <span style={{fontSize: '18px', fontWeight: '800', color: '#6366f1'}}>₹{task.creditCost}</span>
                   </div>
-                  <p style={{fontSize: '13px', color: '#475569', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'}}>
+                  <p style={{fontSize: '13px', color: '#475569', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingLeft: '30px'}}>
                     {task.description || 'No description provided'}
                   </p>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '12px', borderTop: '1px solid #f1f5f9'}}>
+                  {/* Actions Row */}
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', paddingTop: '12px', borderTop: '1px solid #f1f5f9', paddingLeft: '30px'}}>
                     <span style={{fontSize: '12px', color: '#94a3b8'}}>Purchased: {new Date(task.createdAt).toLocaleDateString()}</span>
-                    <button 
-                      onClick={() => handleOpenApproval(task)}
-                      style={{
-                        padding: '8px 16px', backgroundColor: '#6366f1', color: '#fff', border: 'none',
-                        borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                      }}
-                    >
-                      Review & Approve
-                    </button>
+                    <div style={{display: 'flex', gap: '8px'}}>
+                      {/* Quick Approve */}
+                      <button 
+                        onClick={() => handleQuickApprove(task)}
+                        style={{
+                          padding: '6px 12px', backgroundColor: '#22c55e', color: '#fff', border: 'none',
+                          borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                        }}
+                        title="Quick Approve"
+                      >
+                        ✓ Approve
+                      </button>
+                      {/* Quick Reject */}
+                      <button 
+                        onClick={() => handleQuickReject(task)}
+                        style={{
+                          padding: '6px 12px', backgroundColor: '#ef4444', color: '#fff', border: 'none',
+                          borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                        }}
+                        title="Quick Reject"
+                      >
+                        ✕ Reject
+                      </button>
+                      {/* Full Review */}
+                      <button 
+                        onClick={() => handleOpenApproval(task)}
+                        style={{
+                          padding: '6px 12px', backgroundColor: '#6366f1', color: '#fff', border: 'none',
+                          borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                        }}
+                      >
+                        Review
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -531,6 +693,71 @@ const Tasks = () => {
             </svg>
             Create Task
           </button>
+        </div>
+
+        {/* PHASE 7: Quick Filter Tabs */}
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center'
+        }}>
+          {[
+            { key: 'ALL', label: 'All Tasks', count: tasks.filter(t => !t.isListedInPlans).length },
+            { key: 'PENDING', label: 'Pending', count: tasks.filter(t => t.status === 'PENDING_APPROVAL' && !t.isListedInPlans).length, color: '#6366f1' },
+            { key: 'ACTIVE', label: 'Active', count: tasks.filter(t => t.status === 'ACTIVE' && !t.isListedInPlans).length, color: '#22c55e' },
+            { key: 'COMPLETED', label: 'Completed', count: tasks.filter(t => t.status === 'COMPLETED' && !t.isListedInPlans).length, color: '#94a3b8' },
+            { key: 'OVERDUE', label: 'Overdue', count: tasks.filter(t => isOverdue(t) && !t.isListedInPlans).length, color: '#ef4444' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setQuickFilter(tab.key)}
+              style={{
+                padding: '8px 16px', borderRadius: '10px', border: 'none',
+                backgroundColor: quickFilter === tab.key ? (tab.color || '#0f172a') : '#f1f5f9',
+                color: quickFilter === tab.key ? '#fff' : '#64748b',
+                fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '6px'
+              }}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{
+                  padding: '2px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
+                  backgroundColor: quickFilter === tab.key ? 'rgba(255,255,255,0.2)' : (tab.color || '#e2e8f0'),
+                  color: quickFilter === tab.key ? '#fff' : '#fff'
+                }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+
+          {/* Bulk Actions */}
+          {selectedTasks.length > 0 && (
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', color: '#64748b' }}>{selectedTasks.length} selected</span>
+              <button
+                onClick={handleBulkApprove}
+                disabled={bulkApproving}
+                style={{
+                  padding: '8px 16px', borderRadius: '10px', border: 'none',
+                  backgroundColor: '#22c55e', color: '#fff',
+                  fontSize: '13px', fontWeight: '600', cursor: bulkApproving ? 'not-allowed' : 'pointer',
+                  opacity: bulkApproving ? 0.6 : 1
+                }}
+              >
+                {bulkApproving ? 'Approving...' : 'Approve Selected'}
+              </button>
+              <button
+                onClick={() => setSelectedTasks([])}
+                style={{
+                  padding: '8px 12px', borderRadius: '10px', border: '2px solid #e2e8f0',
+                  backgroundColor: '#fff', color: '#64748b',
+                  fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Filter Bar */}
@@ -747,8 +974,9 @@ const Tasks = () => {
                   borderRadius: '20px',
                   padding: '24px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)',
-                  border: isOverdue ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(0,0,0,0.04)',
-                  transition: 'all 0.2s ease'
+                  border: isOverdue ? '2px solid #ef4444' : '1px solid rgba(0,0,0,0.04)',
+                  transition: 'all 0.2s ease',
+                  position: 'relative'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
@@ -759,6 +987,17 @@ const Tasks = () => {
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
+                {/* PHASE 7: Overdue Badge */}
+                {isOverdue && (
+                  <span style={{
+                    position: 'absolute', top: '-8px', right: '12px',
+                    backgroundColor: '#ef4444', color: '#fff',
+                    padding: '4px 10px', borderRadius: '6px',
+                    fontSize: '10px', fontWeight: '700', textTransform: 'uppercase'
+                  }}>
+                    Overdue
+                  </span>
+                )}
                 {/* Row 1: Title + Status */}
                 <div style={{display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px'}}>
                   <h3 style={{fontSize: '17px', fontWeight: '600', color: '#111827', margin: '0', lineHeight: '1.4', flex: '1', paddingRight: '12px'}}>
