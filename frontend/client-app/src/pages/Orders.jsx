@@ -25,6 +25,8 @@ const Orders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [orderInvoice, setOrderInvoice] = useState(null);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
 
   // Fetch orders
   const fetchOrders = useCallback(async () => {
@@ -62,14 +64,52 @@ const Orders = () => {
     setSelectedOrder(order);
     setShowDetailModal(true);
     setDetailLoading(true);
+    setOrderInvoice(null);
     
     try {
       const res = await api.get(`/client/orders/${order.id || order._id}`);
       setSelectedOrder(res.data.order);
+      
+      // Fetch invoice if order is approved
+      if (res.data.order?.orderStatus === 'APPROVED' || res.data.order?.orderStatus === 'IN_PROGRESS' || res.data.order?.orderStatus === 'COMPLETED') {
+        try {
+          const invoiceRes = await api.get(`/client/orders/${order.id || order._id}/invoice`);
+          setOrderInvoice(invoiceRes.data.invoice);
+        } catch (invErr) {
+          // No invoice yet - that's ok
+          console.log('No invoice found for order');
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch order details:', err);
     } finally {
       setDetailLoading(false);
+    }
+  };
+  
+  // Download invoice PDF
+  const handleDownloadInvoice = async () => {
+    if (!orderInvoice) return;
+    
+    setDownloadingInvoice(true);
+    try {
+      const res = await api.get(`/client/invoices/${orderInvoice.id}/download`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${orderInvoice.invoiceNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download invoice:', err);
+      alert('Failed to download invoice. Please try again.');
+    } finally {
+      setDownloadingInvoice(false);
     }
   };
 
@@ -349,6 +389,39 @@ const Orders = () => {
                       {formatCurrency(selectedOrder.totalAmount)}
                     </span>
                   </div>
+
+                  {/* Download Invoice Button (only for approved orders with invoice) */}
+                  {orderInvoice && orderInvoice.isDownloadableByClient && (
+                    <div style={{ marginBottom: '24px' }}>
+                      <button
+                        onClick={handleDownloadInvoice}
+                        disabled={downloadingInvoice}
+                        style={{
+                          width: '100%',
+                          padding: '14px 20px',
+                          backgroundColor: downloadingInvoice ? '#94a3b8' : '#6366f1',
+                          color: '#fff',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          borderRadius: '12px',
+                          border: 'none',
+                          cursor: downloadingInvoice ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          transition: 'background 0.2s'
+                        }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" strokeLinecap="round" strokeLinejoin="round" />
+                          <polyline points="7,10 12,15 17,10" strokeLinecap="round" strokeLinejoin="round" />
+                          <line x1="12" y1="15" x2="12" y2="3" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        {downloadingInvoice ? 'Downloading...' : `Download Invoice (${orderInvoice.invoiceNumber})`}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Order Timeline */}
                   <div style={{ marginBottom: '24px' }}>

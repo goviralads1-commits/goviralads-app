@@ -1,8 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import api from '../services/api';
 import Header from '../components/Header';
 import ProgressWithFlag from '../components/ProgressWithFlag';
+
+// Utility: Clean description - handles HTML and plain text
+const formatDescription = (desc) => {
+  if (!desc || typeof desc !== 'string') return null;
+  
+  // Check if contains HTML tags
+  const hasHtml = /<[^>]+>/.test(desc);
+  
+  if (hasHtml) {
+    // For legacy HTML content - sanitize and strip tags for clean display
+    const clean = DOMPurify.sanitize(desc, { ALLOWED_TAGS: [] });
+    return clean.trim() || null;
+  }
+  
+  // Plain text - return as-is
+  return desc.trim() || null;
+};
 
 const TaskDetail = () => {
   const { taskId } = useParams();
@@ -345,11 +363,12 @@ const TaskDetail = () => {
           )}
 
           {/* Short Description */}
-          {task.description && (
+          {formatDescription(task.description) && (
             <p style={{
-              fontSize: '16px', color: '#666', margin: '16px 0 0 0', lineHeight: 1.6
+              fontSize: '16px', color: '#666', margin: '16px 0 0 0', lineHeight: 1.6,
+              whiteSpace: 'pre-wrap' // Preserve line breaks from backend
             }}>
-              {task.description}
+              {formatDescription(task.description)}
             </p>
           )}
         </div>

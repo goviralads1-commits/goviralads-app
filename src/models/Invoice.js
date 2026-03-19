@@ -6,6 +6,12 @@ const INVOICE_STATUS = Object.freeze({
   CANCELLED: 'CANCELLED',
 });
 
+const INVOICE_TYPE = Object.freeze({
+  RECHARGE: 'RECHARGE',
+  ORDER: 'ORDER',
+  REFUND: 'REFUND',
+});
+
 const invoiceSchema = new mongoose.Schema(
   {
     invoiceNumber: {
@@ -20,16 +26,40 @@ const invoiceSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    
+    // Invoice type
+    invoiceType: {
+      type: String,
+      enum: Object.values(INVOICE_TYPE),
+      default: INVOICE_TYPE.RECHARGE,
+      index: true,
+    },
+    
+    // For RECHARGE invoices
     rechargeRequestId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'RechargeRequest',
-      required: true,
+      default: null,
     },
     transactionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'WalletTransaction',
       default: null,
     },
+    
+    // For ORDER invoices
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Order',
+      default: null,
+    },
+    items: [{
+      planTitle: String,
+      planIcon: String,
+      quantity: Number,
+      unitPrice: Number,
+      totalPrice: Number,
+    }],
 
     // Financial details
     amount: {
@@ -37,9 +67,18 @@ const invoiceSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    taxAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalAmount: {
+      type: Number,
+      default: function() { return this.amount + (this.taxAmount || 0); },
+    },
     paymentMethod: {
       type: String,
-      default: 'Online Transfer',
+      default: 'Wallet',
     },
     paymentReference: {
       type: String,
@@ -52,6 +91,41 @@ const invoiceSchema = new mongoose.Schema(
       enum: Object.values(INVOICE_STATUS),
       default: INVOICE_STATUS.FINALIZED,
       index: true,
+    },
+
+    // Billing snapshot (company details at time of invoice)
+    billingSnapshot: {
+      companyName: String,
+      companyAddress: String,
+      companyGST: String,
+      companyPAN: String,
+      companyEmail: String,
+      companyPhone: String,
+      companyState: String,
+    },
+    
+    // Client billing snapshot (frozen at invoice creation)
+    clientBillingSnapshot: {
+      name: String,
+      companyName: String,
+      email: String,
+      phone: String,
+      address: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: String,
+      gstNumber: String,
+    },
+    
+    // Tax details (frozen at invoice creation)
+    taxDetails: {
+      gstEnabled: { type: Boolean, default: false },
+      taxPercentage: { type: Number, default: 0 },
+      isGstInvoice: { type: Boolean, default: false }, // true if client has GST and GST is enabled
+      cgst: { type: Number, default: 0 }, // Central GST (intra-state)
+      sgst: { type: Number, default: 0 }, // State GST (intra-state)
+      igst: { type: Number, default: 0 }, // Integrated GST (inter-state)
     },
 
     // Admin controls
@@ -79,10 +153,12 @@ const invoiceSchema = new mongoose.Schema(
 // Compound index for faster queries
 invoiceSchema.index({ clientId: 1, createdAt: -1 });
 invoiceSchema.index({ status: 1, createdAt: -1 });
+invoiceSchema.index({ orderId: 1 });
 
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 
 module.exports = {
   Invoice,
   INVOICE_STATUS,
+  INVOICE_TYPE,
 };

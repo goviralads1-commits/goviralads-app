@@ -18,18 +18,32 @@ async function generateInvoicePDF(invoice) {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
+      // Use snapshot if available, fallback to config
+      const companySnapshot = invoice.billingSnapshot || {};
+      const clientSnapshot = invoice.clientBillingSnapshot || {};
+      const taxDetails = invoice.taxDetails || {};
+      const isGstInvoice = taxDetails.isGstInvoice || false;
+      
       // Header
-      doc.fontSize(24).font('Helvetica-Bold').text('TAX INVOICE', { align: 'center' });
+      const headerText = isGstInvoice ? 'TAX INVOICE' : 'INVOICE';
+      doc.fontSize(24).font('Helvetica-Bold').text(headerText, { align: 'center' });
       doc.moveDown(0.5);
 
-      // Company Details
-      doc.fontSize(12).font('Helvetica-Bold').text(config.companyName || 'Company Name');
+      // Company Details (from snapshot)
+      doc.fontSize(12).font('Helvetica-Bold').text(companySnapshot.companyName || config.companyName || 'Company Name');
       doc.fontSize(10).font('Helvetica');
-      if (config.companyAddress) doc.text(config.companyAddress);
-      if (config.companyEmail) doc.text(`Email: ${config.companyEmail}`);
-      if (config.companyPhone) doc.text(`Phone: ${config.companyPhone}`);
-      if (config.companyGST) doc.text(`GST: ${config.companyGST}`);
-      if (config.companyPAN) doc.text(`PAN: ${config.companyPAN}`);
+      if (companySnapshot.companyAddress || config.companyAddress) 
+        doc.text(companySnapshot.companyAddress || config.companyAddress);
+      if (companySnapshot.companyState || config.companyState) 
+        doc.text(`State: ${companySnapshot.companyState || config.companyState}`);
+      if (companySnapshot.companyEmail || config.companyEmail) 
+        doc.text(`Email: ${companySnapshot.companyEmail || config.companyEmail}`);
+      if (companySnapshot.companyPhone || config.companyPhone) 
+        doc.text(`Phone: ${companySnapshot.companyPhone || config.companyPhone}`);
+      if (companySnapshot.companyGST || config.companyGST) 
+        doc.text(`GSTIN: ${companySnapshot.companyGST || config.companyGST}`);
+      if (companySnapshot.companyPAN || config.companyPAN) 
+        doc.text(`PAN: ${companySnapshot.companyPAN || config.companyPAN}`);
       doc.moveDown();
 
       // Divider
@@ -48,19 +62,30 @@ async function generateInvoicePDF(invoice) {
       doc.text(`Invoice Number: ${invoice.invoiceNumber}`);
       doc.text(`Date: ${invoiceDate}`);
       doc.text(`Status: ${invoice.status}`);
+      doc.text(`Type: ${isGstInvoice ? 'GST Invoice' : 'Non-GST Invoice'}`);
       doc.moveDown();
 
-      // Bill To (use billing details if available, fallback to profile)
+      // Bill To (use snapshot if available, fallback to live data)
       const client = invoice.clientId;
       const billing = client?.billing || {};
       const profile = client?.profile || {};
-      const clientName = billing.name || profile.name || client?.identifier || 'Client';
-      const clientEmail = billing.email || client?.identifier || 'N/A';
-      const clientPhone = billing.phone || profile.phone || '';
-      const clientAddress = [billing.address, billing.city, billing.state, billing.pincode, billing.country]
-        .filter(Boolean).join(', ');
-      const clientGST = billing.gstNumber || '';
-      const clientCompany = billing.companyName || profile.company || '';
+      
+      // Prefer snapshot, fallback to live data
+      const clientName = clientSnapshot.name || billing.name || profile.name || client?.identifier || 'Client';
+      const clientEmail = clientSnapshot.email || billing.email || client?.identifier || 'N/A';
+      const clientPhone = clientSnapshot.phone || billing.phone || profile.phone || '';
+      const clientCompany = clientSnapshot.companyName || billing.companyName || profile.company || '';
+      const clientGST = clientSnapshot.gstNumber || billing.gstNumber || '';
+      
+      // Build address from snapshot or live data
+      let clientAddress = '';
+      if (clientSnapshot.address || clientSnapshot.city || clientSnapshot.state) {
+        clientAddress = [clientSnapshot.address, clientSnapshot.city, clientSnapshot.state, clientSnapshot.pincode, clientSnapshot.country]
+          .filter(Boolean).join(', ');
+      } else {
+        clientAddress = [billing.address, billing.city, billing.state, billing.pincode, billing.country]
+          .filter(Boolean).join(', ');
+      }
       
       doc.fontSize(11).font('Helvetica-Bold').text('Bill To', { underline: true });
       doc.moveDown(0.3);
@@ -70,7 +95,7 @@ async function generateInvoicePDF(invoice) {
       doc.text(`Email: ${clientEmail}`);
       if (clientPhone) doc.text(`Phone: ${clientPhone}`);
       if (clientAddress) doc.text(clientAddress);
-      if (clientGST) doc.text(`GST: ${clientGST}`);
+      if (clientGST) doc.text(`GSTIN: ${clientGST}`);
       doc.moveDown();
 
       // Divider
@@ -78,53 +103,131 @@ async function generateInvoicePDF(invoice) {
         .moveTo(50, doc.y).lineTo(545, doc.y).stroke();
       doc.moveDown();
 
-      // Payment Details Table
+      // Check invoice type for different table layout
+      const isOrderInvoice = invoice.invoiceType === 'ORDER' && invoice.items && invoice.items.length > 0;
+      
       const tableTop = doc.y;
-      const tableHeaders = ['Description', 'Payment Method', 'Reference', 'Amount'];
-      const colWidths = [200, 100, 130, 65];
-      let xPos = 50;
+      let rowY = tableTop;
+      const currencySymbol = config.currencySymbol || '₹';
+      
+      if (isOrderInvoice) {
+        // ORDER INVOICE - Show items table
+        const tableHeaders = ['Item', 'Qty', 'Unit Price', 'Total'];
+        const colWidths = [250, 50, 95, 100];
+        let xPos = 50;
 
-      // Table Header
-      doc.fillColor('#6366f1').rect(50, tableTop, 495, 25).fill();
-      doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold');
-      xPos = 50;
-      tableHeaders.forEach((header, i) => {
-        doc.text(header, xPos + 5, tableTop + 7, { width: colWidths[i] - 10 });
-        xPos += colWidths[i];
-      });
+        // Table Header
+        doc.fillColor('#6366f1').rect(50, tableTop, 495, 25).fill();
+        doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold');
+        xPos = 50;
+        tableHeaders.forEach((header, i) => {
+          doc.text(header, xPos + 5, tableTop + 7, { width: colWidths[i] - 10 });
+          xPos += colWidths[i];
+        });
 
-      // Table Row
-      const rowY = tableTop + 25;
-      doc.fillColor('#f8fafc').rect(50, rowY, 495, 30).fill();
-      doc.fillColor('#0f172a').fontSize(10).font('Helvetica');
-      xPos = 50;
-      const rowData = [
-        'Wallet Recharge',
-        invoice.paymentMethod || 'Online Transfer',
-        invoice.paymentReference || '-',
-        `${config.currencySymbol || '₹'}${invoice.amount.toLocaleString()}`
-      ];
-      rowData.forEach((data, i) => {
-        doc.text(data, xPos + 5, rowY + 10, { width: colWidths[i] - 10 });
-        xPos += colWidths[i];
-      });
+        // Table Rows
+        rowY = tableTop + 25;
+        const rowHeight = 28;
+        
+        invoice.items.forEach((item, idx) => {
+          const bgColor = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
+          doc.fillColor(bgColor).rect(50, rowY, 495, rowHeight).fill();
+          doc.fillColor('#0f172a').fontSize(10).font('Helvetica');
+          xPos = 50;
+          
+          const rowData = [
+            item.planTitle || 'Service',
+            String(item.quantity || 1),
+            `${currencySymbol}${(item.unitPrice || 0).toLocaleString()}`,
+            `${currencySymbol}${(item.totalPrice || 0).toLocaleString()}`
+          ];
+          rowData.forEach((data, i) => {
+            doc.text(data, xPos + 5, rowY + 8, { width: colWidths[i] - 10 });
+            xPos += colWidths[i];
+          });
+          rowY += rowHeight;
+        });
+      } else {
+        // RECHARGE INVOICE - Single row table
+        const tableHeaders = ['Description', 'Payment Method', 'Reference', 'Amount'];
+        const colWidths = [200, 100, 130, 65];
+        let xPos = 50;
+
+        // Table Header
+        doc.fillColor('#6366f1').rect(50, tableTop, 495, 25).fill();
+        doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold');
+        xPos = 50;
+        tableHeaders.forEach((header, i) => {
+          doc.text(header, xPos + 5, tableTop + 7, { width: colWidths[i] - 10 });
+          xPos += colWidths[i];
+        });
+
+        // Table Row
+        rowY = tableTop + 25;
+        doc.fillColor('#f8fafc').rect(50, rowY, 495, 30).fill();
+        doc.fillColor('#0f172a').fontSize(10).font('Helvetica');
+        xPos = 50;
+        const rowData = [
+          'Wallet Recharge',
+          invoice.paymentMethod || 'Online Transfer',
+          invoice.paymentReference || '-',
+          `${currencySymbol}${invoice.amount.toLocaleString()}`
+        ];
+        rowData.forEach((data, i) => {
+          doc.text(data, xPos + 5, rowY + 10, { width: colWidths[i] - 10 });
+          xPos += colWidths[i];
+        });
+        rowY += 30;
+      }
 
       doc.moveDown(3);
 
-      // Total
-      doc.y = rowY + 50;
-      doc.strokeColor('#e2e8f0').lineWidth(1)
-        .moveTo(350, doc.y).lineTo(545, doc.y).stroke();
+      // Totals Section
+      doc.y = rowY + 15;
+      const totalsStartX = 350;
+      const totalsWidth = 195;
+      
+      // Subtotal
+      doc.fontSize(10).font('Helvetica').fillColor('#0f172a');
+      doc.text(`Subtotal:`, totalsStartX, doc.y);
+      doc.text(`${currencySymbol}${invoice.amount.toLocaleString()}`, totalsStartX + 100, doc.y - 12, { align: 'right', width: totalsWidth - 100 });
       doc.moveDown(0.5);
       
-      doc.fontSize(12).font('Helvetica-Bold')
-        .text(`Total: ${config.currencySymbol || '₹'}${invoice.amount.toLocaleString()}`, 350, doc.y, { align: 'right' });
+      // GST Breakdown (only if GST invoice)
+      if (isGstInvoice && (invoice.taxAmount > 0)) {
+        if (taxDetails.cgst > 0 || taxDetails.sgst > 0) {
+          // Intra-state: CGST + SGST
+          const halfPercent = (taxDetails.taxPercentage || 0) / 2;
+          doc.text(`CGST (${halfPercent}%):`, totalsStartX, doc.y);
+          doc.text(`${currencySymbol}${taxDetails.cgst.toLocaleString()}`, totalsStartX + 100, doc.y - 12, { align: 'right', width: totalsWidth - 100 });
+          doc.moveDown(0.5);
+          doc.text(`SGST (${halfPercent}%):`, totalsStartX, doc.y);
+          doc.text(`${currencySymbol}${taxDetails.sgst.toLocaleString()}`, totalsStartX + 100, doc.y - 12, { align: 'right', width: totalsWidth - 100 });
+          doc.moveDown(0.5);
+        } else if (taxDetails.igst > 0) {
+          // Inter-state: IGST
+          doc.text(`IGST (${taxDetails.taxPercentage || 0}%):`, totalsStartX, doc.y);
+          doc.text(`${currencySymbol}${taxDetails.igst.toLocaleString()}`, totalsStartX + 100, doc.y - 12, { align: 'right', width: totalsWidth - 100 });
+          doc.moveDown(0.5);
+        }
+      }
+      
+      // Divider before total
+      doc.strokeColor('#e2e8f0').lineWidth(1)
+        .moveTo(totalsStartX, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+      
+      // Grand Total
+      const totalAmount = invoice.totalAmount || invoice.amount;
+      doc.fontSize(12).font('Helvetica-Bold');
+      doc.text(`Grand Total:`, totalsStartX, doc.y);
+      doc.text(`${currencySymbol}${totalAmount.toLocaleString()}`, totalsStartX + 100, doc.y - 14, { align: 'right', width: totalsWidth - 100 });
       
       doc.moveDown(2);
 
       // Notes
       if (invoice.notes) {
-        doc.fontSize(10).font('Helvetica-Bold').text('Notes:', 50);
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#0f172a').text('Notes:', 50);
         doc.font('Helvetica').text(invoice.notes);
       }
 

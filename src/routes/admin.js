@@ -18,6 +18,12 @@ const LegalPage = require('../models/LegalPage');
 const OfficeConfig = require('../models/OfficeConfig');
 const { ROLES } = require('../config');
 const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
+const { Invoice, INVOICE_STATUS } = require('../models/Invoice');
+const { Receipt, RECEIPT_STATUS } = require('../models/Receipt');
+const BillingConfig = require('../models/BillingConfig');
+const CreditPlan = require('../models/CreditPlan');
+const billingService = require('../services/billingService');
+const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
 const { stripHtmlTags } = require('../utils/validators');
@@ -249,8 +255,16 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
     );
     console.log('Step 6: Request status updated to APPROVED');
 
-    // --- Billing Hook removed (module not available) ---
+    // --- Billing Hook - Create Invoice for Recharge ---
     let invoice = null;
+    try {
+      invoice = await billingService.createInvoiceForRecharge(request, transaction, adminId);
+      if (invoice) {
+        console.log('[BILLING] Invoice created:', invoice.invoiceNumber);
+      }
+    } catch (billingErr) {
+      console.error('[BILLING] Failed to create invoice (non-blocking):', billingErr.message);
+    }
     console.log('=== APPROVE COMPLETE ===');
 
     // --- Notification Hook (Phase 5) ---
@@ -2113,6 +2127,17 @@ router.post('/orders/:orderId/approve', async (req, res) => {
     
     await session.commitTransaction();
     
+    // Create invoice for order (outside transaction)
+    let orderInvoice = null;
+    try {
+      orderInvoice = await billingService.createInvoiceForOrder(order, adminId);
+      if (orderInvoice) {
+        console.log('[BILLING] Order invoice created:', orderInvoice.invoiceNumber);
+      }
+    } catch (billingErr) {
+      console.error('[BILLING] Failed to create order invoice (non-blocking):', billingErr.message);
+    }
+    
     // Notify client (outside transaction)
     try {
       await createNotification({
@@ -2124,7 +2149,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           entityType: ENTITY_TYPES.ORDER || 'ORDER',
           entityId: order._id,
         },
-        notifyByEmail: true,
+        notifyByEmail: true, // Email trigger for important event
       });
     } catch (notifErr) {
       console.error('[ADMIN/ORDERS] Notification error:', notifErr);
@@ -2137,6 +2162,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
         orderId: order.orderId,
         orderStatus: order.orderStatus,
         taskCount: createdTaskIds.length,
+        invoiceNumber: orderInvoice?.invoiceNumber || null,
       },
     });
   } catch (err) {
@@ -2213,7 +2239,7 @@ router.post('/orders/:orderId/reject', async (req, res) => {
           entityType: ENTITY_TYPES.ORDER || 'ORDER',
           entityId: order._id,
         },
-        notifyByEmail: true,
+        notifyByEmail: true, // Email trigger for important event
       });
     } catch (notifErr) {
       console.error('[ADMIN/ORDERS] Notification error:', notifErr);
@@ -3298,7 +3324,7 @@ router.post('/users/:userId/assign-plan', async (req, res) => {
     // Create task from plan without deducting wallet (admin assigned)
     const task = await Task.create({
       title: plan.title,
-      description: plan.description,
+      description: stripHtmlTags(plan.description),
       clientId: userId,
       creditCost: creditCost || plan.creditCost,
       status: TASK_STATUS.ACTIVE,
@@ -4678,7 +4704,376 @@ router.patch('/office-config/featured-plans', async (req, res) => {
 });
 
 // =============================================
-// BILLING ROUTES (REMOVED - Module not available)
+// BILLING ROUTES
 // =============================================
+
+// GET /admin/billing/config - Fetch billing configuration
+router.get('/billing/config', async (req, res) => {
+  try {
+    const config = await BillingConfig.getConfig();
+    return res.status(200).json({
+      config: {
+        id: config._id.toString(),
+        companyName: config.companyName,
+        companyAddress: config.companyAddress,
+        companyGST: config.companyGST,
+        companyPAN: config.companyPAN,
+        companyEmail: config.companyEmail,
+        companyPhone: config.companyPhone,
+        companyLogo: config.companyLogo,
+        invoicePrefix: config.invoicePrefix,
+        receiptPrefix: config.receiptPrefix,
+        currencySymbol: config.currencySymbol,
+        currencyCode: config.currencyCode,
+        defaultClientInvoiceDownload: config.defaultClientInvoiceDownload,
+        defaultClientReceiptDownload: config.defaultClientReceiptDownload,
+        updatedAt: config.updatedAt,
+      }
+    });
+  } catch (err) {
+    console.error('[BILLING] Config fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch billing config' });
+  }
+});
+
+// PATCH /admin/billing/config - Update billing configuration
+router.patch('/billing/config', async (req, res) => {
+  try {
+    const updates = req.body;
+    // Only allow specific fields to be updated
+    const allowedFields = [
+      'companyName', 'companyAddress', 'companyGST', 'companyPAN',
+      'companyEmail', 'companyPhone', 'companyLogo',
+      'invoicePrefix', 'receiptPrefix', 'currencySymbol', 'currencyCode',
+      'defaultClientInvoiceDownload', 'defaultClientReceiptDownload'
+    ];
+    const safeUpdates = {};
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        safeUpdates[field] = updates[field];
+      }
+    }
+    const config = await billingService.updateBillingConfig(safeUpdates);
+    return res.status(200).json({
+      config: {
+        id: config._id.toString(),
+        companyName: config.companyName,
+        companyAddress: config.companyAddress,
+        companyGST: config.companyGST,
+        companyPAN: config.companyPAN,
+        companyEmail: config.companyEmail,
+        companyPhone: config.companyPhone,
+        companyLogo: config.companyLogo,
+        invoicePrefix: config.invoicePrefix,
+        receiptPrefix: config.receiptPrefix,
+        currencySymbol: config.currencySymbol,
+        currencyCode: config.currencyCode,
+        defaultClientInvoiceDownload: config.defaultClientInvoiceDownload,
+        defaultClientReceiptDownload: config.defaultClientReceiptDownload,
+        updatedAt: config.updatedAt,
+      }
+    });
+  } catch (err) {
+    console.error('[BILLING] Config update error:', err.message);
+    return res.status(500).json({ error: 'Failed to update billing config' });
+  }
+});
+
+// GET /admin/billing/invoices - List all invoices with filters
+router.get('/billing/invoices', async (req, res) => {
+  try {
+    const { clientId, status, dateFrom, dateTo } = req.query;
+    const invoices = await billingService.getInvoices({ clientId, status, dateFrom, dateTo });
+    return res.status(200).json({
+      invoices: invoices.map(inv => ({
+        id: inv._id.toString(),
+        invoiceNumber: inv.invoiceNumber,
+        clientId: inv.clientId?._id?.toString() || '',
+        clientIdentifier: inv.clientId?.identifier || '',
+        clientName: inv.clientId?.profile?.name || inv.clientId?.identifier || '',
+        rechargeRequestId: inv.rechargeRequestId?.toString() || '',
+        amount: inv.amount,
+        paymentMethod: inv.paymentMethod,
+        paymentReference: inv.paymentReference,
+        status: inv.status,
+        isDownloadableByClient: inv.isDownloadableByClient,
+        generatedBy: inv.generatedBy?.identifier || '',
+        notes: inv.notes,
+        createdAt: inv.createdAt,
+      }))
+    });
+  } catch (err) {
+    console.error('[BILLING] Invoices fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
+// GET /admin/billing/receipts - List all receipts with filters
+router.get('/billing/receipts', async (req, res) => {
+  try {
+    const { clientId, status, taskId, dateFrom, dateTo } = req.query;
+    const receipts = await billingService.getReceipts({ clientId, status, taskId, dateFrom, dateTo });
+    return res.status(200).json({
+      receipts: receipts.map(rcp => ({
+        id: rcp._id.toString(),
+        receiptNumber: rcp.receiptNumber,
+        clientId: rcp.clientId?._id?.toString() || '',
+        clientIdentifier: rcp.clientId?.identifier || '',
+        clientName: rcp.clientId?.profile?.name || rcp.clientId?.identifier || '',
+        taskId: rcp.taskId?._id?.toString() || '',
+        taskTitle: rcp.taskTitle || rcp.taskId?.title || '',
+        creditsUsed: rcp.creditsUsed,
+        status: rcp.status,
+        isDownloadableByClient: rcp.isDownloadableByClient,
+        createdAt: rcp.createdAt,
+      }))
+    });
+  } catch (err) {
+    console.error('[BILLING] Receipts fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch receipts' });
+  }
+});
+
+// PATCH /admin/billing/invoices/:id/download-toggle - Toggle invoice download permission
+router.patch('/billing/invoices/:id/download-toggle', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isDownloadableByClient } = req.body;
+    const invoice = await billingService.toggleInvoiceDownload(id, isDownloadableByClient);
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    return res.status(200).json({ success: true, isDownloadableByClient: invoice.isDownloadableByClient });
+  } catch (err) {
+    console.error('[BILLING] Invoice toggle error:', err.message);
+    return res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
+// PATCH /admin/billing/receipts/:id/download-toggle - Toggle receipt download permission
+router.patch('/billing/receipts/:id/download-toggle', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isDownloadableByClient } = req.body;
+    const receipt = await billingService.toggleReceiptDownload(id, isDownloadableByClient);
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+    return res.status(200).json({ success: true, isDownloadableByClient: receipt.isDownloadableByClient });
+  } catch (err) {
+    console.error('[BILLING] Receipt toggle error:', err.message);
+    return res.status(500).json({ error: 'Failed to update receipt' });
+  }
+});
+
+// GET /admin/billing/invoices/:id/pdf - Download invoice PDF
+router.get('/billing/invoices/:id/pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const invoice = await billingService.getInvoiceById(id);
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const pdfBuffer = await pdfService.generateInvoicePDF(invoice);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[BILLING] Invoice PDF error:', err.message);
+    return res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+// GET /admin/billing/receipts/:id/pdf - Download receipt PDF
+router.get('/billing/receipts/:id/pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const receipt = await billingService.getReceiptById(id);
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+    const pdfBuffer = await pdfService.generateReceiptPDF(receipt);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${receipt.receiptNumber}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[BILLING] Receipt PDF error:', err.message);
+    return res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+// ======================================================================
+// CREDIT PLANS CRUD (Admin manages credit plans for wallet upgrade)
+// NOTE: This does NOT modify wallet logic - only plan definitions
+// ======================================================================
+
+// GET /admin/credit-plans - List all credit plans
+router.get('/credit-plans', async (req, res) => {
+  try {
+    const plans = await CreditPlan.find()
+      .sort({ type: 1, displayOrder: 1, price: 1 })
+      .exec();
+    
+    return res.status(200).json({
+      plans: plans.map(p => ({
+        id: p._id.toString(),
+        name: p.name,
+        price: p.price,
+        credits: p.credits,
+        bonusCredits: p.bonusCredits,
+        totalCredits: p.totalCredits,
+        type: p.type,
+        description: p.description,
+        displayOrder: p.displayOrder,
+        isActive: p.isActive,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt
+      }))
+    });
+  } catch (err) {
+    console.error('[CREDIT_PLANS] List error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve credit plans' });
+  }
+});
+
+// POST /admin/credit-plans - Create a new credit plan
+router.post('/credit-plans', async (req, res) => {
+  try {
+    const { name, price, credits, bonusCredits, type, description, displayOrder, isActive } = req.body || {};
+    
+    // Validation
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Plan name is required' });
+    }
+    if (price === undefined || typeof price !== 'number' || price < 1) {
+      return res.status(400).json({ error: 'Price must be a positive number' });
+    }
+    if (credits === undefined || typeof credits !== 'number' || credits < 0) {
+      return res.status(400).json({ error: 'Credits must be a non-negative number' });
+    }
+    
+    const plan = await CreditPlan.create({
+      name: name.trim(),
+      price,
+      credits,
+      bonusCredits: bonusCredits || 0,
+      type: type === 'PACK' ? 'PACK' : 'PLAN',
+      description: description ? description.trim() : '',
+      displayOrder: displayOrder || 0,
+      isActive: isActive !== false
+    });
+    
+    console.log(`[CREDIT_PLANS] Created: ${plan.name} (${plan.type}) - ₹${plan.price}`);
+    
+    return res.status(201).json({
+      id: plan._id.toString(),
+      name: plan.name,
+      price: plan.price,
+      credits: plan.credits,
+      bonusCredits: plan.bonusCredits,
+      totalCredits: plan.totalCredits,
+      type: plan.type,
+      description: plan.description,
+      displayOrder: plan.displayOrder,
+      isActive: plan.isActive
+    });
+  } catch (err) {
+    console.error('[CREDIT_PLANS] Create error:', err.message);
+    return res.status(500).json({ error: 'Failed to create credit plan' });
+  }
+});
+
+// PATCH /admin/credit-plans/:id - Update a credit plan
+router.patch('/credit-plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, price, credits, bonusCredits, type, description, displayOrder, isActive } = req.body || {};
+    
+    const plan = await CreditPlan.findById(id);
+    if (!plan) {
+      return res.status(404).json({ error: 'Credit plan not found' });
+    }
+    
+    // Update only provided fields
+    if (name !== undefined) {
+      if (typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Plan name cannot be empty' });
+      }
+      plan.name = name.trim();
+    }
+    if (price !== undefined) {
+      if (typeof price !== 'number' || price < 1) {
+        return res.status(400).json({ error: 'Price must be a positive number' });
+      }
+      plan.price = price;
+    }
+    if (credits !== undefined) {
+      if (typeof credits !== 'number' || credits < 0) {
+        return res.status(400).json({ error: 'Credits must be a non-negative number' });
+      }
+      plan.credits = credits;
+    }
+    if (bonusCredits !== undefined) {
+      if (typeof bonusCredits !== 'number' || bonusCredits < 0) {
+        return res.status(400).json({ error: 'Bonus credits must be a non-negative number' });
+      }
+      plan.bonusCredits = bonusCredits;
+    }
+    if (type !== undefined) {
+      plan.type = type === 'PACK' ? 'PACK' : 'PLAN';
+    }
+    if (description !== undefined) {
+      plan.description = description ? description.trim() : '';
+    }
+    if (displayOrder !== undefined) {
+      plan.displayOrder = displayOrder || 0;
+    }
+    if (isActive !== undefined) {
+      plan.isActive = Boolean(isActive);
+    }
+    
+    await plan.save();
+    
+    console.log(`[CREDIT_PLANS] Updated: ${plan.name} (${plan._id})`);
+    
+    return res.status(200).json({
+      id: plan._id.toString(),
+      name: plan.name,
+      price: plan.price,
+      credits: plan.credits,
+      bonusCredits: plan.bonusCredits,
+      totalCredits: plan.totalCredits,
+      type: plan.type,
+      description: plan.description,
+      displayOrder: plan.displayOrder,
+      isActive: plan.isActive
+    });
+  } catch (err) {
+    console.error('[CREDIT_PLANS] Update error:', err.message);
+    return res.status(500).json({ error: 'Failed to update credit plan' });
+  }
+});
+
+// DELETE /admin/credit-plans/:id - Delete a credit plan
+router.delete('/credit-plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const plan = await CreditPlan.findById(id);
+    if (!plan) {
+      return res.status(404).json({ error: 'Credit plan not found' });
+    }
+    
+    const planName = plan.name;
+    await plan.deleteOne();
+    
+    console.log(`[CREDIT_PLANS] Deleted: ${planName} (${id})`);
+    
+    return res.status(200).json({ success: true, message: 'Credit plan deleted' });
+  } catch (err) {
+    console.error('[CREDIT_PLANS] Delete error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete credit plan' });
+  }
+});
 
 module.exports = router;

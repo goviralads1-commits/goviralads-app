@@ -405,6 +405,16 @@ const Billing = () => {
                   />
                 </div>
                 <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Company State</label>
+                  <input
+                    type="text"
+                    value={config.companyState || ''}
+                    onChange={e => setConfig({ ...config, companyState: e.target.value })}
+                    style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', boxSizing: 'border-box' }}
+                    placeholder="e.g. Maharashtra"
+                  />
+                </div>
+                <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>GST Number</label>
                   <input
                     type="text"
@@ -461,6 +471,55 @@ const Billing = () => {
                     style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
                   />
                 </div>
+                
+                {/* GST Settings Section */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '16px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📊</span> GST / Tax Settings
+                  </h3>
+                  <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
+                      <div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={config.gstEnabled || false}
+                            onChange={e => setConfig({ ...config, gstEnabled: e.target.checked })}
+                            style={{ width: '20px', height: '20px', accentColor: '#6366f1', cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>Enable GST for Invoices</span>
+                        </label>
+                        <p style={{ fontSize: '12px', color: '#64748b', margin: '6px 0 0 30px' }}>GST will be applied only to clients with GST number</p>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Tax Percentage (%)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={config.taxPercentage || 18}
+                          onChange={e => setConfig({ ...config, taxPercentage: parseFloat(e.target.value) || 0 })}
+                          disabled={!config.gstEnabled}
+                          style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', boxSizing: 'border-box', backgroundColor: config.gstEnabled ? '#fff' : '#f1f5f9', opacity: config.gstEnabled ? 1 : 0.6 }}
+                        />
+                      </div>
+                    </div>
+                    {config.gstEnabled && (
+                      <div style={{ marginTop: '16px', padding: '12px 16px', backgroundColor: '#dbeafe', borderRadius: '8px', border: '1px solid #93c5fd' }}>
+                        <p style={{ fontSize: '13px', color: '#1e40af', margin: 0 }}>
+                          <strong>ℹ️ Info:</strong> When GST is enabled, tax will be calculated only for clients who have provided their GST number. 
+                          {config.companyState ? (
+                            <span> Same-state clients (State: <strong>{config.companyState}</strong>) will see CGST + SGST, others will see IGST.</span>
+                          ) : (
+                            <span> Please set Company State to enable split GST (CGST/SGST vs IGST).</span>
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
                 <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '12px', marginTop: '8px' }}>
                   <button
                     onClick={handleSaveConfig}

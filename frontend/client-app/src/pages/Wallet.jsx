@@ -6,15 +6,18 @@ const Wallet = () => {
   const [walletData, setWalletData] = useState(null);
   const [rechargeRequests, setRechargeRequests] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [creditPlans, setCreditPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
   const [showRechargeForm, setShowRechargeForm] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [paymentRef, setPaymentRef] = useState('');
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'recharge' | 'invoices'
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
+  const [planTab, setPlanTab] = useState('PLAN'); // 'PLAN' | 'PACK'
 
   useEffect(() => {
     const fetchData = async () => {
@@ -23,19 +26,29 @@ const Wallet = () => {
         const walletResponse = await api.get('/client/wallet');
         const requestsResponse = await api.get('/client/wallet/recharge-requests');
         
-        // Optional: invoices endpoint may not exist yet
+        // Optional: invoices endpoint
         let invoicesData = [];
         try {
-          const invoicesResponse = await api.get('/client/billing/invoices');
+          const invoicesResponse = await api.get('/client/invoices');
           invoicesData = invoicesResponse.data.invoices || [];
         } catch (invoiceErr) {
           // Silently ignore if billing route not implemented
           console.log('[Wallet] Invoices endpoint not available');
         }
         
+        // Optional: credit plans
+        let plansData = [];
+        try {
+          const plansResponse = await api.get('/client/credit-plans');
+          plansData = plansResponse.data.plans || [];
+        } catch (planErr) {
+          console.log('[Wallet] Credit plans endpoint not available');
+        }
+        
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
         setInvoices(invoicesData);
+        setCreditPlans(plansData);
       } catch (err) {
         setError('Failed to load wallet data');
       } finally {
@@ -46,16 +59,16 @@ const Wallet = () => {
     fetchData();
   }, []);
 
-  const handleDownloadInvoice = async (invoiceId) => {
+  const handleDownloadInvoice = async (invoiceId, invoiceNumber) => {
     setDownloadingInvoice(invoiceId);
     try {
-      const response = await api.get(`/client/billing/invoices/${invoiceId}/pdf`, {
+      const response = await api.get(`/client/invoices/${invoiceId}/download`, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `invoice-${invoiceId}.pdf`);
+      link.setAttribute('download', `${invoiceNumber || 'invoice'}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -76,9 +89,17 @@ const Wallet = () => {
     setRechargeSubmitting(true);
     setError('');
     
+    const amount = selectedPlan ? selectedPlan.price : parseFloat(rechargeAmount);
+    if (!amount || amount < 1) {
+      setToast('Please select a plan or enter a valid amount');
+      setTimeout(() => setToast(null), 3000);
+      setRechargeSubmitting(false);
+      return;
+    }
+    
     try {
       const response = await api.post('/client/wallet/recharge', { 
-        amount: parseFloat(rechargeAmount),
+        amount,
         paymentReference: paymentRef
       });
       
@@ -89,6 +110,7 @@ const Wallet = () => {
       // Clear form
       setRechargeAmount('');
       setPaymentRef('');
+      setSelectedPlan(null);
       setShowRechargeForm(false);
       
       // Refresh data (errors won't override success)
@@ -179,7 +201,7 @@ const Wallet = () => {
           <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: '0 0 8px 0'}}>Current Balance</p>
           <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 16px 0'}}>₹{walletData?.balance?.toFixed(2) || '0.00'}</p>
           <button
-            onClick={() => setShowRechargeForm(!showRechargeForm)}
+            onClick={() => { setShowRechargeForm(!showRechargeForm); setSelectedPlan(null); setRechargeAmount(''); setPaymentRef(''); }}
             style={{
               padding: '12px 24px',
               backgroundColor: 'rgba(255,255,255,0.2)',
@@ -192,11 +214,11 @@ const Wallet = () => {
               backdropFilter: 'blur(10px)'
             }}
           >
-            Request Recharge
+            {showRechargeForm ? 'Close' : 'Upgrade Credits'}
           </button>
         </div>
 
-        {/* Recharge Form */}
+        {/* Recharge Form - Upgrade Credits */}
         {showRechargeForm && (
           <div style={{
             backgroundColor: '#fff',
@@ -205,8 +227,103 @@ const Wallet = () => {
             marginBottom: '24px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
           }}>
-            <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px 0'}}>Request Recharge</h3>
-            <form onSubmit={handleRechargeSubmit}>
+            <h3 style={{fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0'}}>Upgrade Credits</h3>
+            <p style={{fontSize: '14px', color: '#64748b', margin: '0 0 20px 0'}}>Choose a plan or credit pack to add to your wallet</p>
+            
+            {/* Plan/Pack Toggle */}
+            {creditPlans.length > 0 && (
+              <>
+                <div style={{
+                  display: 'flex',
+                  backgroundColor: '#f1f5f9',
+                  borderRadius: '12px',
+                  padding: '4px',
+                  marginBottom: '20px'
+                }}>
+                  <button
+                    onClick={() => { setPlanTab('PLAN'); setSelectedPlan(null); }}
+                    style={{
+                      flex: 1,
+                      padding: '10px 16px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      borderRadius: '10px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: planTab === 'PLAN' ? '#6366f1' : 'transparent',
+                      color: planTab === 'PLAN' ? '#fff' : '#64748b',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Plans (with Bonus)
+                  </button>
+                  <button
+                    onClick={() => { setPlanTab('PACK'); setSelectedPlan(null); }}
+                    style={{
+                      flex: 1,
+                      padding: '10px 16px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      borderRadius: '10px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: planTab === 'PACK' ? '#6366f1' : 'transparent',
+                      color: planTab === 'PACK' ? '#fff' : '#64748b',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    Credit Packs
+                  </button>
+                </div>
+
+                {/* Plan Cards */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                  gap: '12px',
+                  marginBottom: '20px'
+                }}>
+                  {creditPlans.filter(p => p.type === planTab).map(plan => (
+                    <div
+                      key={plan.id}
+                      onClick={() => setSelectedPlan(plan)}
+                      style={{
+                        padding: '16px',
+                        borderRadius: '16px',
+                        border: selectedPlan?.id === plan.id ? '2px solid #6366f1' : '2px solid #e2e8f0',
+                        backgroundColor: selectedPlan?.id === plan.id ? '#f5f3ff' : '#fff',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        textAlign: 'center'
+                      }}
+                    >
+                      <p style={{fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px 0'}}>{plan.name}</p>
+                      <p style={{fontSize: '24px', fontWeight: '800', color: '#6366f1', margin: '0 0 8px 0'}}>₹{plan.price.toLocaleString()}</p>
+                      <div style={{fontSize: '13px', color: '#64748b'}}>
+                        <span>{plan.credits.toLocaleString()} credits</span>
+                        {plan.bonusCredits > 0 && (
+                          <span style={{color: '#10b981', fontWeight: '600'}}> +{plan.bonusCredits.toLocaleString()} bonus</span>
+                        )}
+                      </div>
+                      <p style={{fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: '8px 0 0 0'}}>
+                        Total: {plan.totalCredits.toLocaleString()} credits
+                      </p>
+                      {plan.description && (
+                        <p style={{fontSize: '12px', color: '#94a3b8', margin: '8px 0 0 0'}}>{plan.description}</p>
+                      )}
+                    </div>
+                  ))}
+                  {creditPlans.filter(p => p.type === planTab).length === 0 && (
+                    <p style={{gridColumn: '1 / -1', textAlign: 'center', color: '#94a3b8', padding: '20px'}}>
+                      No {planTab.toLowerCase()}s available
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Fallback: Manual Amount (if no plans available) */}
+            {creditPlans.length === 0 && (
               <div style={{marginBottom: '16px'}}>
                 <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>Amount (₹)</label>
                 <input
@@ -215,7 +332,6 @@ const Wallet = () => {
                   onChange={(e) => setRechargeAmount(e.target.value)}
                   min="100"
                   max="100000"
-                  required
                   placeholder="Enter amount (min ₹100)"
                   style={{
                     width: '100%',
@@ -228,63 +344,89 @@ const Wallet = () => {
                   }}
                 />
               </div>
-              <div style={{marginBottom: '20px'}}>
-                <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>Payment Reference</label>
-                <input
-                  type="text"
-                  value={paymentRef}
-                  onChange={(e) => setPaymentRef(e.target.value)}
-                  required
-                  placeholder="Transaction ID or reference"
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    fontSize: '14px',
-                    border: '2px solid #e2e8f0',
+            )}
+
+            {/* Payment Reference - Only show after plan selection or when using manual amount */}
+            {(selectedPlan || (creditPlans.length === 0 && rechargeAmount)) && (
+              <form onSubmit={handleRechargeSubmit}>
+                {selectedPlan && (
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: '#f0fdf4',
                     borderRadius: '12px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-              <div style={{display: 'flex', gap: '12px'}}>
-                <button
-                  type="button"
-                  onClick={() => setShowRechargeForm(false)}
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    backgroundColor: 'transparent',
-                    color: '#64748b',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    borderRadius: '12px',
-                    border: '2px solid #e2e8f0',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={rechargeSubmitting}
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    borderRadius: '12px',
-                    border: 'none',
-                    cursor: rechargeSubmitting ? 'not-allowed' : 'pointer',
-                    opacity: rechargeSubmitting ? 0.6 : 1
-                  }}
-                >
-                  {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
+                    marginBottom: '16px',
+                    border: '1px solid #bbf7d0'
+                  }}>
+                    <p style={{margin: 0, fontSize: '14px', color: '#15803d'}}>
+                      Selected: <strong>{selectedPlan.name}</strong> — ₹{selectedPlan.price.toLocaleString()} for {selectedPlan.totalCredits.toLocaleString()} credits
+                    </p>
+                  </div>
+                )}
+                <div style={{marginBottom: '20px'}}>
+                  <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>Payment Reference / UTR</label>
+                  <input
+                    type="text"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    required
+                    placeholder="Transaction ID or UTR number"
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      fontSize: '14px',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '12px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <div style={{display: 'flex', gap: '12px'}}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowRechargeForm(false); setSelectedPlan(null); }}
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      backgroundColor: 'transparent',
+                      color: '#64748b',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      borderRadius: '12px',
+                      border: '2px solid #e2e8f0',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={rechargeSubmitting}
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      color: '#fff',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      borderRadius: '12px',
+                      border: 'none',
+                      cursor: rechargeSubmitting ? 'not-allowed' : 'pointer',
+                      opacity: rechargeSubmitting ? 0.6 : 1
+                    }}
+                  >
+                    {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Hint when no plan selected */}
+            {!selectedPlan && creditPlans.length > 0 && (
+              <p style={{textAlign: 'center', fontSize: '13px', color: '#94a3b8', margin: '12px 0 0 0'}}>
+                Select a plan above to continue
+              </p>
+            )}
           </div>
         )}
 
@@ -473,7 +615,7 @@ const Wallet = () => {
               ) : (
                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                   {invoices.map((inv, idx) => (
-                    <div key={inv._id || idx} style={{
+                    <div key={inv.id || inv._id || idx} style={{
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -508,8 +650,8 @@ const Wallet = () => {
                         </span>
                         {inv.isDownloadableByClient && (
                           <button
-                            onClick={() => handleDownloadInvoice(inv._id)}
-                            disabled={downloadingInvoice === inv._id}
+                            onClick={() => handleDownloadInvoice(inv.id || inv._id, inv.invoiceNumber)}
+                            disabled={downloadingInvoice === (inv.id || inv._id)}
                             style={{
                               padding: '8px 14px',
                               backgroundColor: '#6366f1',
@@ -518,8 +660,8 @@ const Wallet = () => {
                               fontWeight: '600',
                               borderRadius: '8px',
                               border: 'none',
-                              cursor: downloadingInvoice === inv._id ? 'not-allowed' : 'pointer',
-                              opacity: downloadingInvoice === inv._id ? 0.6 : 1,
+                              cursor: downloadingInvoice === (inv.id || inv._id) ? 'not-allowed' : 'pointer',
+                              opacity: downloadingInvoice === (inv.id || inv._id) ? 0.6 : 1,
                               whiteSpace: 'nowrap'
                             }}
                           >

@@ -76,6 +76,23 @@ const billingConfigSchema = new mongoose.Schema(
       type: String,
       default: 'INR',
     },
+
+    // GST/Tax settings
+    gstEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    taxPercentage: {
+      type: Number,
+      default: 18,
+      min: 0,
+      max: 100,
+    },
+    // State for determining intra/inter-state GST
+    companyState: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,

@@ -9,6 +9,51 @@ const { RechargeRequest, RECHARGE_STATUS } = require('../models/RechargeRequest'
 const { Task, TASK_STATUS } = require('../models/Task');
 const TaskTemplate = require('../models/TaskTemplate');
 
+/**
+ * Strip HTML tags from a string and return clean text.
+ * Converts HTML to readable plain text:
+ * - <br>, <br/>, <p>, </p> become newlines
+ * - Other tags are removed
+ * - HTML entities are decoded
+ * - Multiple whitespace is normalized
+ * @param {string} html - HTML string to clean
+ * @returns {string} Clean text without HTML tags
+ */
+function stripHtmlTags(html) {
+  if (!html || typeof html !== 'string') return '';
+  
+  // Replace common block-level elements with newlines
+  let text = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li>/gi, '• ');
+  
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]*>/g, '');
+  
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&rsquo;/gi, "'")
+    .replace(/&lsquo;/gi, "'")
+    .replace(/&rdquo;/gi, '"')
+    .replace(/&ldquo;/gi, '"')
+    .replace(/&ndash;/gi, '–')
+    .replace(/&mdash;/gi, '—');
+  
+  // Normalize whitespace
+  text = text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  
+  return text;
+}
+
 async function validateWalletBalance(walletId) {
   const wallet = await Wallet.findById(walletId).exec();
   

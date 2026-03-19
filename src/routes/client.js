@@ -9,6 +9,10 @@ const TaskTemplate = require('../models/TaskTemplate');
 const Subscription = require('../models/Subscription');
 const Notice = require('../models/Notice');
 const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
+const { Invoice, INVOICE_STATUS } = require('../models/Invoice');
+const CreditPlan = require('../models/CreditPlan');
+const billingService = require('../services/billingService');
+const pdfService = require('../services/pdfService');
 const User = require('../models/User');
 const OfficeConfig = require('../models/OfficeConfig');
 const { hashPassword, verifyPassword } = require('../services/passwordService');
@@ -128,6 +132,32 @@ router.post('/wallet/recharge', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to create recharge request' });
+  }
+});
+
+// GET /client/credit-plans - Get active credit plans for wallet upgrade
+// NOTE: This only returns plan definitions - does NOT modify wallet logic
+router.get('/credit-plans', async (req, res) => {
+  try {
+    const plans = await CreditPlan.find({ isActive: true })
+      .sort({ type: 1, displayOrder: 1, price: 1 })
+      .exec();
+    
+    return res.status(200).json({
+      plans: plans.map(p => ({
+        id: p._id.toString(),
+        name: p.name,
+        price: p.price,
+        credits: p.credits,
+        bonusCredits: p.bonusCredits,
+        totalCredits: p.totalCredits,
+        type: p.type,
+        description: p.description
+      }))
+    });
+  } catch (err) {
+    console.error('[CREDIT_PLANS] Client fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve credit plans' });
   }
 });
 
@@ -2520,6 +2550,139 @@ router.post('/purchase-cart', async (req, res) => {
   } finally {
     // Always end the session
     session.endSession();
+  }
+});
+
+// =============================================
+// CLIENT BILLING ROUTES
+// =============================================
+
+// GET /client/invoices - Fetch client's own invoices
+router.get('/invoices', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const invoices = await Invoice.find({ clientId })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    return res.status(200).json({
+      invoices: invoices.map(inv => ({
+        id: inv._id.toString(),
+        invoiceNumber: inv.invoiceNumber,
+        invoiceType: inv.invoiceType || 'RECHARGE',
+        amount: inv.amount,
+        totalAmount: inv.totalAmount || inv.amount,
+        status: inv.status,
+        isDownloadableByClient: inv.isDownloadableByClient,
+        orderId: inv.orderId?.toString() || null,
+        items: inv.items || [],
+        createdAt: inv.createdAt,
+      }))
+    });
+  } catch (err) {
+    console.error('[CLIENT/INVOICES] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+});
+
+// GET /client/invoices/:invoiceId - Get single invoice
+router.get('/invoices/:invoiceId', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { invoiceId } = req.params;
+    
+    const invoice = await Invoice.findOne({ _id: invoiceId, clientId })
+      .populate('orderId')
+      .lean();
+    
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    
+    return res.status(200).json({
+      invoice: {
+        id: invoice._id.toString(),
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceType: invoice.invoiceType || 'RECHARGE',
+        amount: invoice.amount,
+        totalAmount: invoice.totalAmount || invoice.amount,
+        status: invoice.status,
+        isDownloadableByClient: invoice.isDownloadableByClient,
+        orderId: invoice.orderId?._id?.toString() || null,
+        orderNumber: invoice.orderId?.orderId || null,
+        items: invoice.items || [],
+        billingSnapshot: invoice.billingSnapshot || {},
+        paymentMethod: invoice.paymentMethod,
+        paymentReference: invoice.paymentReference,
+        createdAt: invoice.createdAt,
+      }
+    });
+  } catch (err) {
+    console.error('[CLIENT/INVOICES] Fetch single error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch invoice' });
+  }
+});
+
+// GET /client/invoices/:invoiceId/download - Download invoice PDF
+router.get('/invoices/:invoiceId/download', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { invoiceId } = req.params;
+    
+    const invoice = await billingService.getInvoiceById(invoiceId);
+    
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    
+    // Verify ownership
+    if (invoice.clientId?._id?.toString() !== clientId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check if download is allowed
+    if (!invoice.isDownloadableByClient) {
+      return res.status(403).json({ error: 'Download not allowed for this invoice' });
+    }
+    
+    const pdfBuffer = await pdfService.generateInvoicePDF(invoice);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('[CLIENT/INVOICES] Download error:', err.message);
+    return res.status(500).json({ error: 'Failed to download invoice' });
+  }
+});
+
+// GET /client/orders/:orderId/invoice - Get invoice for specific order
+router.get('/orders/:orderId/invoice', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { orderId } = req.params;
+    
+    const invoice = await Invoice.findOne({ orderId, clientId }).lean();
+    
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found for this order' });
+    }
+    
+    return res.status(200).json({
+      invoice: {
+        id: invoice._id.toString(),
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceType: invoice.invoiceType || 'ORDER',
+        amount: invoice.amount,
+        totalAmount: invoice.totalAmount || invoice.amount,
+        status: invoice.status,
+        isDownloadableByClient: invoice.isDownloadableByClient,
+        items: invoice.items || [],
+        createdAt: invoice.createdAt,
+      }
+    });
+  } catch (err) {
+    console.error('[CLIENT/ORDERS] Fetch invoice error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch invoice' });
   }
 });
 

@@ -18,6 +18,7 @@ import PlanDetail from './pages/PlanDetail';
 import PlanPreview from './pages/PlanPreview';
 import Wallet from './pages/Wallet';
 import Billing from './pages/Billing';
+import CreditPlans from './pages/CreditPlans';
 import OfficeCMS from './pages/OfficeCMS';
 import Orders from './pages/Orders';
 import NotFound from './pages/NotFound';
@@ -117,6 +118,11 @@ const App = () => {
           <Route path="/billing" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Billing />
+            </ProtectedRoute>
+          } />
+          <Route path="/credit-plans" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <CreditPlans />
             </ProtectedRoute>
           } />
           <Route path="/office-cms" element={

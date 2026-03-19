@@ -532,11 +532,18 @@ const Profile = () => {
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>GST Number</label>
                     {billingEditMode ? (
-                      <input type="text" value={billingData.gstNumber || ''} onChange={e => setBillingData({...billingData, gstNumber: e.target.value})} placeholder="22AAAAA0000A1Z5" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+                      <input type="text" value={billingData.gstNumber || ''} onChange={e => setBillingData({...billingData, gstNumber: e.target.value.toUpperCase()})} placeholder="22AAAAA0000A1Z5" style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
                     ) : (
                       <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '12px', fontSize: '15px', color: billingData.gstNumber ? '#0f172a' : '#94a3b8' }}>{billingData.gstNumber || '-'}</div>
                     )}
                   </div>
+                </div>
+                
+                {/* GST Info Box */}
+                <div style={{ marginTop: '16px', padding: '14px 16px', backgroundColor: '#dbeafe', borderRadius: '12px', border: '1px solid #93c5fd' }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#1e40af' }}>
+                    <strong>ℹ️ GST Information:</strong> If you have a valid GST number, GST (tax) will be added to your invoices. Your invoices will show detailed tax breakdown (CGST/SGST or IGST). Clients without GST number will receive non-taxed invoices.
+                  </p>
                 </div>
               </div>
             </div>

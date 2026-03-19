@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import api from '../services/api';
 import Header from '../components/Header';
 import ProgressWithFlag from '../components/ProgressWithFlag';
+
+// Utility: Clean description - handles HTML and plain text
+const formatDescription = (desc) => {
+  if (!desc || typeof desc !== 'string') return null;
+  const hasHtml = /<[^>]+>/.test(desc);
+  if (hasHtml) {
+    const clean = DOMPurify.sanitize(desc, { ALLOWED_TAGS: [] });
+    return clean.trim() || null;
+  }
+  return desc.trim() || null;
+};
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -299,12 +311,12 @@ const Tasks = () => {
                 )}
 
                 {/* Short Description (if exists) */}
-                {task.description && (
+                {formatDescription(task.description) && (
                   <p style={{
                     fontSize: '14px', color: '#666', margin: '16px 0 0 0', lineHeight: 1.5,
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
                   }}>
-                    {task.description}
+                    {formatDescription(task.description)}
                   </p>
                 )}
 
