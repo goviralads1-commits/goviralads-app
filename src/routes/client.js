@@ -294,7 +294,20 @@ router.get('/my-subscription', async (req, res) => {
       .sort({ createdAt: -1 })
       .exec();
 
-    if (!sub) return res.status(200).json({ subscription: null });
+    if (!sub) {
+      // Return most recent expired subscription so the client can show an expired banner
+      const recentExpired = await UserSubscription.findOne({ userId: clientId })
+        .sort({ expiresAt: -1 })
+        .exec();
+      return res.status(200).json({
+        subscription: null,
+        recentExpired: recentExpired ? {
+          planName: recentExpired.planName,
+          expiresAt: recentExpired.expiresAt,
+          isActive: false
+        } : null
+      });
+    }
 
     return res.status(200).json({
       subscription: {

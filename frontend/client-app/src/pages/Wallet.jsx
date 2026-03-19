@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import Header from '../components/Header';
 
@@ -19,8 +19,10 @@ const Wallet = () => {
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
   const [planTab, setPlanTab] = useState('PLAN'); // 'PLAN' | 'PACK'
   const [subscription, setSubscription] = useState(null);
+  const [expiredSubscription, setExpiredSubscription] = useState(null);
   const [couponCode, setCouponCode] = useState('');
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -52,6 +54,9 @@ const Wallet = () => {
         try {
           const subResponse = await api.get('/client/my-subscription');
           setSubscription(subResponse.data.subscription || null);
+          if (!subResponse.data.subscription && subResponse.data.recentExpired) {
+            setExpiredSubscription(subResponse.data.recentExpired);
+          }
         } catch (subErr) {
           console.log('[Wallet] Subscription endpoint not available');
         }
@@ -69,6 +74,23 @@ const Wallet = () => {
 
     fetchData();
   }, []);
+
+  // Auto-scroll to subscription section if URL has ?scrollToSubscription=true
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('scrollToSubscription') === 'true') {
+      setActiveTab('subscriptions');
+      setTimeout(() => {
+        subscriptionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 400);
+    }
+  }, []);
+
+  // Helper: days until expiry (0 = today, negative = past)
+  const getDaysUntilExpiry = (expiresAt) => {
+    const diffMs = new Date(expiresAt) - new Date();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  };
 
   const handleSubscriptionPurchase = async (planId) => {
     setPurchasingPlan(planId);
@@ -254,10 +276,77 @@ const Wallet = () => {
         </div>
 
         {/* Active Subscription Banner */}
-        {subscription && (
+        {subscription && (() => {
+          const daysLeft = getDaysUntilExpiry(subscription.expiresAt);
+          const isExpiringSoon = daysLeft <= 2;
+          const isToday = daysLeft <= 0;
+          const bannerBg = isToday ? '#fef2f2' : isExpiringSoon ? '#fffbeb' : '#f0fdf4';
+          const bannerBorder = isToday ? '1px solid #fca5a5' : isExpiringSoon ? '1px solid #fcd34d' : '1px solid #86efac';
+          const titleColor = isToday ? '#991b1b' : isExpiringSoon ? '#92400e' : '#15803d';
+          const textColor = isToday ? '#b91c1c' : isExpiringSoon ? '#92400e' : '#166534';
+          const icon = isToday ? '\u26a0\ufe0f' : isExpiringSoon ? '\u23f3' : '\u2705';
+          return (
+            <div style={{
+              backgroundColor: bannerBg,
+              border: bannerBorder,
+              borderRadius: '20px',
+              padding: '20px 24px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px'}}>
+                  <span style={{fontSize: '18px'}}>{icon}</span>
+                  <p style={{fontSize: '16px', fontWeight: '700', color: titleColor, margin: 0}}>
+                    {subscription.planName} &mdash; Active
+                  </p>
+                </div>
+                <p style={{fontSize: '14px', color: textColor, margin: 0}}>
+                  <strong>{subscription.creditsRemaining?.toLocaleString()}</strong> credits remaining
+                  &nbsp;&middot;&nbsp;
+                  Expires {new Date(subscription.expiresAt).toLocaleDateString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric'
+                  })}
+                </p>
+                {isToday && (
+                  <p style={{fontSize: '13px', fontWeight: '700', color: '#dc2626', margin: '6px 0 0 0'}}>
+                    Expires today
+                  </p>
+                )}
+                {!isToday && isExpiringSoon && (
+                  <p style={{fontSize: '13px', fontWeight: '700', color: '#d97706', margin: '6px 0 0 0'}}>
+                    Expiring in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setActiveTab('subscriptions')}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: isToday ? '#dc2626' : isExpiringSoon ? '#d97706' : '#16a34a',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {isExpiringSoon ? 'Renew Plan' : 'Manage Plan'}
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Expired Subscription Banner */}
+        {!subscription && expiredSubscription && (
           <div style={{
-            backgroundColor: '#f0fdf4',
-            border: '1px solid #86efac',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
             borderRadius: '20px',
             padding: '20px 24px',
             marginBottom: '24px',
@@ -269,24 +358,25 @@ const Wallet = () => {
           }}>
             <div>
               <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px'}}>
-                <span style={{fontSize: '18px'}}>&#x2705;</span>
-                <p style={{fontSize: '16px', fontWeight: '700', color: '#15803d', margin: 0}}>
-                  {subscription.planName} &mdash; Active
+                <span style={{fontSize: '18px'}}>&#x274c;</span>
+                <p style={{fontSize: '16px', fontWeight: '700', color: '#64748b', margin: 0}}>
+                  {expiredSubscription.planName} &mdash; Expired
                 </p>
               </div>
-              <p style={{fontSize: '14px', color: '#166534', margin: 0}}>
-                <strong>{subscription.creditsRemaining?.toLocaleString()}</strong> credits remaining
-                &nbsp;&middot;&nbsp;
-                Expires {new Date(subscription.expiresAt).toLocaleDateString('en-IN', {
+              <p style={{fontSize: '14px', color: '#94a3b8', margin: 0}}>
+                Expired on {new Date(expiredSubscription.expiresAt).toLocaleDateString('en-IN', {
                   day: '2-digit', month: 'short', year: 'numeric'
                 })}
+              </p>
+              <p style={{fontSize: '13px', fontWeight: '600', color: '#ef4444', margin: '4px 0 0 0'}}>
+                Your subscription has expired
               </p>
             </div>
             <button
               onClick={() => setActiveTab('subscriptions')}
               style={{
                 padding: '10px 20px',
-                backgroundColor: '#16a34a',
+                backgroundColor: '#6366f1',
                 color: '#fff',
                 fontSize: '13px',
                 fontWeight: '600',
@@ -295,7 +385,7 @@ const Wallet = () => {
                 cursor: 'pointer'
               }}
             >
-              Manage Plan
+              Renew Now
             </button>
           </div>
         )}
@@ -513,7 +603,7 @@ const Wallet = () => {
         )}
 
         {/* Tab Toggle */}
-        <div style={{
+        <div ref={subscriptionRef} style={{
           display: 'flex',
           backgroundColor: '#fff',
           borderRadius: '16px',

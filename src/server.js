@@ -35,6 +35,8 @@ const { Task } = require('./models/Task');
 const User = require('./models/User');
 const LegalPage = require('./models/LegalPage');
 const UserSubscription = require('./models/UserSubscription');
+const Notification = require('./models/Notification');
+const { createNotification, NOTIFICATION_TYPES } = require('./services/notificationService');
 
 app.get('/', (_req, res) => {
   res.status(200).json({ status: 'ok', service: 'GoViral Backend' });
@@ -152,6 +154,9 @@ async function start() {
     
     // Expire stale subscriptions every 60 minutes
     startSubscriptionExpiryJob();
+
+    // Send subscription expiry reminders every 12 hours
+    startSubscriptionReminderJob();
     
     app.listen(PORT, () => {
       console.log('Backend live');
@@ -182,6 +187,77 @@ function startSubscriptionExpiryJob() {
   expireSubscriptions();
   setInterval(expireSubscriptions, 60 * 60 * 1000);
   console.log('Subscription expiry job started (every 60 minutes)');
+}
+
+// Send reminders for subscriptions expiring in ≤2 days
+function startSubscriptionReminderJob() {
+  const sendReminders = async () => {
+    try {
+      const now = new Date();
+      const in2Days = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+      // Find all active subscriptions expiring within next 2 days
+      const expiringSoon = await UserSubscription.find({
+        isActive: true,
+        expiresAt: { $gt: now, $lt: in2Days }
+      }).exec();
+
+      if (expiringSoon.length === 0) return;
+      console.log(`[REMINDER] Found ${expiringSoon.length} subscription(s) expiring within 2 days`);
+
+      for (const sub of expiringSoon) {
+        try {
+          // Dedup: skip if already sent a SUBSCRIPTION_EXPIRING notification in last 23 hours
+          const alreadySent = await Notification.findOne({
+            recipientId: sub.userId,
+            type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+            'relatedEntity.entityId': sub._id,
+            createdAt: { $gt: new Date(Date.now() - 23 * 60 * 60 * 1000) }
+          }).exec();
+
+          if (alreadySent) continue;
+
+          const daysLeft = Math.ceil((new Date(sub.expiresAt) - now) / (1000 * 60 * 60 * 24));
+          const isToday = daysLeft <= 0;
+          const expiryDateStr = new Date(sub.expiresAt).toLocaleDateString('en-IN', {
+            day: '2-digit', month: 'short', year: 'numeric'
+          });
+
+          const title = isToday
+            ? `Your plan expires today`
+            : `Your plan is expiring in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+          const message = isToday
+            ? `Your plan "${sub.planName}" expires today. Renew now to avoid interruption.`
+            : `Your plan "${sub.planName}" is expiring soon. Renew to continue services.`;
+
+          await createNotification({
+            recipientId: sub.userId,
+            title,
+            message,
+            type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+            relatedEntity: {
+              entityType: 'SUBSCRIPTION',
+              entityId: sub._id
+            },
+            planName: sub.planName,
+            expiryDate: expiryDateStr,
+            notifyByEmail: true
+          });
+
+          console.log(`[REMINDER] Sent expiry reminder to user ${sub.userId} for plan "${sub.planName}"`);
+        } catch (subErr) {
+          console.error(`[REMINDER] Error processing sub ${sub._id}:`, subErr.message);
+        }
+      }
+    } catch (err) {
+      console.error('[REMINDER] Subscription reminder job error:', err.message);
+    }
+  };
+
+  // Run immediately on startup, then every 12 hours
+  sendReminders();
+  setInterval(sendReminders, 12 * 60 * 60 * 1000);
+  console.log('Subscription reminder job started (every 12 hours)');
 }
 
 // Function to update progress for all AUTO tasks
