@@ -749,7 +749,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
     if (task.clientId) {
       console.log('[DISCUSSION] Notifying client:', task.clientId);
       try {
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
+        const clientUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://goviralads.com';
         const taskUrl = `${clientUrl}/tasks/${task._id}?scrollToChat=true`;
         
         // Get last 3 messages for email preview
@@ -1091,7 +1091,7 @@ router.post('/tasks/assign', async (req, res) => {
           description: description || '',
           status: 'Assigned',
           deadline: endDate ? new Date(endDate).toLocaleDateString() : null,
-          taskUrl: `${process.env.CLIENT_URL || 'http://localhost:5175'}/tasks/${result.task._id}`
+          taskUrl: `${process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://goviralads.com'}/tasks/${result.task._id}`
         });
         
         if (emailResult.success) {

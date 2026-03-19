@@ -476,7 +476,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
     try {
       const { createNotification, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
       const admins = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } }).select('_id').exec();
-      const adminUrl = process.env.ADMIN_URL || 'http://localhost:5173';
+      const adminUrl = process.env.ADMIN_FRONTEND_URL || process.env.ADMIN_URL || 'https://admin.goviralads.com';
       const taskUrl = `${adminUrl}/tasks/${task._id}?scrollToChat=true`;
       
       // Get last 3 messages for email preview
