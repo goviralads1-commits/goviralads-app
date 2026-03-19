@@ -106,7 +106,7 @@ const Header = ({ title }) => {
     if (notif.relatedEntity?.entityType === 'ORDER') {
       navigate(`/orders?orderId=${notif.relatedEntity.entityId}`);
     } else if (notif.relatedEntity?.entityType === 'TASK') {
-      navigate(`/tasks/${notif.relatedEntity.entityId}`);
+      navigate(`/tasks/${notif.relatedEntity.entityId}?scrollToChat=true`);
     } else if (notif.relatedEntity?.entityType === 'TICKET') {
       navigate(`/tickets`);
     } else if (notif.type === 'NEW_ORDER' || notif.type?.includes('ORDER')) {
