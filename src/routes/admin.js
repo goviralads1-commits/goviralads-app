@@ -750,7 +750,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       console.log('[DISCUSSION] Notifying client:', task.clientId);
       try {
         const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
-        const taskUrl = `${clientUrl}/tasks/${task._id}`;
+        const taskUrl = `${clientUrl}/tasks/${task._id}?scrollToChat=true`;
         
         await createNotification({
           recipientId: task.clientId,

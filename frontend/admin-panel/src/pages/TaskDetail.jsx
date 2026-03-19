@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 
 const TaskDetail = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   // State
   const [task, setTask] = useState(null);
@@ -114,6 +115,15 @@ const TaskDetail = () => {
       setHasChanges(changed);
     }
   }, [formData, originalTask]);
+
+  // Auto-scroll to discussion if scrollToChat=true
+  useEffect(() => {
+    if (!loading && task && searchParams.get('scrollToChat') === 'true' && discussionRef.current) {
+      setTimeout(() => {
+        discussionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [loading, task, searchParams]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));

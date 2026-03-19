@@ -470,23 +470,29 @@ router.post('/tasks/:taskId/message', async (req, res) => {
     task.messages = task.messages || [];
     task.messages.push(newMessage);
     await task.save();
+    console.log('[DISCUSSION] Client message saved to task:', taskId);
 
-    // Notify admin(s)
+    // Notify admin(s) with email
     try {
       const { createNotification, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
       const admins = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } }).select('_id').exec();
+      const adminUrl = process.env.ADMIN_URL || 'http://localhost:5173';
+      const taskUrl = `${adminUrl}/tasks/${task._id}?scrollToChat=true`;
       
       for (const admin of admins) {
         await createNotification({
-          userId: admin._id,
-          type: NOTIFICATION_TYPES.TASK_UPDATE,
-          title: 'New Client Message',
-          message: `Client sent a message on task: ${task.name}`,
+          recipientId: admin._id,
+          type: NOTIFICATION_TYPES.TASK_MESSAGE,
+          title: `New message on: ${task.title}`,
+          message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
           relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
+          taskUrl: taskUrl,
+          notifyByEmail: true,
         });
       }
+      console.log(`[DISCUSSION] Notified ${admins.length} admin(s) with email`);
     } catch (notifErr) {
-      console.log('[DISCUSSION] Notification error:', notifErr.message);
+      console.error('[DISCUSSION] Notification error:', notifErr.message);
     }
 
     console.log(`[DISCUSSION] Client ${clientId} sent message on task ${taskId}`);
