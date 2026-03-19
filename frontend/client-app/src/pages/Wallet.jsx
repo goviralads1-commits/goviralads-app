@@ -84,21 +84,9 @@ const Wallet = () => {
     fetchData();
   }, []);
 
-  // Auto-scroll to subscription section if URL has ?scrollToSubscription=true
+  // Auto-apply best coupon silently on load
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('scrollToSubscription') === 'true') {
-      setActiveTab('subscriptions');
-      setTimeout(() => {
-        subscriptionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 400);
-    }
-  }, []);
-
-  // Auto-suggest best coupon when switching to subscriptions tab
-  useEffect(() => {
-    if (activeTab === 'subscriptions' && availableCoupons.length > 0 && !couponCode) {
-      // Find best coupon: prefer highest % discount, fallback to highest bonus
+    if (availableCoupons.length > 0 && !couponCode) {
       const discountCoupons = availableCoupons.filter(c => c.type === 'discount');
       const best = discountCoupons.length > 0
         ? discountCoupons.reduce((a, b) => b.value > a.value ? b : a)
@@ -106,7 +94,9 @@ const Wallet = () => {
       setCouponCode(best.code);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [availableCoupons]);
+
+
 
   // Helper: days until expiry (0 = today, negative = past)
   const getDaysUntilExpiry = (expiresAt) => {
@@ -279,136 +269,158 @@ const Wallet = () => {
         }}>
           <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: '0 0 8px 0'}}>Current Balance</p>
           <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 16px 0'}}>₹{walletData?.balance?.toFixed(2) || '0.00'}</p>
-          <button
-            onClick={() => { setShowRechargeForm(!showRechargeForm); setSelectedPlan(null); setRechargeAmount(''); setPaymentRef(''); }}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              color: '#fff',
-              fontSize: '14px',
-              fontWeight: '600',
-              borderRadius: '12px',
-              border: '2px solid rgba(255,255,255,0.3)',
-              cursor: 'pointer',
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            {showRechargeForm ? 'Close' : 'Upgrade Credits'}
-          </button>
+
         </div>
 
-        {/* Active Subscription Banner */}
-        {subscription && (() => {
-          const daysLeft = getDaysUntilExpiry(subscription.expiresAt);
-          const isExpiringSoon = daysLeft <= 2;
-          const isToday = daysLeft <= 0;
-          const bannerBg = isToday ? '#fef2f2' : isExpiringSoon ? '#fffbeb' : '#f0fdf4';
-          const bannerBorder = isToday ? '1px solid #fca5a5' : isExpiringSoon ? '1px solid #fcd34d' : '1px solid #86efac';
-          const titleColor = isToday ? '#991b1b' : isExpiringSoon ? '#92400e' : '#15803d';
-          const textColor = isToday ? '#b91c1c' : isExpiringSoon ? '#92400e' : '#166534';
-          const icon = isToday ? '\u26a0\ufe0f' : isExpiringSoon ? '\u23f3' : '\u2705';
-          return (
+        {/* Subscription Plans - Button Style Cards */}
+        {creditPlans.filter(p => p.type === 'PLAN').length > 0 && (
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '20px',
+            padding: '20px',
+            marginBottom: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+          }}>
+            {/* Coupon Input - Minimal */}
+            <div style={{marginBottom: '16px'}}>
+              <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Coupon code"
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    fontSize: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '10px',
+                    outline: 'none',
+                    letterSpacing: '1px',
+                    fontWeight: couponCode ? '600' : '400',
+                    maxWidth: '200px'
+                  }}
+                />
+                {couponCode && (
+                  <button
+                    onClick={() => setCouponCode('')}
+                    style={{
+                      padding: '10px 14px',
+                      backgroundColor: '#f1f5f9',
+                      color: '#64748b',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      borderRadius: '10px',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {!couponCode && (
+                <p style={{fontSize: '12px', color: '#94a3b8', margin: '6px 0 0 0'}}>Have a coupon?</p>
+              )}
+              {couponCode && (
+                <p style={{fontSize: '12px', color: '#16a34a', fontWeight: '600', margin: '6px 0 0 0'}}>Coupon applied</p>
+              )}
+            </div>
+
+            {/* Plan Cards - Button Style */}
             <div style={{
-              backgroundColor: bannerBg,
-              border: bannerBorder,
-              borderRadius: '20px',
-              padding: '20px 24px',
-              marginBottom: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
               gap: '12px'
             }}>
-              <div>
-                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px'}}>
-                  <span style={{fontSize: '18px'}}>{icon}</span>
-                  <p style={{fontSize: '16px', fontWeight: '700', color: titleColor, margin: 0}}>
-                    {subscription.planName} &mdash; Active
-                  </p>
-                </div>
-                <p style={{fontSize: '14px', color: textColor, margin: 0}}>
-                  <strong>{subscription.creditsRemaining?.toLocaleString()}</strong> credits remaining
-                  &nbsp;&middot;&nbsp;
-                  Expires {new Date(subscription.expiresAt).toLocaleDateString('en-IN', {
-                    day: '2-digit', month: 'short', year: 'numeric'
-                  })}
-                </p>
-                {isToday && (
-                  <p style={{fontSize: '13px', fontWeight: '700', color: '#dc2626', margin: '6px 0 0 0'}}>
-                    Expires today
-                  </p>
-                )}
-                {!isToday && isExpiringSoon && (
-                  <p style={{fontSize: '13px', fontWeight: '700', color: '#d97706', margin: '6px 0 0 0'}}>
-                    Expiring in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => setActiveTab('subscriptions')}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: isToday ? '#dc2626' : isExpiringSoon ? '#d97706' : '#16a34a',
-                  color: '#fff',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  borderRadius: '10px',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                {isExpiringSoon ? 'Renew Plan' : 'Manage Plan'}
-              </button>
+              {creditPlans.filter(p => p.type === 'PLAN').map(plan => {
+                const isCurrentPlan = subscription?.planId === plan.id || subscription?.planId === plan._id;
+                const isBuying = purchasingPlan === plan.id || purchasingPlan === plan._id;
+                return (
+                  <button
+                    key={plan.id || plan._id}
+                    onClick={() => handleSubscriptionPurchase(plan.id || plan._id)}
+                    disabled={isBuying}
+                    style={{
+                      padding: '20px 16px',
+                      borderRadius: '16px',
+                      border: isCurrentPlan ? '2px solid #16a34a' : '2px solid #e2e8f0',
+                      background: isCurrentPlan
+                        ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                        : 'linear-gradient(135deg, #f8fafc 0%, #fff 100%)',
+                      cursor: isBuying ? 'not-allowed' : 'pointer',
+                      opacity: isBuying ? 0.6 : 1,
+                      textAlign: 'center',
+                      position: 'relative',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                    }}
+                  >
+                    {isCurrentPlan && (
+                      <span style={{
+                        position: 'absolute', top: '-8px', right: '12px',
+                        backgroundColor: '#16a34a', color: '#fff',
+                        fontSize: '10px', fontWeight: '700',
+                        padding: '2px 8px', borderRadius: '20px'
+                      }}>ACTIVE</span>
+                    )}
+                    <p style={{
+                      fontSize: '26px', fontWeight: '800',
+                      color: isCurrentPlan ? '#16a34a' : '#6366f1',
+                      margin: '0 0 6px 0'
+                    }}>
+                      &#x20B9;{plan.price?.toLocaleString()}
+                    </p>
+                    <p style={{
+                      fontSize: '13px', fontWeight: '600',
+                      color: '#334155', margin: '0 0 2px 0'
+                    }}>
+                      {plan.credits?.toLocaleString()} credits
+                    </p>
+                    {plan.bonusCredits > 0 && (
+                      <p style={{
+                        fontSize: '12px', fontWeight: '700',
+                        color: '#10b981', margin: 0
+                      }}>
+                        +{plan.bonusCredits?.toLocaleString()} bonus
+                      </p>
+                    )}
+                    {isBuying && (
+                      <p style={{fontSize: '11px', color: '#6366f1', margin: '8px 0 0 0', fontWeight: '600'}}>Processing...</p>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          );
-        })()}
 
-        {/* Expired Subscription Banner */}
-        {!subscription && expiredSubscription && (
-          <div style={{
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '20px',
-            padding: '20px 24px',
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}>
-            <div>
-              <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px'}}>
-                <span style={{fontSize: '18px'}}>&#x274c;</span>
-                <p style={{fontSize: '16px', fontWeight: '700', color: '#64748b', margin: 0}}>
-                  {expiredSubscription.planName} &mdash; Expired
-                </p>
-              </div>
-              <p style={{fontSize: '14px', color: '#94a3b8', margin: 0}}>
-                Expired on {new Date(expiredSubscription.expiresAt).toLocaleDateString('en-IN', {
-                  day: '2-digit', month: 'short', year: 'numeric'
-                })}
-              </p>
-              <p style={{fontSize: '13px', fontWeight: '600', color: '#ef4444', margin: '4px 0 0 0'}}>
-                Your subscription has expired
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveTab('subscriptions')}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#6366f1',
-                color: '#fff',
-                fontSize: '13px',
-                fontWeight: '600',
-                borderRadius: '10px',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              Renew Now
-            </button>
+            {/* Active Subscription Status */}
+            {subscription && (() => {
+              const daysLeft = getDaysUntilExpiry(subscription.expiresAt);
+              const isExpiringSoon = daysLeft <= 2;
+              return (
+                <div style={{
+                  marginTop: '16px',
+                  padding: '12px 16px',
+                  backgroundColor: isExpiringSoon ? '#fffbeb' : '#f0fdf4',
+                  borderRadius: '12px',
+                  border: isExpiringSoon ? '1px solid #fcd34d' : '1px solid #86efac',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '8px'
+                }}>
+                  <div>
+                    <p style={{fontSize: '13px', fontWeight: '700', color: isExpiringSoon ? '#92400e' : '#15803d', margin: 0}}>
+                      {subscription.creditsRemaining?.toLocaleString()} credits remaining
+                    </p>
+                    <p style={{fontSize: '11px', color: isExpiringSoon ? '#a16207' : '#166534', margin: '2px 0 0 0'}}>
+                      {isExpiringSoon ? `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}` : `Expires ${new Date(subscription.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -684,23 +696,6 @@ const Wallet = () => {
           >
             Invoices
           </button>
-          <button
-            onClick={() => setActiveTab('subscriptions')}
-            style={{
-              flex: 1,
-              padding: '14px 16px',
-              fontSize: '14px',
-              fontWeight: '600',
-              borderRadius: '12px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'subscriptions' ? '#6366f1' : 'transparent',
-              color: activeTab === 'subscriptions' ? '#fff' : '#64748b',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            Subscriptions
-          </button>
         </div>
 
         {/* Tab Content */}
@@ -813,250 +808,6 @@ const Wallet = () => {
                       </span>
                     </div>
                   ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Subscriptions Tab */}
-          {activeTab === 'subscriptions' && (
-            <>
-              <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px 0'}}>Subscription Plans</h3>
-              <p style={{fontSize: '14px', color: '#64748b', margin: '0 0 20px 0'}}>Buy a plan &mdash; subscription credits are used first before your wallet balance on every task.</p>
-
-              {/* Available Offers Section */}
-              {availableCoupons.length > 0 && (() => {
-                const discountCoupons = availableCoupons.filter(c => c.type === 'discount');
-                const bestCoupon = discountCoupons.length > 0
-                  ? discountCoupons.reduce((a, b) => b.value > a.value ? b : a)
-                  : availableCoupons.reduce((a, b) => b.value > a.value ? b : a);
-                return (
-                  <div style={{marginBottom: '24px'}}>
-                    <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
-                      <span style={{fontSize: '16px'}}>&#127881;</span>
-                      <p style={{fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0}}>Available Offers</p>
-                      <span style={{
-                        fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px',
-                        backgroundColor: '#dcfce7', color: '#15803d'
-                      }}>{availableCoupons.length} offer{availableCoupons.length > 1 ? 's' : ''}</span>
-                    </div>
-                    <div style={{
-                      display: 'flex', gap: '12px', overflowX: 'auto',
-                      paddingBottom: '8px',
-                      scrollbarWidth: 'thin',
-                    }}>
-                      {availableCoupons.map(coupon => {
-                        const isBest = coupon.code === bestCoupon.code;
-                        const isApplied = couponCode === coupon.code;
-                        const discountLabel = coupon.type === 'discount'
-                          ? `${coupon.value}% OFF`
-                          : `+${coupon.value} Bonus Credits`;
-                        const expiryText = coupon.expiryDate
-                          ? `Expires ${new Date(coupon.expiryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
-                          : 'No expiry';
-                        return (
-                          <div key={coupon.id} style={{
-                            minWidth: '180px',
-                            flexShrink: 0,
-                            border: isApplied ? '2px solid #16a34a' : isBest ? '2px solid #6366f1' : '2px solid #bbf7d0',
-                            borderRadius: '16px',
-                            padding: '14px 16px',
-                            backgroundColor: isApplied ? '#f0fdf4' : isBest ? '#f5f3ff' : '#f0fdf4',
-                            position: 'relative',
-                            transition: 'all 0.2s',
-                          }}>
-                            {isBest && (
-                              <span style={{
-                                position: 'absolute', top: '-10px', left: '12px',
-                                backgroundColor: '#6366f1', color: '#fff',
-                                fontSize: '10px', fontWeight: '800',
-                                padding: '3px 8px', borderRadius: '20px',
-                                letterSpacing: '0.5px'
-                              }}>BEST DEAL</span>
-                            )}
-                            {isApplied && (
-                              <span style={{
-                                position: 'absolute', top: '-10px', left: '12px',
-                                backgroundColor: '#16a34a', color: '#fff',
-                                fontSize: '10px', fontWeight: '800',
-                                padding: '3px 8px', borderRadius: '20px',
-                                letterSpacing: '0.5px'
-                              }}>APPLIED &#10003;</span>
-                            )}
-                            <p style={{
-                              fontSize: '16px', fontWeight: '800', color: '#0f172a',
-                              margin: '0 0 4px 0', fontFamily: 'monospace', letterSpacing: '1px'
-                            }}>{coupon.code}</p>
-                            <p style={{
-                              fontSize: '13px', fontWeight: '700',
-                              color: coupon.type === 'discount' ? '#6366f1' : '#10b981',
-                              margin: '0 0 6px 0'
-                            }}>{discountLabel}</p>
-                            <p style={{fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0'}}>{expiryText}</p>
-                            <button
-                              onClick={() => {
-                                setCouponCode(coupon.code);
-                                setToast(`Coupon "${coupon.code}" applied!`);
-                                setTimeout(() => setToast(null), 3000);
-                              }}
-                              style={{
-                                width: '100%',
-                                padding: '8px',
-                                backgroundColor: isApplied ? '#16a34a' : '#6366f1',
-                                color: '#fff',
-                                fontSize: '13px',
-                                fontWeight: '700',
-                                borderRadius: '8px',
-                                border: 'none',
-                                cursor: isApplied ? 'default' : 'pointer',
-                                opacity: isApplied ? 0.8 : 1,
-                              }}
-                            >
-                              {isApplied ? 'Applied' : 'Apply'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Coupon Input */}
-              <div style={{
-                display: 'flex',
-                gap: '10px',
-                marginBottom: '24px',
-                alignItems: 'center'
-              }}>
-                <input
-                  type="text"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  placeholder="Coupon code (optional)"
-                  style={{
-                    flex: 1,
-                    padding: '12px 16px',
-                    fontSize: '14px',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '12px',
-                    outline: 'none',
-                    letterSpacing: '1px',
-                    fontWeight: couponCode ? '600' : '400'
-                  }}
-                />
-                {couponCode && (
-                  <button
-                    onClick={() => setCouponCode('')}
-                    style={{
-                      padding: '12px 16px',
-                      backgroundColor: '#f1f5f9',
-                      color: '#64748b',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      borderRadius: '12px',
-                      border: '2px solid #e2e8f0',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              {couponCode && (
-                <p style={{fontSize: '13px', color: '#6366f1', fontWeight: '600', margin: '-16px 0 20px 0'}}>
-                  Coupon &quot;{couponCode}&quot; will be applied at checkout
-                </p>
-              )}
-
-              {/* Plan Cards */}
-              {creditPlans.filter(p => p.type === 'PLAN').length === 0 ? (
-                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No subscription plans available</p>
-              ) : (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                  gap: '16px'
-                }}>
-                  {creditPlans.filter(p => p.type === 'PLAN').map(plan => {
-                    const isCurrentPlan = subscription?.planId === plan.id || subscription?.planId === plan._id;
-                    const isRecommended = !isCurrentPlan && plan.displayOrder === 0;
-                    const isBuying = purchasingPlan === plan.id;
-                    return (
-                      <div
-                        key={plan.id || plan._id}
-                        style={{
-                          padding: '20px',
-                          borderRadius: '20px',
-                          border: isCurrentPlan ? '2px solid #16a34a' : isRecommended ? '2px solid #6366f1' : '2px solid #e2e8f0',
-                          backgroundColor: isCurrentPlan ? '#f0fdf4' : isRecommended ? '#f5f3ff' : '#fff',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '10px',
-                          position: 'relative'
-                        }}
-                      >
-                        {isCurrentPlan && (
-                          <span style={{
-                            position: 'absolute', top: '-10px', right: '16px',
-                            backgroundColor: '#16a34a', color: '#fff',
-                            fontSize: '11px', fontWeight: '700',
-                            padding: '3px 10px', borderRadius: '20px'
-                          }}>ACTIVE</span>
-                        )}
-                        {isRecommended && (
-                          <span style={{
-                            position: 'absolute', top: '-10px', right: '16px',
-                            backgroundColor: '#6366f1', color: '#fff',
-                            fontSize: '11px', fontWeight: '700',
-                            padding: '3px 10px', borderRadius: '20px'
-                          }}>RECOMMENDED</span>
-                        )}
-                        <p style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0}}>{plan.name}</p>
-                        <p style={{fontSize: '28px', fontWeight: '800', color: '#6366f1', margin: 0}}>&#x20B9;{plan.price?.toLocaleString()}</p>
-                        <div style={{fontSize: '13px', color: '#64748b'}}>
-                          <span>{plan.credits?.toLocaleString()} credits</span>
-                          {plan.bonusCredits > 0 && (
-                            <span style={{color: '#10b981', fontWeight: '600'}}> +{plan.bonusCredits?.toLocaleString()} bonus</span>
-                          )}
-                        </div>
-                        {plan.validityDays && (
-                          <span style={{
-                            display: 'inline-block',
-                            backgroundColor: '#e0e7ff',
-                            color: '#4338ca',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            padding: '4px 10px',
-                            borderRadius: '20px',
-                            width: 'fit-content'
-                          }}>
-                            Valid for {plan.validityDays} days
-                          </span>
-                        )}
-                        <button
-                          onClick={() => handleSubscriptionPurchase(plan.id || plan._id)}
-                          disabled={isBuying}
-                          style={{
-                            marginTop: '6px',
-                            padding: '12px',
-                            background: isCurrentPlan
-                              ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)'
-                              : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                            color: '#fff',
-                            fontSize: '14px',
-                            fontWeight: '700',
-                            borderRadius: '12px',
-                            border: 'none',
-                            cursor: isBuying ? 'not-allowed' : 'pointer',
-                            opacity: isBuying ? 0.6 : 1
-                          }}
-                        >
-                          {isBuying ? 'Processing...' : isCurrentPlan ? 'Renew Plan' : 'Buy Plan'}
-                        </button>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </>
