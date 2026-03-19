@@ -81,6 +81,9 @@ const Header = ({ title }) => {
   };
 
   const handleNotificationClick = async (notif) => {
+    // LOG: Inspect notification object structure
+    console.log("NOTIFICATION CLICK:", JSON.stringify(notif, null, 2));
+    
     // Optimistic UI: Mark as read immediately
     if (!notif.isRead) {
       setNotifications(prev => prev.map(n => 
@@ -102,19 +105,26 @@ const Header = ({ title }) => {
     }
     
     setShowNotifications(false);
+    
+    // Find task ID from available fields
+    const taskId = notif.taskId || notif.relatedEntityId || notif.relatedEntity?.entityId || notif.entityId;
+    
+    if (!taskId) {
+      console.error("No taskId found in notification", notif);
+      navigate('/tasks');
+      return;
+    }
+    
     // Navigate based on entity type
-    if (notif.relatedEntity?.entityType === 'ORDER') {
-      navigate(`/orders?orderId=${notif.relatedEntity.entityId}`);
-    } else if (notif.relatedEntity?.entityType === 'TASK') {
-      navigate(`/tasks/${notif.relatedEntity.entityId}?scrollToChat=true`);
+    if (notif.relatedEntity?.entityType === 'ORDER' || notif.type?.includes('ORDER')) {
+      navigate(`/orders?orderId=${taskId}`);
+    } else if (notif.relatedEntity?.entityType === 'TASK' || notif.type === 'TASK_MESSAGE' || notif.type?.includes('TASK')) {
+      navigate(`/tasks/${taskId}?scrollToChat=true`);
     } else if (notif.relatedEntity?.entityType === 'TICKET') {
       navigate(`/tickets`);
-    } else if (notif.type === 'NEW_ORDER' || notif.type?.includes('ORDER')) {
-      navigate(`/orders`);
-    } else if (notif.type === 'task' || notif.type?.includes('TASK')) {
-      navigate(`/tasks/${notif.id}`);
     } else {
-      navigate('/dashboard');
+      // Default: try to navigate to task if we have a taskId
+      navigate(`/tasks/${taskId}?scrollToChat=true`);
     }
   };
 
