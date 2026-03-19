@@ -799,8 +799,8 @@ const TaskDetail = () => {
         )}
 
         {/* CLIENT CONTENT SUBMISSION (Phase 2) */}
-        {/* Only show for ACTIVE tasks */}
-        {task.status === 'ACTIVE' && (
+        {/* Show if content not yet submitted - regardless of status */}
+        {!task.clientContentSubmitted && (
           <div style={{
             backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)', 
