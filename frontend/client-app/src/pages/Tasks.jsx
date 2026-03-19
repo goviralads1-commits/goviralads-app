@@ -179,7 +179,6 @@ const Tasks = () => {
         {/* Task Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {tasks.map((task) => {
-            const humanStatus = getHumanStatus(task.status);
             const progress = task.progress || 0;
             const progressColor = getProgressColor(task);
             const activeMilestone = getActiveMilestone(task.milestones, progress);
@@ -247,12 +246,34 @@ const Tasks = () => {
                   </p>
                 )}
 
-                {/* Status Chip - Dynamic based on progress */}
+                {/* Progress Chip - milestone-based, no internal status label */}
                 <div style={{ marginBottom: '20px' }}>
                   {(() => {
-                    const isStarted = progress > 0;
-                    // If task has started and has an active milestone, show milestone as status
-                    if (isStarted && activeMilestone) {
+                    if (isPendingApproval) {
+                      return (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '6px',
+                          padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
+                          backgroundColor: '#eef2ff', color: '#6366f1'
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#6366f1' }} />
+                          ⏳ Booked
+                        </span>
+                      );
+                    }
+                    if (progress >= 100 || task.status === 'COMPLETED') {
+                      return (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '6px',
+                          padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
+                          backgroundColor: '#f0fdf4', color: '#22c55e'
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
+                          ✅ Delivered
+                        </span>
+                      );
+                    }
+                    if (progress > 0 && activeMilestone) {
                       return (
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -264,8 +285,7 @@ const Tasks = () => {
                         </span>
                       );
                     }
-                    // If started but no milestone, show "In Progress"
-                    if (isStarted && !activeMilestone) {
+                    if (progress > 0) {
                       return (
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -277,15 +297,14 @@ const Tasks = () => {
                         </span>
                       );
                     }
-                    // Default: show original humanStatus (Scheduled, Pending Approval, etc.)
                     return (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: '6px',
                         padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
-                        backgroundColor: humanStatus.bg, color: humanStatus.color
+                        backgroundColor: '#fffbeb', color: '#f59e0b'
                       }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: humanStatus.color }} />
-                        {humanStatus.label}
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />
+                        Starting Soon
                       </span>
                     );
                   })()}
