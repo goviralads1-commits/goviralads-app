@@ -39,6 +39,13 @@ router.get('/wallet', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found' });
     }
 
+    // Check if subscription is expired
+    const now = new Date();
+    const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
+    const activeSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
+    const walletCredits = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const totalCredits = activeSubCredits + walletCredits;
+
     const limit = parseInt(req.query.limit) || 20;
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
@@ -52,7 +59,11 @@ router.get('/wallet', async (req, res) => {
     const totalTransactions = await WalletTransaction.countDocuments({ walletId: wallet._id }).exec();
 
     return res.status(200).json({
-      balance: wallet.balance,
+      balance: totalCredits, // totalCredits for backward compatibility
+      subscriptionCredits: activeSubCredits,
+      walletCredits: walletCredits,
+      totalCredits: totalCredits,
+      subscriptionExpiresAt: subNotExpired ? wallet.subscriptionExpiresAt : null,
       transactions: transactions.map((t) => ({
         id: t._id.toString(),
         type: t.type,
@@ -219,36 +230,48 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     const wallet = await Wallet.findOne({ clientId }).exec();
     if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
 
-    console.log('Wallet balance before:', wallet.balance, '| Price:', finalPrice);
+    // Use walletCredits if available, fallback to legacy balance
+    const availableBalance = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    console.log('Available balance:', availableBalance, '| Price:', finalPrice);
 
     // 4. Check balance
-    if (wallet.balance < finalPrice) {
+    if (availableBalance < finalPrice) {
       return res.status(400).json({ error: 'Insufficient wallet balance' });
     }
 
-    // 5. Deduct wallet (ATOMIC)
-    wallet.balance -= finalPrice;
+    // 5. Deduct from walletCredits first, then balance
+    let remaining = finalPrice;
+    if (wallet.walletCredits >= remaining) {
+      wallet.walletCredits -= remaining;
+    } else {
+      remaining -= (wallet.walletCredits || 0);
+      wallet.walletCredits = 0;
+      wallet.balance = Math.max(0, (wallet.balance || 0) - remaining);
+    }
+
+    // 6. Add subscription credits + set expiry
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + (plan.validityDays || 30));
+    wallet.subscriptionCredits = (wallet.subscriptionCredits || 0) + totalCredits;
+    wallet.subscriptionExpiresAt = expiresAt;
     await wallet.save();
 
-    // 6. Record wallet transaction
+    // 7. Record wallet transaction
     await WalletTransaction.create({
       walletId: wallet._id,
       type: 'SUBSCRIPTION_PURCHASE',
       amount: -finalPrice,
-      description: `Subscription Plan Purchase: ${plan.name}`,
+      description: `Subscription Plan Purchase: ${plan.name} (+${totalCredits} subscription credits)`,
       referenceId: null,
     });
 
-    // 7. Expire any existing active subscription for this user
+    // 8. Expire any existing active UserSubscription (legacy support)
     await UserSubscription.updateMany(
       { userId: clientId, isActive: true },
       { $set: { isActive: false } }
     );
 
-    // 8. Create new UserSubscription
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (plan.validityDays || 30));
-
+    // 9. Create new UserSubscription for legacy compatibility
     const userSub = await UserSubscription.create({
       userId: clientId,
       planId: plan._id,
@@ -258,7 +281,7 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       isActive: true,
     });
 
-    console.log(`[SUB] Created UserSubscription: ${userSub._id} | Credits: ${totalCredits} | Expires: ${expiresAt}`);
+    console.log(`[SUB] subscriptionCredits: ${wallet.subscriptionCredits} | Expires: ${expiresAt}`);
     console.log('=== SUBSCRIPTION PLAN PURCHASE COMPLETE ===');
 
     return res.status(201).json({
@@ -266,11 +289,13 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       subscription: {
         id: userSub._id.toString(),
         planName: userSub.planName,
-        creditsRemaining: userSub.creditsRemaining,
-        expiresAt: userSub.expiresAt,
-        isActive: userSub.isActive,
+        creditsRemaining: wallet.subscriptionCredits,
+        expiresAt: wallet.subscriptionExpiresAt,
+        isActive: true,
       },
-      walletBalance: wallet.balance,
+      walletBalance: wallet.walletCredits + (wallet.balance || 0),
+      subscriptionCredits: wallet.subscriptionCredits,
+      walletCredits: wallet.walletCredits,
     });
   } catch (err) {
     console.error('[SUB] Purchase error:', err.message);
@@ -1114,52 +1139,76 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found' });
     }
 
-    console.log('Wallet balance before:', wallet.balance);
+    console.log('Wallet subscriptionCredits:', wallet.subscriptionCredits, 'walletCredits:', wallet.walletCredits, 'balance:', wallet.balance);
 
-    // 8. Check active subscription first — deduct from subscription credits if available
+    // 8. HYBRID CREDIT DEDUCTION: subscriptionCredits first (if not expired), then walletCredits
     const nowPlan = new Date();
-    const activePlanSub = await UserSubscription.findOne({
-      userId: clientId,
-      isActive: true,
-      expiresAt: { $gt: nowPlan },
-      creditsRemaining: { $gte: price }
-    }).exec();
+    const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > nowPlan;
+    const availableSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
+    const availableWalletCredits = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const totalAvailable = availableSubCredits + availableWalletCredits;
 
-    if (activePlanSub) {
-      // Deduct from subscription credits
-      activePlanSub.creditsRemaining -= price;
-      await activePlanSub.save();
-      console.log(`[SUB DEDUCT] Plan purchase from subscription credits. Remaining: ${activePlanSub.creditsRemaining}`);
-      // Audit log (zero-cost wallet transaction)
-      await WalletTransaction.create({
-        walletId: wallet._id,
-        type: 'SUBSCRIPTION_DEDUCTION',
-        amount: 0,
-        description: `Plan Purchase (subscription): ${plan.title}`,
-        referenceId: null,
-      });
-    } else {
-      // 8a. Check wallet balance
-      if (wallet.balance < price) {
-        console.log('Insufficient balance');
-        return res.status(400).json({ error: 'Insufficient balance' });
-      }
+    console.log('Available sub credits:', availableSubCredits, '| wallet credits:', availableWalletCredits, '| total:', totalAvailable);
 
-      // 9. Deduct wallet (ATOMIC)
-      wallet.balance -= price;
-      await wallet.save();
-
-      console.log('Wallet balance after:', wallet.balance);
-
-      // 10. Create wallet transaction
-      await WalletTransaction.create({
-        walletId: wallet._id,
-        type: 'PLAN_PURCHASE',
-        amount: -price,
-        description: `Plan Purchase: ${plan.title}`,
-        referenceId: null, // Will update after task creation
-      });
+    if (totalAvailable < price) {
+      console.log('Insufficient balance');
+      return res.status(400).json({ error: 'Insufficient balance' });
     }
+
+    // Deduct from subscriptionCredits first
+    let deductedFromSub = 0;
+    let deductedFromWallet = 0;
+    let remaining = price;
+
+    if (availableSubCredits >= remaining) {
+      wallet.subscriptionCredits -= remaining;
+      deductedFromSub = remaining;
+      remaining = 0;
+    } else if (availableSubCredits > 0) {
+      deductedFromSub = availableSubCredits;
+      wallet.subscriptionCredits = 0;
+      remaining -= deductedFromSub;
+    }
+
+    // Deduct remaining from walletCredits, then balance
+    if (remaining > 0) {
+      if ((wallet.walletCredits || 0) >= remaining) {
+        wallet.walletCredits -= remaining;
+        deductedFromWallet = remaining;
+      } else {
+        deductedFromWallet = (wallet.walletCredits || 0);
+        remaining -= deductedFromWallet;
+        wallet.walletCredits = 0;
+        wallet.balance = Math.max(0, (wallet.balance || 0) - remaining);
+        deductedFromWallet += remaining;
+      }
+    }
+
+    await wallet.save();
+
+    // Also update legacy UserSubscription for backward compatibility
+    if (deductedFromSub > 0) {
+      const activePlanSub = await UserSubscription.findOne({
+        userId: clientId,
+        isActive: true,
+        expiresAt: { $gt: nowPlan }
+      }).exec();
+      if (activePlanSub) {
+        activePlanSub.creditsRemaining = Math.max(0, activePlanSub.creditsRemaining - deductedFromSub);
+        await activePlanSub.save();
+      }
+    }
+
+    console.log(`[HYBRID DEDUCT] Sub: -${deductedFromSub} | Wallet: -${deductedFromWallet}`);
+
+    // Create wallet transaction
+    await WalletTransaction.create({
+      walletId: wallet._id,
+      type: deductedFromSub > 0 ? 'SUBSCRIPTION_DEDUCTION' : 'PLAN_PURCHASE',
+      amount: -price,
+      description: `Plan Purchase: ${plan.title}${deductedFromSub > 0 ? ' (from subscription)' : ''}`,
+      referenceId: null,
+    });
 
     // 11. Clone task for client (DO NOT MODIFY ORIGINAL)
     const newTask = await Task.create({
@@ -1322,50 +1371,76 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found' });
     }
 
-    console.log('Wallet before:', wallet.balance);
+    console.log('Wallet subscriptionCredits:', wallet.subscriptionCredits, 'walletCredits:', wallet.walletCredits, 'balance:', wallet.balance);
 
-    // 6. Check active subscription first — deduct from subscription credits if available
+    // 6. HYBRID CREDIT DEDUCTION: subscriptionCredits first (if not expired), then walletCredits
     const nowSubBundle = new Date();
-    const activeSubForBundle = await UserSubscription.findOne({
-      userId: clientId,
-      isActive: true,
-      expiresAt: { $gt: nowSubBundle },
-      creditsRemaining: { $gte: price }
-    }).exec();
+    const subNotExpiredBundle = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > nowSubBundle;
+    const availableSubCreditsBundle = subNotExpiredBundle ? (wallet.subscriptionCredits || 0) : 0;
+    const availableWalletCreditsBundle = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const totalAvailableBundle = availableSubCreditsBundle + availableWalletCreditsBundle;
 
-    if (activeSubForBundle) {
-      activeSubForBundle.creditsRemaining -= price;
-      await activeSubForBundle.save();
-      console.log(`[SUB DEDUCT] Subscription bundle from subscription credits. Remaining: ${activeSubForBundle.creditsRemaining}`);
-      await WalletTransaction.create({
-        walletId: wallet._id,
-        type: 'SUBSCRIPTION_DEDUCTION',
-        amount: 0,
-        description: `Subscription Purchase (credits): ${subscription.title}`,
-        referenceId: null,
-      });
-    } else {
-      // 6a. Check wallet balance
-      if (wallet.balance < price) {
-        console.log('Insufficient balance');
-        return res.status(400).json({ error: 'Insufficient balance' });
-      }
+    console.log('Available sub credits:', availableSubCreditsBundle, '| wallet credits:', availableWalletCreditsBundle, '| total:', totalAvailableBundle);
 
-      // 7. Deduct wallet (ATOMIC)
-      wallet.balance -= price;
-      await wallet.save();
-
-      console.log('Wallet after:', wallet.balance);
-
-      // 8. Create wallet transaction
-      await WalletTransaction.create({
-        walletId: wallet._id,
-        type: 'SUBSCRIPTION_PURCHASE',
-        amount: -price,
-        description: `Subscription Purchase: ${subscription.title}`,
-        referenceId: null,
-      });
+    if (totalAvailableBundle < price) {
+      console.log('Insufficient balance');
+      return res.status(400).json({ error: 'Insufficient balance' });
     }
+
+    // Deduct from subscriptionCredits first
+    let deductedFromSubBundle = 0;
+    let deductedFromWalletBundle = 0;
+    let remainingBundle = price;
+
+    if (availableSubCreditsBundle >= remainingBundle) {
+      wallet.subscriptionCredits -= remainingBundle;
+      deductedFromSubBundle = remainingBundle;
+      remainingBundle = 0;
+    } else if (availableSubCreditsBundle > 0) {
+      deductedFromSubBundle = availableSubCreditsBundle;
+      wallet.subscriptionCredits = 0;
+      remainingBundle -= deductedFromSubBundle;
+    }
+
+    // Deduct remaining from walletCredits, then balance
+    if (remainingBundle > 0) {
+      if ((wallet.walletCredits || 0) >= remainingBundle) {
+        wallet.walletCredits -= remainingBundle;
+        deductedFromWalletBundle = remainingBundle;
+      } else {
+        deductedFromWalletBundle = (wallet.walletCredits || 0);
+        remainingBundle -= deductedFromWalletBundle;
+        wallet.walletCredits = 0;
+        wallet.balance = Math.max(0, (wallet.balance || 0) - remainingBundle);
+        deductedFromWalletBundle += remainingBundle;
+      }
+    }
+
+    await wallet.save();
+
+    // Also update legacy UserSubscription for backward compatibility
+    if (deductedFromSubBundle > 0) {
+      const activeSubForBundle = await UserSubscription.findOne({
+        userId: clientId,
+        isActive: true,
+        expiresAt: { $gt: nowSubBundle }
+      }).exec();
+      if (activeSubForBundle) {
+        activeSubForBundle.creditsRemaining = Math.max(0, activeSubForBundle.creditsRemaining - deductedFromSubBundle);
+        await activeSubForBundle.save();
+      }
+    }
+
+    console.log(`[HYBRID DEDUCT] Sub: -${deductedFromSubBundle} | Wallet: -${deductedFromWalletBundle}`);
+
+    // Create wallet transaction
+    await WalletTransaction.create({
+      walletId: wallet._id,
+      type: deductedFromSubBundle > 0 ? 'SUBSCRIPTION_DEDUCTION' : 'SUBSCRIPTION_PURCHASE',
+      amount: -price,
+      description: `Subscription Purchase: ${subscription.title}${deductedFromSubBundle > 0 ? ' (from subscription)' : ''}`,
+      referenceId: null,
+    });
 
     // 9. Clone all tasks for client (DO NOT MODIFY ORIGINALS)
     const clonedTasks = [];

@@ -169,14 +169,26 @@ async function start() {
 
 // Expire subscriptions whose expiresAt has passed
 function startSubscriptionExpiryJob() {
+  const Wallet = require('./models/Wallet');
   const expireSubscriptions = async () => {
     try {
+      // 1. Expire UserSubscription records (legacy)
       const result = await UserSubscription.updateMany(
         { isActive: true, expiresAt: { $lt: new Date() } },
         { $set: { isActive: false, creditsRemaining: 0 } }
       );
       if (result.modifiedCount > 0) {
         console.log(`[EXPIRY] Expired ${result.modifiedCount} subscription(s)`);
+      }
+
+      // 2. Reset wallet.subscriptionCredits for expired subscriptions
+      const now = new Date();
+      const walletResult = await Wallet.updateMany(
+        { subscriptionExpiresAt: { $lt: now }, subscriptionCredits: { $gt: 0 } },
+        { $set: { subscriptionCredits: 0 } }
+      );
+      if (walletResult.modifiedCount > 0) {
+        console.log(`[EXPIRY] Reset subscriptionCredits on ${walletResult.modifiedCount} wallet(s)`);
       }
     } catch (err) {
       console.error('[EXPIRY] Subscription expiry job error:', err.message);

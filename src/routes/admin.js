@@ -72,6 +72,13 @@ router.get('/wallets/:clientId', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found for this client' });
     }
 
+    // Check if subscription is expired
+    const now = new Date();
+    const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
+    const activeSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
+    const walletCreditsValue = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const totalCredits = activeSubCredits + walletCreditsValue;
+
     const transactions = await WalletTransaction.find({ walletId: wallet._id })
       .sort({ createdAt: -1 })
       .exec();
@@ -79,7 +86,11 @@ router.get('/wallets/:clientId', async (req, res) => {
     return res.status(200).json({
       clientId: client._id.toString(),
       clientIdentifier: client.identifier,
-      balance: wallet.balance,
+      balance: totalCredits,
+      subscriptionCredits: activeSubCredits,
+      walletCredits: walletCreditsValue,
+      totalCredits: totalCredits,
+      subscriptionExpiresAt: subNotExpired ? wallet.subscriptionExpiresAt : null,
       transactions: transactions.map((t) => ({
         id: t._id.toString(),
         type: t.type,
@@ -237,9 +248,10 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found for this client' });
     }
 
-    wallet.balance += request.amount;
+    wallet.walletCredits = (wallet.walletCredits || 0) + request.amount;
+    wallet.balance = (wallet.balance || 0) + request.amount; // Keep legacy balance in sync
     await wallet.save();
-    console.log('Step 4: Wallet saved, new balance:', wallet.balance);
+    console.log('Step 4: Wallet saved, walletCredits:', wallet.walletCredits, 'balance:', wallet.balance);
 
     const transaction = await WalletTransaction.create({
       walletId: wallet._id,
