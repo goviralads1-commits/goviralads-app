@@ -267,9 +267,48 @@ const Wallet = () => {
           color: '#fff',
           boxShadow: '0 10px 40px rgba(99,102,241,0.3)'
         }}>
-          <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: '0 0 8px 0'}}>Current Balance</p>
-          <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 16px 0'}}>₹{walletData?.balance?.toFixed(2) || '0.00'}</p>
+          <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px'}}>
+            <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: 0}}>Total Credits</p>
+            <span 
+              title="Subscription credits expire monthly. Wallet credits never expire."
+              style={{cursor: 'help', opacity: 0.7, fontSize: '14px'}}
+            >ⓘ</span>
+          </div>
+          <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 20px 0'}}>₹{walletData?.totalCredits?.toFixed(2) || walletData?.balance?.toFixed(2) || '0.00'}</p>
 
+          {/* Credit Breakdown */}
+          <div style={{display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '16px'}}>
+            {/* Subscription Credits Row */}
+            {(walletData?.subscriptionCredits > 0 || walletData?.subscriptionExpiresAt) && (() => {
+              const subCredits = walletData?.subscriptionCredits || 0;
+              const expiresAt = walletData?.subscriptionExpiresAt;
+              const isExpired = expiresAt && new Date(expiresAt) < new Date();
+              const daysLeft = expiresAt ? Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+              
+              if (isExpired && subCredits === 0) return null;
+              
+              return (
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <div>
+                    <p style={{fontSize: '13px', fontWeight: '600', color: '#fcd34d', margin: 0}}>Subscription Credits</p>
+                    <p style={{fontSize: '11px', color: isExpired ? '#fca5a5' : '#fde68a', margin: '2px 0 0 0'}}>
+                      {isExpired ? 'Expired' : `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+                  <span style={{fontSize: '18px', fontWeight: '700', color: '#fcd34d'}}>₹{subCredits.toFixed(2)}</span>
+                </div>
+              );
+            })()}
+
+            {/* Wallet Credits Row */}
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <div>
+                <p style={{fontSize: '13px', fontWeight: '600', color: '#86efac', margin: 0}}>Wallet Credits</p>
+                <p style={{fontSize: '11px', color: '#bbf7d0', margin: '2px 0 0 0'}}>No expiry</p>
+              </div>
+              <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>₹{(walletData?.walletCredits || walletData?.balance || 0).toFixed(2)}</span>
+            </div>
+          </div>
         </div>
 
         {/* Subscription Plans - Button Style Cards */}
