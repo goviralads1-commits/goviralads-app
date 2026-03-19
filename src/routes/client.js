@@ -348,6 +348,37 @@ router.get('/wallet/recharge-requests', async (req, res) => {
   }
 });
 
+// GET /client/coupons - Return active, non-expired coupons for client display
+// Only shows code, type, value and expiry — no business logic changed
+router.get('/coupons', async (req, res) => {
+  try {
+    const now = new Date();
+    const coupons = await Coupon.find({
+      isActive: true,
+      $or: [
+        { expiryDate: null },
+        { expiryDate: { $gt: now } }
+      ]
+    })
+      .select('code type value expiryDate')
+      .sort({ value: -1 })
+      .lean();
+
+    return res.status(200).json({
+      coupons: coupons.map(c => ({
+        id: c._id.toString(),
+        code: c.code,
+        type: c.type,
+        value: c.value,
+        expiryDate: c.expiryDate || null,
+      }))
+    });
+  } catch (err) {
+    console.error('[GET /client/coupons] error:', err.message);
+    return res.status(500).json({ error: 'Failed to load coupons' });
+  }
+});
+
 // Get task details
 router.get('/tasks/:taskId', async (req, res) => {
   try {

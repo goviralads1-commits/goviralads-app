@@ -21,6 +21,7 @@ const Wallet = () => {
   const [subscription, setSubscription] = useState(null);
   const [expiredSubscription, setExpiredSubscription] = useState(null);
   const [couponCode, setCouponCode] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState([]);
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
   const subscriptionRef = useRef(null);
 
@@ -60,6 +61,14 @@ const Wallet = () => {
         } catch (subErr) {
           console.log('[Wallet] Subscription endpoint not available');
         }
+
+        // Optional: available coupons
+        try {
+          const couponsResponse = await api.get('/client/coupons');
+          setAvailableCoupons(couponsResponse.data.coupons || []);
+        } catch (couponErr) {
+          console.log('[Wallet] Coupons endpoint not available');
+        }
         
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
@@ -85,6 +94,19 @@ const Wallet = () => {
       }, 400);
     }
   }, []);
+
+  // Auto-suggest best coupon when switching to subscriptions tab
+  useEffect(() => {
+    if (activeTab === 'subscriptions' && availableCoupons.length > 0 && !couponCode) {
+      // Find best coupon: prefer highest % discount, fallback to highest bonus
+      const discountCoupons = availableCoupons.filter(c => c.type === 'discount');
+      const best = discountCoupons.length > 0
+        ? discountCoupons.reduce((a, b) => b.value > a.value ? b : a)
+        : availableCoupons.reduce((a, b) => b.value > a.value ? b : a);
+      setCouponCode(best.code);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Helper: days until expiry (0 = today, negative = past)
   const getDaysUntilExpiry = (expiresAt) => {
@@ -801,6 +823,104 @@ const Wallet = () => {
             <>
               <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px 0'}}>Subscription Plans</h3>
               <p style={{fontSize: '14px', color: '#64748b', margin: '0 0 20px 0'}}>Buy a plan &mdash; subscription credits are used first before your wallet balance on every task.</p>
+
+              {/* Available Offers Section */}
+              {availableCoupons.length > 0 && (() => {
+                const discountCoupons = availableCoupons.filter(c => c.type === 'discount');
+                const bestCoupon = discountCoupons.length > 0
+                  ? discountCoupons.reduce((a, b) => b.value > a.value ? b : a)
+                  : availableCoupons.reduce((a, b) => b.value > a.value ? b : a);
+                return (
+                  <div style={{marginBottom: '24px'}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
+                      <span style={{fontSize: '16px'}}>&#127881;</span>
+                      <p style={{fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0}}>Available Offers</p>
+                      <span style={{
+                        fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px',
+                        backgroundColor: '#dcfce7', color: '#15803d'
+                      }}>{availableCoupons.length} offer{availableCoupons.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <div style={{
+                      display: 'flex', gap: '12px', overflowX: 'auto',
+                      paddingBottom: '8px',
+                      scrollbarWidth: 'thin',
+                    }}>
+                      {availableCoupons.map(coupon => {
+                        const isBest = coupon.code === bestCoupon.code;
+                        const isApplied = couponCode === coupon.code;
+                        const discountLabel = coupon.type === 'discount'
+                          ? `${coupon.value}% OFF`
+                          : `+${coupon.value} Bonus Credits`;
+                        const expiryText = coupon.expiryDate
+                          ? `Expires ${new Date(coupon.expiryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
+                          : 'No expiry';
+                        return (
+                          <div key={coupon.id} style={{
+                            minWidth: '180px',
+                            flexShrink: 0,
+                            border: isApplied ? '2px solid #16a34a' : isBest ? '2px solid #6366f1' : '2px solid #bbf7d0',
+                            borderRadius: '16px',
+                            padding: '14px 16px',
+                            backgroundColor: isApplied ? '#f0fdf4' : isBest ? '#f5f3ff' : '#f0fdf4',
+                            position: 'relative',
+                            transition: 'all 0.2s',
+                          }}>
+                            {isBest && (
+                              <span style={{
+                                position: 'absolute', top: '-10px', left: '12px',
+                                backgroundColor: '#6366f1', color: '#fff',
+                                fontSize: '10px', fontWeight: '800',
+                                padding: '3px 8px', borderRadius: '20px',
+                                letterSpacing: '0.5px'
+                              }}>BEST DEAL</span>
+                            )}
+                            {isApplied && (
+                              <span style={{
+                                position: 'absolute', top: '-10px', left: '12px',
+                                backgroundColor: '#16a34a', color: '#fff',
+                                fontSize: '10px', fontWeight: '800',
+                                padding: '3px 8px', borderRadius: '20px',
+                                letterSpacing: '0.5px'
+                              }}>APPLIED &#10003;</span>
+                            )}
+                            <p style={{
+                              fontSize: '16px', fontWeight: '800', color: '#0f172a',
+                              margin: '0 0 4px 0', fontFamily: 'monospace', letterSpacing: '1px'
+                            }}>{coupon.code}</p>
+                            <p style={{
+                              fontSize: '13px', fontWeight: '700',
+                              color: coupon.type === 'discount' ? '#6366f1' : '#10b981',
+                              margin: '0 0 6px 0'
+                            }}>{discountLabel}</p>
+                            <p style={{fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0'}}>{expiryText}</p>
+                            <button
+                              onClick={() => {
+                                setCouponCode(coupon.code);
+                                setToast(`Coupon "${coupon.code}" applied!`);
+                                setTimeout(() => setToast(null), 3000);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                backgroundColor: isApplied ? '#16a34a' : '#6366f1',
+                                color: '#fff',
+                                fontSize: '13px',
+                                fontWeight: '700',
+                                borderRadius: '8px',
+                                border: 'none',
+                                cursor: isApplied ? 'default' : 'pointer',
+                                opacity: isApplied ? 0.8 : 1,
+                              }}
+                            >
+                              {isApplied ? 'Applied' : 'Apply'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Coupon Input */}
               <div style={{
