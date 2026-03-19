@@ -1752,12 +1752,17 @@ router.post('/notices/:noticeId/respond', async (req, res) => {
           recipientId: adminUser._id,
           type: NOTIFICATION_TYPES.NOTICE_RESPONSE,
           title: 'Client Response Received',
-          message: `Client responded to notice: "${notice.title.substring(0, 50)}${notice.title.length > 50 ? '...' : ''}"`,
+          message: `Client responded to notice: "${notice.title.substring(0, 50)}${notice.title.length > 50 ? '...' : ''}" — Response: ${value !== undefined ? String(value).substring(0, 50) : responseType}`,
           relatedEntity: {
             entityType: ENTITY_TYPES.NOTICE,
             entityId: notice._id,
           },
-          notifyByEmail: false, // Admin usually doesn't need email for responses
+          metadata: {
+            response: value !== undefined ? value : responseType,
+            responseType: responseType,
+            noticeTitle: notice.title,
+          },
+          notifyByEmail: true,
         });
         
         console.log(`[NOTICE_RESPONSE] Notification sent to admin for notice ${notice._id}`);

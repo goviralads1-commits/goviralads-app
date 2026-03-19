@@ -182,6 +182,8 @@ const Header = ({ title }) => {
       navigate(`/wallet`);
     } else if (entityType === 'WALLET') {
       navigate(`/wallet`);
+    } else if (entityType === 'NOTICE') {
+      navigate(`/notifications`);
     } else if (notif.type?.includes('TASK')) {
       // Fallback for TASK types without entity
       if (entityId) {

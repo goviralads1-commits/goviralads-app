@@ -119,6 +119,10 @@ const Header = ({ title }) => {
       navigate(`/tickets/${entityId}`);
     } else if (entityType === 'RECHARGE_REQUEST') {
       navigate(`/recharges`);
+    } else if (entityType === 'NOTICE') {
+      navigate(`/notifications`);
+    } else if (notif.type === 'NOTICE_RESPONSE') {
+      navigate(`/notifications`);
     } else if (notif.type?.includes('TASK')) {
       // Fallback for TASK types without entity
       if (entityId) {

@@ -25,6 +25,7 @@ const NOTIFICATION_TYPES = Object.freeze({
   NEW_REQUIREMENT: 'NEW_REQUIREMENT',
   NEW_PROMOTION: 'NEW_PROMOTION',
   NOTICE_RESPONSE: 'NOTICE_RESPONSE',
+  RESPONSE_SUBMITTED: 'RESPONSE_SUBMITTED',
   // Order notifications
   NEW_ORDER: 'NEW_ORDER',
   ORDER_APPROVED: 'ORDER_APPROVED',
@@ -328,6 +329,44 @@ async function triggerNotificationEmail(notifData) {
               </div>
               <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
                 <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+    } else if (type === NOTIFICATION_TYPES.NOTICE_RESPONSE) {
+      // Admin email for client response
+      console.log('[NOTIF EMAIL] Sending NOTICE_RESPONSE email to admin:', recipientEmail);
+      const responseDisplay = notifData.metadata?.response !== undefined ? String(notifData.metadata.response) : 'Response submitted';
+      const noticeTitle = notifData.metadata?.noticeTitle || 'Notice';
+      
+      await emailService.send({
+        to: recipientEmail,
+        subject: `📝 Client Response Received - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #0ea5e9, #0284c7); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">📝 Client Response</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'Client Response Received'}</h2>
+                <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 0 0 24px;">
+                  <p style="color: #64748b; font-size: 12px; font-weight: 600; margin: 0 0 8px; text-transform: uppercase;">Notice</p>
+                  <p style="color: #1e293b; font-size: 14px; margin: 0 0 12px;">${noticeTitle}</p>
+                  <p style="color: #64748b; font-size: 12px; font-weight: 600; margin: 0 0 8px; text-transform: uppercase;">Response</p>
+                  <p style="color: #1e293b; font-size: 16px; font-weight: 700; margin: 0;">${responseDisplay}</p>
+                </div>
+                <a href="${adminDashboardUrl}/notices" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 12px rgba(14,165,233,0.3);">
+                  💼 View Responses
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads Admin</p>
               </div>
             </div>
           </body>
