@@ -10,6 +10,7 @@ const NOTIFICATION_TYPES = Object.freeze({
   TASK_APPROVED: 'TASK_APPROVED',
   TASK_STATUS_CHANGED: 'TASK_STATUS_CHANGED',
   TASK_CREATED: 'TASK_CREATED',
+  TASK_MESSAGE: 'TASK_MESSAGE',
   WALLET_ADJUSTED: 'WALLET_ADJUSTED',
   TICKET_CREATED: 'TICKET_CREATED',
   TICKET_REPLIED: 'TICKET_REPLIED',
@@ -178,6 +179,39 @@ async function triggerNotificationEmail(notifData) {
                 <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${bodyText}</p>
                 <a href="${dashboardUrl}/orders" style="display: inline-block; padding: 14px 32px; background: ${isApproved ? '#22c55e' : '#6366f1'}; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
                   View Orders
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+    } else if (type === NOTIFICATION_TYPES.TASK_MESSAGE) {
+      // Task discussion message email
+      console.log('[NOTIF EMAIL] Sending TASK_MESSAGE email:', { to: recipientEmail, title: notifData.title });
+      const taskUrl = notifData.taskUrl || (dashboardUrl + '/tasks');
+      await emailService.send({
+        to: recipientEmail,
+        subject: `💬 New Message on Your Task - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #6366f1, #4f46e5); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">💬 New Message</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'New Message'}</h2>
+                <div style="background: #f1f5f9; padding: 16px; border-radius: 12px; margin: 0 0 24px;">
+                  <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0;">${notifData.message || ''}</p>
+                </div>
+                <a href="${taskUrl}" style="display: inline-block; padding: 14px 32px; background: #6366f1; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
+                  View Task
                 </a>
               </div>
               <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">

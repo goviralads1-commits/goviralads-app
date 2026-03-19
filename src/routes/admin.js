@@ -743,20 +743,30 @@ router.post('/tasks/:taskId/message', async (req, res) => {
     task.messages = task.messages || [];
     task.messages.push(newMessage);
     await task.save();
+    console.log('[DISCUSSION] Message saved to task:', taskId);
 
-    // Notify client
+    // Notify client with email
     if (task.clientId) {
+      console.log('[DISCUSSION] Notifying client:', task.clientId);
       try {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
+        const taskUrl = `${clientUrl}/tasks/${task._id}`;
+        
         await createNotification({
-          userId: task.clientId,
-          type: NOTIFICATION_TYPES.TASK_UPDATE,
-          title: 'New Message from Admin',
-          message: `Admin sent a message on task: ${task.name}`,
+          recipientId: task.clientId,
+          type: NOTIFICATION_TYPES.TASK_MESSAGE,
+          title: `New message on: ${task.title}`,
+          message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
           relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
+          taskUrl: taskUrl,
+          notifyByEmail: true,
         });
+        console.log('[DISCUSSION] Notification created + email triggered for client:', task.clientId);
       } catch (notifErr) {
-        console.log('[DISCUSSION] Notification error:', notifErr.message);
+        console.error('[DISCUSSION] Notification/email error:', notifErr.message);
       }
+    } else {
+      console.warn('[DISCUSSION] No clientId on task, skipping notification');
     }
 
     console.log(`[DISCUSSION] Admin ${adminId} sent message on task ${taskId}`);
