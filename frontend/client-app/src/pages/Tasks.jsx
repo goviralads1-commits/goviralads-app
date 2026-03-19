@@ -342,6 +342,24 @@ const Tasks = () => {
                     <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>₹{task.creditsUsed || task.creditCost || 0}</span>
                   </div>
                 )}
+
+                {/* Chat Icon - if messages exist */}
+                {task.messages && task.messages.length > 0 && (
+                  <div 
+                    onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id || task._id}?scrollToChat=true`); }}
+                    style={{ 
+                      marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f0f0f0',
+                      display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
+                      <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: '600' }}>
+                      {task.messages.length} message{task.messages.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
                 </div>
               </div>
             );

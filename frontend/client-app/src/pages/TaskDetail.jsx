@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import api from '../services/api';
 import Header from '../components/Header';
@@ -25,6 +25,7 @@ const formatDescription = (desc) => {
 const TaskDetail = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [task, setTask] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +45,7 @@ const TaskDetail = () => {
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const discussionRef = useRef(null);
 
   const fetchTask = useCallback(async () => {
     try {
@@ -182,6 +184,15 @@ const TaskDetail = () => {
       setDriveLink(userDefaultFolder);
     }
   }, [task, userDefaultFolder]);
+
+  // Auto-scroll to discussion if scrollToChat=true
+  useEffect(() => {
+    if (!loading && task && searchParams.get('scrollToChat') === 'true' && discussionRef.current) {
+      setTimeout(() => {
+        discussionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [loading, task, searchParams]);
 
   // Human-readable status labels (hide internal codes)
   const getHumanStatus = (status) => {
@@ -481,6 +492,85 @@ const TaskDetail = () => {
           )}
         </div>
 
+        {/* TASK DISCUSSION (Phase 6) - MOVED TO TOP */}
+        <div ref={discussionRef} style={{
+          backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
+              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Chat with admin about this task</p>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
+            {(!task.messages || task.messages.length === 0) ? (
+              <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '40px 0' }}>
+                No messages yet. Start a conversation!
+              </p>
+            ) : (
+              task.messages.map((msg, idx) => (
+                <div key={idx} style={{ 
+                  display: 'flex', 
+                  justifyContent: msg.sender === 'CLIENT' ? 'flex-end' : 'flex-start',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    maxWidth: '75%', padding: '12px 16px', borderRadius: '16px',
+                    backgroundColor: msg.sender === 'CLIENT' ? '#6366f1' : '#f1f5f9',
+                    color: msg.sender === 'CLIENT' ? '#fff' : '#0f172a',
+                  }}>
+                    <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                    <p style={{ 
+                      fontSize: '10px', margin: '6px 0 0', 
+                      color: msg.sender === 'CLIENT' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
+                      textAlign: 'right'
+                    }}>
+                      {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Input */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+            <textarea
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Type your message..."
+              rows={2}
+              style={{
+                flex: 1, padding: '12px 16px', fontSize: '14px',
+                border: '2px solid #e2e8f0', borderRadius: '14px',
+                outline: 'none', resize: 'none', lineHeight: 1.5
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!messageText.trim() || sendingMessage}
+              style={{
+                padding: '12px 20px', backgroundColor: messageText.trim() ? '#6366f1' : '#e2e8f0',
+                color: messageText.trim() ? '#fff' : '#94a3b8', fontSize: '14px', fontWeight: '600',
+                borderRadius: '14px', border: 'none',
+                cursor: messageText.trim() && !sendingMessage ? 'pointer' : 'not-allowed',
+                opacity: sendingMessage ? 0.6 : 1
+              }}
+            >
+              {sendingMessage ? '...' : 'Send'}
+            </button>
+          </div>
+        </div>
+
         {/* PROGRESS CARD - Clean Client View */}
         <div style={{
           backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
@@ -707,85 +797,6 @@ const TaskDetail = () => {
             )}
           </div>
         )}
-
-        {/* TASK DISCUSSION (Phase 6) */}
-        <div style={{
-          backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
-                <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Chat with admin about this task</p>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
-            {(!task.messages || task.messages.length === 0) ? (
-              <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '40px 0' }}>
-                No messages yet. Start a conversation!
-              </p>
-            ) : (
-              task.messages.map((msg, idx) => (
-                <div key={idx} style={{ 
-                  display: 'flex', 
-                  justifyContent: msg.sender === 'CLIENT' ? 'flex-end' : 'flex-start',
-                  marginBottom: '12px'
-                }}>
-                  <div style={{
-                    maxWidth: '75%', padding: '12px 16px', borderRadius: '16px',
-                    backgroundColor: msg.sender === 'CLIENT' ? '#6366f1' : '#f1f5f9',
-                    color: msg.sender === 'CLIENT' ? '#fff' : '#0f172a',
-                  }}>
-                    <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
-                    <p style={{ 
-                      fontSize: '10px', margin: '6px 0 0', 
-                      color: msg.sender === 'CLIENT' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
-                      textAlign: 'right'
-                    }}>
-                      {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Input */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Type your message..."
-              rows={2}
-              style={{
-                flex: 1, padding: '12px 16px', fontSize: '14px',
-                border: '2px solid #e2e8f0', borderRadius: '14px',
-                outline: 'none', resize: 'none', lineHeight: 1.5
-              }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!messageText.trim() || sendingMessage}
-              style={{
-                padding: '12px 20px', backgroundColor: messageText.trim() ? '#6366f1' : '#e2e8f0',
-                color: messageText.trim() ? '#fff' : '#94a3b8', fontSize: '14px', fontWeight: '600',
-                borderRadius: '14px', border: 'none',
-                cursor: messageText.trim() && !sendingMessage ? 'pointer' : 'not-allowed',
-                opacity: sendingMessage ? 0.6 : 1
-              }}
-            >
-              {sendingMessage ? '...' : 'Send'}
-            </button>
-          </div>
-        </div>
 
         {/* CLIENT CONTENT SUBMISSION (Phase 2) */}
         {/* Only show for ACTIVE tasks */}
