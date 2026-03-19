@@ -18,6 +18,9 @@ const Wallet = () => {
   const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'recharge' | 'invoices'
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
   const [planTab, setPlanTab] = useState('PLAN'); // 'PLAN' | 'PACK'
+  const [subscription, setSubscription] = useState(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
 
   useEffect(() => {
     const fetchData = async () => {
@@ -44,6 +47,14 @@ const Wallet = () => {
         } catch (planErr) {
           console.log('[Wallet] Credit plans endpoint not available');
         }
+
+        // Optional: active subscription
+        try {
+          const subResponse = await api.get('/client/my-subscription');
+          setSubscription(subResponse.data.subscription || null);
+        } catch (subErr) {
+          console.log('[Wallet] Subscription endpoint not available');
+        }
         
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
@@ -58,6 +69,30 @@ const Wallet = () => {
 
     fetchData();
   }, []);
+
+  const handleSubscriptionPurchase = async (planId) => {
+    setPurchasingPlan(planId);
+    try {
+      const res = await api.post(`/client/credit-plans/${planId}/purchase`, {
+        couponCode: couponCode.trim() || undefined
+      });
+      setToast('Subscription activated!');
+      setTimeout(() => setToast(null), 4000);
+      setCouponCode('');
+      setSubscription(res.data.subscription || null);
+      // Refresh wallet balance
+      try {
+        const walletRes = await api.get('/client/wallet');
+        setWalletData(walletRes.data);
+      } catch (_) {}
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Purchase failed';
+      setToast(msg);
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setPurchasingPlan(null);
+    }
+  };
 
   const handleDownloadInvoice = async (invoiceId, invoiceNumber) => {
     setDownloadingInvoice(invoiceId);
@@ -218,6 +253,53 @@ const Wallet = () => {
           </button>
         </div>
 
+        {/* Active Subscription Banner */}
+        {subscription && (
+          <div style={{
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #86efac',
+            borderRadius: '20px',
+            padding: '20px 24px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px'}}>
+                <span style={{fontSize: '18px'}}>&#x2705;</span>
+                <p style={{fontSize: '16px', fontWeight: '700', color: '#15803d', margin: 0}}>
+                  {subscription.planName} &mdash; Active
+                </p>
+              </div>
+              <p style={{fontSize: '14px', color: '#166534', margin: 0}}>
+                <strong>{subscription.creditsRemaining?.toLocaleString()}</strong> credits remaining
+                &nbsp;&middot;&nbsp;
+                Expires {new Date(subscription.expiresAt).toLocaleDateString('en-IN', {
+                  day: '2-digit', month: 'short', year: 'numeric'
+                })}
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab('subscriptions')}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#16a34a',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: '600',
+                borderRadius: '10px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Manage Plan
+            </button>
+          </div>
+        )}
+
         {/* Recharge Form - Upgrade Credits */}
         {showRechargeForm && (
           <div style={{
@@ -255,7 +337,7 @@ const Wallet = () => {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    Plans (with Bonus)
+                    Subscription Plans
                   </button>
                   <button
                     onClick={() => { setPlanTab('PACK'); setSelectedPlan(null); }}
@@ -272,7 +354,7 @@ const Wallet = () => {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    Credit Packs
+                    One-time Credit Packs
                   </button>
                 </div>
 
@@ -490,6 +572,23 @@ const Wallet = () => {
           >
             Invoices
           </button>
+          <button
+            onClick={() => setActiveTab('subscriptions')}
+            style={{
+              flex: 1,
+              padding: '14px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'subscriptions' ? '#6366f1' : 'transparent',
+              color: activeTab === 'subscriptions' ? '#fff' : '#64748b',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Subscriptions
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -602,6 +701,152 @@ const Wallet = () => {
                       </span>
                     </div>
                   ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Subscriptions Tab */}
+          {activeTab === 'subscriptions' && (
+            <>
+              <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px 0'}}>Subscription Plans</h3>
+              <p style={{fontSize: '14px', color: '#64748b', margin: '0 0 20px 0'}}>Buy a plan &mdash; subscription credits are used first before your wallet balance on every task.</p>
+
+              {/* Coupon Input */}
+              <div style={{
+                display: 'flex',
+                gap: '10px',
+                marginBottom: '24px',
+                alignItems: 'center'
+              }}>
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Coupon code (optional)"
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    fontSize: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '12px',
+                    outline: 'none',
+                    letterSpacing: '1px',
+                    fontWeight: couponCode ? '600' : '400'
+                  }}
+                />
+                {couponCode && (
+                  <button
+                    onClick={() => setCouponCode('')}
+                    style={{
+                      padding: '12px 16px',
+                      backgroundColor: '#f1f5f9',
+                      color: '#64748b',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      borderRadius: '12px',
+                      border: '2px solid #e2e8f0',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {couponCode && (
+                <p style={{fontSize: '13px', color: '#6366f1', fontWeight: '600', margin: '-16px 0 20px 0'}}>
+                  Coupon &quot;{couponCode}&quot; will be applied at checkout
+                </p>
+              )}
+
+              {/* Plan Cards */}
+              {creditPlans.filter(p => p.type === 'PLAN').length === 0 ? (
+                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No subscription plans available</p>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {creditPlans.filter(p => p.type === 'PLAN').map(plan => {
+                    const isCurrentPlan = subscription?.planId === plan.id || subscription?.planId === plan._id;
+                    const isRecommended = !isCurrentPlan && plan.displayOrder === 0;
+                    const isBuying = purchasingPlan === plan.id;
+                    return (
+                      <div
+                        key={plan.id || plan._id}
+                        style={{
+                          padding: '20px',
+                          borderRadius: '20px',
+                          border: isCurrentPlan ? '2px solid #16a34a' : isRecommended ? '2px solid #6366f1' : '2px solid #e2e8f0',
+                          backgroundColor: isCurrentPlan ? '#f0fdf4' : isRecommended ? '#f5f3ff' : '#fff',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px',
+                          position: 'relative'
+                        }}
+                      >
+                        {isCurrentPlan && (
+                          <span style={{
+                            position: 'absolute', top: '-10px', right: '16px',
+                            backgroundColor: '#16a34a', color: '#fff',
+                            fontSize: '11px', fontWeight: '700',
+                            padding: '3px 10px', borderRadius: '20px'
+                          }}>ACTIVE</span>
+                        )}
+                        {isRecommended && (
+                          <span style={{
+                            position: 'absolute', top: '-10px', right: '16px',
+                            backgroundColor: '#6366f1', color: '#fff',
+                            fontSize: '11px', fontWeight: '700',
+                            padding: '3px 10px', borderRadius: '20px'
+                          }}>RECOMMENDED</span>
+                        )}
+                        <p style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0}}>{plan.name}</p>
+                        <p style={{fontSize: '28px', fontWeight: '800', color: '#6366f1', margin: 0}}>&#x20B9;{plan.price?.toLocaleString()}</p>
+                        <div style={{fontSize: '13px', color: '#64748b'}}>
+                          <span>{plan.credits?.toLocaleString()} credits</span>
+                          {plan.bonusCredits > 0 && (
+                            <span style={{color: '#10b981', fontWeight: '600'}}> +{plan.bonusCredits?.toLocaleString()} bonus</span>
+                          )}
+                        </div>
+                        {plan.validityDays && (
+                          <span style={{
+                            display: 'inline-block',
+                            backgroundColor: '#e0e7ff',
+                            color: '#4338ca',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            padding: '4px 10px',
+                            borderRadius: '20px',
+                            width: 'fit-content'
+                          }}>
+                            Valid for {plan.validityDays} days
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleSubscriptionPurchase(plan.id || plan._id)}
+                          disabled={isBuying}
+                          style={{
+                            marginTop: '6px',
+                            padding: '12px',
+                            background: isCurrentPlan
+                              ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)'
+                              : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                            color: '#fff',
+                            fontSize: '14px',
+                            fontWeight: '700',
+                            borderRadius: '12px',
+                            border: 'none',
+                            cursor: isBuying ? 'not-allowed' : 'pointer',
+                            opacity: isBuying ? 0.6 : 1
+                          }}
+                        >
+                          {isBuying ? 'Processing...' : isCurrentPlan ? 'Renew Plan' : 'Buy Plan'}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>

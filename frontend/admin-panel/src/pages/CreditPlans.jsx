@@ -349,11 +349,31 @@ const CreditPlans = () => {
     type: 'PLAN',
     description: '',
     displayOrder: '0',
+    validityDays: '30',
+    visibility: 'public',
+    visibleToUsers: [],
+    isActive: true,
+  });
+
+  const [users, setUsers] = useState([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+
+  // Coupon state
+  const [coupons, setCoupons] = useState([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState(null);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    type: 'discount',
+    value: '',
+    expiryDate: '',
     isActive: true,
   });
 
   useEffect(() => {
     fetchPlans();
+    fetchCoupons();
   }, []);
 
   const fetchPlans = async () => {
@@ -368,12 +388,36 @@ const CreditPlans = () => {
     }
   };
 
+  const fetchCoupons = async () => {
+    setCouponsLoading(true);
+    try {
+      const res = await api.get('/admin/coupons');
+      setCoupons(res.data.coupons || []);
+    } catch {
+      // Silently ignore
+    } finally {
+      setCouponsLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    if (usersLoaded) return;
+    try {
+      const res = await api.get('/admin/users?limit=200');
+      setUsers(res.data.users || []);
+      setUsersLoaded(true);
+    } catch {
+      // Silently ignore
+    }
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
   const handleOpenModal = (plan = null) => {
+    fetchUsers();
     if (plan) {
       setEditingPlan(plan);
       setFormData({
@@ -384,6 +428,9 @@ const CreditPlans = () => {
         type: plan.type,
         description: plan.description || '',
         displayOrder: plan.displayOrder.toString(),
+        validityDays: (plan.validityDays || 30).toString(),
+        visibility: plan.visibility || 'public',
+        visibleToUsers: plan.visibleToUsers || [],
         isActive: plan.isActive,
       });
     } else {
@@ -396,6 +443,9 @@ const CreditPlans = () => {
         type: activeTab,
         description: '',
         displayOrder: '0',
+        validityDays: '30',
+        visibility: 'public',
+        visibleToUsers: [],
         isActive: true,
       });
     }
@@ -425,6 +475,9 @@ const CreditPlans = () => {
       type: formData.type,
       description: formData.description,
       displayOrder: parseInt(formData.displayOrder) || 0,
+      validityDays: parseInt(formData.validityDays) || 30,
+      visibility: formData.visibility,
+      visibleToUsers: formData.visibility === 'selected' ? formData.visibleToUsers : [],
       isActive: formData.isActive,
     };
 
@@ -465,6 +518,64 @@ const CreditPlans = () => {
     }
   };
 
+  // Coupon handlers
+  const handleOpenCouponModal = (coupon = null) => {
+    if (coupon) {
+      setEditingCoupon(coupon);
+      setCouponForm({
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value.toString(),
+        expiryDate: coupon.expiryDate ? coupon.expiryDate.slice(0, 10) : '',
+        isActive: coupon.isActive,
+      });
+    } else {
+      setEditingCoupon(null);
+      setCouponForm({ code: '', type: 'discount', value: '', expiryDate: '', isActive: true });
+    }
+    setShowCouponModal(true);
+  };
+
+  const handleCouponSubmit = async (e) => {
+    e.preventDefault();
+    const val = parseFloat(couponForm.value);
+    if (!couponForm.code.trim()) { showToast('Coupon code is required', 'error'); return; }
+    if (isNaN(val) || val <= 0) { showToast('Value must be positive', 'error'); return; }
+    if (couponForm.type === 'discount' && val > 100) { showToast('Discount cannot exceed 100%', 'error'); return; }
+    const payload = {
+      code: couponForm.code.toUpperCase(),
+      type: couponForm.type,
+      value: val,
+      expiryDate: couponForm.expiryDate || null,
+      isActive: couponForm.isActive,
+    };
+    try {
+      if (editingCoupon) {
+        await api.patch(`/admin/coupons/${editingCoupon.id}`, payload);
+        showToast('Coupon updated');
+      } else {
+        await api.post('/admin/coupons', payload);
+        showToast('Coupon created');
+      }
+      setShowCouponModal(false);
+      setEditingCoupon(null);
+      fetchCoupons();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to save coupon', 'error');
+    }
+  };
+
+  const handleDeleteCoupon = async (coupon) => {
+    if (!window.confirm(`Delete coupon "${coupon.code}"?`)) return;
+    try {
+      await api.delete(`/admin/coupons/${coupon.id}`);
+      showToast('Coupon deleted');
+      fetchCoupons();
+    } catch {
+      showToast('Failed to delete coupon', 'error');
+    }
+  };
+
   const filteredPlans = plans.filter(p => p.type === activeTab);
 
   return (
@@ -473,8 +584,8 @@ const CreditPlans = () => {
       <main style={styles.main}>
         <div style={styles.pageHeader}>
           <h1 style={styles.pageTitle}>Credit Plans</h1>
-          <button style={styles.addButton} onClick={() => handleOpenModal()}>
-            + Add {activeTab === 'PLAN' ? 'Plan' : 'Pack'}
+          <button style={styles.addButton} onClick={() => activeTab === 'COUPON' ? handleOpenCouponModal() : handleOpenModal()}>
+            + {activeTab === 'PLAN' ? 'Add Subscription Plan' : activeTab === 'PACK' ? 'Add Credit Pack' : 'Add Coupon'}
           </button>
         </div>
 
@@ -484,24 +595,32 @@ const CreditPlans = () => {
             style={{ ...styles.tab, ...(activeTab === 'PLAN' ? styles.activeTab : {}) }}
             onClick={() => setActiveTab('PLAN')}
           >
-            Plans (with Bonus)
+            Subscription Plans
           </button>
           <button
             style={{ ...styles.tab, ...(activeTab === 'PACK' ? styles.activeTab : {}) }}
             onClick={() => setActiveTab('PACK')}
           >
-            Credit Packs (Simple)
+            One-time Credit Packs
+          </button>
+          <button
+            style={{ ...styles.tab, ...(activeTab === 'COUPON' ? styles.activeTab : {}) }}
+            onClick={() => setActiveTab('COUPON')}
+          >
+            Coupons
           </button>
         </div>
 
         {/* Plans Grid */}
+        {activeTab !== 'COUPON' && (
+          <>
         {loading ? (
           <div style={styles.emptyState}>Loading...</div>
         ) : filteredPlans.length === 0 ? (
           <div style={styles.emptyState}>
-            <p>No {activeTab.toLowerCase()}s created yet.</p>
+            <p>No {activeTab === 'PLAN' ? 'subscription plans' : 'credit packs'} created yet.</p>
             <button style={styles.addButton} onClick={() => handleOpenModal()}>
-              + Create First {activeTab === 'PLAN' ? 'Plan' : 'Pack'}
+              + Create First {activeTab === 'PLAN' ? 'Subscription Plan' : 'Credit Pack'}
             </button>
           </div>
         ) : (
@@ -515,7 +634,7 @@ const CreditPlans = () => {
                   <h3 style={styles.planName}>{plan.name}</h3>
                   <div>
                     <span style={{ ...styles.badge, ...(plan.type === 'PLAN' ? styles.planBadge : styles.packBadge) }}>
-                      {plan.type}
+                      {plan.type === 'PLAN' ? 'Subscription' : 'Credit Pack'}
                     </span>
                     {!plan.isActive && (
                       <span style={{ ...styles.badge, ...styles.inactiveBadge }}>Inactive</span>
@@ -548,6 +667,25 @@ const CreditPlans = () => {
                   <p style={styles.description}>{plan.description}</p>
                 )}
 
+                {/* Validity + Visibility info row */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  {plan.type === 'PLAN' && plan.validityDays && (
+                    <span style={{
+                      padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
+                      backgroundColor: '#e0e7ff', color: '#4338ca'
+                    }}>
+                      {plan.validityDays}d validity
+                    </span>
+                  )}
+                  <span style={{
+                    padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
+                    backgroundColor: plan.visibility === 'public' ? '#dcfce7' : plan.visibility === 'private' ? '#fee2e2' : '#fef3c7',
+                    color: plan.visibility === 'public' ? '#15803d' : plan.visibility === 'private' ? '#dc2626' : '#92400e'
+                  }}>
+                    {plan.visibility === 'public' ? 'Public' : plan.visibility === 'private' ? 'Private' : `Selected (${(plan.visibleToUsers || []).length})`}
+                  </span>
+                </div>
+
                 <div style={styles.cardActions}>
                   <button style={styles.editBtn} onClick={() => handleOpenModal(plan)}>
                     Edit
@@ -570,9 +708,70 @@ const CreditPlans = () => {
             ))}
           </div>
         )}
+        </>)}
+
+        {/* Coupon Section */}
+        {activeTab === 'COUPON' && (
+          <div>
+            {couponsLoading ? (
+              <div style={styles.emptyState}>Loading coupons...</div>
+            ) : coupons.length === 0 ? (
+              <div style={styles.emptyState}>
+                <p>No coupons created yet.</p>
+                <button style={styles.addButton} onClick={() => handleOpenCouponModal()}>+ Create First Coupon</button>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${colors.border.light}`, textAlign: 'left' }}>
+                      <th style={{ padding: '10px 12px', color: colors.text.secondary }}>Code</th>
+                      <th style={{ padding: '10px 12px', color: colors.text.secondary }}>Type</th>
+                      <th style={{ padding: '10px 12px', color: colors.text.secondary }}>Value</th>
+                      <th style={{ padding: '10px 12px', color: colors.text.secondary }}>Expiry</th>
+                      <th style={{ padding: '10px 12px', color: colors.text.secondary }}>Status</th>
+                      <th style={{ padding: '10px 12px', color: colors.text.secondary }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {coupons.map(c => (
+                      <tr key={c.id} style={{ borderBottom: `1px solid ${colors.border.light}` }}>
+                        <td style={{ padding: '10px 12px', fontWeight: '600', fontFamily: 'monospace' }}>{c.code}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
+                            backgroundColor: c.type === 'discount' ? '#fef3c7' : '#dcfce7',
+                            color: c.type === 'discount' ? '#92400e' : '#15803d' }}>
+                            {c.type === 'discount' ? `${c.value}% OFF` : `+${c.value} Credits`}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', color: colors.text.secondary }}>{c.value}</td>
+                        <td style={{ padding: '10px 12px', color: colors.text.secondary }}>
+                          {c.expiryDate ? new Date(c.expiryDate).toLocaleDateString('en-IN') : 'No expiry'}
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
+                            backgroundColor: c.isActive ? '#dcfce7' : '#fee2e2',
+                            color: c.isActive ? '#15803d' : '#dc2626' }}>
+                            {c.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button style={styles.editBtn} onClick={() => handleOpenCouponModal(c)}>Edit</button>
+                            <button style={styles.deleteBtn} onClick={() => handleDeleteCoupon(c)}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
-      {/* Modal */}
+      {/* Plan Modal */}
       {showModal && (
         <div style={styles.modalOverlay} onClick={handleCloseModal}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
@@ -599,8 +798,8 @@ const CreditPlans = () => {
                   value={formData.type}
                   onChange={e => setFormData({ ...formData, type: e.target.value })}
                 >
-                  <option value="PLAN">Plan (with Bonus)</option>
-                  <option value="PACK">Credit Pack (Simple)</option>
+                  <option value="PLAN">Subscription Plan (with Bonus)</option>
+                  <option value="PACK">One-time Credit Pack (Simple)</option>
                 </select>
               </div>
 
@@ -664,6 +863,82 @@ const CreditPlans = () => {
               </div>
 
               <div style={styles.formGroup}>
+                <label style={styles.label}>Validity (days)</label>
+                <input
+                  style={styles.input}
+                  type="number"
+                  min="1"
+                  value={formData.validityDays}
+                  onChange={e => setFormData({ ...formData, validityDays: e.target.value })}
+                  placeholder="30"
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Visibility</label>
+                <select
+                  style={styles.select}
+                  value={formData.visibility}
+                  onChange={e => setFormData({ ...formData, visibility: e.target.value, visibleToUsers: [] })}
+                >
+                  <option value="public">Public (visible to all)</option>
+                  <option value="private">Private (hidden from all)</option>
+                  <option value="selected">Selected Users only</option>
+                </select>
+              </div>
+
+              {formData.visibility === 'selected' && (
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    Visible To ({formData.visibleToUsers.length} selected)
+                  </label>
+                  <div style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    backgroundColor: '#f8fafc'
+                  }}>
+                    {users.length === 0 ? (
+                      <p style={{ padding: '12px', color: '#94a3b8', fontSize: '13px', margin: 0 }}>Loading users...</p>
+                    ) : (
+                      users.map(u => {
+                        const checked = formData.visibleToUsers.includes(u.id);
+                        return (
+                          <label key={u.id} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            backgroundColor: checked ? '#e0e7ff' : 'transparent',
+                            fontSize: '13px',
+                            borderBottom: '1px solid #f1f5f9'
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                const updated = checked
+                                  ? formData.visibleToUsers.filter(id => id !== u.id)
+                                  : [...formData.visibleToUsers, u.id];
+                                setFormData({ ...formData, visibleToUsers: updated });
+                              }}
+                            />
+                            <span style={{ fontWeight: '600', color: '#334155' }}>{u.name || u.identifier}</span>
+                            <span style={{ color: '#94a3b8', fontSize: '12px' }}>{u.identifier}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  {formData.visibleToUsers.length === 0 && (
+                    <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>No users selected — plan will be hidden (treated as private)</p>
+                  )}
+                </div>
+              )}
+
+              <div style={styles.formGroup}>
                 <label style={styles.checkbox}>
                   <input
                     style={styles.checkboxInput}
@@ -682,6 +957,57 @@ const CreditPlans = () => {
                 <button type="submit" style={styles.submitBtn}>
                   {editingPlan ? 'Update Plan' : 'Create Plan'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Coupon Modal */}
+      {showCouponModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowCouponModal(false)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>{editingCoupon ? 'Edit Coupon' : 'Create Coupon'}</h2>
+            <form onSubmit={handleCouponSubmit}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Coupon Code *</label>
+                <input style={styles.input} type="text" value={couponForm.code}
+                  onChange={e => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  placeholder="e.g., SAVE20" required />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Type *</label>
+                <select style={styles.select} value={couponForm.type}
+                  onChange={e => setCouponForm({ ...couponForm, type: e.target.value })}>
+                  <option value="discount">Discount (% off price)</option>
+                  <option value="bonus">Bonus (extra credits)</option>
+                </select>
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  {couponForm.type === 'discount' ? 'Discount %  (1-100) *' : 'Bonus Credits *'}
+                </label>
+                <input style={styles.input} type="number" min="1"
+                  max={couponForm.type === 'discount' ? '100' : undefined}
+                  value={couponForm.value}
+                  onChange={e => setCouponForm({ ...couponForm, value: e.target.value })}
+                  placeholder={couponForm.type === 'discount' ? 'e.g., 20' : 'e.g., 500'} required />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Expiry Date (optional)</label>
+                <input style={styles.input} type="date" value={couponForm.expiryDate}
+                  onChange={e => setCouponForm({ ...couponForm, expiryDate: e.target.value })} />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.checkbox}>
+                  <input style={styles.checkboxInput} type="checkbox" checked={couponForm.isActive}
+                    onChange={e => setCouponForm({ ...couponForm, isActive: e.target.checked })} />
+                  Active
+                </label>
+              </div>
+              <div style={styles.modalActions}>
+                <button type="button" style={styles.cancelBtn} onClick={() => setShowCouponModal(false)}>Cancel</button>
+                <button type="submit" style={styles.submitBtn}>{editingCoupon ? 'Update' : 'Create'}</button>
               </div>
             </form>
           </div>

@@ -34,6 +34,7 @@ const reminderScheduler = require('./services/reminderScheduler');
 const { Task } = require('./models/Task');
 const User = require('./models/User');
 const LegalPage = require('./models/LegalPage');
+const UserSubscription = require('./models/UserSubscription');
 
 app.get('/', (_req, res) => {
   res.status(200).json({ status: 'ok', service: 'GoViral Backend' });
@@ -145,10 +146,13 @@ async function start() {
     
     // Start email reminder scheduler
     startReminderScheduler();
-    
+      
     // Start reminder schedulers
     reminderScheduler.startSchedulers();
-
+    
+    // Expire stale subscriptions every 60 minutes
+    startSubscriptionExpiryJob();
+    
     app.listen(PORT, () => {
       console.log('Backend live');
     });
@@ -156,6 +160,28 @@ async function start() {
     console.error('Failed to start server:', err.message);
     process.exit(1);
   }
+}
+
+// Expire subscriptions whose expiresAt has passed
+function startSubscriptionExpiryJob() {
+  const expireSubscriptions = async () => {
+    try {
+      const result = await UserSubscription.updateMany(
+        { isActive: true, expiresAt: { $lt: new Date() } },
+        { $set: { isActive: false, creditsRemaining: 0 } }
+      );
+      if (result.modifiedCount > 0) {
+        console.log(`[EXPIRY] Expired ${result.modifiedCount} subscription(s)`);
+      }
+    } catch (err) {
+      console.error('[EXPIRY] Subscription expiry job error:', err.message);
+    }
+  };
+
+  // Run immediately on startup, then every 60 minutes
+  expireSubscriptions();
+  setInterval(expireSubscriptions, 60 * 60 * 1000);
+  console.log('Subscription expiry job started (every 60 minutes)');
 }
 
 // Function to update progress for all AUTO tasks

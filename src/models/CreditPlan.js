@@ -68,7 +68,27 @@ const creditPlanSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
     index: true
-  }
+  },
+
+  // How many days the subscription credits are valid after purchase
+  validityDays: {
+    type: Number,
+    default: 30,
+    min: 1
+  },
+
+  // Visibility control: public (all), private (hidden), selected (specific users)
+  visibility: {
+    type: String,
+    enum: ['public', 'private', 'selected'],
+    default: 'public'
+  },
+
+  // Users who can see this plan when visibility === 'selected'
+  visibleToUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 }, {
   timestamps: true
 });

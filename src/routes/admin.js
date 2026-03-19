@@ -23,6 +23,7 @@ const { Invoice, INVOICE_STATUS } = require('../models/Invoice');
 const { Receipt, RECEIPT_STATUS } = require('../models/Receipt');
 const BillingConfig = require('../models/BillingConfig');
 const CreditPlan = require('../models/CreditPlan');
+const Coupon = require('../models/Coupon');
 const billingService = require('../services/billingService');
 const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
@@ -5116,6 +5117,9 @@ router.get('/credit-plans', async (req, res) => {
         type: p.type,
         description: p.description,
         displayOrder: p.displayOrder,
+        validityDays: p.validityDays,
+        visibility: p.visibility || 'public',
+        visibleToUsers: (p.visibleToUsers || []).map(id => id.toString()),
         isActive: p.isActive,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt
@@ -5143,6 +5147,7 @@ router.post('/credit-plans', async (req, res) => {
       return res.status(400).json({ error: 'Credits must be a non-negative number' });
     }
     
+    const { validityDays, visibility, visibleToUsers } = req.body || {};
     const plan = await CreditPlan.create({
       name: name.trim(),
       price,
@@ -5151,6 +5156,9 @@ router.post('/credit-plans', async (req, res) => {
       type: type === 'PACK' ? 'PACK' : 'PLAN',
       description: description ? description.trim() : '',
       displayOrder: displayOrder || 0,
+      validityDays: (validityDays && validityDays > 0) ? validityDays : 30,
+      visibility: ['public', 'private', 'selected'].includes(visibility) ? visibility : 'public',
+      visibleToUsers: Array.isArray(visibleToUsers) ? visibleToUsers : [],
       isActive: isActive !== false
     });
     
@@ -5166,6 +5174,9 @@ router.post('/credit-plans', async (req, res) => {
       type: plan.type,
       description: plan.description,
       displayOrder: plan.displayOrder,
+      validityDays: plan.validityDays,
+      visibility: plan.visibility,
+      visibleToUsers: (plan.visibleToUsers || []).map(id => id.toString()),
       isActive: plan.isActive
     });
   } catch (err) {
@@ -5178,7 +5189,7 @@ router.post('/credit-plans', async (req, res) => {
 router.patch('/credit-plans/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, credits, bonusCredits, type, description, displayOrder, isActive } = req.body || {};
+    const { name, price, credits, bonusCredits, type, description, displayOrder, isActive, validityDays, visibility, visibleToUsers } = req.body || {};
     
     const plan = await CreditPlan.findById(id);
     if (!plan) {
@@ -5222,6 +5233,15 @@ router.patch('/credit-plans/:id', async (req, res) => {
     if (isActive !== undefined) {
       plan.isActive = Boolean(isActive);
     }
+    if (validityDays !== undefined && validityDays > 0) {
+      plan.validityDays = validityDays;
+    }
+    if (visibility !== undefined && ['public', 'private', 'selected'].includes(visibility)) {
+      plan.visibility = visibility;
+    }
+    if (visibleToUsers !== undefined) {
+      plan.visibleToUsers = Array.isArray(visibleToUsers) ? visibleToUsers : [];
+    }
     
     await plan.save();
     
@@ -5237,6 +5257,9 @@ router.patch('/credit-plans/:id', async (req, res) => {
       type: plan.type,
       description: plan.description,
       displayOrder: plan.displayOrder,
+      validityDays: plan.validityDays,
+      visibility: plan.visibility,
+      visibleToUsers: (plan.visibleToUsers || []).map(id => id.toString()),
       isActive: plan.isActive
     });
   } catch (err) {
@@ -5264,6 +5287,120 @@ router.delete('/credit-plans/:id', async (req, res) => {
   } catch (err) {
     console.error('[CREDIT_PLANS] Delete error:', err.message);
     return res.status(500).json({ error: 'Failed to delete credit plan' });
+  }
+});
+
+// ======================================================================
+// COUPON CRUD (Admin manages coupons for subscription plan purchases)
+// ======================================================================
+
+// GET /admin/coupons - List all coupons
+router.get('/coupons', async (req, res) => {
+  try {
+    const coupons = await Coupon.find().sort({ createdAt: -1 }).exec();
+    return res.status(200).json({
+      coupons: coupons.map(c => ({
+        id: c._id.toString(),
+        code: c.code,
+        type: c.type,
+        value: c.value,
+        isActive: c.isActive,
+        expiryDate: c.expiryDate,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      }))
+    });
+  } catch (err) {
+    console.error('[COUPONS] List error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve coupons' });
+  }
+});
+
+// POST /admin/coupons - Create a coupon
+router.post('/coupons', async (req, res) => {
+  try {
+    const { code, type, value, isActive, expiryDate } = req.body || {};
+    if (!code || !type || value === undefined) {
+      return res.status(400).json({ error: 'code, type, and value are required' });
+    }
+    if (!['discount', 'bonus'].includes(type)) {
+      return res.status(400).json({ error: 'type must be discount or bonus' });
+    }
+    if (type === 'discount' && (value <= 0 || value > 100)) {
+      return res.status(400).json({ error: 'Discount value must be between 1 and 100' });
+    }
+    if (type === 'bonus' && value <= 0) {
+      return res.status(400).json({ error: 'Bonus value must be positive' });
+    }
+    const coupon = await Coupon.create({
+      code: code.toUpperCase().trim(),
+      type,
+      value,
+      isActive: isActive !== false,
+      expiryDate: expiryDate || null,
+    });
+    console.log(`[COUPONS] Created: ${coupon.code}`);
+    return res.status(201).json({
+      id: coupon._id.toString(),
+      code: coupon.code,
+      type: coupon.type,
+      value: coupon.value,
+      isActive: coupon.isActive,
+      expiryDate: coupon.expiryDate,
+      createdAt: coupon.createdAt,
+    });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ error: 'Coupon code already exists' });
+    console.error('[COUPONS] Create error:', err.message);
+    return res.status(500).json({ error: 'Failed to create coupon' });
+  }
+});
+
+// PATCH /admin/coupons/:id - Update a coupon
+router.patch('/coupons/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code, type, value, isActive, expiryDate } = req.body || {};
+    const coupon = await Coupon.findById(id);
+    if (!coupon) return res.status(404).json({ error: 'Coupon not found' });
+    if (code !== undefined) coupon.code = code.toUpperCase().trim();
+    if (type !== undefined) {
+      if (!['discount', 'bonus'].includes(type)) return res.status(400).json({ error: 'type must be discount or bonus' });
+      coupon.type = type;
+    }
+    if (value !== undefined) coupon.value = value;
+    if (isActive !== undefined) coupon.isActive = Boolean(isActive);
+    if (expiryDate !== undefined) coupon.expiryDate = expiryDate || null;
+    await coupon.save();
+    console.log(`[COUPONS] Updated: ${coupon.code}`);
+    return res.status(200).json({
+      id: coupon._id.toString(),
+      code: coupon.code,
+      type: coupon.type,
+      value: coupon.value,
+      isActive: coupon.isActive,
+      expiryDate: coupon.expiryDate,
+      updatedAt: coupon.updatedAt,
+    });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ error: 'Coupon code already exists' });
+    console.error('[COUPONS] Update error:', err.message);
+    return res.status(500).json({ error: 'Failed to update coupon' });
+  }
+});
+
+// DELETE /admin/coupons/:id - Delete a coupon
+router.delete('/coupons/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const coupon = await Coupon.findById(id);
+    if (!coupon) return res.status(404).json({ error: 'Coupon not found' });
+    await coupon.deleteOne();
+    console.log(`[COUPONS] Deleted: ${coupon.code}`);
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('[COUPONS] Delete error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete coupon' });
   }
 });
 

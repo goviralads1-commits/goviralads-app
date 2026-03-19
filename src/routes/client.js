@@ -11,6 +11,8 @@ const Notice = require('../models/Notice');
 const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
 const { Invoice, INVOICE_STATUS } = require('../models/Invoice');
 const CreditPlan = require('../models/CreditPlan');
+const UserSubscription = require('../models/UserSubscription');
+const Coupon = require('../models/Coupon');
 const billingService = require('../services/billingService');
 const pdfService = require('../services/pdfService');
 const User = require('../models/User');
@@ -140,9 +142,19 @@ router.post('/wallet/recharge', async (req, res) => {
 // NOTE: This only returns plan definitions - does NOT modify wallet logic
 router.get('/credit-plans', async (req, res) => {
   try {
-    const plans = await CreditPlan.find({ isActive: true })
+    const userId = req.user.id;
+    const allPlans = await CreditPlan.find({ isActive: true })
       .sort({ type: 1, displayOrder: 1, price: 1 })
       .exec();
+
+    // Filter by visibility
+    const plans = allPlans.filter(p => {
+      if (p.visibility === 'private') return false;
+      if (p.visibility === 'selected') {
+        return (p.visibleToUsers || []).some(uid => uid.toString() === userId);
+      }
+      return true; // public
+    });
     
     return res.status(200).json({
       plans: plans.map(p => ({
@@ -153,12 +165,150 @@ router.get('/credit-plans', async (req, res) => {
         bonusCredits: p.bonusCredits,
         totalCredits: p.totalCredits,
         type: p.type,
+        validityDays: p.validityDays,
         description: p.description
       }))
     });
   } catch (err) {
     console.error('[CREDIT_PLANS] Client fetch error:', err.message);
     return res.status(500).json({ error: 'Failed to retrieve credit plans' });
+  }
+});
+
+// POST /client/credit-plans/:id/purchase - Purchase a subscription plan instantly
+// Deducts from wallet, creates UserSubscription with timed credits.
+// Optional coupon: discount (reduce price) or bonus (extra credits).
+router.post('/credit-plans/:id/purchase', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const clientId = req.user.id;
+    const { couponCode } = req.body || {};
+
+    console.log('=== SUBSCRIPTION PLAN PURCHASE ===');
+    console.log('Client:', clientId, '| Plan:', id, '| Coupon:', couponCode || 'none');
+
+    // 1. Load plan
+    const plan = await CreditPlan.findById(id).exec();
+    if (!plan || !plan.isActive) {
+      return res.status(404).json({ error: 'Subscription plan not found or inactive' });
+    }
+
+    let finalPrice = plan.price;
+    let totalCredits = plan.credits + plan.bonusCredits;
+
+    // 2. Apply coupon if provided
+    if (couponCode) {
+      const now = new Date();
+      const coupon = await Coupon.findOne({ code: couponCode.toUpperCase().trim() }).exec();
+      if (!coupon) return res.status(400).json({ error: 'Invalid coupon code' });
+      if (!coupon.isActive) return res.status(400).json({ error: 'Coupon is not active' });
+      if (coupon.expiryDate && coupon.expiryDate < now) {
+        return res.status(400).json({ error: 'Coupon has expired' });
+      }
+      if (coupon.type === 'discount') {
+        finalPrice = Math.max(0, finalPrice * (1 - coupon.value / 100));
+        finalPrice = Math.round(finalPrice * 100) / 100;
+        console.log(`[COUPON] discount ${coupon.value}% → finalPrice: ${finalPrice}`);
+      } else if (coupon.type === 'bonus') {
+        totalCredits += coupon.value;
+        console.log(`[COUPON] bonus +${coupon.value} credits → totalCredits: ${totalCredits}`);
+      }
+    }
+
+    // 3. Get wallet
+    const wallet = await Wallet.findOne({ clientId }).exec();
+    if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
+
+    console.log('Wallet balance before:', wallet.balance, '| Price:', finalPrice);
+
+    // 4. Check balance
+    if (wallet.balance < finalPrice) {
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
+    }
+
+    // 5. Deduct wallet (ATOMIC)
+    wallet.balance -= finalPrice;
+    await wallet.save();
+
+    // 6. Record wallet transaction
+    await WalletTransaction.create({
+      walletId: wallet._id,
+      type: 'SUBSCRIPTION_PURCHASE',
+      amount: -finalPrice,
+      description: `Subscription Plan Purchase: ${plan.name}`,
+      referenceId: null,
+    });
+
+    // 7. Expire any existing active subscription for this user
+    await UserSubscription.updateMany(
+      { userId: clientId, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    // 8. Create new UserSubscription
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + (plan.validityDays || 30));
+
+    const userSub = await UserSubscription.create({
+      userId: clientId,
+      planId: plan._id,
+      planName: plan.name,
+      creditsRemaining: totalCredits,
+      expiresAt,
+      isActive: true,
+    });
+
+    console.log(`[SUB] Created UserSubscription: ${userSub._id} | Credits: ${totalCredits} | Expires: ${expiresAt}`);
+    console.log('=== SUBSCRIPTION PLAN PURCHASE COMPLETE ===');
+
+    return res.status(201).json({
+      success: true,
+      subscription: {
+        id: userSub._id.toString(),
+        planName: userSub.planName,
+        creditsRemaining: userSub.creditsRemaining,
+        expiresAt: userSub.expiresAt,
+        isActive: userSub.isActive,
+      },
+      walletBalance: wallet.balance,
+    });
+  } catch (err) {
+    console.error('[SUB] Purchase error:', err.message);
+    return res.status(500).json({ error: 'Failed to purchase subscription plan' });
+  }
+});
+
+// GET /client/my-subscription - Get current active subscription for the logged-in client
+router.get('/my-subscription', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const now = new Date();
+
+    // Expire stale subscriptions on every call (lightweight guard)
+    await UserSubscription.updateMany(
+      { isActive: true, expiresAt: { $lt: now } },
+      { $set: { isActive: false, creditsRemaining: 0 } }
+    );
+
+    const sub = await UserSubscription.findOne({ userId: clientId, isActive: true })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!sub) return res.status(200).json({ subscription: null });
+
+    return res.status(200).json({
+      subscription: {
+        id: sub._id.toString(),
+        planName: sub.planName,
+        creditsRemaining: sub.creditsRemaining,
+        expiresAt: sub.expiresAt,
+        isActive: sub.isActive,
+        createdAt: sub.createdAt,
+      }
+    });
+  } catch (err) {
+    console.error('[SUB] my-subscription error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve subscription' });
   }
 });
 
@@ -922,26 +1072,50 @@ router.post('/plans/:planId/purchase', async (req, res) => {
 
     console.log('Wallet balance before:', wallet.balance);
 
-    // 8. Check balance
-    if (wallet.balance < price) {
-      console.log('Insufficient balance');
-      return res.status(400).json({ error: 'Insufficient balance' });
+    // 8. Check active subscription first — deduct from subscription credits if available
+    const nowPlan = new Date();
+    const activePlanSub = await UserSubscription.findOne({
+      userId: clientId,
+      isActive: true,
+      expiresAt: { $gt: nowPlan },
+      creditsRemaining: { $gte: price }
+    }).exec();
+
+    if (activePlanSub) {
+      // Deduct from subscription credits
+      activePlanSub.creditsRemaining -= price;
+      await activePlanSub.save();
+      console.log(`[SUB DEDUCT] Plan purchase from subscription credits. Remaining: ${activePlanSub.creditsRemaining}`);
+      // Audit log (zero-cost wallet transaction)
+      await WalletTransaction.create({
+        walletId: wallet._id,
+        type: 'SUBSCRIPTION_DEDUCTION',
+        amount: 0,
+        description: `Plan Purchase (subscription): ${plan.title}`,
+        referenceId: null,
+      });
+    } else {
+      // 8a. Check wallet balance
+      if (wallet.balance < price) {
+        console.log('Insufficient balance');
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      // 9. Deduct wallet (ATOMIC)
+      wallet.balance -= price;
+      await wallet.save();
+
+      console.log('Wallet balance after:', wallet.balance);
+
+      // 10. Create wallet transaction
+      await WalletTransaction.create({
+        walletId: wallet._id,
+        type: 'PLAN_PURCHASE',
+        amount: -price,
+        description: `Plan Purchase: ${plan.title}`,
+        referenceId: null, // Will update after task creation
+      });
     }
-
-    // 9. Deduct wallet (ATOMIC)
-    wallet.balance -= price;
-    await wallet.save();
-
-    console.log('Wallet balance after:', wallet.balance);
-
-    // 10. Create wallet transaction
-    await WalletTransaction.create({
-      walletId: wallet._id,
-      type: 'PLAN_PURCHASE',
-      amount: -price,
-      description: `Plan Purchase: ${plan.title}`,
-      referenceId: null, // Will update after task creation
-    });
 
     // 11. Clone task for client (DO NOT MODIFY ORIGINAL)
     const newTask = await Task.create({
@@ -1106,26 +1280,48 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
 
     console.log('Wallet before:', wallet.balance);
 
-    // 6. Check balance
-    if (wallet.balance < price) {
-      console.log('Insufficient balance');
-      return res.status(400).json({ error: 'Insufficient balance' });
+    // 6. Check active subscription first — deduct from subscription credits if available
+    const nowSubBundle = new Date();
+    const activeSubForBundle = await UserSubscription.findOne({
+      userId: clientId,
+      isActive: true,
+      expiresAt: { $gt: nowSubBundle },
+      creditsRemaining: { $gte: price }
+    }).exec();
+
+    if (activeSubForBundle) {
+      activeSubForBundle.creditsRemaining -= price;
+      await activeSubForBundle.save();
+      console.log(`[SUB DEDUCT] Subscription bundle from subscription credits. Remaining: ${activeSubForBundle.creditsRemaining}`);
+      await WalletTransaction.create({
+        walletId: wallet._id,
+        type: 'SUBSCRIPTION_DEDUCTION',
+        amount: 0,
+        description: `Subscription Purchase (credits): ${subscription.title}`,
+        referenceId: null,
+      });
+    } else {
+      // 6a. Check wallet balance
+      if (wallet.balance < price) {
+        console.log('Insufficient balance');
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
+      // 7. Deduct wallet (ATOMIC)
+      wallet.balance -= price;
+      await wallet.save();
+
+      console.log('Wallet after:', wallet.balance);
+
+      // 8. Create wallet transaction
+      await WalletTransaction.create({
+        walletId: wallet._id,
+        type: 'SUBSCRIPTION_PURCHASE',
+        amount: -price,
+        description: `Subscription Purchase: ${subscription.title}`,
+        referenceId: null,
+      });
     }
-
-    // 7. Deduct wallet (ATOMIC)
-    wallet.balance -= price;
-    await wallet.save();
-
-    console.log('Wallet after:', wallet.balance);
-
-    // 8. Create wallet transaction
-    await WalletTransaction.create({
-      walletId: wallet._id,
-      type: 'SUBSCRIPTION_PURCHASE',
-      amount: -price,
-      description: `Subscription Purchase: ${subscription.title}`,
-      referenceId: null,
-    });
 
     // 9. Clone all tasks for client (DO NOT MODIFY ORIGINALS)
     const clonedTasks = [];
