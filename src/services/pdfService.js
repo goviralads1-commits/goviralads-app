@@ -1,5 +1,31 @@
 const PDFDocument = require('pdfkit');
 const BillingConfig = require('../models/BillingConfig');
+const Settings = require('../models/Settings');
+
+// Helper: Get agency settings with fallback
+async function getAgencyBranding() {
+  try {
+    const settings = await Settings.getSettings();
+    return {
+      agencyName: settings.agencyName || '',
+      agencyAddress: settings.agencyAddress || '',
+      supportEmail: settings.supportEmail || '',
+      gstNumber: settings.gstNumber || '',
+      logoUrl: settings.logoUrl || '',
+      phoneNumber: settings.phoneNumber || '',
+    };
+  } catch (err) {
+    // Fallback if Settings model fails
+    return {
+      agencyName: '',
+      agencyAddress: '',
+      supportEmail: '',
+      gstNumber: '',
+      logoUrl: '',
+      phoneNumber: '',
+    };
+  }
+}
 
 /**
  * Generate Invoice PDF
@@ -8,6 +34,7 @@ const BillingConfig = require('../models/BillingConfig');
  */
 async function generateInvoicePDF(invoice) {
   const config = await BillingConfig.getConfig();
+  const agencyBranding = await getAgencyBranding();
   
   return new Promise((resolve, reject) => {
     try {
@@ -29,21 +56,23 @@ async function generateInvoicePDF(invoice) {
       doc.fontSize(24).font('Helvetica-Bold').text(headerText, { align: 'center' });
       doc.moveDown(0.5);
 
-      // Company Details (from snapshot)
-      doc.fontSize(12).font('Helvetica-Bold').text(companySnapshot.companyName || config.companyName || 'Company Name');
+      // Company Details (Priority: agencyBranding > snapshot > config)
+      const companyName = agencyBranding.agencyName || companySnapshot.companyName || config.companyName || 'Company Name';
+      const companyAddress = agencyBranding.agencyAddress || companySnapshot.companyAddress || config.companyAddress || '';
+      const companyEmail = agencyBranding.supportEmail || companySnapshot.companyEmail || config.companyEmail || '';
+      const companyPhone = agencyBranding.phoneNumber || companySnapshot.companyPhone || config.companyPhone || '';
+      const companyGST = agencyBranding.gstNumber || companySnapshot.companyGST || config.companyGST || '';
+      const companyState = companySnapshot.companyState || config.companyState || '';
+      const companyPAN = companySnapshot.companyPAN || config.companyPAN || '';
+      
+      doc.fontSize(12).font('Helvetica-Bold').text(companyName);
       doc.fontSize(10).font('Helvetica');
-      if (companySnapshot.companyAddress || config.companyAddress) 
-        doc.text(companySnapshot.companyAddress || config.companyAddress);
-      if (companySnapshot.companyState || config.companyState) 
-        doc.text(`State: ${companySnapshot.companyState || config.companyState}`);
-      if (companySnapshot.companyEmail || config.companyEmail) 
-        doc.text(`Email: ${companySnapshot.companyEmail || config.companyEmail}`);
-      if (companySnapshot.companyPhone || config.companyPhone) 
-        doc.text(`Phone: ${companySnapshot.companyPhone || config.companyPhone}`);
-      if (companySnapshot.companyGST || config.companyGST) 
-        doc.text(`GSTIN: ${companySnapshot.companyGST || config.companyGST}`);
-      if (companySnapshot.companyPAN || config.companyPAN) 
-        doc.text(`PAN: ${companySnapshot.companyPAN || config.companyPAN}`);
+      if (companyAddress) doc.text(companyAddress);
+      if (companyState) doc.text(`State: ${companyState}`);
+      if (companyEmail) doc.text(`Email: ${companyEmail}`);
+      if (companyPhone) doc.text(`Phone: ${companyPhone}`);
+      if (companyGST) doc.text(`GSTIN: ${companyGST}`);
+      if (companyPAN) doc.text(`PAN: ${companyPAN}`);
       doc.moveDown();
 
       // Divider
@@ -249,6 +278,7 @@ async function generateInvoicePDF(invoice) {
  */
 async function generateReceiptPDF(receipt) {
   const config = await BillingConfig.getConfig();
+  const agencyBranding = await getAgencyBranding();
   
   return new Promise((resolve, reject) => {
     try {
@@ -264,13 +294,18 @@ async function generateReceiptPDF(receipt) {
       doc.fontSize(10).fillColor('#64748b').text('Paid via Wallet Credits', { align: 'center' });
       doc.moveDown();
 
-      // Company Details
+      // Company Details (Priority: agencyBranding > config)
+      const companyName = agencyBranding.agencyName || config.companyName || 'Company Name';
+      const companyAddress = agencyBranding.agencyAddress || config.companyAddress || '';
+      const companyEmail = agencyBranding.supportEmail || config.companyEmail || '';
+      const companyPhone = agencyBranding.phoneNumber || config.companyPhone || '';
+      
       doc.fillColor('#0f172a');
-      doc.fontSize(12).font('Helvetica-Bold').text(config.companyName || 'Company Name');
+      doc.fontSize(12).font('Helvetica-Bold').text(companyName);
       doc.fontSize(10).font('Helvetica');
-      if (config.companyAddress) doc.text(config.companyAddress);
-      if (config.companyEmail) doc.text(`Email: ${config.companyEmail}`);
-      if (config.companyPhone) doc.text(`Phone: ${config.companyPhone}`);
+      if (companyAddress) doc.text(companyAddress);
+      if (companyEmail) doc.text(`Email: ${companyEmail}`);
+      if (companyPhone) doc.text(`Phone: ${companyPhone}`);
       doc.moveDown();
 
       // Divider

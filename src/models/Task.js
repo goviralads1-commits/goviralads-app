@@ -243,6 +243,63 @@ const taskSchema = new mongoose.Schema(
         share: { type: Number, default: 100 }
       }]
     },
+    // CLIENT CONTENT SUBMISSION (Phase 2)
+    // Allows client to submit content after task purchase
+    clientContentText: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 5000,
+    },
+    clientContentLinks: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: function(arr) {
+          return arr.length <= 10; // Max 10 links
+        },
+        message: 'Maximum 10 content links allowed'
+      }
+    },
+    clientDriveLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    // ALIAS: clientContentFolder (Phase 4A - future Google Drive automation)
+    // Maps to clientDriveLink for backward compatibility
+    clientContentSubmittedAt: {
+      type: Date,
+      default: null,
+    },
+    clientContentSubmitted: {
+      type: Boolean,
+      default: false,
+    },
+    // CONTENT REQUIREMENT CONTROL (Phase 2 Step 4)
+    // If true, client must submit content before work starts
+    requireClientContent: {
+      type: Boolean,
+      default: false,
+    },
+    // FINAL DELIVERY SYSTEM (Phase 3)
+    // Admin uploads final deliverables for client download
+    // ALIAS: finalDeliveryFolder (Phase 4A - future Google Drive automation)
+    finalDeliveryLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    finalDeliveryText: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 2000,
+    },
+    finalDeliveredAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

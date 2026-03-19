@@ -16,6 +16,7 @@ const User = require('../models/User');
 const Notice = require('../models/Notice');
 const LegalPage = require('../models/LegalPage');
 const OfficeConfig = require('../models/OfficeConfig');
+const Settings = require('../models/Settings');
 const { ROLES } = require('../config');
 const { Order, ORDER_STATUS, PAYMENT_STATUS } = require('../models/Order');
 const { Invoice, INVOICE_STATUS } = require('../models/Invoice');
@@ -5073,6 +5074,70 @@ router.delete('/credit-plans/:id', async (req, res) => {
   } catch (err) {
     console.error('[CREDIT_PLANS] Delete error:', err.message);
     return res.status(500).json({ error: 'Failed to delete credit plan' });
+  }
+});
+
+// ============================================================
+// ADMIN SETTINGS (Phase 5 - Invoice Branding)
+// ============================================================
+
+// GET /admin/settings - Get agency/branding settings
+router.get('/settings', async (req, res) => {
+  try {
+    const settings = await Settings.getSettings();
+    
+    return res.status(200).json({
+      settings: {
+        agencyName: settings.agencyName || 'Go Viral Ads',
+        agencyAddress: settings.agencyAddress || '',
+        supportEmail: settings.supportEmail || '',
+        gstNumber: settings.gstNumber || '',
+        logoUrl: settings.logoUrl || '',
+        phoneNumber: settings.phoneNumber || '',
+        websiteUrl: settings.websiteUrl || '',
+        updatedAt: settings.updatedAt,
+      },
+    });
+  } catch (err) {
+    console.error('[SETTINGS] Get error:', err.message);
+    return res.status(500).json({ error: 'Failed to get settings' });
+  }
+});
+
+// PATCH /admin/settings - Update agency/branding settings
+router.patch('/settings', async (req, res) => {
+  try {
+    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl } = req.body || {};
+    
+    const updates = {};
+    if (agencyName !== undefined) updates.agencyName = agencyName.trim();
+    if (agencyAddress !== undefined) updates.agencyAddress = agencyAddress.trim();
+    if (supportEmail !== undefined) updates.supportEmail = supportEmail.trim();
+    if (gstNumber !== undefined) updates.gstNumber = gstNumber.trim();
+    if (logoUrl !== undefined) updates.logoUrl = logoUrl.trim();
+    if (phoneNumber !== undefined) updates.phoneNumber = phoneNumber.trim();
+    if (websiteUrl !== undefined) updates.websiteUrl = websiteUrl.trim();
+    
+    const settings = await Settings.updateSettings(updates);
+    
+    console.log(`[SETTINGS] Updated by admin ${req.user.id}`);
+    
+    return res.status(200).json({
+      success: true,
+      settings: {
+        agencyName: settings.agencyName,
+        agencyAddress: settings.agencyAddress,
+        supportEmail: settings.supportEmail,
+        gstNumber: settings.gstNumber,
+        logoUrl: settings.logoUrl,
+        phoneNumber: settings.phoneNumber,
+        websiteUrl: settings.websiteUrl,
+        updatedAt: settings.updatedAt,
+      },
+    });
+  } catch (err) {
+    console.error('[SETTINGS] Update error:', err.message);
+    return res.status(500).json({ error: 'Failed to update settings' });
   }
 });
 

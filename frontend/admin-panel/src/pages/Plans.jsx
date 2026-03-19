@@ -53,7 +53,8 @@ const Plans = () => {
     isPopular: false,
     isNew: false,
     visibility: 'PUBLIC',
-    allowedClients: []
+    allowedClients: [],
+    requireClientContent: false
   });
 
   // Premium gradient backgrounds for fallback cards
@@ -120,7 +121,8 @@ const Plans = () => {
       title: '', description: '', creditCost: '', offerPrice: '', originalPrice: '',
       categoryId: '', progressTarget: 100, quantity: '', showQuantityToClient: true,
       showCreditsToClient: true, isActivePlan: true, publicNotes: '', planMedia: [],
-      isFeatured: false, isPopular: false, isNew: false, visibility: 'PUBLIC', allowedClients: []
+      isFeatured: false, isPopular: false, isNew: false, visibility: 'PUBLIC', allowedClients: [],
+      requireClientContent: false
     });
   };
 
@@ -157,7 +159,8 @@ const Plans = () => {
         isPopular: formData.isPopular,
         isNew: formData.isNew,
         visibility: formData.visibility,
-        allowedClients: formData.visibility === 'SELECTED' ? formData.allowedClients : []
+        allowedClients: formData.visibility === 'SELECTED' ? formData.allowedClients : [],
+        requireClientContent: formData.requireClientContent
       };
       
       if (formData.offerPrice) payload.offerPrice = Number(formData.offerPrice);
@@ -904,6 +907,26 @@ const Plans = () => {
                     <span style={{ fontSize: '12px', fontWeight: '600', color: formData.isNew ? '#1d4ed8' : '#64748b' }}>New</span>
                   </label>
                 </div>
+              </div>
+
+              {/* Content Requirement Control */}
+              <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: formData.requireClientContent ? '#fef3c7' : '#f8fafc', borderRadius: '14px', border: formData.requireClientContent ? '2px solid #fbbf24' : '2px solid #e2e8f0', transition: 'all 0.2s' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formData.requireClientContent} 
+                    onChange={(e) => handleInputChange('requireClientContent', e.target.checked)} 
+                    style={{ width: '20px', height: '20px', accentColor: '#f59e0b', marginTop: '2px', flexShrink: 0 }} 
+                  />
+                  <div>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: formData.requireClientContent ? '#92400e' : '#0f172a' }}>
+                      Require Client Content Before Work
+                    </span>
+                    <span style={{ display: 'block', fontSize: '12px', color: formData.requireClientContent ? '#b45309' : '#64748b', marginTop: '4px', lineHeight: 1.4 }}>
+                      Client must submit content (text, links, files) before admin starts the task. A reminder will be shown.
+                    </span>
+                  </div>
+                </label>
               </div>
 
               {/* Preview */}

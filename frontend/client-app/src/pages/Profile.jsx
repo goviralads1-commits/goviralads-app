@@ -62,6 +62,7 @@ const Profile = () => {
         language: res.data.profile.language || 'en',
         emailNotifications: res.data.profile.preferences?.emailNotifications ?? true,
         inAppNotifications: res.data.profile.preferences?.inAppNotifications ?? true,
+        defaultContentFolder: res.data.profile.defaultContentFolder || '',
       });
       // Set billing data
       setBillingData(res.data.billing || {});
@@ -194,11 +195,13 @@ const Profile = () => {
           emailNotifications: formData.emailNotifications,
           inAppNotifications: formData.inAppNotifications,
         },
+        defaultContentFolder: formData.defaultContentFolder || '',
       });
       await fetchProfile();
       setEditMode(false);
+      setToast({ type: 'success', message: 'Settings saved!' });
     } catch (err) {
-      // Silent fail - error handled via UI
+      setToast({ type: 'error', message: 'Failed to save settings' });
     } finally {
       setSaving(false);
     }
@@ -914,6 +917,38 @@ const Profile = () => {
                     <span style={{ position: 'absolute', height: '22px', width: '22px', left: localStorage.getItem('notificationSoundEnabled') !== 'false' ? '23px' : '3px', bottom: '3px', backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s' }} />
                   </span>
                 </label>
+              </div>
+
+              {/* Default Content Folder Section (Phase 4A+) */}
+              <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0' }}>📁 Default Content Folder</h3>
+                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: 1.5 }}>
+                  Set a default Google Drive folder to auto-fill when submitting task content
+                </p>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="url"
+                    value={formData.defaultContentFolder || ''}
+                    onChange={(e) => setFormData({...formData, defaultContentFolder: e.target.value})}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    style={{
+                      width: '100%', padding: '14px 16px',
+                      fontSize: '14px',
+                      border: formData.defaultContentFolder && !formData.defaultContentFolder.includes('drive.google.com') ? '2px solid #f59e0b' : '2px solid #e2e8f0',
+                      borderRadius: '12px', outline: 'none', boxSizing: 'border-box'
+                    }}
+                  />
+                  {formData.defaultContentFolder && !formData.defaultContentFolder.includes('drive.google.com') && (
+                    <p style={{ fontSize: '12px', color: '#f59e0b', margin: '8px 0 0', fontWeight: '500' }}>
+                      ⚠ Link should be a Google Drive folder URL
+                    </p>
+                  )}
+                  {formData.defaultContentFolder && formData.defaultContentFolder.includes('drive.google.com') && (
+                    <p style={{ fontSize: '12px', color: '#22c55e', margin: '8px 0 0', fontWeight: '500' }}>
+                      ✓ Valid Google Drive link
+                    </p>
+                  )}
+                </div>
               </div>
 
               <button onClick={handleSaveProfile} disabled={saving} style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>

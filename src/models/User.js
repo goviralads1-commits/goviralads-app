@@ -90,6 +90,12 @@ const userSchema = new mongoose.Schema(
         customMessage: { type: String, default: 'Your task deadline is approaching. Please ensure timely completion.' },
       },
     },
+    // Client content folder default (Phase 4A+)
+    defaultContentFolder: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     // Metadata
     lastLoginAt: { type: Date, default: null },
     lastActivityAt: { type: Date, default: null },

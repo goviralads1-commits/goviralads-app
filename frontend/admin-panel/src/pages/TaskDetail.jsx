@@ -16,6 +16,11 @@ const TaskDetail = () => {
   const [toast, setToast] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   
+  // Final Delivery state (Phase 3)
+  const [deliveryLink, setDeliveryLink] = useState('');
+  const [deliveryText, setDeliveryText] = useState('');
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  
   // Form state for editable fields
   const [formData, setFormData] = useState({
     title: '',
@@ -72,6 +77,10 @@ const TaskDetail = () => {
         autoCompletionCap: taskData.autoCompletionCap || 100,
         icon: taskData.icon || ''
       });
+      
+      // Initialize delivery state (Phase 3)
+      setDeliveryLink(taskData.finalDeliveryLink || '');
+      setDeliveryText(taskData.finalDeliveryText || '');
     } catch (err) {
       console.error('Task fetch error:', err);
       setError(err.response?.data?.error || 'Failed to load task');
@@ -247,6 +256,32 @@ const TaskDetail = () => {
       setTimeout(() => setToast(null), 4000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Save Final Delivery (Phase 3)
+  const handleSaveDelivery = async () => {
+    if (!deliveryLink.trim()) {
+      setToast({ type: 'error', message: 'Please enter a delivery link' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    setSavingDelivery(true);
+    try {
+      await api.patch(`/admin/tasks/${taskId}`, {
+        finalDeliveryLink: deliveryLink.trim(),
+        finalDeliveryText: deliveryText.trim(),
+        finalDeliveredAt: new Date().toISOString()
+      });
+      await fetchTask();
+      setToast({ type: 'success', message: 'Delivery saved successfully' });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to save delivery' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setSavingDelivery(false);
     }
   };
 
@@ -791,6 +826,79 @@ const TaskDetail = () => {
                   style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #fcd34d', borderRadius: '12px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box' }}
                 />
               </div>
+
+              {/* FINAL DELIVERY SECTION (Phase 3) */}
+              <div style={{ backgroundColor: task.finalDeliveryLink ? '#f0fdf4' : '#fff', borderRadius: '20px', padding: '28px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: task.finalDeliveryLink ? '2px solid #22c55e' : '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: task.finalDeliveryLink ? '#dcfce7' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={task.finalDeliveryLink ? '#22c55e' : '#64748b'} strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Final Delivery Folder</h2>
+                  </div>
+                  {task.finalDeliveryLink && (
+                    <span style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700', backgroundColor: '#dcfce7', color: '#15803d' }}>
+                      ✓ Delivered
+                    </span>
+                  )}
+                </div>
+
+                {/* Show existing delivery info */}
+                {task.finalDeliveryLink && task.finalDeliveredAt && (
+                  <div style={{ padding: '14px 16px', backgroundColor: '#fff', borderRadius: '12px', marginBottom: '16px', border: '1px solid #bbf7d0' }}>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px' }}>Delivered on</p>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#15803d', margin: 0 }}>{formatDateTime(task.finalDeliveredAt)}</p>
+                  </div>
+                )}
+
+                {/* Delivery Folder Link Input */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Delivery Folder Link *</label>
+                  <input
+                    type="url"
+                    value={deliveryLink}
+                    onChange={(e) => setDeliveryLink(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    disabled={task.status === 'COMPLETED'}
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: task.status === 'COMPLETED' ? '#f8fafc' : '#fff', boxSizing: 'border-box', opacity: task.status === 'COMPLETED' ? 0.7 : 1 }}
+                  />
+                </div>
+
+                {/* Delivery Notes */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Delivery Notes (optional)</label>
+                  <textarea
+                    value={deliveryText}
+                    onChange={(e) => setDeliveryText(e.target.value)}
+                    placeholder="Instructions for the client..."
+                    rows={3}
+                    disabled={task.status === 'COMPLETED'}
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: task.status === 'COMPLETED' ? '#f8fafc' : '#fff', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box', opacity: task.status === 'COMPLETED' ? 0.7 : 1 }}
+                  />
+                </div>
+
+                {/* Save Button */}
+                {task.status !== 'COMPLETED' ? (
+                  <button
+                    onClick={handleSaveDelivery}
+                    disabled={savingDelivery || !deliveryLink.trim()}
+                    style={{
+                      width: '100%', padding: '14px 20px',
+                      background: deliveryLink.trim() ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : '#e2e8f0',
+                      color: deliveryLink.trim() ? '#fff' : '#94a3b8',
+                      fontSize: '14px', fontWeight: '600', borderRadius: '12px', border: 'none',
+                      cursor: deliveryLink.trim() && !savingDelivery ? 'pointer' : 'not-allowed',
+                      opacity: savingDelivery ? 0.6 : 1, transition: 'all 0.2s'
+                    }}
+                  >
+                    {savingDelivery ? 'Saving...' : (task.finalDeliveryLink ? 'Update Delivery' : 'Save Delivery')}
+                  </button>
+                ) : (
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, textAlign: 'center' }}>Editing disabled for COMPLETED tasks</p>
+                )}
+              </div>
             </div>
 
             {/* Right Sidebar */}
@@ -868,6 +976,107 @@ const TaskDetail = () => {
                     {task.progressMode || 'AUTO'}
                   </span>
                 </div>
+              </div>
+
+              {/* CLIENT SUBMITTED CONTENT (Phase 2) */}
+              <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', marginTop: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: task.clientContentSubmitted ? '2px solid #bbf7d0' : (task.requireClientContent ? '2px solid #fbbf24' : '1px solid #f1f5f9') }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: task.requireClientContent && !task.clientContentSubmitted ? '#fef3c7' : '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={task.requireClientContent && !task.clientContentSubmitted ? '#d97706' : '#22c55e'} strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+                        <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="16" y1="13" x2="8" y2="13" strokeLinecap="round" />
+                        <line x1="16" y1="17" x2="8" y2="17" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Client Submitted Content</h3>
+                  </div>
+                  {task.clientContentSubmitted && (
+                    <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: '700', backgroundColor: '#dcfce7', color: '#15803d' }}>
+                      ✓ Received
+                    </span>
+                  )}
+                </div>
+
+                {task.clientContentSubmitted ? (
+                  <>
+                    {/* Submitted Text */}
+                    {task.clientContentText && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Content / Instructions</label>
+                        <div style={{ padding: '12px 14px', backgroundColor: '#f8fafc', borderRadius: '10px', fontSize: '13px', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '200px', overflowY: 'auto' }}>
+                          {task.clientContentText}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Client Content Folder */}
+                    {task.clientDriveLink && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Content Folder</label>
+                        <a
+                          href={task.clientDriveLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            padding: '12px 16px', backgroundColor: '#3b82f6', borderRadius: '10px', 
+                            fontSize: '13px', fontWeight: '600', color: '#fff', textDecoration: 'none',
+                            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)'
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          Open Client Content Folder
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Additional Links */}
+                    {task.clientContentLinks && task.clientContentLinks.length > 0 && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Additional Links</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {task.clientContentLinks.map((link, idx) => (
+                            <a
+                              key={idx}
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ display: 'block', padding: '8px 12px', backgroundColor: '#f1f5f9', borderRadius: '8px', fontSize: '12px', color: '#6366f1', textDecoration: 'none', wordBreak: 'break-all' }}
+                            >
+                              {link}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Submitted Timestamp */}
+                    {task.clientContentSubmittedAt && (
+                      <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0, textAlign: 'right' }}>
+                        Submitted: {formatDateTime(task.clientContentSubmittedAt)}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ padding: '20px', backgroundColor: task.requireClientContent ? '#fef3c7' : '#f8fafc', borderRadius: '12px', textAlign: 'center', border: task.requireClientContent ? '2px solid #fcd34d' : '2px dashed #e2e8f0' }}>
+                    {task.requireClientContent ? (
+                      <>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ margin: '0 auto 10px' }}>
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 6v6M12 14.5v1.5" strokeLinecap="round" />
+                        </svg>
+                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 4px' }}>Waiting for client content</p>
+                        <p style={{ fontSize: '12px', color: '#b45309', margin: 0 }}>Content required before work can start</p>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>Client has not submitted content yet</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

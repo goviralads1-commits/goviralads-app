@@ -21,6 +21,7 @@ import Billing from './pages/Billing';
 import CreditPlans from './pages/CreditPlans';
 import OfficeCMS from './pages/OfficeCMS';
 import Orders from './pages/Orders';
+import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 
 // Protected Route Component
@@ -128,6 +129,11 @@ const App = () => {
           <Route path="/office-cms" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <OfficeCMS />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Settings />
             </ProtectedRoute>
           } />
           <Route path="/orders" element={

@@ -321,11 +321,103 @@ router.get('/tasks/:taskId', async (req, res) => {
           reached: m.reached || false,
           reachedAt: m.reachedAt || null,
         })),
+        // CLIENT CONTENT SUBMISSION (Phase 2)
+        clientContentText: task.clientContentText || '',
+        clientContentLinks: task.clientContentLinks || [],
+        clientDriveLink: task.clientDriveLink || '',
+        clientContentSubmittedAt: task.clientContentSubmittedAt || null,
+        clientContentSubmitted: task.clientContentSubmitted || false,
       },
     });
   } catch (err) {
     console.error('[SINGLE-TASK ERROR]', err);
     return res.status(500).json({ error: 'Failed to retrieve task' });
+  }
+});
+
+// ======================================================================
+// CLIENT CONTENT SUBMISSION (Phase 2)
+// Allows client to submit content for their purchased task
+// ======================================================================
+router.post('/tasks/:taskId/content', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const clientId = req.user.id;
+    const { contentText, contentLinks, driveLink } = req.body || {};
+
+    // Find the task
+    const task = await Task.findById(taskId).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Ensure the task belongs to the current client
+    if (!task.clientId || task.clientId.toString() !== clientId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Only allow content submission for active/pending tasks (not completed/cancelled)
+    if (task.status === 'COMPLETED' || task.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Cannot submit content for completed or cancelled tasks' });
+    }
+
+    // Validate contentText (optional, max 5000 chars)
+    if (contentText !== undefined) {
+      if (typeof contentText !== 'string') {
+        return res.status(400).json({ error: 'contentText must be a string' });
+      }
+      if (contentText.length > 5000) {
+        return res.status(400).json({ error: 'contentText cannot exceed 5000 characters' });
+      }
+      task.clientContentText = contentText.trim();
+    }
+
+    // Validate contentLinks (optional, array of strings, max 10)
+    if (contentLinks !== undefined) {
+      if (!Array.isArray(contentLinks)) {
+        return res.status(400).json({ error: 'contentLinks must be an array' });
+      }
+      if (contentLinks.length > 10) {
+        return res.status(400).json({ error: 'Maximum 10 content links allowed' });
+      }
+      // Filter out empty strings and validate each link
+      const validLinks = contentLinks
+        .filter(link => typeof link === 'string' && link.trim().length > 0)
+        .map(link => link.trim());
+      task.clientContentLinks = validLinks;
+    }
+
+    // Validate driveLink (optional, string)
+    if (driveLink !== undefined) {
+      if (typeof driveLink !== 'string') {
+        return res.status(400).json({ error: 'driveLink must be a string' });
+      }
+      task.clientDriveLink = driveLink.trim();
+    }
+
+    // Mark content as submitted
+    task.clientContentSubmittedAt = new Date();
+    task.clientContentSubmitted = true;
+
+    await task.save();
+
+    console.log(`[CONTENT_SUBMIT] Task ${taskId} content submitted by client ${clientId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Content submitted successfully',
+      task: {
+        id: task._id.toString(),
+        clientContentText: task.clientContentText,
+        clientContentLinks: task.clientContentLinks,
+        clientDriveLink: task.clientDriveLink,
+        clientContentSubmittedAt: task.clientContentSubmittedAt,
+        clientContentSubmitted: task.clientContentSubmitted,
+      }
+    });
+  } catch (err) {
+    console.error('[CONTENT_SUBMIT ERROR]', err);
+    return res.status(500).json({ error: 'Failed to submit content' });
   }
 });
 
@@ -789,7 +881,9 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       originalPrice: plan.originalPrice,
       countdownEndDate: null,
       milestones: plan.milestones || [], // Copy milestones
-      autoCompletionCap: plan.autoCompletionCap || 100
+      autoCompletionCap: plan.autoCompletionCap || 100,
+      // CONTENT REQUIREMENT CONTROL (Phase 2 Step 4)
+      requireClientContent: plan.requireClientContent || false
     });
 
     console.log('Task created:', newTask._id.toString());
@@ -1639,6 +1733,8 @@ router.get('/profile', async (req, res) => {
         preferences: user.preferences || {},
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
+        // Phase 4A+ - Default content folder
+        defaultContentFolder: user.defaultContentFolder || '',
       },
       billing: {
         name: user.billing?.name || '',
@@ -1671,7 +1767,7 @@ router.get('/profile', async (req, res) => {
 router.patch('/profile', async (req, res) => {
   try {
     const clientId = req.user.id;
-    const { name, phone, photoUrl, company, timezone, language, preferences, billing } = req.body || {};
+    const { name, phone, photoUrl, company, timezone, language, preferences, billing, defaultContentFolder } = req.body || {};
 
     const user = await User.findById(clientId).exec();
     if (!user) {
@@ -1685,6 +1781,11 @@ router.patch('/profile', async (req, res) => {
     if (company !== undefined) user.profile.company = company.trim();
     if (timezone !== undefined) user.profile.timezone = timezone;
     if (language !== undefined) user.profile.language = language;
+
+    // Update default content folder (Phase 4A+)
+    if (defaultContentFolder !== undefined) {
+      user.defaultContentFolder = defaultContentFolder.trim();
+    }
 
     // Update preferences
     if (preferences) {
@@ -1723,6 +1824,7 @@ router.patch('/profile', async (req, res) => {
         timezone: user.profile?.timezone || 'UTC',
         language: user.profile?.language || 'en',
         preferences: user.preferences || {},
+        defaultContentFolder: user.defaultContentFolder || '',
       },
       billing: {
         name: user.billing?.name || '',
