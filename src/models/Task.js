@@ -300,6 +300,29 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // TASK DISCUSSION SYSTEM (Phase 6)
+    // Client-Admin messaging within task context
+    messages: [{
+      sender: {
+        type: String,
+        enum: ['CLIENT', 'ADMIN'],
+        required: true,
+      },
+      senderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      text: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 2000,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
   },
   {
     timestamps: true,

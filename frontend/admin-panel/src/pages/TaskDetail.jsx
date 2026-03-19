@@ -21,6 +21,10 @@ const TaskDetail = () => {
   const [deliveryText, setDeliveryText] = useState('');
   const [savingDelivery, setSavingDelivery] = useState(false);
   
+  // Discussion state (Phase 6)
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  
   // Form state for editable fields
   const [formData, setFormData] = useState({
     title: '',
@@ -282,6 +286,23 @@ const TaskDetail = () => {
       setTimeout(() => setToast(null), 4000);
     } finally {
       setSavingDelivery(false);
+    }
+  };
+
+  // Send discussion message (Phase 6)
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || sendingMessage) return;
+    
+    setSendingMessage(true);
+    try {
+      await api.post(`/admin/tasks/${taskId}/message`, { text: messageText.trim() });
+      setMessageText('');
+      await fetchTask(); // Refresh to get new message
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to send message' });
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -1080,6 +1101,91 @@ const TaskDetail = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* CLIENT DISCUSSION (Phase 6) */}
+      <div style={{
+        backgroundColor: '#fff', borderRadius: '16px', padding: '20px', marginBottom: '100px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Client Discussion</h3>
+            <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Chat history with client</p>
+          </div>
+          {task.messages && task.messages.length > 0 && (
+            <span style={{ marginLeft: 'auto', padding: '4px 10px', backgroundColor: '#eff6ff', color: '#3b82f6', fontSize: '11px', fontWeight: '600', borderRadius: '8px' }}>
+              {task.messages.length} message{task.messages.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Messages */}
+        <div style={{ maxHeight: '250px', overflowY: 'auto', marginBottom: '12px', padding: '4px' }}>
+          {(!task.messages || task.messages.length === 0) ? (
+            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '30px 0' }}>
+              No messages yet
+            </p>
+          ) : (
+            task.messages.map((msg, idx) => (
+              <div key={idx} style={{ 
+                display: 'flex', 
+                justifyContent: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start',
+                marginBottom: '10px'
+              }}>
+                <div style={{
+                  maxWidth: '70%', padding: '10px 14px', borderRadius: '14px',
+                  backgroundColor: msg.sender === 'ADMIN' ? '#6366f1' : '#f1f5f9',
+                  color: msg.sender === 'ADMIN' ? '#fff' : '#0f172a',
+                }}>
+                  <p style={{ fontSize: '13px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                  <p style={{ 
+                    fontSize: '10px', margin: '5px 0 0', 
+                    color: msg.sender === 'ADMIN' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
+                    textAlign: 'right'
+                  }}>
+                    {msg.sender === 'CLIENT' ? 'Client • ' : ''}
+                    {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Input */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+          <textarea
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            placeholder="Reply to client..."
+            rows={2}
+            style={{
+              flex: 1, padding: '10px 14px', fontSize: '13px',
+              border: '2px solid #e2e8f0', borderRadius: '12px',
+              outline: 'none', resize: 'none', lineHeight: 1.5
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={!messageText.trim() || sendingMessage}
+            style={{
+              padding: '10px 16px', backgroundColor: messageText.trim() ? '#6366f1' : '#e2e8f0',
+              color: messageText.trim() ? '#fff' : '#94a3b8', fontSize: '13px', fontWeight: '600',
+              borderRadius: '12px', border: 'none',
+              cursor: messageText.trim() && !sendingMessage ? 'pointer' : 'not-allowed',
+              opacity: sendingMessage ? 0.6 : 1
+            }}
+          >
+            {sendingMessage ? '...' : 'Send'}
+          </button>
         </div>
       </div>
 

@@ -327,6 +327,16 @@ router.get('/tasks/:taskId', async (req, res) => {
         clientDriveLink: task.clientDriveLink || '',
         clientContentSubmittedAt: task.clientContentSubmittedAt || null,
         clientContentSubmitted: task.clientContentSubmitted || false,
+        // FINAL DELIVERY (Phase 3)
+        finalDeliveryLink: task.finalDeliveryLink || '',
+        finalDeliveryText: task.finalDeliveryText || '',
+        finalDeliveredAt: task.finalDeliveredAt || null,
+        // TASK DISCUSSION (Phase 6)
+        messages: (task.messages || []).map(m => ({
+          sender: m.sender,
+          text: m.text,
+          createdAt: m.createdAt,
+        })),
       },
     });
   } catch (err) {
@@ -418,6 +428,76 @@ router.post('/tasks/:taskId/content', async (req, res) => {
   } catch (err) {
     console.error('[CONTENT_SUBMIT ERROR]', err);
     return res.status(500).json({ error: 'Failed to submit content' });
+  }
+});
+
+// ======================================================================
+// TASK DISCUSSION SYSTEM (Phase 6)
+// Client can send messages within task context
+// ======================================================================
+router.post('/tasks/:taskId/message', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const clientId = req.user.id;
+    const { text } = req.body || {};
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Message text is required' });
+    }
+
+    if (text.length > 2000) {
+      return res.status(400).json({ error: 'Message too long (max 2000 characters)' });
+    }
+
+    const task = await Task.findById(taskId).exec();
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (task.clientId.toString() !== clientId) {
+      return res.status(403).json({ error: 'Not authorized to message on this task' });
+    }
+
+    // Add message
+    const newMessage = {
+      sender: 'CLIENT',
+      senderId: clientId,
+      text: text.trim(),
+      createdAt: new Date(),
+    };
+
+    task.messages = task.messages || [];
+    task.messages.push(newMessage);
+    await task.save();
+
+    // Notify admin(s)
+    try {
+      const { createNotification, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
+      const admins = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } }).select('_id').exec();
+      
+      for (const admin of admins) {
+        await createNotification({
+          userId: admin._id,
+          type: NOTIFICATION_TYPES.TASK_UPDATE,
+          title: 'New Client Message',
+          message: `Client sent a message on task: ${task.name}`,
+          relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
+        });
+      }
+    } catch (notifErr) {
+      console.log('[DISCUSSION] Notification error:', notifErr.message);
+    }
+
+    console.log(`[DISCUSSION] Client ${clientId} sent message on task ${taskId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: newMessage,
+    });
+  } catch (err) {
+    console.error('[DISCUSSION ERROR]', err);
+    return res.status(500).json({ error: 'Failed to send message' });
   }
 });
 

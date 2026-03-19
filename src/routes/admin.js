@@ -527,6 +527,22 @@ router.get('/tasks/:taskId', async (req, res) => {
         isNew: task.isNew,
         visibility: task.visibility,
         allowedClients: task.allowedClients,
+        // CLIENT CONTENT (Phase 2)
+        clientContentText: task.clientContentText || '',
+        clientContentLinks: task.clientContentLinks || [],
+        clientDriveLink: task.clientDriveLink || '',
+        clientContentSubmittedAt: task.clientContentSubmittedAt || null,
+        clientContentSubmitted: task.clientContentSubmitted || false,
+        // FINAL DELIVERY (Phase 3)
+        finalDeliveryLink: task.finalDeliveryLink || '',
+        finalDeliveryText: task.finalDeliveryText || '',
+        finalDeliveredAt: task.finalDeliveredAt || null,
+        // TASK DISCUSSION (Phase 6)
+        messages: (task.messages || []).map(m => ({
+          sender: m.sender,
+          text: m.text,
+          createdAt: m.createdAt,
+        })),
       }
     });
   } catch (err) {
@@ -689,6 +705,69 @@ router.patch('/tasks/:taskId', async (req, res) => {
     return res.status(200).json({ success: true, task });
   } catch (err) {
     return res.status(500).json({ error: `UPDATE ERROR: ${err.message}` });
+  }
+});
+
+// ======================================================================
+// TASK DISCUSSION SYSTEM (Phase 6)
+// Admin can send messages within task context
+// ======================================================================
+router.post('/tasks/:taskId/message', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const adminId = req.user.id;
+    const { text } = req.body || {};
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Message text is required' });
+    }
+
+    if (text.length > 2000) {
+      return res.status(400).json({ error: 'Message too long (max 2000 characters)' });
+    }
+
+    const task = await Task.findById(taskId).exec();
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Add message
+    const newMessage = {
+      sender: 'ADMIN',
+      senderId: adminId,
+      text: text.trim(),
+      createdAt: new Date(),
+    };
+
+    task.messages = task.messages || [];
+    task.messages.push(newMessage);
+    await task.save();
+
+    // Notify client
+    if (task.clientId) {
+      try {
+        await createNotification({
+          userId: task.clientId,
+          type: NOTIFICATION_TYPES.TASK_UPDATE,
+          title: 'New Message from Admin',
+          message: `Admin sent a message on task: ${task.name}`,
+          relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
+        });
+      } catch (notifErr) {
+        console.log('[DISCUSSION] Notification error:', notifErr.message);
+      }
+    }
+
+    console.log(`[DISCUSSION] Admin ${adminId} sent message on task ${taskId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: newMessage,
+    });
+  } catch (err) {
+    console.error('[DISCUSSION ERROR]', err);
+    return res.status(500).json({ error: 'Failed to send message' });
   }
 });
 
