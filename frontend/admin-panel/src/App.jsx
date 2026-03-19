@@ -22,6 +22,7 @@ import CreditPlans from './pages/CreditPlans';
 import OfficeCMS from './pages/OfficeCMS';
 import Orders from './pages/Orders';
 import Settings from './pages/Settings';
+import Roles from './pages/Roles';
 import NotFound from './pages/NotFound';
 
 // Protected Route Component
@@ -134,6 +135,11 @@ const App = () => {
           <Route path="/settings" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Settings />
+            </ProtectedRoute>
+          } />
+          <Route path="/roles" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Roles />
             </ProtectedRoute>
           } />
           <Route path="/orders" element={

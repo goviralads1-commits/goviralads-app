@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { getCurrentUser, logout } from '../services/authService';
+import { getCurrentUser, logout, getPermissions } from '../services/authService';
 import api from '../services/api';
 
 const Header = ({ title }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = getCurrentUser();
+  const permissions = getPermissions();
+  const isMainAdmin = permissions?.isMainAdmin !== false; // default true if not set yet
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -380,6 +382,11 @@ const Header = ({ title }) => {
                     <Link to="/credit-plans" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>💳</span> Credit Plans
                     </Link>
+                    {isMainAdmin && (
+                      <Link to="/roles" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#6366f1', fontSize: '14px', fontWeight: '600', transition: 'background 0.2s' }}>
+                        <span style={{ fontSize: '16px' }}>🔑</span> Roles & Permissions
+                      </Link>
+                    )}
                     <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '8px 0' }} />
                     <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', fontSize: '14px', fontWeight: '500', cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>🚪</span> Logout
@@ -418,9 +425,9 @@ const Header = ({ title }) => {
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-            { path: '/wallet', label: 'Wallet', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+            ...(isMainAdmin || permissions?.canViewWallet ? [{ path: '/wallet', label: 'Wallet', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' }] : []),
             { path: '/tasks', label: 'Tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-            { path: '/plans', label: 'Plans', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+            ...(isMainAdmin || permissions?.canEditPlans ? [{ path: '/plans', label: 'Plans', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' }] : []),
             { path: '/profile', label: 'Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' }
           ].map((item) => {
             const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');

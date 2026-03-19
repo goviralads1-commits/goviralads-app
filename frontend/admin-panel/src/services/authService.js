@@ -37,6 +37,7 @@ export const login = async (email, password) => {
 export const logout = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  localStorage.removeItem('permissions');
 };
 
 // Get current user from localStorage
@@ -57,4 +58,22 @@ export const isAuthenticated = () => {
 export const getUserRole = () => {
   const user = getCurrentUser();
   return user?.role;
+};
+
+// Permissions helpers
+export const savePermissions = (data) => {
+  localStorage.setItem('permissions', JSON.stringify(data));
+};
+
+export const getPermissions = () => {
+  const raw = localStorage.getItem('permissions');
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+};
+
+export const hasPermission = (key) => {
+  const data = getPermissions();
+  if (!data) return true; // not yet loaded — default allow to avoid blocking
+  if (data.isMainAdmin) return true;
+  return data.permissions?.[key] === true;
 };

@@ -27,6 +27,7 @@ const billingService = require('../services/billingService');
 const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
+const { requirePermission, ALL_PERMISSIONS } = require('../middleware/permissions');
 const { stripHtmlTags } = require('../utils/validators');
 
 const router = express.Router();
@@ -415,6 +416,14 @@ router.get('/tasks', async (req, res) => {
     
     if (status) {
       filter.status = status;
+    }
+
+    // TASK VISIBILITY: sub-admins without canViewAllTasks only see tasks they created
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    const canViewAll = isMainAdmin || adminUser?.customRole?.permissions?.canViewAllTasks === true;
+    if (!canViewAll) {
+      filter.assignedBy = adminUser._id;
     }
 
     const tasks = await Task.find(filter)
@@ -4315,6 +4324,59 @@ router.post('/reminder-settings/run', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to run reminder check' });
+  }
+});
+
+// GET /admin/admin-users — list all admin users with their custom role (for role assignment UI)
+router.get('/admin-users', async (req, res) => {
+  try {
+    const users = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } })
+      .select('identifier customRole status')
+      .populate('customRole', 'id displayName')
+      .sort({ createdAt: 1 })
+      .exec();
+
+    return res.status(200).json({
+      users: users.map(u => ({
+        id: u._id.toString(),
+        identifier: u.identifier,
+        status: u.status,
+        customRole: u.customRole ? u.customRole._id.toString() : null,
+        customRoleName: u.customRole?.displayName || null,
+      }))
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to get admin users' });
+  }
+});
+
+// ===============================
+// CURRENT USER PERMISSIONS
+// ===============================
+
+// GET /admin/me/permissions — returns resolved permission set for the calling user
+router.get('/me/permissions', async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).populate('customRole');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Main admin: no customRole — all permissions granted
+    if (user.role === 'ADMIN' && !user.customRole) {
+      return res.status(200).json({
+        isMainAdmin: true,
+        roleName: 'Main Admin',
+        permissions: ALL_PERMISSIONS,
+      });
+    }
+
+    // Sub-admin with a custom role
+    return res.status(200).json({
+      isMainAdmin: false,
+      roleName: user.customRole?.displayName || null,
+      permissions: user.customRole?.permissions || {},
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to get permissions' });
   }
 });
 

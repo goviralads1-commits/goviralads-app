@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login } from '../services/authService';
+import { login, savePermissions } from '../services/authService';
 import api from '../services/api';
 
 const LoginForm = () => {
@@ -60,6 +60,15 @@ const LoginForm = () => {
       }
       
       console.log('[ADMIN LOGIN] ✓✓✓ Success - redirecting to dashboard');
+
+      // Fetch and cache permissions for frontend guards
+      try {
+        const permRes = await api.get('/admin/me/permissions');
+        savePermissions(permRes.data);
+      } catch {
+        // Non-fatal: guards will default to allowing access
+      }
+
       navigate('/dashboard');
     } catch (err) {
       console.error('[ADMIN LOGIN] ❌ Error:', err.message);

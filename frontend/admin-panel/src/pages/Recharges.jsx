@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Header from '../components/Header';
+import { hasPermission } from '../services/authService';
 
 const Recharges = () => {
   const [rechargeRequests, setRechargeRequests] = useState([]);
@@ -199,16 +200,18 @@ const Recharges = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button
-                          onClick={() => {
-                            setSelectedRequest(request);
-                            setActionType('approve');
-                            setShowActionForm(true);
-                          }}
-                          className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 mr-2"
-                        >
-                          Approve
-                        </button>
+                        {hasPermission('canApproveRecharge') && (
+                          <button
+                            onClick={() => {
+                              setSelectedRequest(request);
+                              setActionType('approve');
+                              setShowActionForm(true);
+                            }}
+                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 mr-2"
+                          >
+                            Approve
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setSelectedRequest(request);
