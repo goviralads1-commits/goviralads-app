@@ -358,6 +358,13 @@ const CreditPlans = () => {
   const [users, setUsers] = useState([]);
   const [usersLoaded, setUsersLoaded] = useState(false);
 
+  // Loading/action states (Section 4 — button states)
+  const [submitting, setSubmitting] = useState(false);
+  const [couponSubmitting, setCouponSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null); // plan id being deleted
+  const [togglingId, setTogglingId] = useState(null); // plan id being toggled
+  const [deletingCouponId, setDeletingCouponId] = useState(null); // coupon id being deleted
+
   // Coupon state
   const [coupons, setCoupons] = useState([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
@@ -393,8 +400,9 @@ const CreditPlans = () => {
     try {
       const res = await api.get('/admin/coupons');
       setCoupons(res.data.coupons || []);
-    } catch {
-      // Silently ignore
+    } catch (err) {
+      console.error('[CreditPlans] fetchCoupons error:', err.response?.data || err.message);
+      showToast('Failed to load coupons', 'error');
     } finally {
       setCouponsLoading(false);
     }
@@ -406,8 +414,8 @@ const CreditPlans = () => {
       const res = await api.get('/admin/users?limit=200');
       setUsers(res.data.users || []);
       setUsersLoaded(true);
-    } catch {
-      // Silently ignore
+    } catch (err) {
+      console.error('[CreditPlans] fetchUsers error:', err.message);
     }
   };
 
@@ -459,16 +467,20 @@ const CreditPlans = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return; // prevent double-click
     
-    // Validate price >= 100 (matches backend recharge validation)
+    // Validate required fields
+    if (!formData.name.trim()) { showToast('Plan name is required', 'error'); return; }
+    if (!formData.credits || parseInt(formData.credits) <= 0) { showToast('Base credits must be > 0', 'error'); return; }
+    
     const priceValue = parseFloat(formData.price);
-    if (!priceValue || priceValue < 100) {
-      showToast('Price must be at least ₹100', 'error');
+    if (!priceValue || priceValue < 1) {
+      showToast('Price must be a positive number', 'error');
       return;
     }
     
     const payload = {
-      name: formData.name,
+      name: formData.name.trim(),
       price: priceValue,
       credits: parseInt(formData.credits),
       bonusCredits: parseInt(formData.bonusCredits) || 0,
@@ -481,6 +493,8 @@ const CreditPlans = () => {
       isActive: formData.isActive,
     };
 
+    console.log('[CreditPlans] handleSubmit', editingPlan ? 'PATCH' : 'POST', payload);
+    setSubmitting(true);
     try {
       if (editingPlan) {
         await api.patch(`/admin/credit-plans/${editingPlan.id}`, payload);
@@ -492,29 +506,43 @@ const CreditPlans = () => {
       handleCloseModal();
       fetchPlans();
     } catch (err) {
+      console.error('[CreditPlans] handleSubmit error:', err.response?.data || err.message);
       showToast(err.response?.data?.error || 'Failed to save credit plan', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleToggleActive = async (plan) => {
+    if (togglingId) return;
+    console.log('[CreditPlans] toggleActive', plan.id, !plan.isActive);
+    setTogglingId(plan.id);
     try {
       await api.patch(`/admin/credit-plans/${plan.id}`, { isActive: !plan.isActive });
       showToast(`Plan ${plan.isActive ? 'deactivated' : 'activated'} successfully`);
       fetchPlans();
     } catch (err) {
+      console.error('[CreditPlans] toggleActive error:', err.response?.data || err.message);
       showToast('Failed to update plan status', 'error');
+    } finally {
+      setTogglingId(null);
     }
   };
 
   const handleDelete = async (plan) => {
+    if (deletingId) return;
     if (!window.confirm(`Are you sure you want to delete "${plan.name}"?`)) return;
-    
+    console.log('[CreditPlans] delete', plan.id);
+    setDeletingId(plan.id);
     try {
       await api.delete(`/admin/credit-plans/${plan.id}`);
       showToast('Credit plan deleted successfully');
       fetchPlans();
     } catch (err) {
-      showToast('Failed to delete credit plan', 'error');
+      console.error('[CreditPlans] delete error:', err.response?.data || err.message);
+      showToast(err.response?.data?.error || 'Failed to delete credit plan', 'error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -538,17 +566,20 @@ const CreditPlans = () => {
 
   const handleCouponSubmit = async (e) => {
     e.preventDefault();
+    if (couponSubmitting) return; // prevent double-click
     const val = parseFloat(couponForm.value);
     if (!couponForm.code.trim()) { showToast('Coupon code is required', 'error'); return; }
     if (isNaN(val) || val <= 0) { showToast('Value must be positive', 'error'); return; }
     if (couponForm.type === 'discount' && val > 100) { showToast('Discount cannot exceed 100%', 'error'); return; }
     const payload = {
-      code: couponForm.code.toUpperCase(),
+      code: couponForm.code.toUpperCase().trim(),
       type: couponForm.type,
       value: val,
       expiryDate: couponForm.expiryDate || null,
       isActive: couponForm.isActive,
     };
+    console.log('[CreditPlans] couponSubmit', editingCoupon ? 'PATCH' : 'POST', payload);
+    setCouponSubmitting(true);
     try {
       if (editingCoupon) {
         await api.patch(`/admin/coupons/${editingCoupon.id}`, payload);
@@ -561,18 +592,27 @@ const CreditPlans = () => {
       setEditingCoupon(null);
       fetchCoupons();
     } catch (err) {
+      console.error('[CreditPlans] couponSubmit error:', err.response?.data || err.message);
       showToast(err.response?.data?.error || 'Failed to save coupon', 'error');
+    } finally {
+      setCouponSubmitting(false);
     }
   };
 
   const handleDeleteCoupon = async (coupon) => {
+    if (deletingCouponId) return;
     if (!window.confirm(`Delete coupon "${coupon.code}"?`)) return;
+    console.log('[CreditPlans] deleteCoupon', coupon.id);
+    setDeletingCouponId(coupon.id);
     try {
       await api.delete(`/admin/coupons/${coupon.id}`);
       showToast('Coupon deleted');
       fetchCoupons();
-    } catch {
+    } catch (err) {
+      console.error('[CreditPlans] deleteCoupon error:', err.response?.data || err.message);
       showToast('Failed to delete coupon', 'error');
+    } finally {
+      setDeletingCouponId(null);
     }
   };
 
@@ -695,13 +735,20 @@ const CreditPlans = () => {
                       ...styles.toggleBtn,
                       backgroundColor: plan.isActive ? colors.warning + '20' : colors.success + '20',
                       color: plan.isActive ? colors.warning : colors.success,
+                      opacity: togglingId === plan.id ? 0.6 : 1,
+                      cursor: togglingId === plan.id ? 'not-allowed' : 'pointer',
                     }}
                     onClick={() => handleToggleActive(plan)}
+                    disabled={togglingId === plan.id}
                   >
-                    {plan.isActive ? 'Deactivate' : 'Activate'}
+                    {togglingId === plan.id ? '...' : (plan.isActive ? 'Deactivate' : 'Activate')}
                   </button>
-                  <button style={styles.deleteBtn} onClick={() => handleDelete(plan)}>
-                    Delete
+                  <button
+                    style={{ ...styles.deleteBtn, opacity: deletingId === plan.id ? 0.6 : 1, cursor: deletingId === plan.id ? 'not-allowed' : 'pointer' }}
+                    onClick={() => handleDelete(plan)}
+                    disabled={deletingId === plan.id}
+                  >
+                    {deletingId === plan.id ? '...' : 'Delete'}
                   </button>
                 </div>
               </div>
@@ -758,7 +805,7 @@ const CreditPlans = () => {
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <button style={styles.editBtn} onClick={() => handleOpenCouponModal(c)}>Edit</button>
-                            <button style={styles.deleteBtn} onClick={() => handleDeleteCoupon(c)}>Delete</button>
+                            <button style={{ ...styles.deleteBtn, opacity: deletingCouponId === c.id ? 0.6 : 1, cursor: deletingCouponId === c.id ? 'not-allowed' : 'pointer' }} onClick={() => handleDeleteCoupon(c)} disabled={deletingCouponId === c.id}>{deletingCouponId === c.id ? '...' : 'Delete'}</button>
                           </div>
                         </td>
                       </tr>
@@ -954,8 +1001,8 @@ const CreditPlans = () => {
                 <button type="button" style={styles.cancelBtn} onClick={handleCloseModal}>
                   Cancel
                 </button>
-                <button type="submit" style={styles.submitBtn}>
-                  {editingPlan ? 'Update Plan' : 'Create Plan'}
+                <button type="submit" style={{ ...styles.submitBtn, opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }} disabled={submitting}>
+                  {submitting ? 'Saving...' : (editingPlan ? 'Update Plan' : 'Create Plan')}
                 </button>
               </div>
             </form>
@@ -1007,7 +1054,7 @@ const CreditPlans = () => {
               </div>
               <div style={styles.modalActions}>
                 <button type="button" style={styles.cancelBtn} onClick={() => setShowCouponModal(false)}>Cancel</button>
-                <button type="submit" style={styles.submitBtn}>{editingCoupon ? 'Update' : 'Create'}</button>
+                <button type="submit" style={{ ...styles.submitBtn, opacity: couponSubmitting ? 0.7 : 1, cursor: couponSubmitting ? 'not-allowed' : 'pointer' }} disabled={couponSubmitting}>{couponSubmitting ? 'Saving...' : (editingCoupon ? 'Update' : 'Create')}</button>
               </div>
             </form>
           </div>

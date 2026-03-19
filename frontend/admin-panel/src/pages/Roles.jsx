@@ -61,6 +61,7 @@ const Roles = () => {
   const [assignModal, setAssignModal] = useState(null); // { userId, currentRoleId }
   const [assignRoleId, setAssignRoleId] = useState('');
   const [assigning, setAssigning] = useState(false);
+  const [deletingId, setDeletingId] = useState(null); // role id being deleted
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -140,13 +141,18 @@ const Roles = () => {
 
   // ── DELETE ───────────────────────────────────────────────────────────
   const handleDelete = async (role) => {
+    if (deletingId) return;
     if (!window.confirm(`Delete role "${role.displayName}"? This cannot be undone.`)) return;
+    console.log('[Roles] delete', role.id);
+    setDeletingId(role.id);
     try {
       await api.delete(`/admin/roles/${role.id}`);
       showToast('Role deleted');
       fetchRoles();
     } catch (err) {
       showToast(err.response?.data?.error || 'Failed to delete role', 'error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -294,12 +300,15 @@ const Roles = () => {
                     </button>
                     <button
                       onClick={() => handleDelete(role)}
+                      disabled={deletingId === role.id}
                       style={{
                         flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #fee2e2',
-                        cursor: 'pointer', backgroundColor: '#fff', fontSize: '13px', fontWeight: '600', color: '#dc2626',
+                        cursor: deletingId === role.id ? 'not-allowed' : 'pointer',
+                        backgroundColor: '#fff', fontSize: '13px', fontWeight: '600', color: '#dc2626',
+                        opacity: deletingId === role.id ? 0.6 : 1,
                       }}
                     >
-                      Delete
+                      {deletingId === role.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
                 </div>
