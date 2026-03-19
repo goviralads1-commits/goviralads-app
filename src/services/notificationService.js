@@ -11,6 +11,11 @@ const NOTIFICATION_TYPES = Object.freeze({
   TASK_STATUS_CHANGED: 'TASK_STATUS_CHANGED',
   TASK_CREATED: 'TASK_CREATED',
   TASK_MESSAGE: 'TASK_MESSAGE',
+  TASK_REMINDER: 'TASK_REMINDER',
+  TASK_OVERDUE: 'TASK_OVERDUE',
+  TASK_COMPLETED: 'TASK_COMPLETED',
+  MILESTONE_REACHED: 'MILESTONE_REACHED',
+  FINAL_DELIVERY_READY: 'FINAL_DELIVERY_READY',
   WALLET_ADJUSTED: 'WALLET_ADJUSTED',
   TICKET_CREATED: 'TICKET_CREATED',
   TICKET_REPLIED: 'TICKET_REPLIED',
@@ -20,7 +25,6 @@ const NOTIFICATION_TYPES = Object.freeze({
   NEW_REQUIREMENT: 'NEW_REQUIREMENT',
   NEW_PROMOTION: 'NEW_PROMOTION',
   NOTICE_RESPONSE: 'NOTICE_RESPONSE',
-  TASK_REMINDER: 'TASK_REMINDER',
   // Order notifications
   NEW_ORDER: 'NEW_ORDER',
   ORDER_APPROVED: 'ORDER_APPROVED',
@@ -127,17 +131,78 @@ async function triggerNotificationEmail(notifData) {
     
     // Build email based on notification type
     const dashboardUrl = process.env.CLIENT_URL || 'https://goviralads.com';
+    const adminDashboardUrl = process.env.ADMIN_URL || 'https://admin.goviralads.com';
     const type = notifData.type || 'GENERAL';
     
     // Use specific templates for known types
-    if (type === NOTIFICATION_TYPES.RECHARGE_APPROVED || type === NOTIFICATION_TYPES.RECHARGE_REJECTED) {
+    if (type === NOTIFICATION_TYPES.RECHARGE_REQUEST_SUBMITTED) {
+      // Admin email for recharge request
+      console.log('[NOTIF EMAIL] Sending RECHARGE_REQUEST_SUBMITTED email to admin:', recipientEmail);
+      await emailService.send({
+        to: recipientEmail,
+        subject: `💰 New Recharge Request - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">💰 New Recharge Request</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'New Recharge Request'}</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">${notifData.message || 'A client has submitted a recharge request.'}</p>
+                <a href="${adminDashboardUrl}/recharges" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                  📋 View Requests
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads Admin</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+    } else if (type === NOTIFICATION_TYPES.TASK_PURCHASED) {
+      // Admin email for task purchase
+      console.log('[NOTIF EMAIL] Sending TASK_PURCHASED email to admin:', recipientEmail);
+      await emailService.send({
+        to: recipientEmail,
+        subject: `🛒 New Task Purchased - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">🛒 New Task Purchased</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'New Task Purchased'}</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">${notifData.message || 'A client has purchased a new task.'}</p>
+                <a href="${adminDashboardUrl}/tasks" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(139,92,246,0.3);">
+                  📋 View Tasks
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads Admin</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+    } else if (type === NOTIFICATION_TYPES.RECHARGE_APPROVED || type === NOTIFICATION_TYPES.RECHARGE_REJECTED) {
       await emailService.sendWalletUpdate(recipientEmail, {
         amount: type === NOTIFICATION_TYPES.RECHARGE_APPROVED ? '+' : '-',
         description: notifData.message || notifData.title,
         newBalance: 'Check dashboard',
         dashboardUrl
       });
-    } else if (type === NOTIFICATION_TYPES.TASK_PURCHASED || type === NOTIFICATION_TYPES.TASK_APPROVED || type === NOTIFICATION_TYPES.TASK_CREATED) {
+    } else if (type === NOTIFICATION_TYPES.TASK_APPROVED || type === NOTIFICATION_TYPES.TASK_CREATED) {
       await emailService.sendNewTask(recipientEmail, {
         taskTitle: notifData.title,
         description: notifData.message,
@@ -227,6 +292,38 @@ async function triggerNotificationEmail(notifData) {
                 ${messagesHtml}
                 <a href="${taskUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
                   💬 Open Chat
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+    } else if (type === NOTIFICATION_TYPES.FINAL_DELIVERY_READY) {
+      // Final delivery ready email
+      console.log('[NOTIF EMAIL] Sending FINAL_DELIVERY_READY email:', { to: recipientEmail, title: notifData.title });
+      const taskUrl = notifData.taskUrl || (dashboardUrl + '/tasks');
+      
+      await emailService.send({
+        to: recipientEmail,
+        subject: `📦 Delivery Ready! - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">📦 Delivery Ready!</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'Your delivery is ready'}</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">${notifData.message || 'Your task has a delivery ready for download.'}</p>
+                <a href="${taskUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">
+                  📥 View Task
                 </a>
               </div>
               <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">

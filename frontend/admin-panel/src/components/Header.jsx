@@ -106,25 +106,28 @@ const Header = ({ title }) => {
     
     setShowNotifications(false);
     
-    // Find task ID from available fields
-    const taskId = notif.taskId || notif.relatedEntityId || notif.relatedEntity?.entityId || notif.entityId;
-    
-    if (!taskId) {
-      console.error("No taskId found in notification", notif);
-      navigate('/tasks');
-      return;
-    }
+    // Use exact field from notification schema
+    const entityId = notif.relatedEntity?.entityId;
+    const entityType = notif.relatedEntity?.entityType;
     
     // Navigate based on entity type
-    if (notif.relatedEntity?.entityType === 'ORDER' || notif.type?.includes('ORDER')) {
-      navigate(`/orders?orderId=${taskId}`);
-    } else if (notif.relatedEntity?.entityType === 'TASK' || notif.type === 'TASK_MESSAGE' || notif.type?.includes('TASK')) {
-      navigate(`/tasks/${taskId}?scrollToChat=true`);
-    } else if (notif.relatedEntity?.entityType === 'TICKET') {
-      navigate(`/tickets`);
+    if (entityType === 'ORDER') {
+      navigate(`/orders?orderId=${entityId}`);
+    } else if (entityType === 'TASK') {
+      navigate(`/tasks/${entityId}?scrollToChat=true`);
+    } else if (entityType === 'TICKET') {
+      navigate(`/tickets/${entityId}`);
+    } else if (entityType === 'RECHARGE_REQUEST') {
+      navigate(`/recharges`);
+    } else if (notif.type?.includes('TASK')) {
+      // Fallback for TASK types without entity
+      if (entityId) {
+        navigate(`/tasks/${entityId}?scrollToChat=true`);
+      } else {
+        navigate('/tasks');
+      }
     } else {
-      // Default: try to navigate to task if we have a taskId
-      navigate(`/tasks/${taskId}?scrollToChat=true`);
+      navigate('/dashboard');
     }
   };
 

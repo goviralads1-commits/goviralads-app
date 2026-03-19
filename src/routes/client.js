@@ -116,6 +116,7 @@ router.post('/wallet/recharge', async (req, res) => {
             entityType: ENTITY_TYPES.RECHARGE_REQUEST,
             entityId: rechargeRequest._id,
           },
+          notifyByEmail: true, // Email trigger for admin
         });
       }
     } catch (err) {
@@ -492,7 +493,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
           type: NOTIFICATION_TYPES.TASK_MESSAGE,
           title: `New message on: ${task.title}`,
           message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
-          relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
+          relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
           taskUrl: taskUrl,
           recentMessages: recentMessages,
           notifyByEmail: true,
@@ -573,6 +574,7 @@ router.post('/tasks/purchase', async (req, res) => {
             entityType: ENTITY_TYPES.TASK,
             entityId: result.task._id,
           },
+          notifyByEmail: true, // Email trigger for admin
         });
       }
     } catch (err) {

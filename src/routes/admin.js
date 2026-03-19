@@ -570,6 +570,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
     // Track old values for completion notification
     const oldProgress = task.progress || 0;
     const oldStatus = task.status;
+    const oldDeliveryLink = task.finalDeliveryLink || '';
 
     // Track if progress-related fields are being updated
     const progressFieldsUpdated = (
@@ -629,6 +630,36 @@ router.patch('/tasks/:taskId', async (req, res) => {
     }
 
     await task.save();
+
+    // --- Final Delivery Notification ---
+    if (updates.finalDeliveryLink && task.clientId) {
+      const newDeliveryLink = updates.finalDeliveryLink?.trim() || '';
+      const wasEmpty = !oldDeliveryLink || oldDeliveryLink.trim() === '';
+      const nowHasLink = newDeliveryLink !== '';
+      
+      if (wasEmpty && nowHasLink) {
+        console.log(`[DELIVERY] Task ${taskId} delivery link added - notifying client`);
+        try {
+          const clientUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://goviralads.com';
+          const taskUrl = `${clientUrl}/tasks/${task._id}?scrollToChat=true`;
+          
+          await createNotification({
+            recipientId: task.clientId,
+            type: NOTIFICATION_TYPES.FINAL_DELIVERY_READY,
+            title: 'Delivery Ready!',
+            message: `Your task "${task.title}" has a delivery ready for download.`,
+            relatedEntity: {
+              entityType: ENTITY_TYPES.TASK,
+              entityId: task._id,
+            },
+            taskUrl: taskUrl,
+            notifyByEmail: true,
+          });
+        } catch (notifErr) {
+          console.error('[DELIVERY] Failed to notify client:', notifErr.message);
+        }
+      }
+    }
 
     // --- Task Completion Notification ---
     const newProgress = task.progress || 0;
@@ -764,7 +795,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
           type: NOTIFICATION_TYPES.TASK_MESSAGE,
           title: `New message on: ${task.title}`,
           message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
-          relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
+          relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
           taskUrl: taskUrl,
           recentMessages: recentMessages,
           notifyByEmail: true,
