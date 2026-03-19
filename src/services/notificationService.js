@@ -193,6 +193,23 @@ async function triggerNotificationEmail(notifData) {
       // Task discussion message email
       console.log('[NOTIF EMAIL] Sending TASK_MESSAGE email:', { to: recipientEmail, title: notifData.title });
       const taskUrl = notifData.taskUrl || (dashboardUrl + '/tasks');
+      
+      // Build messages preview HTML
+      let messagesHtml = '';
+      if (notifData.recentMessages && notifData.recentMessages.length > 0) {
+        messagesHtml = `
+          <div style="margin: 0 0 24px;">
+            <p style="color: #64748b; font-size: 12px; font-weight: 600; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.05em;">Recent Messages</p>
+            ${notifData.recentMessages.map(m => `
+              <div style="padding: 12px 16px; border-radius: 12px; margin-bottom: 8px; ${m.sender === 'CLIENT' ? 'background: #f0f9ff; border-left: 3px solid #3b82f6;' : 'background: #f5f3ff; border-left: 3px solid #6366f1;'}">
+                <p style="font-size: 11px; color: ${m.sender === 'CLIENT' ? '#3b82f6' : '#6366f1'}; font-weight: 600; margin: 0 0 4px;">${m.sender === 'CLIENT' ? '👤 Client' : '🔧 Admin'}</p>
+                <p style="color: #334155; font-size: 14px; line-height: 1.5; margin: 0;">${m.text}</p>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      
       await emailService.send({
         to: recipientEmail,
         subject: `💬 New Message on Your Task - Go Viral Ads`,
@@ -207,11 +224,9 @@ async function triggerNotificationEmail(notifData) {
               </div>
               <div style="padding: 32px;">
                 <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'New Message'}</h2>
-                <div style="background: #f1f5f9; padding: 16px; border-radius: 12px; margin: 0 0 24px;">
-                  <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0;">${notifData.message || ''}</p>
-                </div>
-                <a href="${taskUrl}" style="display: inline-block; padding: 14px 32px; background: #6366f1; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
-                  View Task
+                ${messagesHtml}
+                <a href="${taskUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+                  💬 Open Chat
                 </a>
               </div>
               <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">

@@ -479,6 +479,13 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       const adminUrl = process.env.ADMIN_URL || 'http://localhost:5173';
       const taskUrl = `${adminUrl}/tasks/${task._id}?scrollToChat=true`;
       
+      // Get last 3 messages for email preview
+      const recentMessages = (task.messages || []).slice(-3).map(m => ({
+        sender: m.sender,
+        text: m.text.substring(0, 100) + (m.text.length > 100 ? '...' : ''),
+        createdAt: m.createdAt
+      }));
+      
       for (const admin of admins) {
         await createNotification({
           recipientId: admin._id,
@@ -487,6 +494,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
           message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
           relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
           taskUrl: taskUrl,
+          recentMessages: recentMessages,
           notifyByEmail: true,
         });
       }

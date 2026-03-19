@@ -752,6 +752,13 @@ router.post('/tasks/:taskId/message', async (req, res) => {
         const clientUrl = process.env.CLIENT_URL || 'http://localhost:5175';
         const taskUrl = `${clientUrl}/tasks/${task._id}?scrollToChat=true`;
         
+        // Get last 3 messages for email preview
+        const recentMessages = (task.messages || []).slice(-3).map(m => ({
+          sender: m.sender,
+          text: m.text.substring(0, 100) + (m.text.length > 100 ? '...' : ''),
+          createdAt: m.createdAt
+        }));
+        
         await createNotification({
           recipientId: task.clientId,
           type: NOTIFICATION_TYPES.TASK_MESSAGE,
@@ -759,6 +766,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
           message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
           relatedEntity: { type: ENTITY_TYPES.TASK, id: task._id },
           taskUrl: taskUrl,
+          recentMessages: recentMessages,
           notifyByEmail: true,
         });
         console.log('[DISCUSSION] Notification created + email triggered for client:', task.clientId);
