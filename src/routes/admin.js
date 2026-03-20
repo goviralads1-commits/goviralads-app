@@ -3418,8 +3418,10 @@ router.post('/users/:userId/reset-password', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.role === ROLES.ADMIN) {
-      return res.status(403).json({ error: 'Cannot reset admin password' });
+    // Only block main admin (role=ADMIN without customRole)
+    // Allow reset for managers (role=ADMIN with customRole)
+    if (user.role === ROLES.ADMIN && !user.customRole) {
+      return res.status(403).json({ error: 'Cannot reset main admin password' });
     }
 
     // Hash the new password using password service
@@ -3452,8 +3454,10 @@ router.delete('/users/:userId', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.role === ROLES.ADMIN) {
-      return res.status(403).json({ error: 'Cannot delete admin users' });
+    // Only block main admin deletion (role=ADMIN without customRole)
+    // Allow delete for managers (role=ADMIN with customRole)
+    if (user.role === ROLES.ADMIN && !user.customRole) {
+      return res.status(403).json({ error: 'Cannot delete main admin user' });
     }
 
     // Soft delete with email re-use capability
