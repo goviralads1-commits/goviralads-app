@@ -657,10 +657,25 @@ const CreditPlans = () => {
         {loading ? (
           <div style={styles.emptyState}>Loading...</div>
         ) : filteredPlans.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p>No {activeTab === 'PLAN' ? 'subscription plans' : 'credit packs'} created yet.</p>
-            <button style={styles.addButton} onClick={() => handleOpenModal()}>
-              + Create First {activeTab === 'PLAN' ? 'Subscription Plan' : 'Credit Pack'}
+          <div style={{...styles.emptyState, padding: '60px 24px', backgroundColor: '#fff', borderRadius: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
+            <div style={{width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <path d="M12 12h.01"/>
+              </svg>
+            </div>
+            <h3 style={{fontSize: '18px', fontWeight: '700', color: '#1e293b', margin: '0 0 8px 0'}}>No {activeTab === 'PLAN' ? 'subscription plans' : 'credit packs'} yet</h3>
+            <p style={{fontSize: '14px', color: '#64748b', margin: '0 0 24px 0'}}>Start selling by creating your first {activeTab === 'PLAN' ? 'subscription plan' : 'credit pack'}</p>
+            <button
+              onClick={() => handleOpenModal()}
+              style={{
+                padding: '14px 28px', borderRadius: '14px', border: 'none',
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                color: '#fff', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(99,102,241,0.3)'
+              }}
+            >
+              + Create {activeTab === 'PLAN' ? 'Subscription Plan' : 'Credit Pack'}
             </button>
           </div>
         ) : (

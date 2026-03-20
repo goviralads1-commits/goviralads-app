@@ -3,19 +3,42 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
 
-// All permission definitions with labels
-const PERMISSION_DEFS = [
-  { key: 'canViewWallet',      label: 'View Wallet',       desc: 'Can access wallet & transaction data' },
-  { key: 'canApproveRecharge', label: 'Approve Recharge',  desc: 'Can approve/reject recharge requests' },
-  { key: 'canEditPlans',       label: 'Edit Plans',        desc: 'Can create, edit, and delete plans' },
-  { key: 'canCreateTasks',     label: 'Create Tasks',      desc: 'Can create new tasks for clients' },
-  { key: 'canEditTasks',       label: 'Edit Tasks',        desc: 'Can update task details and progress' },
-  { key: 'canDeleteTasks',     label: 'Delete Tasks',      desc: 'Can delete tasks permanently' },
-  { key: 'canViewAllTasks',    label: 'View All Tasks',    desc: 'Can see all tasks (not just assigned)' },
-  { key: 'canAssignTasks',     label: 'Assign Tasks',      desc: 'Can assign tasks to clients' },
-  { key: 'canAddUsers',        label: 'Add Users',         desc: 'Can create new admin/client accounts' },
-  { key: 'canEditUsers',       label: 'Edit Users',        desc: 'Can edit user profiles and settings' },
+// All permission definitions with labels - GROUPED BY CATEGORY
+const PERMISSION_GROUPS = [
+  {
+    name: 'TASKS',
+    permissions: [
+      { key: 'canCreateTasks', label: 'Create Tasks', desc: 'Can create new tasks for clients' },
+      { key: 'canEditTasks', label: 'Edit Tasks', desc: 'Can update task details and progress' },
+      { key: 'canDeleteTasks', label: 'Delete Tasks', desc: 'Can delete tasks permanently' },
+      { key: 'canViewAllTasks', label: 'View All Tasks', desc: 'Can see all tasks (not just assigned)' },
+      { key: 'canAssignTasks', label: 'Assign Tasks', desc: 'Can assign tasks to clients' },
+    ]
+  },
+  {
+    name: 'FINANCE',
+    permissions: [
+      { key: 'canViewWallet', label: 'View Wallet', desc: 'Can access wallet & transaction data' },
+      { key: 'canApproveRecharge', label: 'Approve Recharge', desc: 'Can approve/reject recharge requests' },
+    ]
+  },
+  {
+    name: 'PLANS',
+    permissions: [
+      { key: 'canEditPlans', label: 'Edit Plans', desc: 'Can create, edit, and delete plans' },
+    ]
+  },
+  {
+    name: 'USERS',
+    permissions: [
+      { key: 'canAddUsers', label: 'Add Users', desc: 'Can create new admin/client accounts' },
+      { key: 'canEditUsers', label: 'Edit Users', desc: 'Can edit user profiles and settings' },
+    ]
+  },
 ];
+
+// Flat list for backward compatibility
+const PERMISSION_DEFS = PERMISSION_GROUPS.flatMap(g => g.permissions);
 
 const emptyPermissions = () =>
   PERMISSION_DEFS.reduce((acc, d) => ({ ...acc, [d.key]: false }), {});
@@ -176,20 +199,27 @@ const Roles = () => {
     }
   };
 
-  // ── PERMISSION FORM ───────────────────────────────────────────────────
+  // ── PERMISSION FORM - GROUPED ─────────────────────────────────────────
   const PermissionToggles = ({ perms, onChange, disabled }) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-      {PERMISSION_DEFS.map((def) => (
-        <div key={def.key} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px', borderRadius: '12px', backgroundColor: '#f8fafc',
-          border: `1px solid ${perms[def.key] ? '#c7d2fe' : '#e2e8f0'}`,
-        }}>
-          <div style={{ flex: 1, marginRight: '12px' }}>
-            <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#1a1a1a' }}>{def.label}</p>
-            <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', lineHeight: 1.4 }}>{def.desc}</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {PERMISSION_GROUPS.map((group) => (
+        <div key={group.name} style={{ backgroundColor: '#f8fafc', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0' }}>
+          <p style={{ fontSize: '12px', fontWeight: '700', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 12px 0' }}>{group.name}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {group.permissions.map((def) => (
+              <div key={def.key} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 12px', borderRadius: '10px', backgroundColor: '#fff',
+                border: `1px solid ${perms[def.key] ? '#c7d2fe' : '#e2e8f0'}`,
+              }}>
+                <div style={{ flex: 1, marginRight: '10px' }}>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#1a1a1a' }}>{def.label}</p>
+                  <p style={{ margin: 0, fontSize: '10px', color: '#94a3b8', lineHeight: 1.3 }}>{def.desc}</p>
+                </div>
+                <Toggle checked={!!perms[def.key]} onChange={(v) => onChange({ ...perms, [def.key]: v })} disabled={disabled} />
+              </div>
+            ))}
           </div>
-          <Toggle checked={!!perms[def.key]} onChange={(v) => onChange({ ...perms, [def.key]: v })} disabled={disabled} />
         </div>
       ))}
     </div>
@@ -363,22 +393,28 @@ const Roles = () => {
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Role Key (auto-formatted)</label>
-                <input
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. SUPPORT_AGENT"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
                 <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Display Name</label>
                 <input
                   value={createForm.displayName}
-                  onChange={(e) => setCreateForm(f => ({ ...f, displayName: e.target.value }))}
+                  onChange={(e) => {
+                    const displayName = e.target.value;
+                    const autoKey = displayName.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+                    setCreateForm(f => ({ ...f, displayName, name: autoKey }));
+                  }}
                   placeholder="e.g. Support Agent"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
                 />
+                <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 0 0' }}>This is shown in the UI</p>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Role Key (auto-generated)</label>
+                <input
+                  value={createForm.name}
+                  readOnly
+                  placeholder="AUTO_GENERATED"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace', backgroundColor: '#f8fafc', color: '#64748b' }}
+                />
+                <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 0 0' }}>Used internally, cannot be changed</p>
               </div>
             </div>
 

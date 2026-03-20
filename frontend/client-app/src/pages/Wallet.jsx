@@ -311,121 +311,119 @@ const Wallet = () => {
           </div>
         </div>
 
-        {/* Subscription Plans - Button Style Cards */}
+        {/* Subscription Plans - Premium Product Cards */}
         {creditPlans.filter(p => p.type === 'PLAN').length > 0 && (
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '20px',
-            padding: '20px',
-            marginBottom: '24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
-          }}>
-            {/* Coupon Input - Minimal */}
-            <div style={{marginBottom: '16px'}}>
-              <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                <input
-                  type="text"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  placeholder="Coupon code"
-                  style={{
-                    flex: 1,
-                    padding: '10px 14px',
-                    fontSize: '14px',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '10px',
-                    outline: 'none',
-                    letterSpacing: '1px',
-                    fontWeight: couponCode ? '600' : '400',
-                    maxWidth: '200px'
-                  }}
-                />
-                {couponCode && (
-                  <button
-                    onClick={() => setCouponCode('')}
-                    style={{
-                      padding: '10px 14px',
-                      backgroundColor: '#f1f5f9',
-                      color: '#64748b',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      borderRadius: '10px',
-                      border: 'none',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              {!couponCode && (
-                <p style={{fontSize: '12px', color: '#94a3b8', margin: '6px 0 0 0'}}>Have a coupon?</p>
-              )}
+          <div style={{marginBottom: '24px'}}>
+            {/* Coupon Input - Inline */}
+            <div style={{display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px'}}>
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="Have a coupon?"
+                style={{
+                  padding: '10px 14px',
+                  fontSize: '14px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  outline: 'none',
+                  letterSpacing: '1px',
+                  fontWeight: couponCode ? '600' : '400',
+                  width: '180px',
+                  backgroundColor: '#fff'
+                }}
+              />
               {couponCode && (
-                <p style={{fontSize: '12px', color: '#16a34a', fontWeight: '600', margin: '6px 0 0 0'}}>Coupon applied</p>
+                <>
+                  <span style={{fontSize: '12px', color: '#16a34a', fontWeight: '600'}}>Applied</span>
+                  <button onClick={() => setCouponCode('')} style={{background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '16px'}}>×</button>
+                </>
               )}
             </div>
 
-            {/* Plan Cards - Button Style */}
+            {/* Plan Cards - Premium Product Style */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: '12px'
+              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+              gap: '16px'
             }}>
-              {creditPlans.filter(p => p.type === 'PLAN').map(plan => {
+              {creditPlans.filter(p => p.type === 'PLAN').sort((a, b) => (b.totalCredits || b.credits) - (a.totalCredits || a.credits)).map((plan, index) => {
                 const isCurrentPlan = subscription?.planId === plan.id || subscription?.planId === plan._id;
                 const isBuying = purchasingPlan === plan.id || purchasingPlan === plan._id;
+                const isBestValue = index === 0 && !isCurrentPlan;
                 return (
                   <button
                     key={plan.id || plan._id}
                     onClick={() => handleSubscriptionPurchase(plan.id || plan._id)}
                     disabled={isBuying}
                     style={{
-                      padding: '20px 16px',
-                      borderRadius: '16px',
-                      border: isCurrentPlan ? '2px solid #16a34a' : '2px solid #e2e8f0',
+                      padding: '24px 16px',
+                      borderRadius: '20px',
+                      border: isCurrentPlan ? '2px solid #16a34a' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
                       background: isCurrentPlan
-                        ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
-                        : 'linear-gradient(135deg, #f8fafc 0%, #fff 100%)',
+                        ? 'linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%)'
+                        : isBestValue
+                        ? 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'
+                        : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
                       cursor: isBuying ? 'not-allowed' : 'pointer',
-                      opacity: isBuying ? 0.6 : 1,
+                      opacity: isBuying ? 0.7 : 1,
                       textAlign: 'center',
                       position: 'relative',
-                      transition: 'all 0.2s',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                      transition: 'all 0.25s ease',
+                      boxShadow: isBestValue ? '0 8px 24px rgba(99,102,241,0.2)' : '0 4px 12px rgba(0,0,0,0.06)',
+                      transform: isBuying ? 'scale(0.98)' : 'scale(1)'
                     }}
                   >
+                    {/* Badges */}
+                    {isBestValue && (
+                      <span style={{
+                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
+                        background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
+                        color: '#fff', fontSize: '9px', fontWeight: '700',
+                        padding: '4px 12px', borderRadius: '20px', letterSpacing: '0.5px',
+                        boxShadow: '0 2px 8px rgba(99,102,241,0.4)'
+                      }}>BEST VALUE</span>
+                    )}
                     {isCurrentPlan && (
                       <span style={{
-                        position: 'absolute', top: '-8px', right: '12px',
+                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
                         backgroundColor: '#16a34a', color: '#fff',
-                        fontSize: '10px', fontWeight: '700',
-                        padding: '2px 8px', borderRadius: '20px'
+                        fontSize: '9px', fontWeight: '700',
+                        padding: '4px 12px', borderRadius: '20px'
                       }}>ACTIVE</span>
                     )}
+
+                    {/* Price */}
                     <p style={{
-                      fontSize: '26px', fontWeight: '800',
-                      color: isCurrentPlan ? '#16a34a' : '#6366f1',
-                      margin: '0 0 6px 0'
+                      fontSize: '32px', fontWeight: '800',
+                      color: isCurrentPlan ? '#16a34a' : isBestValue ? '#4f46e5' : '#1e293b',
+                      margin: '8px 0 8px 0', lineHeight: 1
                     }}>
-                      &#x20B9;{plan.price?.toLocaleString()}
+                      ₹{plan.price?.toLocaleString()}
                     </p>
+
+                    {/* Credits */}
                     <p style={{
-                      fontSize: '13px', fontWeight: '600',
-                      color: '#334155', margin: '0 0 2px 0'
+                      fontSize: '15px', fontWeight: '700',
+                      color: '#334155', margin: '0 0 4px 0'
                     }}>
-                      {plan.credits?.toLocaleString()} credits
+                      {plan.credits?.toLocaleString()} Credits
                     </p>
+
+                    {/* Bonus */}
                     {plan.bonusCredits > 0 && (
                       <p style={{
-                        fontSize: '12px', fontWeight: '700',
-                        color: '#10b981', margin: 0
+                        fontSize: '13px', fontWeight: '700',
+                        color: '#10b981', margin: '0',
+                        backgroundColor: '#ecfdf5', padding: '4px 10px', borderRadius: '8px', display: 'inline-block'
                       }}>
-                        +{plan.bonusCredits?.toLocaleString()} bonus
+                        +{plan.bonusCredits?.toLocaleString()} Bonus
                       </p>
                     )}
+
+                    {/* Loading */}
                     {isBuying && (
-                      <p style={{fontSize: '11px', color: '#6366f1', margin: '8px 0 0 0', fontWeight: '600'}}>Processing...</p>
+                      <p style={{fontSize: '12px', color: '#6366f1', margin: '10px 0 0 0', fontWeight: '600'}}>Processing...</p>
                     )}
                   </button>
                 );
