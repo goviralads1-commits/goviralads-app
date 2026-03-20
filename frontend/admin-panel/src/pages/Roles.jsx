@@ -86,6 +86,11 @@ const Roles = () => {
   const [assigning, setAssigning] = useState(false);
   const [deletingId, setDeletingId] = useState(null); // role id being deleted
 
+  // User creation state
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [userForm, setUserForm] = useState({ identifier: '', password: '', name: '' });
+  const [creatingUser, setCreatingUser] = useState(false);
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
@@ -188,7 +193,7 @@ const Roles = () => {
   const handleAssign = async () => {
     setAssigning(true);
     try {
-      await api.post(`/admin/users/${assignModal.id}/assign-role`, { roleId: assignRoleId || null });
+      await api.patch(`/admin/users/${assignModal.id}/role`, { customRole: assignRoleId || null });
       showToast('Role assigned');
       setAssignModal(null);
       fetchUsers();
@@ -196,6 +201,33 @@ const Roles = () => {
       showToast(err.response?.data?.error || 'Failed to assign role', 'error');
     } finally {
       setAssigning(false);
+    }
+  };
+
+  // ── CREATE USER ──────────────────────────────────────────────────────────────
+  const handleCreateUser = async () => {
+    if (!userForm.identifier.trim()) {
+      showToast('Email is required', 'error'); return;
+    }
+    if (!userForm.password || userForm.password.length < 6) {
+      showToast('Password must be at least 6 characters', 'error'); return;
+    }
+    setCreatingUser(true);
+    try {
+      await api.post('/admin/users', {
+        identifier: userForm.identifier.trim(),
+        password: userForm.password,
+        role: 'ADMIN',
+        name: userForm.name.trim(),
+      });
+      showToast('Admin user created');
+      setShowCreateUser(false);
+      setUserForm({ identifier: '', password: '', name: '' });
+      fetchUsers();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to create user', 'error');
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -348,39 +380,126 @@ const Roles = () => {
         )}
 
         {/* Admin Users + Role Assignment */}
-        {users.length > 0 && (
-          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '28px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#1a1a1a', margin: '0 0 20px' }}>Assign Roles to Admin Users</h2>
+        <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '28px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#1a1a1a', margin: 0 }}>Admin Users</h2>
+            <button
+              onClick={() => setShowCreateUser(true)}
+              style={{
+                padding: '10px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                backgroundColor: '#22c55e', color: '#fff', fontSize: '13px', fontWeight: '600',
+              }}
+            >
+              + Add User
+            </button>
+          </div>
+          {users.length === 0 ? (
+            <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>No admin users yet. Create your first admin user.</p>
+          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {users.map((user) => {
                 const assignedRole = roles.find(r => r.id === user.customRole);
+                const isMainAdmin = user.identifier === 'admin';
                 return (
                   <div key={user.id} style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '14px 16px', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0',
+                    padding: '16px', borderRadius: '14px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0',
                   }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#1a1a1a' }}>{user.identifier}</p>
-                      <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                        {assignedRole ? assignedRole.displayName : 'No custom role (main admin access)'}
-                      </p>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <p style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#1a1a1a' }}>
+                          {user.name || user.identifier}
+                        </p>
+                        {/* Role Badge */}
+                        {assignedRole ? (
+                          <span style={{
+                            padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: '600',
+                            backgroundColor: '#dcfce7', color: '#16a34a',
+                          }}>
+                            {assignedRole.displayName}
+                          </span>
+                        ) : (
+                          <span style={{
+                            padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: '600',
+                            backgroundColor: '#eef2ff', color: '#6366f1',
+                          }}>
+                            {isMainAdmin ? 'Main Admin' : 'Full Access'}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>{user.identifier}</p>
                     </div>
-                    <button
-                      onClick={() => openAssign(user)}
-                      style={{
-                        padding: '8px 16px', borderRadius: '10px', border: '1px solid #e2e8f0',
-                        cursor: 'pointer', backgroundColor: '#fff', fontSize: '13px', fontWeight: '600', color: '#374151',
-                      }}
-                    >
-                      {assignedRole ? 'Change Role' : 'Assign Role'}
-                    </button>
+                    {!isMainAdmin && (
+                      <button
+                        onClick={() => openAssign(user)}
+                        style={{
+                          padding: '8px 16px', borderRadius: '10px', border: '1px solid #e2e8f0',
+                          cursor: 'pointer', backgroundColor: '#fff', fontSize: '13px', fontWeight: '600', color: '#374151',
+                        }}
+                      >
+                        {assignedRole ? 'Change Role' : 'Assign Role'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* ── CREATE USER MODAL ───────────────────────────────────────────── */}
+      {showCreateUser && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '460px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a1a1a', margin: 0 }}>Create Admin User</h2>
+              <button onClick={() => setShowCreateUser(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Email *</label>
+              <input
+                type="email"
+                value={userForm.identifier}
+                onChange={(e) => setUserForm(f => ({ ...f, identifier: e.target.value }))}
+                placeholder="user@example.com"
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Password *</label>
+              <input
+                type="password"
+                value={userForm.password}
+                onChange={(e) => setUserForm(f => ({ ...f, password: e.target.value }))}
+                placeholder="Min 6 characters"
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Display Name</label>
+              <input
+                value={userForm.name}
+                onChange={(e) => setUserForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="John Doe (optional)"
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => setShowCreateUser(false)} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', cursor: 'pointer', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                Cancel
+              </button>
+              <button onClick={handleCreateUser} disabled={creatingUser} style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', cursor: creatingUser ? 'not-allowed' : 'pointer', backgroundColor: '#22c55e', color: '#fff', fontSize: '14px', fontWeight: '600', opacity: creatingUser ? 0.7 : 1 }}>
+                {creatingUser ? 'Creating...' : 'Create User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── CREATE MODAL ────────────────────────────────────────────── */}
       {showCreate && (

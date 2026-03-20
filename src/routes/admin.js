@@ -4634,7 +4634,7 @@ router.post('/reminder-settings/run', async (req, res) => {
 router.get('/admin-users', async (req, res) => {
   try {
     const users = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } })
-      .select('identifier customRole status')
+      .select('identifier customRole status profile createdAt')
       .populate('customRole', 'id displayName')
       .sort({ createdAt: 1 })
       .exec();
@@ -4643,13 +4643,57 @@ router.get('/admin-users', async (req, res) => {
       users: users.map(u => ({
         id: u._id.toString(),
         identifier: u.identifier,
+        name: u.profile?.name || '',
         status: u.status,
         customRole: u.customRole ? u.customRole._id.toString() : null,
         customRoleName: u.customRole?.displayName || null,
+        createdAt: u.createdAt,
       }))
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to get admin users' });
+  }
+});
+
+// PATCH /admin/users/:userId/role — Update user's custom role
+router.patch('/users/:userId/role', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { customRole } = req.body;
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // SAFETY: Prevent main admin from losing access
+    if (user.identifier === 'admin') {
+      return res.status(400).json({ error: 'Cannot change role of main admin' });
+    }
+    
+    if (customRole) {
+      const role = await Role.findById(customRole);
+      if (!role || !role.isActive) {
+        return res.status(404).json({ error: 'Role not found or inactive' });
+      }
+      user.customRole = customRole;
+    } else {
+      user.customRole = null; // Remove role = full access
+    }
+    
+    await user.save();
+    
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: user._id.toString(),
+        identifier: user.identifier,
+        customRole: user.customRole?.toString() || null,
+      }
+    });
+  } catch (err) {
+    console.error('[USER] Role update error:', err);
+    return res.status(500).json({ error: 'Failed to update role' });
   }
 });
 
