@@ -642,16 +642,13 @@ router.get('/tasks', async (req, res) => {
       filter.status = status;
     }
 
-    // TASK VISIBILITY: sub-admins without canViewAllTasks only see tasks they created OR assigned to them
+    // TASK VISIBILITY: sub-admins without canViewAllTasks only see tasks assigned TO them
     const adminUser = await User.findById(req.user.id).populate('customRole');
     const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
     const canViewAll = isMainAdmin || adminUser?.customRole?.permissions?.canViewAllTasks === true;
     if (!canViewAll) {
-      // Filter: tasks created by user OR tasks assigned to user
-      filter.$or = [
-        { assignedBy: adminUser._id },
-        { assignedTo: adminUser._id }
-      ];
+      // Manager → ONLY assigned tasks (not tasks they created)
+      filter.assignedTo = adminUser._id;
     }
 
     const tasks = await Task.find(filter)
@@ -734,9 +731,8 @@ router.get('/tasks/:taskId', async (req, res) => {
     const canViewAll = isMainAdmin || adminUser?.customRole?.permissions?.canViewAllTasks === true;
     
     if (!canViewAll) {
-      const isAssignedBy = task.assignedBy && task.assignedBy._id.toString() === adminUser._id.toString();
       const isAssignedTo = task.assignedTo && task.assignedTo._id.toString() === adminUser._id.toString();
-      if (!isAssignedBy && !isAssignedTo) {
+      if (!isAssignedTo) {
         return res.status(403).json({ error: 'Access denied: You can only view tasks assigned to you' });
       }
     }
