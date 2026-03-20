@@ -156,6 +156,10 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
       offerPrice: taskDetails.offerPrice,
       originalPrice: taskDetails.originalPrice,
       countdownEndDate: taskDetails.countdownEndDate,
+      // TASK ASSIGNMENT SYSTEM
+      assignedTo: taskDetails.assignedTo || null,
+      commissionType: taskDetails.commissionType || 'percentage',
+      commissionValue: taskDetails.commissionValue || 0,
     });
     console.log('Step 5: Task created:', task._id.toString());
 

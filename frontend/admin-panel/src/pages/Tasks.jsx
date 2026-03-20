@@ -13,6 +13,7 @@ const Tasks = () => {
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [clients, setClients] = useState([]);
   const [categories, setCategories] = useState([]);  // Category list
+  const [adminUsers, setAdminUsers] = useState([]);  // For task assignment
   const [toast, setToast] = useState(null);
   
   // Filter state
@@ -87,7 +88,11 @@ const Tasks = () => {
     quantity: '',
     showQuantityToClient: true,
     showCreditsToClient: true,
-    offerPrice: ''
+    offerPrice: '',
+    // ASSIGNMENT & COMMISSION
+    assignedTo: '',
+    commissionType: 'percentage',
+    commissionValue: 0
   });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -97,13 +102,15 @@ const Tasks = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [tasksResponse, walletsResponse, categoriesResponse] = await Promise.all([
+        const [tasksResponse, walletsResponse, categoriesResponse, adminUsersResponse] = await Promise.all([
           api.get('/admin/tasks'),
           api.get('/admin/wallets'),
-          api.get('/admin/categories').catch(() => ({ data: { categories: [] } }))
+          api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
+          api.get('/admin/admin-users').catch(() => ({ data: { users: [] } }))
         ]);
         setTasks(tasksResponse.data.tasks || []);
         setCategories(categoriesResponse.data.categories || []);
+        setAdminUsers(adminUsersResponse.data.users || []);
         // Map wallets to client format for dropdown
         const clientsFromWallets = (walletsResponse.data.wallets || []).map(w => ({
           id: w.clientId,
@@ -270,7 +277,11 @@ const Tasks = () => {
         ...(formData.quantity && { quantity: Number(formData.quantity) }),
         showQuantityToClient: formData.showQuantityToClient,
         showCreditsToClient: formData.showCreditsToClient,
-        isListedInPlans: false
+        isListedInPlans: false,
+        // ASSIGNMENT & COMMISSION
+        ...(formData.assignedTo && { assignedTo: formData.assignedTo }),
+        commissionType: formData.commissionType || 'percentage',
+        commissionValue: Number(formData.commissionValue) || 0
       };
       
       const response = await api.post('/admin/tasks/assign', payload);
@@ -1027,6 +1038,15 @@ const Tasks = () => {
                   </span>
                 </div>
 
+                {/* Assigned To Badge */}
+                {task.assignedToIdentifier && (
+                  <div style={{marginBottom: '12px'}}>
+                    <span style={{fontSize: '11px', fontWeight: '600', color: '#64748b', backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px'}}>
+                      👤 Assigned to: {task.assignedToIdentifier}
+                    </span>
+                  </div>
+                )}
+
                 {/* Row 3: Date + Deadline Warning */}
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px'}}>
                   <span style={{fontSize: '12px', color: '#6b7280'}}>
@@ -1744,7 +1764,80 @@ const Tasks = () => {
                       />
                     </div>
                   </div>
+
+                {/* ASSIGN WORK & COMMISSION SECTION */}
+                <div style={{backgroundColor: '#fff', borderRadius: '16px', padding: '20px', marginBottom: '24px', border: '1px solid #e2e8f0'}}>
+                  <h3 style={{fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '20px', paddingBottom: '8px', borderBottom: '2px solid #e2e8f0'}}>👥 ASSIGN WORK</h3>
+                  
+                  {/* Assign To Dropdown */}
+                  <div style={{marginBottom: '20px'}}>
+                    <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Assign To <span style={{fontSize: '11px', color: '#64748b', fontWeight: '400'}}>(Optional)</span></label>
+                    <select
+                      value={formData.assignedTo}
+                      onChange={(e) => handleInputChange('assignedTo', e.target.value)}
+                      style={{width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none', cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 16px center'}}
+                    >
+                      <option value="">Not Assigned</option>
+                      {adminUsers.map(user => (
+                        <option key={user._id} value={user._id}>
+                          {user.identifier} {user.customRole?.displayName ? `(${user.customRole.displayName})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Commission Section */}
+                  <h3 style={{fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px', paddingBottom: '8px', borderBottom: '2px solid #e2e8f0', marginTop: '24px'}}>💰 COMMISSION</h3>
+                  
+                  <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
+                    {/* Commission Type Toggle */}
+                    <div>
+                      <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Type</label>
+                      <div style={{display: 'flex', borderRadius: '10px', overflow: 'hidden', border: '2px solid #e2e8f0'}}>
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('commissionType', 'percentage')}
+                          style={{flex: 1, padding: '12px', fontSize: '13px', fontWeight: '600', border: 'none', cursor: 'pointer', backgroundColor: formData.commissionType === 'percentage' ? '#6366f1' : '#f8fafc', color: formData.commissionType === 'percentage' ? '#fff' : '#64748b', transition: 'all 0.2s'}}
+                        >
+                          Percentage
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('commissionType', 'fixed')}
+                          style={{flex: 1, padding: '12px', fontSize: '13px', fontWeight: '600', border: 'none', cursor: 'pointer', backgroundColor: formData.commissionType === 'fixed' ? '#6366f1' : '#f8fafc', color: formData.commissionType === 'fixed' ? '#fff' : '#64748b', transition: 'all 0.2s'}}
+                        >
+                          Fixed
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Commission Value */}
+                    <div>
+                      <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>
+                        {formData.commissionType === 'percentage' ? 'Commission (%)' : 'Commission Amount (₹)'}
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.commissionValue}
+                        onChange={(e) => handleInputChange('commissionValue', e.target.value)}
+                        placeholder={formData.commissionType === 'percentage' ? '0' : '0'}
+                        min="0"
+                        max={formData.commissionType === 'percentage' ? '100' : undefined}
+                        style={{width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Commission Preview */}
+                  {formData.commissionValue > 0 && formData.creditCost > 0 && (
+                    <div style={{marginTop: '16px', padding: '12px 16px', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #86efac'}}>
+                      <span style={{fontSize: '13px', color: '#166534', fontWeight: '500'}}>
+                        💵 Estimated Commission: ₹{formData.commissionType === 'percentage' ? Math.round((Number(formData.creditCost) * Number(formData.commissionValue)) / 100) : Number(formData.commissionValue)}
+                      </span>
+                    </div>
+                  )}
                 </div>
+              </div>
               )}
 
               {/* PLANS MODE UI */}

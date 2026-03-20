@@ -133,6 +133,28 @@ const taskSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    // TASK ASSIGNMENT SYSTEM
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    commissionType: {
+      type: String,
+      enum: ['percentage', 'fixed'],
+      default: 'percentage',
+    },
+    commissionValue: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    commissionEarned: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     templateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaskTemplate',

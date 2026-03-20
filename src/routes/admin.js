@@ -641,17 +641,22 @@ router.get('/tasks', async (req, res) => {
       filter.status = status;
     }
 
-    // TASK VISIBILITY: sub-admins without canViewAllTasks only see tasks they created
+    // TASK VISIBILITY: sub-admins without canViewAllTasks only see tasks they created OR assigned to them
     const adminUser = await User.findById(req.user.id).populate('customRole');
     const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
     const canViewAll = isMainAdmin || adminUser?.customRole?.permissions?.canViewAllTasks === true;
     if (!canViewAll) {
-      filter.assignedBy = adminUser._id;
+      // Filter: tasks created by user OR tasks assigned to user
+      filter.$or = [
+        { assignedBy: adminUser._id },
+        { assignedTo: adminUser._id }
+      ];
     }
 
     const tasks = await Task.find(filter)
       .populate('clientId', 'identifier')
       .populate('assignedBy', 'identifier')
+      .populate('assignedTo', 'identifier')
       .sort({ createdAt: -1 })
       .exec();
 
@@ -694,6 +699,12 @@ router.get('/tasks', async (req, res) => {
         milestones: t.milestones,
         autoCompletionCap: t.autoCompletionCap,
         progressTarget: t.progressTarget,
+        // TASK ASSIGNMENT SYSTEM
+        assignedTo: t.assignedTo ? t.assignedTo._id.toString() : null,
+        assignedToIdentifier: t.assignedTo ? t.assignedTo.identifier : null,
+        commissionType: t.commissionType,
+        commissionValue: t.commissionValue,
+        commissionEarned: t.commissionEarned,
       })),
     });
   } catch (err) {
@@ -709,6 +720,7 @@ router.get('/tasks/:taskId', async (req, res) => {
     const task = await Task.findById(taskId)
       .populate('clientId', 'identifier')
       .populate('assignedBy', 'identifier')
+      .populate('assignedTo', 'identifier')
       .exec();
 
     if (!task) {
@@ -775,6 +787,12 @@ router.get('/tasks/:taskId', async (req, res) => {
           text: m.text,
           createdAt: m.createdAt,
         })),
+        // TASK ASSIGNMENT SYSTEM
+        assignedTo: task.assignedTo ? task.assignedTo._id.toString() : null,
+        assignedToIdentifier: task.assignedTo ? task.assignedTo.identifier : null,
+        commissionType: task.commissionType,
+        commissionValue: task.commissionValue,
+        commissionEarned: task.commissionEarned,
       }
     });
   } catch (err) {
@@ -855,6 +873,16 @@ router.patch('/tasks/:taskId', async (req, res) => {
       if (task.status !== 'CANCELLED' && task.status !== 'PENDING_APPROVAL' && task.status !== 'LISTED') {
         if (currentProgress >= 100 && task.status !== 'COMPLETED') {
           task.status = 'COMPLETED';
+          // COMMISSION CALCULATION: When auto-completed via progress
+          if (task.commissionValue > 0 && !task.commissionEarned) {
+            const taskValue = task.creditCost || 0;
+            if (task.commissionType === 'percentage') {
+              task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
+            } else {
+              task.commissionEarned = task.commissionValue;
+            }
+            console.log(`[COMMISSION] Auto-completion earned: \u20b9${task.commissionEarned}`);
+          }
         } else if (currentProgress > 0 && task.status === 'PENDING') {
           task.status = 'ACTIVE';
         }
@@ -1098,6 +1126,19 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     const newStatus = task.status;
     const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
     
+    // COMMISSION CALCULATION: When task is completed, calculate commission
+    if (crossedCompletion && task.commissionValue > 0) {
+      console.log(`[COMMISSION] Calculating commission for task ${taskId}`);
+      const taskValue = task.creditCost || 0;
+      if (task.commissionType === 'percentage') {
+        task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
+      } else {
+        task.commissionEarned = task.commissionValue;
+      }
+      console.log(`[COMMISSION] Earned: \u20b9${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
+      await task.save();
+    }
+    
     if (crossedCompletion && task.clientId) {
       console.log(`[TASK_COMPLETE] Task ${taskId} completed via status change - notifying client and admin`);
       
@@ -1205,7 +1246,11 @@ router.post('/tasks/assign', async (req, res) => {
       progressTarget,
       milestones,
       autoCompletionCap,
-      categoryId
+      categoryId,
+      // TASK ASSIGNMENT SYSTEM
+      assignedTo,
+      commissionType,
+      commissionValue
     } = payload;
 
     // --- HARD BRANCH: PLAN (PRODUCT LISTING) ---
@@ -1306,6 +1351,10 @@ router.post('/tasks/assign', async (req, res) => {
       offerPrice: offerPrice !== undefined && offerPrice !== '' ? Number(offerPrice) : undefined,
       originalPrice: originalPrice !== undefined && originalPrice !== '' ? Number(originalPrice) : undefined,
       countdownEndDate: countdownEndDate ? new Date(countdownEndDate) : undefined,
+      // TASK ASSIGNMENT SYSTEM
+      assignedTo: assignedTo || null,
+      commissionType: commissionType || 'percentage',
+      commissionValue: Number(commissionValue) || 0,
     };
 
     // 3. Deduct & Assign (Service Level)
