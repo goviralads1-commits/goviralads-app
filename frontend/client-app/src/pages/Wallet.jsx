@@ -23,6 +23,7 @@ const Wallet = () => {
   const [couponCode, setCouponCode] = useState('');
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
+  const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
   const subscriptionRef = useRef(null);
 
   useEffect(() => {
@@ -69,6 +70,14 @@ const Wallet = () => {
         } catch (couponErr) {
           console.log('[Wallet] Coupons endpoint not available');
         }
+
+        // Optional: pending subscription requests
+        try {
+          const pendingRes = await api.get('/client/subscription-requests');
+          setPendingSubscriptionRequests(pendingRes.data.requests?.filter(r => r.status === 'PENDING') || []);
+        } catch (pendingErr) {
+          console.log('[Wallet] Subscription requests endpoint not available');
+        }
         
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
@@ -110,15 +119,13 @@ const Wallet = () => {
       const res = await api.post(`/client/credit-plans/${planId}/purchase`, {
         couponCode: couponCode.trim() || undefined
       });
-      setToast('Subscription activated!');
+      setToast('Request submitted. Waiting for admin approval.');
       setTimeout(() => setToast(null), 4000);
       setCouponCode('');
-      setSubscription(res.data.subscription || null);
-      // Refresh wallet balance
-      try {
-        const walletRes = await api.get('/client/wallet');
-        setWalletData(walletRes.data);
-      } catch (_) {}
+      // Add to pending requests
+      if (res.data.request) {
+        setPendingSubscriptionRequests(prev => [...prev, res.data.request]);
+      }
     } catch (err) {
       const msg = err.response?.data?.error || 'Purchase failed';
       setToast(msg);
@@ -348,24 +355,28 @@ const Wallet = () => {
               gap: '16px'
             }}>
               {creditPlans.filter(p => p.type === 'PLAN').sort((a, b) => (b.totalCredits || b.credits) - (a.totalCredits || a.credits)).map((plan, index) => {
-                const isCurrentPlan = subscription?.planId === plan.id || subscription?.planId === plan._id;
-                const isBuying = purchasingPlan === plan.id || purchasingPlan === plan._id;
-                const isBestValue = index === 0 && !isCurrentPlan;
+                const planId = plan.id || plan._id;
+                const isCurrentPlan = subscription?.planId === planId;
+                const isBuying = purchasingPlan === planId;
+                const isPendingApproval = pendingSubscriptionRequests.some(r => r.planId === planId);
+                const isBestValue = index === 0 && !isCurrentPlan && !isPendingApproval;
                 return (
                   <button
-                    key={plan.id || plan._id}
-                    onClick={() => handleSubscriptionPurchase(plan.id || plan._id)}
-                    disabled={isBuying}
+                    key={planId}
+                    onClick={() => !isPendingApproval && handleSubscriptionPurchase(planId)}
+                    disabled={isBuying || isPendingApproval}
                     style={{
                       padding: '24px 16px',
                       borderRadius: '20px',
-                      border: isCurrentPlan ? '2px solid #16a34a' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
-                      background: isCurrentPlan
+                      border: isPendingApproval ? '2px solid #f59e0b' : isCurrentPlan ? '2px solid #16a34a' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                      background: isPendingApproval
+                        ? 'linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%)'
+                        : isCurrentPlan
                         ? 'linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%)'
                         : isBestValue
                         ? 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'
                         : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
-                      cursor: isBuying ? 'not-allowed' : 'pointer',
+                      cursor: isBuying || isPendingApproval ? 'not-allowed' : 'pointer',
                       opacity: isBuying ? 0.7 : 1,
                       textAlign: 'center',
                       position: 'relative',
@@ -375,7 +386,16 @@ const Wallet = () => {
                     }}
                   >
                     {/* Badges */}
-                    {isBestValue && (
+                    {isPendingApproval && (
+                      <span style={{
+                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
+                        background: 'linear-gradient(90deg, #f59e0b, #d97706)',
+                        color: '#fff', fontSize: '9px', fontWeight: '700',
+                        padding: '4px 12px', borderRadius: '20px', letterSpacing: '0.5px',
+                        boxShadow: '0 2px 8px rgba(245,158,11,0.4)'
+                      }}>PENDING APPROVAL</span>
+                    )}
+                    {!isPendingApproval && isBestValue && (
                       <span style={{
                         position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
                         background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
@@ -384,7 +404,7 @@ const Wallet = () => {
                         boxShadow: '0 2px 8px rgba(99,102,241,0.4)'
                       }}>BEST VALUE</span>
                     )}
-                    {isCurrentPlan && (
+                    {!isPendingApproval && isCurrentPlan && (
                       <span style={{
                         position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
                         backgroundColor: '#16a34a', color: '#fff',
@@ -421,9 +441,12 @@ const Wallet = () => {
                       </p>
                     )}
 
-                    {/* Loading */}
+                    {/* Loading/Status */}
                     {isBuying && (
                       <p style={{fontSize: '12px', color: '#6366f1', margin: '10px 0 0 0', fontWeight: '600'}}>Processing...</p>
+                    )}
+                    {isPendingApproval && !isBuying && (
+                      <p style={{fontSize: '11px', color: '#92400e', margin: '10px 0 0 0', fontWeight: '600'}}>Awaiting Approval</p>
                     )}
                   </button>
                 );

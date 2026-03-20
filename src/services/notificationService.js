@@ -33,6 +33,9 @@ const NOTIFICATION_TYPES = Object.freeze({
   ORDER_COMPLETED: 'ORDER_COMPLETED',
   // Subscription notifications
   SUBSCRIPTION_EXPIRING: 'SUBSCRIPTION_EXPIRING',
+  SUBSCRIPTION_REQUEST_SUBMITTED: 'SUBSCRIPTION_REQUEST_SUBMITTED',
+  SUBSCRIPTION_REQUEST_APPROVED: 'SUBSCRIPTION_REQUEST_APPROVED',
+  SUBSCRIPTION_REQUEST_REJECTED: 'SUBSCRIPTION_REQUEST_REJECTED',
 });
 
 const ENTITY_TYPES = Object.freeze({
@@ -407,6 +410,75 @@ async function triggerNotificationEmail(notifData) {
               </div>
               <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
                 <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads Admin</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+} else if (type === NOTIFICATION_TYPES.SUBSCRIPTION_REQUEST_SUBMITTED) {
+      // Admin email for new subscription request
+      console.log('[NOTIF EMAIL] Sending SUBSCRIPTION_REQUEST_SUBMITTED email to admin:', recipientEmail);
+      await emailService.send({
+        to: recipientEmail,
+        subject: `📋 New Subscription Request - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">📋 New Subscription Request</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${notifData.title || 'New Subscription Request'}</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">${notifData.message || 'A client has submitted a subscription request.'}</p>
+                <a href="${adminDashboardUrl}/subscription-requests" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(139,92,246,0.3);">
+                  📋 View Requests
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads Admin</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
+} else if (type === NOTIFICATION_TYPES.SUBSCRIPTION_REQUEST_APPROVED || type === NOTIFICATION_TYPES.SUBSCRIPTION_REQUEST_REJECTED) {
+      // Client email for subscription request decision
+      const isApproved = type === NOTIFICATION_TYPES.SUBSCRIPTION_REQUEST_APPROVED;
+      const icon = isApproved ? '✅' : '❌';
+      const statusText = isApproved ? 'Approved' : 'Rejected';
+      const gradient = isApproved ? '#22c55e, #16a34a' : '#ef4444, #dc2626';
+      const bodyText = isApproved 
+        ? 'Your subscription has been approved! Your credits have been added to your wallet.'
+        : 'Unfortunately, your subscription request was rejected. Please check your dashboard for details.';
+      
+      console.log('[NOTIF EMAIL] Sending SUBSCRIPTION_REQUEST email:', { type, to: recipientEmail });
+      
+      await emailService.send({
+        to: recipientEmail,
+        subject: `${icon} Subscription ${statusText} - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, ${gradient}); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">Subscription ${statusText} ${icon}</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">Subscription ${statusText}</h2>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${bodyText}</p>
+                <a href="${dashboardUrl}/wallet" style="display: inline-block; padding: 14px 32px; background: ${isApproved ? '#22c55e' : '#6366f1'}; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
+                  View Wallet
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
               </div>
             </div>
           </body>

@@ -24,6 +24,8 @@ const { Receipt, RECEIPT_STATUS } = require('../models/Receipt');
 const BillingConfig = require('../models/BillingConfig');
 const CreditPlan = require('../models/CreditPlan');
 const Coupon = require('../models/Coupon');
+const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/SubscriptionRequest');
+const UserSubscription = require('../models/Subscription');
 const billingService = require('../services/billingService');
 const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
@@ -411,6 +413,214 @@ router.post('/recharge-requests/:id/reject', async (req, res) => {
     console.error('Error:', err.message);
     console.error('Stack:', err.stack);
     return res.status(500).json({ error: 'Failed to reject recharge request' });
+  }
+});
+
+// ================== SUBSCRIPTION REQUESTS ==================
+
+// GET /admin/subscription-requests - List all subscription requests
+router.get('/subscription-requests', async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    let filter = {};
+    if (status) {
+      if (!Object.values(SUBSCRIPTION_REQUEST_STATUS).includes(status)) {
+        return res.status(400).json({ error: 'Invalid status filter' });
+      }
+      filter.status = status;
+    }
+
+    const requests = await SubscriptionRequest.find(filter)
+      .populate('clientId', 'identifier')
+      .populate('reviewedBy', 'identifier')
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return res.status(200).json({
+      requests: requests.map((r) => ({
+        id: r._id.toString(),
+        clientId: r.clientId?._id?.toString() || null,
+        clientIdentifier: r.clientId?.identifier || 'Unknown',
+        planId: r.planId?.toString() || null,
+        planName: r.planName,
+        planPrice: r.planPrice,
+        finalPrice: r.finalPrice,
+        totalCredits: r.totalCredits,
+        couponCode: r.couponCode,
+        couponDiscount: r.couponDiscount,
+        status: r.status,
+        reviewedBy: r.reviewedBy ? r.reviewedBy._id.toString() : null,
+        reviewedByIdentifier: r.reviewedBy ? r.reviewedBy.identifier : null,
+        rejectionReason: r.rejectionReason,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[SUB_REQ] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve subscription requests' });
+  }
+});
+
+// POST /admin/subscription-requests/:id/approve - Approve subscription request
+router.post('/subscription-requests/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user.id;
+    console.log('=== SUBSCRIPTION APPROVE START ===');
+    console.log('Request ID:', id);
+
+    const request = await SubscriptionRequest.findById(id).exec();
+    if (!request) {
+      return res.status(404).json({ error: 'Subscription request not found' });
+    }
+    if (request.status !== SUBSCRIPTION_REQUEST_STATUS.PENDING) {
+      return res.status(400).json({ error: 'Only PENDING requests can be approved' });
+    }
+
+    // 1. Get wallet
+    const wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found for this client' });
+    }
+
+    // 2. Check balance
+    const availableBalance = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    if (availableBalance < request.finalPrice) {
+      return res.status(400).json({ error: `Insufficient balance. Client has ${availableBalance} credits but needs ${request.finalPrice}` });
+    }
+
+    // 3. Deduct from walletCredits first, then balance
+    let remaining = request.finalPrice;
+    if (wallet.walletCredits >= remaining) {
+      wallet.walletCredits -= remaining;
+    } else {
+      remaining -= (wallet.walletCredits || 0);
+      wallet.walletCredits = 0;
+      wallet.balance = Math.max(0, (wallet.balance || 0) - remaining);
+    }
+
+    // 4. Add subscription credits + set expiry
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + (request.planValidityDays || 30));
+    wallet.subscriptionCredits = (wallet.subscriptionCredits || 0) + request.totalCredits;
+    wallet.subscriptionExpiresAt = expiresAt;
+    await wallet.save();
+
+    // 5. Record wallet transaction
+    await WalletTransaction.create({
+      walletId: wallet._id,
+      type: 'SUBSCRIPTION_PURCHASE',
+      amount: -request.finalPrice,
+      description: `Subscription Plan: ${request.planName} (+${request.totalCredits} subscription credits)`,
+      referenceId: request._id,
+    });
+
+    // 6. Expire any existing active UserSubscription (legacy support)
+    await UserSubscription.updateMany(
+      { userId: request.clientId, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    // 7. Create new UserSubscription for legacy compatibility
+    await UserSubscription.create({
+      userId: request.clientId,
+      planId: request.planId,
+      planName: request.planName,
+      creditsRemaining: request.totalCredits,
+      expiresAt,
+      isActive: true,
+    });
+
+    // 8. Update request status
+    const updatedRequest = await SubscriptionRequest.findByIdAndUpdate(
+      id,
+      { status: SUBSCRIPTION_REQUEST_STATUS.APPROVED, reviewedBy: adminId, reviewedAt: new Date() },
+      { new: true }
+    );
+
+    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${request.totalCredits}, Expires: ${expiresAt}`);
+    console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
+
+    // 9. Notify client
+    try {
+      await createNotification({
+        recipientId: request.clientId,
+        type: 'SUBSCRIPTION_REQUEST_APPROVED',
+        title: 'Subscription Approved',
+        message: `Your subscription request for ${request.planName} has been approved. ${request.totalCredits} credits added!`,
+        relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: request._id },
+        notifyByEmail: true,
+      });
+    } catch (notifErr) {
+      console.error('[SUB_REQ] Notification error:', notifErr.message);
+    }
+
+    return res.status(200).json({
+      id: updatedRequest._id.toString(),
+      clientId: updatedRequest.clientId.toString(),
+      planName: updatedRequest.planName,
+      totalCredits: updatedRequest.totalCredits,
+      status: updatedRequest.status,
+      walletBalance: wallet.walletCredits + (wallet.balance || 0),
+      subscriptionCredits: wallet.subscriptionCredits,
+      expiresAt: wallet.subscriptionExpiresAt,
+    });
+  } catch (err) {
+    console.error('[SUB_REQ] Approve error:', err.message);
+    return res.status(500).json({ error: 'Failed to approve subscription request' });
+  }
+});
+
+// POST /admin/subscription-requests/:id/reject - Reject subscription request
+router.post('/subscription-requests/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    const adminId = req.user.id;
+    console.log('=== SUBSCRIPTION REJECT START ===');
+
+    const request = await SubscriptionRequest.findById(id).exec();
+    if (!request) {
+      return res.status(404).json({ error: 'Subscription request not found' });
+    }
+    if (request.status !== SUBSCRIPTION_REQUEST_STATUS.PENDING) {
+      return res.status(400).json({ error: 'Only PENDING requests can be rejected' });
+    }
+
+    const updatedRequest = await SubscriptionRequest.findByIdAndUpdate(
+      id,
+      { status: SUBSCRIPTION_REQUEST_STATUS.REJECTED, reviewedBy: adminId, reviewedAt: new Date(), rejectionReason: reason || null },
+      { new: true }
+    );
+
+    console.log('=== SUBSCRIPTION REJECT COMPLETE ===');
+
+    // Notify client
+    try {
+      await createNotification({
+        recipientId: request.clientId,
+        type: 'SUBSCRIPTION_REQUEST_REJECTED',
+        title: 'Subscription Rejected',
+        message: `Your subscription request for ${request.planName} has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
+        relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: request._id },
+        notifyByEmail: true,
+      });
+    } catch (notifErr) {
+      console.error('[SUB_REQ] Notification error:', notifErr.message);
+    }
+
+    return res.status(200).json({
+      id: updatedRequest._id.toString(),
+      clientId: updatedRequest.clientId.toString(),
+      planName: updatedRequest.planName,
+      status: updatedRequest.status,
+      rejectionReason: updatedRequest.rejectionReason,
+    });
+  } catch (err) {
+    console.error('[SUB_REQ] Reject error:', err.message);
+    return res.status(500).json({ error: 'Failed to reject subscription request' });
   }
 });
 

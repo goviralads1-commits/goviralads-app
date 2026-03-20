@@ -13,6 +13,7 @@ const { Invoice, INVOICE_STATUS } = require('../models/Invoice');
 const CreditPlan = require('../models/CreditPlan');
 const UserSubscription = require('../models/UserSubscription');
 const Coupon = require('../models/Coupon');
+const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/SubscriptionRequest');
 const billingService = require('../services/billingService');
 const pdfService = require('../services/pdfService');
 const User = require('../models/User');
@@ -186,19 +187,27 @@ router.get('/credit-plans', async (req, res) => {
   }
 });
 
-// POST /client/credit-plans/:id/purchase - Purchase a subscription plan instantly
-// Deducts from wallet, creates UserSubscription with timed credits.
-// Optional coupon: discount (reduce price) or bonus (extra credits).
+// POST /client/credit-plans/:id/purchase - Submit subscription request (requires admin approval)
+// Does NOT deduct from wallet - only creates a pending request
 router.post('/credit-plans/:id/purchase', async (req, res) => {
   try {
     const { id } = req.params;
     const clientId = req.user.id;
     const { couponCode } = req.body || {};
 
-    console.log('=== SUBSCRIPTION PLAN PURCHASE ===');
+    console.log('=== SUBSCRIPTION REQUEST SUBMIT ===');
     console.log('Client:', clientId, '| Plan:', id, '| Coupon:', couponCode || 'none');
 
-    // 1. Load plan
+    // 1. Check for existing pending request
+    const existingPending = await SubscriptionRequest.findOne({
+      clientId,
+      status: SUBSCRIPTION_REQUEST_STATUS.PENDING
+    }).exec();
+    if (existingPending) {
+      return res.status(400).json({ error: 'You already have a pending subscription request' });
+    }
+
+    // 2. Load plan
     const plan = await CreditPlan.findById(id).exec();
     if (!plan || !plan.isActive) {
       return res.status(404).json({ error: 'Subscription plan not found or inactive' });
@@ -206,8 +215,10 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
 
     let finalPrice = plan.price;
     let totalCredits = plan.credits + plan.bonusCredits;
+    let couponDiscount = 0;
+    let appliedCouponCode = null;
 
-    // 2. Apply coupon if provided
+    // 3. Validate coupon if provided (but don't check balance yet)
     if (couponCode) {
       const now = new Date();
       const coupon = await Coupon.findOne({ code: couponCode.toUpperCase().trim() }).exec();
@@ -216,7 +227,9 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       if (coupon.expiryDate && coupon.expiryDate < now) {
         return res.status(400).json({ error: 'Coupon has expired' });
       }
+      appliedCouponCode = coupon.code;
       if (coupon.type === 'discount') {
+        couponDiscount = coupon.value;
         finalPrice = Math.max(0, finalPrice * (1 - coupon.value / 100));
         finalPrice = Math.round(finalPrice * 100) / 100;
         console.log(`[COUPON] discount ${coupon.value}% → finalPrice: ${finalPrice}`);
@@ -226,80 +239,98 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       }
     }
 
-    // 3. Get wallet
-    const wallet = await Wallet.findOne({ clientId }).exec();
-    if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
-
-    // Use walletCredits if available, fallback to legacy balance
-    const availableBalance = (wallet.walletCredits || 0) + (wallet.balance || 0);
-    console.log('Available balance:', availableBalance, '| Price:', finalPrice);
-
-    // 4. Check balance
-    if (availableBalance < finalPrice) {
-      return res.status(400).json({ error: 'Insufficient wallet balance' });
-    }
-
-    // 5. Deduct from walletCredits first, then balance
-    let remaining = finalPrice;
-    if (wallet.walletCredits >= remaining) {
-      wallet.walletCredits -= remaining;
-    } else {
-      remaining -= (wallet.walletCredits || 0);
-      wallet.walletCredits = 0;
-      wallet.balance = Math.max(0, (wallet.balance || 0) - remaining);
-    }
-
-    // 6. Add subscription credits + set expiry
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (plan.validityDays || 30));
-    wallet.subscriptionCredits = (wallet.subscriptionCredits || 0) + totalCredits;
-    wallet.subscriptionExpiresAt = expiresAt;
-    await wallet.save();
-
-    // 7. Record wallet transaction
-    await WalletTransaction.create({
-      walletId: wallet._id,
-      type: 'SUBSCRIPTION_PURCHASE',
-      amount: -finalPrice,
-      description: `Subscription Plan Purchase: ${plan.name} (+${totalCredits} subscription credits)`,
-      referenceId: null,
-    });
-
-    // 8. Expire any existing active UserSubscription (legacy support)
-    await UserSubscription.updateMany(
-      { userId: clientId, isActive: true },
-      { $set: { isActive: false } }
-    );
-
-    // 9. Create new UserSubscription for legacy compatibility
-    const userSub = await UserSubscription.create({
-      userId: clientId,
+    // 4. Create subscription request
+    const subRequest = await SubscriptionRequest.create({
+      clientId,
       planId: plan._id,
       planName: plan.name,
-      creditsRemaining: totalCredits,
-      expiresAt,
-      isActive: true,
+      planPrice: plan.price,
+      planCredits: plan.credits,
+      planBonusCredits: plan.bonusCredits || 0,
+      planValidityDays: plan.validityDays || 30,
+      couponCode: appliedCouponCode,
+      couponDiscount,
+      finalPrice,
+      totalCredits,
+      status: SUBSCRIPTION_REQUEST_STATUS.PENDING,
     });
 
-    console.log(`[SUB] subscriptionCredits: ${wallet.subscriptionCredits} | Expires: ${expiresAt}`);
-    console.log('=== SUBSCRIPTION PLAN PURCHASE COMPLETE ===');
+    console.log(`[SUB_REQ] Created request ${subRequest._id} for plan ${plan.name}`);
+    console.log('=== SUBSCRIPTION REQUEST SUBMIT COMPLETE ===');
+
+    // 5. Notify admin (async, don't wait)
+    try {
+      const { createNotification } = require('../services/notificationService');
+      const User = require('../models/User');
+      const client = await User.findById(clientId).exec();
+      const admins = await User.find({ role: { $in: ['ADMIN', 'MAIN_ADMIN'] } }).exec();
+      for (const admin of admins) {
+        await createNotification({
+          recipientId: admin._id,
+          type: 'SUBSCRIPTION_REQUEST_SUBMITTED',
+          title: 'New Subscription Request',
+          message: `${client?.identifier || 'A client'} requested subscription: ${plan.name} (₹${finalPrice})`,
+          relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: subRequest._id },
+          notifyByEmail: true,
+        });
+      }
+      // Also notify the client
+      await createNotification({
+        recipientId: clientId,
+        type: 'NEW_UPDATE',
+        title: 'Subscription Request Submitted',
+        message: `Your request for ${plan.name} (₹${finalPrice}) has been submitted. Awaiting admin approval.`,
+        relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: subRequest._id },
+      });
+    } catch (notifErr) {
+      console.error('[SUB_REQ] Notification error:', notifErr.message);
+    }
 
     return res.status(201).json({
       success: true,
-      subscription: {
-        id: userSub._id.toString(),
-        planName: userSub.planName,
-        creditsRemaining: wallet.subscriptionCredits,
-        expiresAt: wallet.subscriptionExpiresAt,
-        isActive: true,
+      message: 'Subscription request submitted. Waiting for admin approval.',
+      request: {
+        id: subRequest._id.toString(),
+        planId: subRequest.planId?.toString() || id,
+        planName: subRequest.planName,
+        finalPrice: subRequest.finalPrice,
+        totalCredits: subRequest.totalCredits,
+        status: subRequest.status,
+        createdAt: subRequest.createdAt,
       },
-      walletBalance: wallet.walletCredits + (wallet.balance || 0),
-      subscriptionCredits: wallet.subscriptionCredits,
-      walletCredits: wallet.walletCredits,
     });
   } catch (err) {
-    console.error('[SUB] Purchase error:', err.message);
-    return res.status(500).json({ error: 'Failed to purchase subscription plan' });
+    console.error('[SUB_REQ] Submit error:', err.message);
+    return res.status(500).json({ error: 'Failed to submit subscription request' });
+  }
+});
+
+// GET /client/subscription-requests - Get client's subscription requests
+router.get('/subscription-requests', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const requests = await SubscriptionRequest.find({ clientId })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .exec();
+    
+    return res.status(200).json({
+      requests: requests.map(r => ({
+        id: r._id.toString(),
+        planId: r.planId?.toString() || null,
+        planName: r.planName,
+        planPrice: r.planPrice,
+        finalPrice: r.finalPrice,
+        totalCredits: r.totalCredits,
+        couponCode: r.couponCode,
+        status: r.status,
+        createdAt: r.createdAt,
+        rejectionReason: r.rejectionReason,
+      })),
+    });
+  } catch (err) {
+    console.error('[SUB_REQ] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch subscription requests' });
   }
 });
 
