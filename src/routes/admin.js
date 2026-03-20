@@ -74,6 +74,22 @@ router.get('/wallets/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
 
+    // ROLE CHECK: Only main admin or assigned manager can view client wallet
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      // Manager: Check if assigned to any task of this client
+      const assignedTask = await Task.findOne({ 
+        clientId: clientId, 
+        assignedTo: adminUser._id 
+      }).exec();
+      
+      if (!assignedTask) {
+        return res.status(403).json({ error: 'Access denied: You are not assigned to this client' });
+      }
+    }
+
     const client = await User.findById(clientId).exec();
 
     if (!client || client.role !== ROLES.CLIENT) {
@@ -123,6 +139,14 @@ router.post('/wallets/:clientId/adjust', async (req, res) => {
   try {
     const { clientId } = req.params;
     const { amount, description } = req.body || {};
+
+    // ROLE CHECK: Only main admin can adjust wallets
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can adjust wallets' });
+    }
 
     if (amount === undefined || amount === null) {
       return res.status(400).json({ error: 'amount is required' });
@@ -249,6 +273,15 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
   try {
     const { id } = req.params;
     const adminId = req.user.id;
+    
+    // ROLE CHECK: Only main admin can approve recharge requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can approve recharge requests' });
+    }
+    
     console.log('=== APPROVE START ===' );
     console.log('Request ID:', id);
     console.log('Admin ID:', adminId);
@@ -380,6 +413,15 @@ router.post('/recharge-requests/:id/reject', async (req, res) => {
   try {
     const { id } = req.params;
     const adminId = req.user.id;
+    
+    // ROLE CHECK: Only main admin can reject recharge requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can reject recharge requests' });
+    }
+    
     console.log('=== REJECT START ===' );
     console.log('Request ID:', id);
 
@@ -500,6 +542,15 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
   try {
     const { id } = req.params;
     const adminId = req.user.id;
+    
+    // ROLE CHECK: Only main admin can approve subscription requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can approve subscription requests' });
+    }
+    
     console.log('=== SUBSCRIPTION APPROVE START ===');
     console.log('Request ID:', id);
 
@@ -611,6 +662,15 @@ router.post('/subscription-requests/:id/reject', async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body || {};
     const adminId = req.user.id;
+    
+    // ROLE CHECK: Only main admin can reject subscription requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can reject subscription requests' });
+    }
+    
     console.log('=== SUBSCRIPTION REJECT START ===');
 
     const request = await SubscriptionRequest.findById(id).exec();
