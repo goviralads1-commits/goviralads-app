@@ -46,7 +46,7 @@ const Recharges = () => {
       
       // Refresh data after successful action
       const response = await api.get('/admin/recharge-requests');
-      setRechargeRequests(response.data);
+      setRechargeRequests(response.data.requests || []);
       setSelectedRequest(null);
       setActionType('');
       setAdminNotes('');
