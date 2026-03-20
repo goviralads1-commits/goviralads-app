@@ -17,7 +17,7 @@ const Recharges = () => {
     const fetchData = async () => {
       try {
         const response = await api.get('/admin/recharge-requests');
-        setRechargeRequests(response.data);
+        setRechargeRequests(response.data.requests || []);
       } catch (err) {
         setError('Failed to load recharge requests');
         console.error('Recharges error:', err);
@@ -35,11 +35,11 @@ const Recharges = () => {
     
     try {
       if (actionType === 'approve') {
-        await api.post(`/admin/recharge-requests/${selectedRequest._id}/approve`, {
+        await api.post(`/admin/recharge-requests/${selectedRequest.id}/approve`, {
           adminNotes
         });
       } else if (actionType === 'reject') {
-        await api.post(`/admin/recharge-requests/${selectedRequest._id}/reject`, {
+        await api.post(`/admin/recharge-requests/${selectedRequest.id}/reject`, {
           adminNotes
         });
       }
@@ -184,9 +184,9 @@ const Recharges = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {rechargeRequests.filter(req => req.status === 'PENDING').map((request) => (
-                    <tr key={request._id}>
+                    <tr key={request.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {request.client.email}
+                        {request.clientIdentifier}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {request.amount.toFixed(2)} credits
@@ -259,9 +259,9 @@ const Recharges = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {rechargeRequests.filter(req => req.status !== 'PENDING').map((request) => (
-                    <tr key={request._id}>
+                    <tr key={request.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {request.client.email}
+                        {request.clientIdentifier}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {request.amount.toFixed(2)} credits

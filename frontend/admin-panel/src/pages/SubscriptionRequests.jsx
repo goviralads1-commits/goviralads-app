@@ -36,10 +36,10 @@ const SubscriptionRequests = () => {
     
     try {
       if (actionType === 'approve') {
-        await api.post(`/admin/subscription-requests/${selectedRequest._id}/approve`);
+        await api.post(`/admin/subscription-requests/${selectedRequest.id}/approve`);
         setToast('Subscription approved successfully');
       } else if (actionType === 'reject') {
-        await api.post(`/admin/subscription-requests/${selectedRequest._id}/reject`, {
+        await api.post(`/admin/subscription-requests/${selectedRequest.id}/reject`, {
           rejectionReason
         });
         setToast('Subscription request rejected');
@@ -210,9 +210,9 @@ const SubscriptionRequests = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {pendingRequests.map((request) => (
-                      <tr key={request._id}>
+                      <tr key={request.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {request.clientId?.email || 'N/A'}
+                          {request.clientIdentifier || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div>{request.planName}</div>
@@ -304,9 +304,9 @@ const SubscriptionRequests = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {processedRequests.map((request) => (
-                      <tr key={request._id}>
+                      <tr key={request.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {request.clientId?.email || 'N/A'}
+                          {request.clientIdentifier || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {request.planName}

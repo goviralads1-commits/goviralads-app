@@ -1143,7 +1143,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
     
     // COMMISSION CALCULATION: When task is completed, calculate commission
-    if (crossedCompletion && task.commissionValue > 0 && task.assignedTo) {
+    if (crossedCompletion && task.commissionValue > 0 && !task.commissionEarned && task.assignedTo) {
       console.log(`[COMMISSION] Calculating commission for task ${taskId}`);
       const taskValue = task.creditCost || 0;
       if (task.commissionType === 'percentage') {
