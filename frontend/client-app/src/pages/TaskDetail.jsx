@@ -369,6 +369,7 @@ const TaskDetail = () => {
   const milestones = task.milestones || [];
 
   const isPendingApproval = task.status === 'PENDING_APPROVAL';
+  const humanStatus = getHumanStatus(task.status);
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
@@ -1098,9 +1099,6 @@ const TaskDetail = () => {
             )}
 
             {/* Activity Log */}
-            {(() => {
-              const humanStatus = getHumanStatus(task.status);
-              return (
             <div style={{ position: 'relative', paddingLeft: '24px' }}>
               <div style={{ position: 'absolute', left: '7px', top: '8px', bottom: '8px', width: '2px', backgroundColor: '#f0f0f0' }} />
 
@@ -1136,8 +1134,6 @@ const TaskDetail = () => {
                 <p style={{ fontSize: '13px', color: humanStatus.color, fontWeight: '600', margin: 0 }}>{humanStatus.label}</p>
               </div>
             </div>
-              );
-            })()}
           </div>
         )}
       </div>
