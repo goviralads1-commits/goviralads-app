@@ -25,6 +25,7 @@ const Wallet = () => {
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
   const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
   const subscriptionRef = useRef(null);
+  const addCreditRef = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -326,7 +327,12 @@ const Wallet = () => {
 
           {/* Upgrade Credits Button */}
           <button
-            onClick={() => setActiveTab('recharge')}
+            onClick={() => {
+              setActiveTab('recharge');
+              setTimeout(() => {
+                addCreditRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 100);
+            }}
             style={{
               marginTop: '20px',
               width: '100%',
@@ -913,7 +919,7 @@ const Wallet = () => {
           {activeTab === 'recharge' && (
             <>
               {/* Manual Recharge Form */}
-              <div style={{
+              <div ref={addCreditRef} style={{
                 backgroundColor: '#f8fafc',
                 borderRadius: '16px',
                 padding: '20px',
