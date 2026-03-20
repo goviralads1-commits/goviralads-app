@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const Task = require('../models/Task');
+const { Task } = require('../models/Task');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
