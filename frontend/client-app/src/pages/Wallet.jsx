@@ -316,6 +316,26 @@ const Wallet = () => {
               <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>₹{(walletData?.walletCredits || walletData?.balance || 0).toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Upgrade Credits Button */}
+          <button
+            onClick={() => setActiveTab('recharge')}
+            style={{
+              marginTop: '20px',
+              width: '100%',
+              padding: '14px 24px',
+              background: 'rgba(255,255,255,0.2)',
+              border: '2px solid rgba(255,255,255,0.4)',
+              borderRadius: '14px',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            💳 Upgrade Credits
+          </button>
         </div>
 
         {/* Subscription Plans - Premium Product Cards */}
@@ -825,6 +845,102 @@ const Wallet = () => {
           {/* Recharge Requests Tab */}
           {activeTab === 'recharge' && (
             <>
+              {/* Manual Recharge Form */}
+              <div style={{
+                backgroundColor: '#f8fafc',
+                borderRadius: '16px',
+                padding: '20px',
+                marginBottom: '20px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <h4 style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0'}}>Add Credits</h4>
+                <div style={{marginBottom: '12px'}}>
+                  <input
+                    type="number"
+                    placeholder="Enter Amount"
+                    value={rechargeAmount}
+                    onChange={(e) => setRechargeAmount(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      fontSize: '15px',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '12px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <div style={{marginBottom: '16px'}}>
+                  <input
+                    type="text"
+                    placeholder="Enter UTR / Transaction ID"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      fontSize: '15px',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '12px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!rechargeAmount || parseFloat(rechargeAmount) < 1) {
+                      setToast('Please enter a valid amount');
+                      setTimeout(() => setToast(null), 3000);
+                      return;
+                    }
+                    if (!paymentRef.trim()) {
+                      setToast('Please enter UTR / Transaction ID');
+                      setTimeout(() => setToast(null), 3000);
+                      return;
+                    }
+                    setRechargeSubmitting(true);
+                    try {
+                      await api.post('/client/wallet/recharge', {
+                        amount: parseFloat(rechargeAmount),
+                        paymentReference: paymentRef.trim()
+                      });
+                      setToast('Request submitted. Waiting for admin approval.');
+                      setTimeout(() => setToast(null), 4000);
+                      setRechargeAmount('');
+                      setPaymentRef('');
+                      // Refresh recharge requests
+                      const requestsResponse = await api.get('/client/wallet/recharge-requests');
+                      setRechargeRequests(requestsResponse.data.requests || []);
+                    } catch (err) {
+                      const msg = err.response?.data?.error || 'Failed to submit request';
+                      setToast(msg);
+                      setTimeout(() => setToast(null), 4000);
+                    } finally {
+                      setRechargeSubmitting(false);
+                    }
+                  }}
+                  disabled={rechargeSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#fff',
+                    fontSize: '15px',
+                    fontWeight: '700',
+                    borderRadius: '12px',
+                    border: 'none',
+                    cursor: rechargeSubmitting ? 'not-allowed' : 'pointer',
+                    opacity: rechargeSubmitting ? 0.6 : 1
+                  }}
+                >
+                  {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+
+              {/* Recharge History */}
+              <h4 style={{fontSize: '14px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0'}}>Request History</h4>
               {rechargeRequests.length === 0 ? (
                 <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No recharge requests</p>
               ) : (
