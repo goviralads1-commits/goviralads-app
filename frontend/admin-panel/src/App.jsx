@@ -23,6 +23,7 @@ import OfficeCMS from './pages/OfficeCMS';
 import Orders from './pages/Orders';
 import Settings from './pages/Settings';
 import Roles from './pages/Roles';
+import Commissions from './pages/Commissions';
 import SubscriptionRequests from './pages/SubscriptionRequests';
 import NotFound from './pages/NotFound';
 
@@ -141,6 +142,11 @@ const App = () => {
           <Route path="/roles" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Roles />
+            </ProtectedRoute>
+          } />
+          <Route path="/commissions" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Commissions />
             </ProtectedRoute>
           } />
           <Route path="/orders" element={

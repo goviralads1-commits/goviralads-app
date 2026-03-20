@@ -392,6 +392,9 @@ const Header = ({ title }) => {
                         <span style={{ fontSize: '16px' }}>🔑</span> Roles & Permissions
                       </Link>
                     )}
+                    <Link to="/commissions" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#10b981', fontSize: '14px', fontWeight: '600', transition: 'background 0.2s' }}>
+                      <span style={{ fontSize: '16px' }}>💰</span> Commissions
+                    </Link>
                     <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '8px 0' }} />
                     <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', fontSize: '14px', fontWeight: '500', cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>🚪</span> Logout

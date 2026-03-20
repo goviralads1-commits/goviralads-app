@@ -27,6 +27,7 @@ const Coupon = require('../models/Coupon');
 const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/SubscriptionRequest');
 const UserSubscription = require('../models/Subscription');
 const billingService = require('../services/billingService');
+const CommissionLog = require('../models/CommissionLog');
 const pdfService = require('../services/pdfService');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
@@ -874,14 +875,29 @@ router.patch('/tasks/:taskId', async (req, res) => {
         if (currentProgress >= 100 && task.status !== 'COMPLETED') {
           task.status = 'COMPLETED';
           // COMMISSION CALCULATION: When auto-completed via progress
-          if (task.commissionValue > 0 && !task.commissionEarned) {
+          if (task.commissionValue > 0 && !task.commissionEarned && task.assignedTo) {
             const taskValue = task.creditCost || 0;
             if (task.commissionType === 'percentage') {
               task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
             } else {
               task.commissionEarned = task.commissionValue;
             }
-            console.log(`[COMMISSION] Auto-completion earned: \u20b9${task.commissionEarned}`);
+            console.log(`[COMMISSION] Auto-completion earned: ₹${task.commissionEarned}`);
+                      
+            // Create CommissionLog entry
+            try {
+              await CommissionLog.create({
+                userId: task.assignedTo,
+                taskId: task._id,
+                taskTitle: task.title,
+                amount: task.commissionEarned,
+                commissionType: task.commissionType,
+                commissionValue: task.commissionValue,
+              });
+              console.log(`[COMMISSION] Log created for auto-completion`);
+            } catch (logErr) {
+              console.error(`[COMMISSION] Failed to create log:`, logErr.message);
+            }
           }
         } else if (currentProgress > 0 && task.status === 'PENDING') {
           task.status = 'ACTIVE';
@@ -1127,7 +1143,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
     
     // COMMISSION CALCULATION: When task is completed, calculate commission
-    if (crossedCompletion && task.commissionValue > 0) {
+    if (crossedCompletion && task.commissionValue > 0 && task.assignedTo) {
       console.log(`[COMMISSION] Calculating commission for task ${taskId}`);
       const taskValue = task.creditCost || 0;
       if (task.commissionType === 'percentage') {
@@ -1135,8 +1151,23 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
       } else {
         task.commissionEarned = task.commissionValue;
       }
-      console.log(`[COMMISSION] Earned: \u20b9${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
+      console.log(`[COMMISSION] Earned: ₹${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
       await task.save();
+          
+      // Create CommissionLog entry
+      try {
+        await CommissionLog.create({
+          userId: task.assignedTo,
+          taskId: task._id,
+          taskTitle: task.title,
+          amount: task.commissionEarned,
+          commissionType: task.commissionType,
+          commissionValue: task.commissionValue,
+        });
+        console.log(`[COMMISSION] Log created for task completion`);
+      } catch (logErr) {
+        console.error(`[COMMISSION] Failed to create log:`, logErr.message);
+      }
     }
     
     if (crossedCompletion && task.clientId) {
@@ -5736,6 +5767,107 @@ router.patch('/settings', async (req, res) => {
   } catch (err) {
     console.error('[SETTINGS] Update error:', err.message);
     return res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// ===== COMMISSION TRACKING =====
+
+// GET /admin/commissions - Get commission logs with aggregation
+router.get('/commissions', async (req, res) => {
+  try {
+    const adminUser = await User.findById(req.user.id);
+    if (!adminUser) {
+      return res.status(404).json({ error: 'Admin not found' });
+    }
+    
+    const { startDate, endDate, userId } = req.query;
+    
+    // Build date filter
+    const filter = {};
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+    
+    // STEP 6: Non-main-admin users can only see their own commissions
+    const isMainAdmin = adminUser.identifier === 'admin' || adminUser.role === ROLES.ADMIN;
+    if (!isMainAdmin) {
+      filter.userId = adminUser._id;
+    } else if (userId) {
+      // Main admin can filter by specific user
+      filter.userId = userId;
+    }
+    
+    // Get commission logs
+    const logs = await CommissionLog.find(filter)
+      .populate('userId', 'identifier')
+      .sort({ createdAt: -1 })
+      .limit(500);
+    
+    // Aggregate by user
+    const userAggregation = await CommissionLog.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$userId',
+          totalAmount: { $sum: '$amount' },
+          taskCount: { $sum: 1 },
+        },
+      },
+    ]);
+    
+    // Get overall total
+    const overallTotal = userAggregation.reduce((sum, u) => sum + u.totalAmount, 0);
+    const overallTaskCount = userAggregation.reduce((sum, u) => sum + u.taskCount, 0);
+    
+    // Populate user details for aggregation
+    const userIds = userAggregation.map(u => u._id);
+    const users = await User.find({ _id: { $in: userIds } }).select('identifier');
+    const userMap = {};
+    users.forEach(u => { userMap[u._id.toString()] = u.identifier; });
+    
+    const userSummary = userAggregation.map(u => ({
+      userId: u._id.toString(),
+      userIdentifier: userMap[u._id.toString()] || 'Unknown',
+      totalAmount: u.totalAmount,
+      taskCount: u.taskCount,
+    }));
+    
+    // Get list of admin users for filter dropdown (main admin only)
+    let adminUsers = [];
+    if (isMainAdmin) {
+      adminUsers = await User.find({ role: { $in: ['admin', 'ADMIN'] } })
+        .select('_id identifier')
+        .sort({ identifier: 1 });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      logs: logs.map(l => ({
+        id: l._id.toString(),
+        userId: l.userId?._id?.toString() || null,
+        userIdentifier: l.userId?.identifier || 'Unknown',
+        taskId: l.taskId?.toString(),
+        taskTitle: l.taskTitle,
+        amount: l.amount,
+        commissionType: l.commissionType,
+        commissionValue: l.commissionValue,
+        createdAt: l.createdAt,
+      })),
+      userSummary,
+      overallTotal,
+      overallTaskCount,
+      adminUsers: adminUsers.map(u => ({ id: u._id.toString(), identifier: u.identifier })),
+      isMainAdmin,
+    });
+  } catch (err) {
+    console.error('[COMMISSIONS] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch commissions' });
   }
 });
 
