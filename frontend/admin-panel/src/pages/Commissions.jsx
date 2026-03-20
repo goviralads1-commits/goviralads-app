@@ -62,6 +62,28 @@ export default function Commissions() {
     setEndDate('');
     setSelectedUser('');
   };
+
+  // Quick date filters
+  const setQuickFilter = (days) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
+
+  const setTodayFilter = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setStartDate(today);
+    setEndDate(today);
+  };
+
+  const setThisMonthFilter = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(now.toISOString().split('T')[0]);
+  };
   
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -102,6 +124,69 @@ export default function Commissions() {
         marginBottom: '24px',
         border: '1px solid #e2e8f0',
       }}>
+        {/* Quick Filter Buttons */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <button
+            onClick={setTodayFilter}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#f8fafc',
+              color: '#475569',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setQuickFilter(7)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#f8fafc',
+              color: '#475569',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            Last 7 Days
+          </button>
+          <button
+            onClick={() => setQuickFilter(30)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#f8fafc',
+              color: '#475569',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            Last 30 Days
+          </button>
+          <button
+            onClick={setThisMonthFilter}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#f8fafc',
+              color: '#475569',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            This Month
+          </button>
+        </div>
         <div style={{ 
           display: 'flex', 
           flexWrap: 'wrap', 
