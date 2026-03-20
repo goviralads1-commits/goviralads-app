@@ -41,7 +41,18 @@ router.use(requireAdmin);
 
 router.get('/wallets', async (req, res) => {
   try {
-    const wallets = await Wallet.find()
+    // ROLE CHECK: Only main admin can see all wallets
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    let filter = {};
+    if (!isMainAdmin) {
+      // Manager: Only see wallets of clients assigned to them via tasks
+      const assignedClientIds = await Task.distinct('clientId', { assignedTo: adminUser._id });
+      filter.clientId = { $in: assignedClientIds };
+    }
+    
+    const wallets = await Wallet.find(filter)
       .populate('clientId', 'identifier')
       .exec();
 
@@ -197,6 +208,16 @@ router.get('/recharge-requests', async (req, res) => {
         return res.status(400).json({ error: 'Invalid status filter' });
       }
       filter.status = status;
+    }
+
+    // ROLE CHECK: Only main admin can see all requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      // Manager: Only see requests from clients assigned to them
+      const assignedClientIds = await Task.distinct('clientId', { assignedTo: adminUser._id });
+      filter.clientId = { $in: assignedClientIds };
     }
 
     const requests = await RechargeRequest.find(filter)
@@ -430,6 +451,16 @@ router.get('/subscription-requests', async (req, res) => {
         return res.status(400).json({ error: 'Invalid status filter' });
       }
       filter.status = status;
+    }
+
+    // ROLE CHECK: Only main admin can see all requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    if (!isMainAdmin) {
+      // Manager: Only see requests from clients assigned to them
+      const assignedClientIds = await Task.distinct('clientId', { assignedTo: adminUser._id });
+      filter.clientId = { $in: assignedClientIds };
     }
 
     const requests = await SubscriptionRequest.find(filter)
@@ -3067,7 +3098,19 @@ router.delete('/notices/:noticeId', async (req, res) => {
 // GET /admin/clients - Get list of clients for targeting
 router.get('/clients', async (req, res) => {
   try {
-    const clients = await User.find({ role: ROLES.CLIENT, status: 'ACTIVE' })
+    // ROLE CHECK: Only main admin can see all clients
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
+    let clientFilter = { role: ROLES.CLIENT, status: 'ACTIVE' };
+    
+    if (!isMainAdmin) {
+      // Manager: Only see clients assigned to them via tasks
+      const assignedClientIds = await Task.distinct('clientId', { assignedTo: adminUser._id });
+      clientFilter._id = { $in: assignedClientIds };
+    }
+    
+    const clients = await User.find(clientFilter)
       .select('identifier createdAt')
       .sort({ identifier: 1 })
       .exec();
@@ -3097,7 +3140,16 @@ router.get('/users', async (req, res) => {
     const { page = 1, limit = 20, search, status, sort = 'createdAt', order = 'desc' } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // ROLE CHECK: Only main admin can see all users
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    
     let filter = { isDeleted: { $ne: true } };
+    
+    if (!isMainAdmin) {
+      // Manager: Can only see themselves (no user management)
+      filter._id = adminUser._id;
+    }
     if (status) filter.status = status;
     if (search) {
       filter.$or = [
