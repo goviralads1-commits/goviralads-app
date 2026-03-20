@@ -113,7 +113,14 @@ const Wallet = () => {
     return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   };
 
-  const handleSubscriptionPurchase = async (planId) => {
+  const handleSubscriptionPurchase = async (planId, plan) => {
+    // ISSUE 2 FIX: Confirmation popup before purchase
+    const confirmMsg = plan 
+      ? `Buy "${plan.name}" for ₹${plan.price?.toLocaleString()}?\n\nYou will get ${plan.credits?.toLocaleString()} credits${plan.bonusCredits > 0 ? ` + ${plan.bonusCredits} bonus` : ''}.`
+      : 'Confirm this purchase?';
+    
+    if (!window.confirm(confirmMsg)) return;
+    
     setPurchasingPlan(planId);
     try {
       const res = await api.post(`/client/credit-plans/${planId}/purchase`, {
@@ -383,7 +390,7 @@ const Wallet = () => {
                 return (
                   <button
                     key={planId}
-                    onClick={() => !isPendingApproval && handleSubscriptionPurchase(planId)}
+                    onClick={() => !isPendingApproval && handleSubscriptionPurchase(planId, plan)}
                     disabled={isBuying || isPendingApproval}
                     style={{
                       padding: '24px 16px',
@@ -501,6 +508,66 @@ const Wallet = () => {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* ISSUE 1 FIX: One-time Credit Packs Section */}
+        {creditPlans.filter(p => p.type === 'PACK').length > 0 && (
+          <div style={{marginBottom: '24px'}}>
+            <h3 style={{fontSize: '16px', fontWeight: '700', color: '#1e293b', margin: '0 0 12px 0'}}>One-time Credit Packs</h3>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+              gap: '12px'
+            }}>
+              {creditPlans.filter(p => p.type === 'PACK').map((plan) => {
+                const planId = plan.id || plan._id;
+                const isBuying = purchasingPlan === planId;
+                const isPendingApproval = pendingSubscriptionRequests.some(r => r.planId === planId);
+                return (
+                  <button
+                    key={planId}
+                    onClick={() => !isPendingApproval && handleSubscriptionPurchase(planId, plan)}
+                    disabled={isBuying || isPendingApproval}
+                    style={{
+                      padding: '16px 12px',
+                      borderRadius: '16px',
+                      border: isPendingApproval ? '2px solid #f59e0b' : '1px solid #e2e8f0',
+                      background: isPendingApproval 
+                        ? 'linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%)' 
+                        : 'linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%)',
+                      cursor: isBuying || isPendingApproval ? 'not-allowed' : 'pointer',
+                      opacity: isBuying ? 0.7 : 1,
+                      textAlign: 'center',
+                      position: 'relative',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {isPendingApproval && (
+                      <span style={{
+                        position: 'absolute', top: '-8px', left: '50%', transform: 'translateX(-50%)',
+                        background: '#f59e0b', color: '#fff', fontSize: '8px', fontWeight: '700',
+                        padding: '2px 8px', borderRadius: '12px'
+                      }}>PENDING</span>
+                    )}
+                    <p style={{fontSize: '22px', fontWeight: '800', color: '#15803d', margin: '0 0 4px 0'}}>
+                      ₹{plan.price?.toLocaleString()}
+                    </p>
+                    <p style={{fontSize: '13px', fontWeight: '600', color: '#334155', margin: 0}}>
+                      {plan.credits?.toLocaleString()} Credits
+                    </p>
+                    {plan.bonusCredits > 0 && (
+                      <p style={{fontSize: '11px', color: '#10b981', margin: '4px 0 0 0', fontWeight: '600'}}>
+                        +{plan.bonusCredits} Bonus
+                      </p>
+                    )}
+                    {isBuying && (
+                      <p style={{fontSize: '10px', color: '#6366f1', margin: '6px 0 0 0', fontWeight: '600'}}>Processing...</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

@@ -123,6 +123,9 @@ const Header = ({ title }) => {
       navigate(`/recharges`);
     } else if (entityType === 'SUBSCRIPTION_REQUEST') {
       navigate(`/subscription-requests`);
+    } else if (notif.type === 'SUBSCRIPTION_REQUEST_SUBMITTED' || notif.type?.includes('SUBSCRIPTION')) {
+      // ISSUE 4 FIX: Handle subscription notification types
+      navigate(`/subscription-requests`);
     } else if (entityType === 'NOTICE') {
       navigate(`/notifications`);
     } else if (notif.type === 'NOTICE_RESPONSE') {

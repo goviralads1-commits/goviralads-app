@@ -863,6 +863,7 @@ const CreditPlans = () => {
                   <option value="PLAN">Subscription Plan (with Bonus)</option>
                   <option value="PACK">One-time Credit Pack (Simple)</option>
                 </select>
+                <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>This plan will be visible to clients based on visibility setting</p>
               </div>
 
               <div style={styles.formGroup}>
@@ -901,6 +902,7 @@ const CreditPlans = () => {
                   onChange={e => setFormData({ ...formData, bonusCredits: e.target.value })}
                   placeholder="e.g., 200"
                 />
+                <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>Bonus credits added on purchase (typically for subscription plans)</p>
               </div>
 
               <div style={styles.formGroup}>
@@ -934,6 +936,7 @@ const CreditPlans = () => {
                   onChange={e => setFormData({ ...formData, validityDays: e.target.value })}
                   placeholder="30"
                 />
+                <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>Validity in days (for subscription plans only - credits expire after this period)</p>
               </div>
 
               <div style={styles.formGroup}>
