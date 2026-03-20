@@ -728,6 +728,19 @@ router.get('/tasks/:taskId', async (req, res) => {
       return res.status(404).json({ error: 'TASK NOT FOUND: The requested ID does not exist in the database.' });
     }
 
+    // ACCESS CONTROL: Non-main-admin can only view tasks they created or assigned to them
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    const canViewAll = isMainAdmin || adminUser?.customRole?.permissions?.canViewAllTasks === true;
+    
+    if (!canViewAll) {
+      const isAssignedBy = task.assignedBy && task.assignedBy._id.toString() === adminUser._id.toString();
+      const isAssignedTo = task.assignedTo && task.assignedTo._id.toString() === adminUser._id.toString();
+      if (!isAssignedBy && !isAssignedTo) {
+        return res.status(403).json({ error: 'Access denied: You can only view tasks assigned to you' });
+      }
+    }
+
     return res.status(200).json({
       task: {
         id: task._id.toString(),
@@ -5843,7 +5856,7 @@ router.get('/commissions', async (req, res) => {
     }
     
     // STEP 6: Non-main-admin users can only see their own commissions
-    const isMainAdmin = adminUser.identifier === 'admin' || adminUser.role === ROLES.ADMIN;
+    const isMainAdmin = adminUser.role === ROLES.ADMIN && !adminUser.customRole;
     if (!isMainAdmin) {
       filter.userId = adminUser._id;
     } else if (userId) {
