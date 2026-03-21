@@ -575,7 +575,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     }
 
     // Calculate credits from plan (source of truth)
-    const baseCredits = Number(plan.baseCredits) || 0;
+    const baseCredits = Number(plan.credits) || 0;
     const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
     const validityDays = Number(plan.validityDays) || 0;
