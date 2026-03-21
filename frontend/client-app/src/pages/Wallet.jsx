@@ -273,15 +273,17 @@ const Wallet = () => {
         </div>
       )}
       
-      <div style={{maxWidth: '1200px', margin: '0 auto', padding: '24px'}}>
+      <div style={{maxWidth: '1200px', margin: '0 auto', padding: '24px', boxSizing: 'border-box'}}>
         {/* Balance Card */}
         <div style={{
           background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
           borderRadius: '24px',
-          padding: '32px',
+          padding: '32px 24px',
           marginBottom: '24px',
           color: '#fff',
-          boxShadow: '0 10px 40px rgba(99,102,241,0.3)'
+          boxShadow: '0 10px 40px rgba(99,102,241,0.3)',
+          boxSizing: 'border-box',
+          overflow: 'hidden'
         }}>
           <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px'}}>
             <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: 0}}>Total Credits</p>
@@ -336,8 +338,15 @@ const Wallet = () => {
           {/* Upgrade Credits Button */}
           <button
             onClick={() => {
-              setActiveSection(prev => prev === 'recharge' ? null : 'recharge');
+              const newSection = activeSection === 'recharge' ? null : 'recharge';
+              setActiveSection(newSection);
               setActiveTab('recharge');
+              // Scroll to form after state update
+              if (newSection === 'recharge') {
+                setTimeout(() => {
+                  addCreditRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+              }
             }}
             style={{
               marginTop: '20px',
@@ -372,16 +381,19 @@ const Wallet = () => {
                   <div style={{
                     marginTop: '10px',
                     width: '100%',
-                    padding: '14px 24px',
+                    maxWidth: '100%',
+                    padding: '14px 20px',
                     background: 'rgba(16,185,129,0.3)',
                     border: '2px solid rgba(16,185,129,0.5)',
                     borderRadius: '14px',
                     color: '#86efac',
                     fontSize: '14px',
                     fontWeight: '600',
-                    textAlign: 'center'
+                    textAlign: 'center',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden'
                   }}>
-                    <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Subscription Credits: {walletData.subscriptionCredits}</div>
+                    <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis'}}>✅ Subscription Credits: {walletData.subscriptionCredits}</div>
                     <div style={{fontSize: '13px', opacity: 0.9}}>
                       {daysLeft} day{daysLeft !== 1 ? 's' : ''} remaining
                     </div>

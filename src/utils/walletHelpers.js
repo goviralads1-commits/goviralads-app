@@ -35,7 +35,8 @@ function getTotalAvailableCredits(wallet) {
   if (!wallet) return 0;
   
   const subCredits = getAvailableSubscriptionCredits(wallet);
-  const walletCredits = (wallet.walletCredits || 0) + (wallet.balance || 0);
+  // SINGLE SOURCE OF TRUTH: walletCredits only (ignore legacy balance)
+  const walletCredits = wallet.walletCredits || 0;
   
   return subCredits + walletCredits;
 }

@@ -105,7 +105,7 @@ router.get('/wallets/:clientId', async (req, res) => {
     const now = new Date();
     const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
     const activeSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
-    const walletCreditsValue = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const walletCreditsValue = wallet.walletCredits || 0;
     const totalCredits = activeSubCredits + walletCreditsValue;
 
     const transactions = await WalletTransaction.find({ walletId: wallet._id })
@@ -321,9 +321,9 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
     }
 
     wallet.walletCredits = (wallet.walletCredits || 0) + request.amount;
-    wallet.balance = (wallet.balance || 0) + request.amount; // Keep legacy balance in sync
+    // DO NOT update balance - walletCredits is the single source of truth
     await wallet.save();
-    console.log('Step 4: Wallet saved, walletCredits:', wallet.walletCredits, 'balance:', wallet.balance);
+    console.log('Step 4: Wallet saved, walletCredits:', wallet.walletCredits);
 
     const transaction = await WalletTransaction.create({
       walletId: wallet._id,
@@ -619,20 +619,20 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       });
     }
     
-    // REVENUE-FIRST: No blocking - always allow plan purchase
-    // Credits ADD (not replace), Expiry MAX (not reset)
-    
-    // Calculate new expiry: MAX(current, new)
+    // SINGLE-ACTIVE: On upgrade, ADD credits and RESET expiry
+    // Calculate new expiry: RESET to now + validityDays (not MAX)
     const newExpiry = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
-    const currentExpiry = wallet.subscriptionExpiresAt ? new Date(wallet.subscriptionExpiresAt) : new Date(0);
-    const finalExpiry = newExpiry > currentExpiry ? newExpiry : currentExpiry;
     
-    // Atomic update: ADD credits, MAX expiry
+    // Atomic update: ADD credits, RESET expiry, store plan info
     const updatedWallet = await Wallet.findByIdAndUpdate(
       wallet._id,
       {
         $inc: { subscriptionCredits: creditsToAdd },
-        $set: { subscriptionExpiresAt: finalExpiry }
+        $set: { 
+          subscriptionExpiresAt: newExpiry,
+          currentPlanId: plan._id,
+          currentPlanPrice: planPrice
+        }
       },
       { new: true }
     );
@@ -661,7 +661,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       { new: true }
     );
 
-    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${creditsToAdd}, Expires: ${finalExpiry}`);
+    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${creditsToAdd}, Expires: ${newExpiry}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
     // 7. Notify client
@@ -684,7 +684,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       planName: updatedRequest.planName,
       totalCredits: creditsToAdd,
       status: updatedRequest.status,
-      walletBalance: (Number(updatedWallet.walletCredits) || 0) + (Number(updatedWallet.balance) || 0),
+      walletBalance: Number(updatedWallet.walletCredits) || 0,
       subscriptionCredits: updatedWallet.subscriptionCredits,
       expiresAt: updatedWallet.subscriptionExpiresAt,
     });

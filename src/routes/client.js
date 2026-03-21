@@ -44,7 +44,16 @@ router.get('/wallet', async (req, res) => {
     const now = new Date();
     const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
     const activeSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
-    const walletCredits = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    
+    // DEBUG: Log all wallet fields
+    console.log('[WALLET_DEBUG]', {
+      walletCredits: wallet.walletCredits,
+      balance: wallet.balance,
+      subscriptionCredits: wallet.subscriptionCredits
+    });
+    
+    // SINGLE SOURCE OF TRUTH: walletCredits only (ignore legacy balance)
+    const walletCredits = wallet.walletCredits || 0;
     const totalCredits = activeSubCredits + walletCredits;
 
     const limit = parseInt(req.query.limit) || 20;
@@ -205,19 +214,50 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     console.log('=== SUBSCRIPTION REQUEST SUBMIT ===');
     console.log('Client:', clientId, '| Plan:', id, '| Coupon:', couponCode || 'none');
 
-    // 1. Check for existing pending request
-    const existingPending = await SubscriptionRequest.findOne({
-      clientId,
-      status: SUBSCRIPTION_REQUEST_STATUS.PENDING
-    }).exec();
-    if (existingPending) {
-      return res.status(400).json({ error: 'You already have a pending subscription request' });
-    }
-
-    // 2. Load plan
+    // 1. Load plan first
     const plan = await CreditPlan.findById(id).exec();
     if (!plan || !plan.isActive) {
       return res.status(404).json({ error: 'Subscription plan not found or inactive' });
+    }
+
+    // 2. Check for existing pending request FOR SAME PLAN
+    const existingPendingSamePlan = await SubscriptionRequest.findOne({
+      clientId,
+      planId: plan._id,
+      status: SUBSCRIPTION_REQUEST_STATUS.PENDING
+    }).exec();
+    if (existingPendingSamePlan) {
+      return res.status(400).json({ error: 'Request already pending for this plan' });
+    }
+
+    // 3. Get wallet to check active subscription
+    const now = new Date();
+    const wallet = await Wallet.findOne({ clientId }).exec();
+    
+    // 4. SINGLE-ACTIVE SUBSCRIPTION RULE
+    if (wallet) {
+      const hasActiveSubscription = 
+        wallet.subscriptionExpiresAt && 
+        new Date(wallet.subscriptionExpiresAt) > now && 
+        (wallet.subscriptionCredits || 0) > 0;
+      
+      if (hasActiveSubscription) {
+        const currentPlanPrice = wallet.currentPlanPrice || 0;
+        const newPlanPrice = plan.price || 0;
+        
+        // Check if same plan (by ID or price)
+        if (wallet.currentPlanId && wallet.currentPlanId.toString() === plan._id.toString()) {
+          return res.status(400).json({ error: 'You already have this plan active' });
+        }
+        
+        // Check if lower/same price plan (downgrade blocked)
+        if (newPlanPrice <= currentPlanPrice) {
+          return res.status(400).json({ error: 'Cannot downgrade to a lower plan. Use remaining credits first.' });
+        }
+        
+        // Higher price = upgrade allowed
+        console.log(`[SUB_REQ] Upgrade detected: ₹${currentPlanPrice} → ₹${newPlanPrice}`);
+      }
     }
 
     // DEBUG: Log full plan object
@@ -1192,7 +1232,7 @@ router.post('/plans/:planId/purchase', async (req, res) => {
     const nowPlan = new Date();
     const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > nowPlan;
     const availableSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
-    const availableWalletCredits = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const availableWalletCredits = wallet.walletCredits || 0;
     const totalAvailable = availableSubCredits + availableWalletCredits;
 
     console.log('Available sub credits:', availableSubCredits, '| wallet credits:', availableWalletCredits, '| total:', totalAvailable);
@@ -1202,10 +1242,9 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
-    // Calculate deduction amounts (subscriptionCredits first, then walletCredits, then balance)
+    // Calculate deduction amounts (subscriptionCredits first, then walletCredits)
     let deductedFromSub = 0;
     let deductedFromWallet = 0;
-    let deductedFromBalance = 0;
     let remaining = price;
 
     // 1. From subscriptionCredits (if not expired)
@@ -1217,7 +1256,7 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       remaining -= deductedFromSub;
     }
 
-    // 2. From walletCredits
+    // 2. From walletCredits (SINGLE SOURCE OF TRUTH)
     if (remaining > 0) {
       const walletCreditsAvail = wallet.walletCredits || 0;
       if (walletCreditsAvail >= remaining) {
@@ -1229,16 +1268,10 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       }
     }
 
-    // 3. From balance (legacy)
-    if (remaining > 0) {
-      deductedFromBalance = Math.min(wallet.balance || 0, remaining);
-    }
-
     // ATOMIC UPDATE: Apply all deductions in one operation
     const incUpdate = {};
     if (deductedFromSub > 0) incUpdate.subscriptionCredits = -deductedFromSub;
     if (deductedFromWallet > 0) incUpdate.walletCredits = -deductedFromWallet;
-    if (deductedFromBalance > 0) incUpdate.balance = -deductedFromBalance;
 
     const updatedWallet = await Wallet.findByIdAndUpdate(
       wallet._id,
@@ -1447,7 +1480,7 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
     const nowSubBundle = new Date();
     const subNotExpiredBundle = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > nowSubBundle;
     const availableSubCreditsBundle = subNotExpiredBundle ? (wallet.subscriptionCredits || 0) : 0;
-    const availableWalletCreditsBundle = (wallet.walletCredits || 0) + (wallet.balance || 0);
+    const availableWalletCreditsBundle = wallet.walletCredits || 0;
     const totalAvailableBundle = availableSubCreditsBundle + availableWalletCreditsBundle;
 
     console.log('Available sub credits:', availableSubCreditsBundle, '| wallet credits:', availableWalletCreditsBundle, '| total:', totalAvailableBundle);
@@ -1457,10 +1490,9 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
-    // Calculate deduction amounts (subscriptionCredits first, then walletCredits, then balance)
+    // Calculate deduction amounts (subscriptionCredits first, then walletCredits)
     let deductedFromSubBundle = 0;
     let deductedFromWalletBundle = 0;
-    let deductedFromBalanceBundle = 0;
     let remainingBundle = price;
 
     // 1. From subscriptionCredits (if not expired)
@@ -1472,7 +1504,7 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
       remainingBundle -= deductedFromSubBundle;
     }
 
-    // 2. From walletCredits
+    // 2. From walletCredits (SINGLE SOURCE OF TRUTH)
     if (remainingBundle > 0) {
       const walletCreditsAvailBundle = wallet.walletCredits || 0;
       if (walletCreditsAvailBundle >= remainingBundle) {
@@ -1484,16 +1516,10 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
       }
     }
 
-    // 3. From balance (legacy)
-    if (remainingBundle > 0) {
-      deductedFromBalanceBundle = Math.min(wallet.balance || 0, remainingBundle);
-    }
-
     // ATOMIC UPDATE: Apply all deductions in one operation
     const incUpdateBundle = {};
     if (deductedFromSubBundle > 0) incUpdateBundle.subscriptionCredits = -deductedFromSubBundle;
     if (deductedFromWalletBundle > 0) incUpdateBundle.walletCredits = -deductedFromWalletBundle;
-    if (deductedFromBalanceBundle > 0) incUpdateBundle.balance = -deductedFromBalanceBundle;
 
     const updatedWalletBundle = await Wallet.findByIdAndUpdate(
       wallet._id,
