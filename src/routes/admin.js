@@ -577,13 +577,8 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     // DEBUG: Log full plan object
     console.log('[SUB_APPROVE] FULL PLAN:', JSON.stringify(plan, null, 2));
 
-    // Calculate credits - CreditPlan model uses 'credits' not 'baseCredits'
-    let baseCredits;
-    if (plan.type === 'PLAN') {
-      baseCredits = Number(plan.credits) || 0;  // PLAN uses credits field
-    } else {
-      baseCredits = Number(plan.credits) || 0;  // PACK also uses credits field
-    }
+    // Calculate credits: plan.credits + plan.bonusCredits
+    const baseCredits = Number(plan.credits) || 0;
     const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
     const validityDays = Number(plan.validityDays) || 0;
@@ -628,12 +623,12 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
 
     const expiresAt = wallet.subscriptionExpiresAt;
 
-    // 3. Record wallet transaction (admin approval credit)
+    // 3. Record wallet transaction (credits added)
     await WalletTransaction.create({
       walletId: wallet._id,
-      type: 'SUBSCRIPTION_PURCHASE',  // Valid type from TRANSACTION_TYPES enum
+      type: 'SUBSCRIPTION_CREDIT',
       amount: creditsToAdd,
-      description: `Subscription Plan: ${plan.name} (+${creditsToAdd} subscription credits)`,
+      description: `+${creditsToAdd} credits via ${plan.name}`,
       referenceId: request._id,
     });
 

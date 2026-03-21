@@ -980,9 +980,12 @@ const Wallet = () => {
               ) : (
                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                   {walletData.transactions.map((tx, idx) => {
+                    const type = tx.type?.toUpperCase() || '';
+                    const isSubscription = type.includes('SUBSCRIPTION');
+                    
                     // Determine label based on type
                     const getLabel = () => {
-                      const type = tx.type?.toUpperCase() || '';
+                      if (isSubscription) return 'Plan Credits';
                       if (type.includes('DEDUCT') || type.includes('SPEND')) return 'Task Deduction';
                       if (type.includes('REFUND')) return 'Refund';
                       if (type.includes('MANUAL') && tx.amount < 0) return 'Manual Deduct';
@@ -1005,8 +1008,8 @@ const Wallet = () => {
                           <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0'}}>
                             {getLabel()}
                           </p>
-                          <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
-                            {new Date(tx.createdAt).toLocaleString('en-IN', {
+                          <p style={{fontSize: '12px', color: '#94a3b8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                            {tx.description || new Date(tx.createdAt).toLocaleString('en-IN', {
                               day: '2-digit', month: 'short', year: 'numeric',
                               hour: '2-digit', minute: '2-digit'
                             })}
@@ -1019,7 +1022,7 @@ const Wallet = () => {
                           marginLeft: '12px',
                           whiteSpace: 'nowrap'
                         }}>
-                          {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount).toFixed(2)}
+                          {tx.amount > 0 ? '+' : '−'}{isSubscription ? '' : '₹'}{Math.abs(tx.amount)}{isSubscription ? ' credits' : ''}
                         </span>
                       </div>
                     );

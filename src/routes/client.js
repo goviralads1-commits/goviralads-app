@@ -216,13 +216,8 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     // DEBUG: Log full plan object
     console.log('[SUB_REQ] FULL PLAN OBJECT:', JSON.stringify(plan, null, 2));
     
-    // Use correct field - CreditPlan model uses 'credits' not 'baseCredits'
-    let planCredits;
-    if (plan.type === 'PLAN') {
-      planCredits = Number(plan.credits) || 0;  // PLAN uses credits field
-    } else {
-      planCredits = Number(plan.credits) || 0;  // PACK also uses credits field
-    }
+    // Calculate credits: plan.credits + plan.bonusCredits
+    const planCredits = Number(plan.credits) || 0;
     const planBonusCredits = Number(plan.bonusCredits) || 0;
     
     let finalPrice = plan.price;
