@@ -563,26 +563,44 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Only PENDING requests can be approved' });
     }
 
-    // 1. Get or create wallet
-    let wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
-    if (!wallet) {
-      wallet = await Wallet.create({ clientId: request.clientId, balance: 0, walletCredits: 0, subscriptionCredits: 0 });
+    // Calculate credits from snapshotted plan data (safe fallback)
+    const baseCredits = Number(request.planCredits) || 0;
+    const bonusCredits = Number(request.planBonusCredits) || 0;
+    const creditsToAdd = baseCredits + bonusCredits;
+    const validityDays = Number(request.planValidityDays) || 30;
+
+    if (creditsToAdd <= 0) {
+      return res.status(400).json({ error: 'Invalid plan: credits must be greater than 0' });
     }
 
-    // 2. Add subscription credits + set expiry (NO deduction - prepaid externally)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (request.planValidityDays || 30));
-    wallet.subscriptionCredits = (wallet.subscriptionCredits || 0) + request.totalCredits;
-    wallet.subscriptionExpiresAt = expiresAt;
-    await wallet.save();
+    // 1. Get or create wallet (safe initialization)
+    let wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
+    if (!wallet) {
+      wallet = await Wallet.create({
+        clientId: request.clientId,
+        balance: 0,
+        walletCredits: 0,
+        subscriptionCredits: creditsToAdd,
+        subscriptionExpiresAt: new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
+      });
+    } else {
+      // 2. Add subscription credits + set expiry (safe math)
+      wallet.subscriptionCredits = (Number(wallet.subscriptionCredits) || 0) + creditsToAdd;
+      wallet.subscriptionExpiresAt = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000);
+      await wallet.save();
+    }
 
-    // 3. Record wallet transaction (credit added via subscription approval)
+    const expiresAt = wallet.subscriptionExpiresAt;
+
+    // 3. Record wallet transaction (admin approval credit)
     await WalletTransaction.create({
       walletId: wallet._id,
       type: 'SUBSCRIPTION_CREDIT',
-      amount: request.totalCredits,
-      description: `Subscription Plan Approved: ${request.planName} (+${request.totalCredits} subscription credits)`,
+      amount: creditsToAdd,
+      description: `Subscription Plan Approved: ${request.planName} (+${creditsToAdd} subscription credits)`,
       referenceId: request._id,
+      source: 'admin_approval',
+      planId: request.planId,
     });
 
     // 4. Expire any existing active UserSubscription (legacy support)
@@ -596,7 +614,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       userId: request.clientId,
       planId: request.planId,
       planName: request.planName,
-      creditsRemaining: request.totalCredits,
+      creditsRemaining: creditsToAdd,
       expiresAt,
       isActive: true,
     });
@@ -608,7 +626,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       { new: true }
     );
 
-    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${request.totalCredits}, Expires: ${expiresAt}`);
+    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${creditsToAdd}, Expires: ${expiresAt}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
     // 7. Notify client
@@ -617,7 +635,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
         recipientId: request.clientId,
         type: 'SUBSCRIPTION_REQUEST_APPROVED',
         title: 'Subscription Approved',
-        message: `Your subscription request for ${request.planName} has been approved. ${request.totalCredits} credits added!`,
+        message: `Your subscription request for ${request.planName} has been approved. ${creditsToAdd} credits added!`,
         relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: request._id },
         notifyByEmail: true,
       });
@@ -629,9 +647,9 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       id: updatedRequest._id.toString(),
       clientId: updatedRequest.clientId.toString(),
       planName: updatedRequest.planName,
-      totalCredits: updatedRequest.totalCredits,
+      totalCredits: creditsToAdd,
       status: updatedRequest.status,
-      walletBalance: wallet.walletCredits + (wallet.balance || 0),
+      walletBalance: (Number(wallet.walletCredits) || 0) + (Number(wallet.balance) || 0),
       subscriptionCredits: wallet.subscriptionCredits,
       expiresAt: wallet.subscriptionExpiresAt,
     });
