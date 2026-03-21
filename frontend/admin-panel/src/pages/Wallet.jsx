@@ -584,10 +584,10 @@ const Wallet = () => {
                           {req.clientIdentifier}
                         </p>
                         <p style={{fontSize: '16px', fontWeight: '700', color: '#6366f1', margin: '0 0 4px 0'}}>
-                          {req.planId?.name || 'Plan'}
+                          {req.planName || req.planId?.name || 'Plan'}
                         </p>
                         <p style={{fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0'}}>
-                          ₹{(req.planId?.baseCredits || 0) + (req.planId?.bonusCredits || 0)} credits
+                          ₹{(req.planCredits || 0) + (req.planBonusCredits || 0)} credits
                         </p>
                         <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
                           {new Date(req.createdAt).toLocaleString()}
@@ -653,7 +653,7 @@ const Wallet = () => {
                           {req.clientIdentifier}
                         </p>
                         <p style={{fontSize: '14px', fontWeight: '600', color: '#6366f1', margin: '0 0 4px 0'}}>
-                          {req.planId?.name || 'Plan'}
+                          {req.planName || req.planId?.name || 'Plan'}
                         </p>
                         <p style={{fontSize: '11px', color: '#94a3b8', margin: 0}}>
                           {new Date(req.createdAt).toLocaleString()}
