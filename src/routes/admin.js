@@ -25,7 +25,6 @@ const BillingConfig = require('../models/BillingConfig');
 const CreditPlan = require('../models/CreditPlan');
 const Coupon = require('../models/Coupon');
 const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/SubscriptionRequest');
-const UserSubscription = require('../models/Subscription');
 const billingService = require('../services/billingService');
 const CommissionLog = require('../models/CommissionLog');
 const pdfService = require('../services/pdfService');
@@ -655,30 +654,14 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       referenceId: request._id,
     });
 
-    // 4. Expire any existing active UserSubscription (legacy support)
-    await UserSubscription.updateMany(
-      { userId: request.clientId, isActive: true },
-      { $set: { isActive: false } }
-    );
-
-    // 5. Create new UserSubscription for legacy compatibility
-    await UserSubscription.create({
-      userId: request.clientId,
-      planId: request.planId,
-      planName: request.planName,
-      creditsRemaining: creditsToAdd,
-      expiresAt,
-      isActive: true,
-    });
-
-    // 6. Update request status
+    // 4. Update request status
     const updatedRequest = await SubscriptionRequest.findByIdAndUpdate(
       id,
       { status: SUBSCRIPTION_REQUEST_STATUS.APPROVED, reviewedBy: adminId, reviewedAt: new Date() },
       { new: true }
     );
 
-    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${creditsToAdd}, Expires: ${expiresAt}`);
+    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${creditsToAdd}, Expires: ${finalExpiry}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
     // 7. Notify client
@@ -701,9 +684,9 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       planName: updatedRequest.planName,
       totalCredits: creditsToAdd,
       status: updatedRequest.status,
-      walletBalance: (Number(wallet.walletCredits) || 0) + (Number(wallet.balance) || 0),
-      subscriptionCredits: wallet.subscriptionCredits,
-      expiresAt: wallet.subscriptionExpiresAt,
+      walletBalance: (Number(updatedWallet.walletCredits) || 0) + (Number(updatedWallet.balance) || 0),
+      subscriptionCredits: updatedWallet.subscriptionCredits,
+      expiresAt: updatedWallet.subscriptionExpiresAt,
     });
   } catch (err) {
     console.error('[SUB_APPROVE_ERROR] Full error:', err);
