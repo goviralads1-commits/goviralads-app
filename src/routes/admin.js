@@ -563,30 +563,48 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Only PENDING requests can be approved' });
     }
 
-    // Calculate credits from snapshotted plan data (safe fallback)
-    const baseCredits = Number(request.planCredits) || 0;
-    const bonusCredits = Number(request.planBonusCredits) || 0;
+    // Validate clientId
+    if (!request.clientId) {
+      return res.status(400).json({ error: 'Invalid clientId in request' });
+    }
+
+    // Fetch plan (source of truth)
+    const plan = await CreditPlan.findById(request.planId).exec();
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    // Calculate credits from plan (source of truth)
+    const baseCredits = Number(plan.credits) || 0;
+    const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
-    const validityDays = Number(request.planValidityDays) || 30;
+    const validityDays = Number(plan.validityDays) || 30;
 
     if (creditsToAdd <= 0) {
       return res.status(400).json({ error: 'Invalid plan: credits must be greater than 0' });
     }
 
     // 1. Get or create wallet (safe initialization)
+    const now = new Date();
     let wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
+    
     if (!wallet) {
       wallet = await Wallet.create({
         clientId: request.clientId,
         balance: 0,
         walletCredits: 0,
         subscriptionCredits: creditsToAdd,
-        subscriptionExpiresAt: new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
+        subscriptionExpiresAt: new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000)
       });
     } else {
-      // 2. Add subscription credits + set expiry (safe math)
+      // 2. Add subscription credits + extend expiry (safe math)
       wallet.subscriptionCredits = (Number(wallet.subscriptionCredits) || 0) + creditsToAdd;
-      wallet.subscriptionExpiresAt = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000);
+      
+      // Extend from current expiry if active, otherwise from now
+      const currentExpiry = wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt > now
+        ? wallet.subscriptionExpiresAt
+        : now;
+      wallet.subscriptionExpiresAt = new Date(currentExpiry.getTime() + validityDays * 24 * 60 * 60 * 1000);
       await wallet.save();
     }
 
@@ -597,10 +615,10 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       walletId: wallet._id,
       type: 'SUBSCRIPTION_CREDIT',
       amount: creditsToAdd,
-      description: `Subscription Plan Approved: ${request.planName} (+${creditsToAdd} subscription credits)`,
+      description: `Subscription Plan Approved: ${plan.name} (+${creditsToAdd} subscription credits)`,
       referenceId: request._id,
       source: 'admin_approval',
-      planId: request.planId,
+      planId: plan._id,
     });
 
     // 4. Expire any existing active UserSubscription (legacy support)
