@@ -706,8 +706,10 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       expiresAt: wallet.subscriptionExpiresAt,
     });
   } catch (err) {
-    console.error('[SUB_REQ] Approve error:', err.message);
-    return res.status(500).json({ error: 'Failed to approve subscription request' });
+    console.error('[SUB_APPROVE_ERROR] Full error:', err);
+    console.error('[SUB_APPROVE_ERROR] Message:', err.message);
+    console.error('[SUB_APPROVE_ERROR] Stack:', err.stack);
+    return res.status(500).json({ error: 'Failed to approve subscription request', details: err.message });
   }
 });
 
