@@ -138,7 +138,10 @@ router.get('/wallets/:clientId', async (req, res) => {
 router.post('/wallets/:clientId/adjust', async (req, res) => {
   try {
     const { clientId } = req.params;
-    const { amount, description } = req.body || {};
+    const { credits, description, isHidden, targetPool } = req.body || {};
+    
+    // Backward compatibility: support 'amount' as alias for 'credits'
+    const creditAmount = credits !== undefined ? credits : req.body.amount;
 
     // ROLE CHECK: Only main admin can adjust wallets
     const adminUser = await User.findById(req.user.id).populate('customRole');
@@ -148,12 +151,12 @@ router.post('/wallets/:clientId/adjust', async (req, res) => {
       return res.status(403).json({ error: 'Access denied: Only main admin can adjust wallets' });
     }
 
-    if (amount === undefined || amount === null) {
-      return res.status(400).json({ error: 'amount is required' });
+    if (creditAmount === undefined || creditAmount === null) {
+      return res.status(400).json({ error: 'credits is required' });
     }
 
-    if (typeof amount !== 'number' || amount === 0) {
-      return res.status(400).json({ error: 'amount must be a non-zero number' });
+    if (typeof creditAmount !== 'number' || creditAmount === 0) {
+      return res.status(400).json({ error: 'credits must be a non-zero number' });
     }
 
     if (!description || typeof description !== 'string' || description.trim().length === 0) {
@@ -172,53 +175,66 @@ router.post('/wallets/:clientId/adjust', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found for this client' });
     }
 
-    const newBalance = wallet.balance + amount;
-
-    if (newBalance < 0) {
-      return res.status(400).json({ error: 'Insufficient balance for this adjustment' });
+    // Determine which pool to adjust
+    const pool = targetPool === 'subscription' ? 'subscriptionCredits' : 'walletCredits';
+    const currentValue = wallet[pool] || 0;
+    
+    // Safety: don't allow negative credits
+    if (currentValue + creditAmount < 0) {
+      return res.status(400).json({ error: 'Insufficient credits for this adjustment' });
     }
 
-    wallet.balance = newBalance;
-    await wallet.save();
+    // Atomic update
+    const updatedWallet = await Wallet.findByIdAndUpdate(
+      wallet._id,
+      { $inc: { [pool]: creditAmount } },
+      { new: true }
+    );
 
     const transaction = await WalletTransaction.create({
       walletId: wallet._id,
       type: TRANSACTION_TYPES.ADMIN_ADJUSTMENT,
-      amount,
+      amount: 0,
+      credits: creditAmount,
       description: description.trim(),
+      isHidden: isHidden === true,
       referenceId: null,
     });
 
-    // --- Notification Hook (Phase 5) ---
-    try {
-      await createNotification({
-        recipientId: clientId,
-        type: NOTIFICATION_TYPES.WALLET_ADJUSTED,
-        title: 'Wallet Balance Adjusted',
-        message: `Your wallet balance was adjusted by ${amount > 0 ? '+' : ''}${amount} credits. Reason: ${description.trim()}`,
-        relatedEntity: {
-          entityType: ENTITY_TYPES.WALLET,
-          entityId: wallet._id,
-        },
-      });
-    } catch (err) {
-      console.error('Failed to notify client of wallet adjustment:', err.message);
+    // Only notify if NOT hidden
+    if (!isHidden) {
+      try {
+        await createNotification({
+          recipientId: clientId,
+          type: NOTIFICATION_TYPES.WALLET_ADJUSTED,
+          title: 'Credits Adjusted',
+          message: `Your credits were adjusted by ${creditAmount > 0 ? '+' : ''}${creditAmount}. Reason: ${description.trim()}`,
+          relatedEntity: {
+            entityType: ENTITY_TYPES.WALLET,
+            entityId: wallet._id,
+          },
+        });
+      } catch (err) {
+        console.error('Failed to notify client of wallet adjustment:', err.message);
+      }
     }
-    // ------------------------------------
 
     return res.status(200).json({
       clientId: client._id.toString(),
       clientIdentifier: client.identifier,
-      balance: wallet.balance,
+      walletCredits: updatedWallet.walletCredits,
+      subscriptionCredits: updatedWallet.subscriptionCredits,
       adjustment: {
         id: transaction._id.toString(),
-        amount: transaction.amount,
+        credits: transaction.credits,
+        pool: pool,
+        isHidden: transaction.isHidden,
         description: transaction.description,
         createdAt: transaction.createdAt,
       },
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Failed to adjust wallet balance' });
+    return res.status(500).json({ error: 'Failed to adjust wallet credits' });
   }
 });
 
