@@ -985,7 +985,7 @@ const Wallet = () => {
                     
                     // Determine label based on type
                     const getLabel = () => {
-                      if (isSubscription) return 'Plan Credits';
+                      if (isSubscription) return 'Plan Purchase';
                       if (type.includes('DEDUCT') || type.includes('SPEND')) return 'Task Deduction';
                       if (type.includes('REFUND')) return 'Refund';
                       if (type.includes('MANUAL') && tx.amount < 0) return 'Manual Deduct';
@@ -1018,11 +1018,11 @@ const Wallet = () => {
                         <span style={{
                           fontSize: '16px',
                           fontWeight: '700',
-                          color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                          color: isSubscription ? '#10b981' : (tx.amount > 0 ? '#10b981' : '#ef4444'),
                           marginLeft: '12px',
                           whiteSpace: 'nowrap'
                         }}>
-                          {tx.amount > 0 ? '+' : '−'}{isSubscription ? '' : '₹'}{Math.abs(tx.amount)}{isSubscription ? ' credits' : ''}
+                          {isSubscription ? tx.description?.match(/\+\d+ credits/)?.[0] || `₹${Math.abs(tx.amount)}` : `${tx.amount > 0 ? '+' : '−'}₹${Math.abs(tx.amount)}`}
                         </span>
                       </div>
                     );

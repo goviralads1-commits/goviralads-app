@@ -623,12 +623,12 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
 
     const expiresAt = wallet.subscriptionExpiresAt;
 
-    // 3. Record wallet transaction (credits added)
+    // 3. Record wallet transaction
     await WalletTransaction.create({
       walletId: wallet._id,
-      type: 'SUBSCRIPTION_CREDIT',
-      amount: creditsToAdd,
-      description: `+${creditsToAdd} credits via ${plan.name}`,
+      type: 'SUBSCRIPTION_PURCHASE',
+      amount: -planPrice,
+      description: `Subscription Plan: ${plan.name} (+${creditsToAdd} credits)`,
       referenceId: request._id,
     });
 

@@ -587,7 +587,7 @@ const Wallet = () => {
                           {req.planName || req.planId?.name || 'Plan'}
                         </p>
                         <p style={{fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0'}}>
-                          ₹{(req.planCredits || 0) + (req.planBonusCredits || 0)} credits
+                          {req.totalCredits || ((req.planCredits || 0) + (req.planBonusCredits || 0))} credits
                         </p>
                         <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
                           {new Date(req.createdAt).toLocaleString()}
