@@ -326,6 +326,13 @@ const Wallet = () => {
             </div>
           </div>
 
+          {/* Empty State Helper */}
+          {(walletData?.walletCredits || walletData?.balance || 0) === 0 && (walletData?.subscriptionCredits || 0) === 0 && (
+            <p style={{fontSize: '13px', color: 'rgba(255,255,255,0.7)', marginTop: '12px', textAlign: 'center'}}>
+              Add money to your wallet or buy a plan to start
+            </p>
+          )}
+
           {/* Upgrade Credits Button */}
           <button
             onClick={() => {
@@ -346,7 +353,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            💳 {activeSection === 'recharge' ? 'Hide' : 'Add Money'}
+            💳 {activeSection === 'recharge' ? 'Hide Add Money' : 'Add Money'}
           </button>
 
           {/* View Plans Button */}
@@ -368,13 +375,14 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            📦 {activeSection === 'subscription' ? 'Hide' : 'Buy Plan'}
+            📦 {activeSection === 'subscription' ? 'Hide Plans' : 'Buy Plan'}
           </button>
         </div>
 
         {/* Subscription Plans - Premium Product Cards */}
         {activeSection === 'subscription' && creditPlans.filter(p => p.type === 'PLAN').length > 0 && (
           <div style={{marginBottom: '24px'}}>
+            <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '16px'}}>Choose a Plan</h3>
             {/* Coupon Input - Inline */}
             <div style={{display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px'}}>
               <input
@@ -940,6 +948,7 @@ const Wallet = () => {
           {activeSection === 'recharge' && activeTab === 'recharge' && (
             <>
               {/* Manual Recharge Form */}
+              <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '16px'}}>Add Money to Wallet</h3>
               <div ref={addCreditRef} style={{
                 backgroundColor: '#f8fafc',
                 borderRadius: '16px',
@@ -947,7 +956,7 @@ const Wallet = () => {
                 marginBottom: '20px',
                 border: '1px solid #e2e8f0'
               }}>
-                <h4 style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0'}}>Add Money</h4>
+                <h4 style={{fontSize: '16px', fontWeight: '600', color: '#475569', margin: '0 0 16px 0'}}>Enter Details</h4>
                 <div style={{marginBottom: '12px'}}>
                   <input
                     type="number"
