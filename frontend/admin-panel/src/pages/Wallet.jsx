@@ -20,7 +20,7 @@ const Wallet = () => {
   const [addAmount, setAddAmount] = useState('');
   const [addDescription, setAddDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [processingRequestId, setProcessingRequestId] = useState(null);
+  const [loadingId, setLoadingId] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -72,7 +72,7 @@ const Wallet = () => {
   };
 
   const handleApprove = async (requestId) => {
-    setProcessingRequestId(requestId);
+    setLoadingId(requestId);
     try {
       // Step 1: Call approve API
       const response = await api.post(`/admin/recharge-requests/${requestId}/approve`);
@@ -82,9 +82,9 @@ const Wallet = () => {
       setToast('Recharge approved - Balance updated');
       setTimeout(() => setToast(null), 3000);
       
-      // Step 2: Refresh ALL request data (don't let refresh errors override success)
+      // Step 2: Smart refresh - only current tab + wallets
       try {
-        await Promise.all([fetchWallets(), fetchRechargeRequests(), fetchSubscriptionRequests()]);
+        await Promise.all([fetchWallets(), fetchRechargeRequests()]);
         if (selectedClient) await fetchClientWallet(selectedClient);
       } catch (refreshErr) {
         console.warn('Refresh after approve had issues:', refreshErr);
@@ -97,12 +97,12 @@ const Wallet = () => {
       setToast(errorMsg);
       setTimeout(() => setToast(null), 4000);
     } finally {
-      setProcessingRequestId(null);
+      setLoadingId(null);
     }
   };
 
   const handleReject = async (requestId) => {
-    setProcessingRequestId(requestId);
+    setLoadingId(requestId);
     try {
       await api.post(`/admin/recharge-requests/${requestId}/reject`);
       
@@ -110,9 +110,9 @@ const Wallet = () => {
       setToast('Recharge rejected');
       setTimeout(() => setToast(null), 3000);
       
-      // Refresh ALL request data (errors won't override success)
+      // Smart refresh - only current tab
       try {
-        await Promise.all([fetchRechargeRequests(), fetchSubscriptionRequests()]);
+        await fetchRechargeRequests();
       } catch (refreshErr) {
         console.warn('Refresh after reject had issues:', refreshErr);
       }
@@ -121,19 +121,20 @@ const Wallet = () => {
       setToast(err.response?.data?.error || 'Failed to reject request');
       setTimeout(() => setToast(null), 4000);
     } finally {
-      setProcessingRequestId(null);
+      setLoadingId(null);
     }
   };
 
   // Subscription Request Handlers
   const handleSubscriptionApprove = async (requestId) => {
-    setProcessingRequestId(requestId);
+    setLoadingId(requestId);
     try {
       await api.post(`/admin/subscription-requests/${requestId}/approve`);
       setToast('Plan request approved - Credits added');
       setTimeout(() => setToast(null), 3000);
+      // Smart refresh - only current tab + wallets
       try {
-        await Promise.all([fetchWallets(), fetchRechargeRequests(), fetchSubscriptionRequests()]);
+        await Promise.all([fetchWallets(), fetchSubscriptionRequests()]);
         if (selectedClient) await fetchClientWallet(selectedClient);
       } catch (refreshErr) {
         console.warn('Refresh after approve had issues:', refreshErr);
@@ -143,18 +144,19 @@ const Wallet = () => {
       setToast(err.response?.data?.error || 'Failed to approve plan request');
       setTimeout(() => setToast(null), 4000);
     } finally {
-      setProcessingRequestId(null);
+      setLoadingId(null);
     }
   };
 
   const handleSubscriptionReject = async (requestId) => {
-    setProcessingRequestId(requestId);
+    setLoadingId(requestId);
     try {
       await api.post(`/admin/subscription-requests/${requestId}/reject`);
       setToast('Plan request rejected');
       setTimeout(() => setToast(null), 3000);
+      // Smart refresh - only current tab
       try {
-        await Promise.all([fetchRechargeRequests(), fetchSubscriptionRequests()]);
+        await fetchSubscriptionRequests();
       } catch (refreshErr) {
         console.warn('Refresh after reject had issues:', refreshErr);
       }
@@ -163,7 +165,7 @@ const Wallet = () => {
       setToast(err.response?.data?.error || 'Failed to reject plan request');
       setTimeout(() => setToast(null), 4000);
     } finally {
-      setProcessingRequestId(null);
+      setLoadingId(null);
     }
   };
 
@@ -487,7 +489,7 @@ const Wallet = () => {
                       <div style={{display: 'flex', gap: '8px', flexShrink: 0}}>
                         <button
                           onClick={() => handleReject(req.id)}
-                          disabled={processingRequestId === req.id}
+                          disabled={loadingId === req.id}
                           style={{
                             padding: '8px 16px',
                             backgroundColor: '#fee2e2',
@@ -496,15 +498,15 @@ const Wallet = () => {
                             fontWeight: '600',
                             borderRadius: '10px',
                             border: 'none',
-                            cursor: processingRequestId === req.id ? 'not-allowed' : 'pointer',
-                            opacity: processingRequestId === req.id ? 0.6 : 1
+                            cursor: loadingId === req.id ? 'not-allowed' : 'pointer',
+                            opacity: loadingId === req.id ? 0.6 : 1
                           }}
                         >
                           Reject
                         </button>
                         <button
                           onClick={() => handleApprove(req.id)}
-                          disabled={processingRequestId === req.id}
+                          disabled={loadingId === req.id}
                           style={{
                             padding: '8px 16px',
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -513,12 +515,12 @@ const Wallet = () => {
                             fontWeight: '600',
                             borderRadius: '10px',
                             border: 'none',
-                            cursor: processingRequestId === req.id ? 'not-allowed' : 'pointer',
-                            opacity: processingRequestId === req.id ? 0.6 : 1,
+                            cursor: loadingId === req.id ? 'not-allowed' : 'pointer',
+                            opacity: loadingId === req.id ? 0.6 : 1,
                             boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
                           }}
                         >
-                          {processingRequestId === req.id ? 'Processing...' : 'Approve'}
+                          {loadingId === req.id ? 'Processing...' : 'Approve'}
                         </button>
                       </div>
                     </div>
@@ -609,7 +611,7 @@ const Wallet = () => {
                       <div style={{display: 'flex', gap: '8px', flexShrink: 0}}>
                         <button
                           onClick={() => handleSubscriptionReject(req.id)}
-                          disabled={processingRequestId === req.id}
+                          disabled={loadingId === req.id}
                           style={{
                             padding: '8px 16px',
                             backgroundColor: '#fee2e2',
@@ -618,15 +620,15 @@ const Wallet = () => {
                             fontWeight: '600',
                             borderRadius: '10px',
                             border: 'none',
-                            cursor: processingRequestId === req.id ? 'not-allowed' : 'pointer',
-                            opacity: processingRequestId === req.id ? 0.6 : 1
+                            cursor: loadingId === req.id ? 'not-allowed' : 'pointer',
+                            opacity: loadingId === req.id ? 0.6 : 1
                           }}
                         >
                           Reject
                         </button>
                         <button
                           onClick={() => handleSubscriptionApprove(req.id)}
-                          disabled={processingRequestId === req.id}
+                          disabled={loadingId === req.id}
                           style={{
                             padding: '8px 16px',
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -635,12 +637,12 @@ const Wallet = () => {
                             fontWeight: '600',
                             borderRadius: '10px',
                             border: 'none',
-                            cursor: processingRequestId === req.id ? 'not-allowed' : 'pointer',
-                            opacity: processingRequestId === req.id ? 0.6 : 1,
+                            cursor: loadingId === req.id ? 'not-allowed' : 'pointer',
+                            opacity: loadingId === req.id ? 0.6 : 1,
                             boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
                           }}
                         >
-                          {processingRequestId === req.id ? 'Processing...' : 'Approve'}
+                          {loadingId === req.id ? 'Processing...' : 'Approve'}
                         </button>
                       </div>
                     </div>
