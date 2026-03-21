@@ -577,12 +577,12 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     // DEBUG: Log full plan object
     console.log('[SUB_APPROVE] FULL PLAN:', JSON.stringify(plan, null, 2));
 
-    // Calculate credits based on plan type (strict, no fallback)
+    // Calculate credits - CreditPlan model uses 'credits' not 'baseCredits'
     let baseCredits;
-    if (plan.type === 'PLAN' || plan.type?.toLowerCase().includes('subscription')) {
-      baseCredits = Number(plan.baseCredits) || 0;
+    if (plan.type === 'PLAN') {
+      baseCredits = Number(plan.credits) || 0;  // PLAN uses credits field
     } else {
-      baseCredits = Number(plan.credits) || 0;
+      baseCredits = Number(plan.credits) || 0;  // PACK also uses credits field
     }
     const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
@@ -631,12 +631,10 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     // 3. Record wallet transaction (admin approval credit)
     await WalletTransaction.create({
       walletId: wallet._id,
-      type: 'SUBSCRIPTION_CREDIT',
+      type: 'SUBSCRIPTION_PURCHASE',  // Valid type from TRANSACTION_TYPES enum
       amount: creditsToAdd,
-      description: `Subscription Plan Approved: ${plan.name} (+${creditsToAdd} subscription credits)`,
+      description: `Subscription Plan: ${plan.name} (+${creditsToAdd} subscription credits)`,
       referenceId: request._id,
-      source: 'admin_approval',
-      planId: plan._id,
     });
 
     // 4. Expire any existing active UserSubscription (legacy support)
