@@ -72,29 +72,20 @@ const Wallet = () => {
   };
 
   const handleApprove = async (requestId) => {
-    setLoadingId(requestId);
     try {
-      // Step 1: Call approve API
-      const response = await api.post(`/admin/recharge-requests/${requestId}/approve`);
-      // Approved successfully
-      
-      // If we reach here, approval succeeded - show success immediately
-      setToast('Recharge approved - Balance updated');
+      setLoadingId(requestId);
+      await api.post(`/admin/recharge-requests/${requestId}/approve`);
+      setToast('Approved successfully');
       setTimeout(() => setToast(null), 3000);
-      
-      // Step 2: Smart refresh - only current tab + wallets
       try {
         await Promise.all([fetchWallets(), fetchRechargeRequests()]);
         if (selectedClient) await fetchClientWallet(selectedClient);
       } catch (refreshErr) {
         console.warn('Refresh after approve had issues:', refreshErr);
-        // Don't show error - approval already succeeded
       }
     } catch (err) {
-      // Only show error if the APPROVE call itself failed
-      console.error('Approve API error:', err);
-      const errorMsg = err.response?.data?.error || 'Failed to approve request';
-      setToast(errorMsg);
+      console.error('Approve error:', err);
+      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
@@ -102,23 +93,19 @@ const Wallet = () => {
   };
 
   const handleReject = async (requestId) => {
-    setLoadingId(requestId);
     try {
+      setLoadingId(requestId);
       await api.post(`/admin/recharge-requests/${requestId}/reject`);
-      
-      // Success - show immediately
-      setToast('Recharge rejected');
+      setToast('Rejected successfully');
       setTimeout(() => setToast(null), 3000);
-      
-      // Smart refresh - only current tab
       try {
         await fetchRechargeRequests();
       } catch (refreshErr) {
         console.warn('Refresh after reject had issues:', refreshErr);
       }
     } catch (err) {
-      console.error('Reject API error:', err);
-      setToast(err.response?.data?.error || 'Failed to reject request');
+      console.error('Reject error:', err);
+      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
@@ -127,12 +114,11 @@ const Wallet = () => {
 
   // Subscription Request Handlers
   const handleSubscriptionApprove = async (requestId) => {
-    setLoadingId(requestId);
     try {
+      setLoadingId(requestId);
       await api.post(`/admin/subscription-requests/${requestId}/approve`);
-      setToast('Plan request approved - Credits added');
+      setToast('Approved successfully');
       setTimeout(() => setToast(null), 3000);
-      // Smart refresh - only current tab + wallets
       try {
         await Promise.all([fetchWallets(), fetchSubscriptionRequests()]);
         if (selectedClient) await fetchClientWallet(selectedClient);
@@ -141,7 +127,7 @@ const Wallet = () => {
       }
     } catch (err) {
       console.error('Subscription approve error:', err);
-      setToast(err.response?.data?.error || 'Failed to approve plan request');
+      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
@@ -149,12 +135,11 @@ const Wallet = () => {
   };
 
   const handleSubscriptionReject = async (requestId) => {
-    setLoadingId(requestId);
     try {
+      setLoadingId(requestId);
       await api.post(`/admin/subscription-requests/${requestId}/reject`);
-      setToast('Plan request rejected');
+      setToast('Rejected successfully');
       setTimeout(() => setToast(null), 3000);
-      // Smart refresh - only current tab
       try {
         await fetchSubscriptionRequests();
       } catch (refreshErr) {
@@ -162,7 +147,7 @@ const Wallet = () => {
       }
     } catch (err) {
       console.error('Subscription reject error:', err);
-      setToast(err.response?.data?.error || 'Failed to reject plan request');
+      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
