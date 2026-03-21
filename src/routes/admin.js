@@ -628,7 +628,8 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       walletId: wallet._id,
       type: 'SUBSCRIPTION_PURCHASE',
       amount: -planPrice,
-      description: `Subscription Plan: ${plan.name} (+${creditsToAdd} credits)`,
+      credits: creditsToAdd,
+      description: `Subscription Plan: ${plan.name}`,
       referenceId: request._id,
     });
 

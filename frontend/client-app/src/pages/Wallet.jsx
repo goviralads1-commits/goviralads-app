@@ -1015,15 +1015,21 @@ const Wallet = () => {
                             })}
                           </p>
                         </div>
-                        <span style={{
-                          fontSize: '16px',
-                          fontWeight: '700',
-                          color: isSubscription ? '#10b981' : (tx.amount > 0 ? '#10b981' : '#ef4444'),
-                          marginLeft: '12px',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {isSubscription ? tx.description?.match(/\+\d+ credits/)?.[0] || `₹${Math.abs(tx.amount)}` : `${tx.amount > 0 ? '+' : '−'}₹${Math.abs(tx.amount)}`}
-                        </span>
+                        <div style={{textAlign: 'right', marginLeft: '12px', flexShrink: 0}}>
+                          {isSubscription && tx.credits > 0 && (
+                            <p style={{fontSize: '14px', fontWeight: '700', color: '#10b981', margin: 0}}>
+                              +{tx.credits} credits
+                            </p>
+                          )}
+                          <p style={{
+                            fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
+                            fontWeight: '700',
+                            color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                            margin: 0
+                          }}>
+                            {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount)}
+                          </p>
+                        </div>
                       </div>
                     );
                   })}

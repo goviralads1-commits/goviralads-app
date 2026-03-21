@@ -38,6 +38,10 @@ const walletTransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    credits: {
+      type: Number,
+      default: 0,
+    },
     referenceId: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,
