@@ -13,7 +13,7 @@ const Wallet = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
-  const [activeTab, setActiveTab] = useState('clients'); // 'clients' | 'requests' | 'plans'
+  const [walletTab, setWalletTab] = useState('clients'); // 'clients' | 'rechargeRequests' | 'planRequests'
   
   // Add funds modal
   const [showAddFunds, setShowAddFunds] = useState(false);
@@ -82,9 +82,9 @@ const Wallet = () => {
       setToast('Recharge approved - Balance updated');
       setTimeout(() => setToast(null), 3000);
       
-      // Step 2: Refresh data (don't let refresh errors override success)
+      // Step 2: Refresh ALL request data (don't let refresh errors override success)
       try {
-        await Promise.all([fetchWallets(), fetchRechargeRequests()]);
+        await Promise.all([fetchWallets(), fetchRechargeRequests(), fetchSubscriptionRequests()]);
         if (selectedClient) await fetchClientWallet(selectedClient);
       } catch (refreshErr) {
         console.warn('Refresh after approve had issues:', refreshErr);
@@ -110,9 +110,9 @@ const Wallet = () => {
       setToast('Recharge rejected');
       setTimeout(() => setToast(null), 3000);
       
-      // Refresh data (errors won't override success)
+      // Refresh ALL request data (errors won't override success)
       try {
-        await fetchRechargeRequests();
+        await Promise.all([fetchRechargeRequests(), fetchSubscriptionRequests()]);
       } catch (refreshErr) {
         console.warn('Refresh after reject had issues:', refreshErr);
       }
@@ -133,7 +133,7 @@ const Wallet = () => {
       setToast('Plan request approved - Credits added');
       setTimeout(() => setToast(null), 3000);
       try {
-        await Promise.all([fetchWallets(), fetchSubscriptionRequests()]);
+        await Promise.all([fetchWallets(), fetchRechargeRequests(), fetchSubscriptionRequests()]);
         if (selectedClient) await fetchClientWallet(selectedClient);
       } catch (refreshErr) {
         console.warn('Refresh after approve had issues:', refreshErr);
@@ -154,7 +154,7 @@ const Wallet = () => {
       setToast('Plan request rejected');
       setTimeout(() => setToast(null), 3000);
       try {
-        await fetchSubscriptionRequests();
+        await Promise.all([fetchRechargeRequests(), fetchSubscriptionRequests()]);
       } catch (refreshErr) {
         console.warn('Refresh after reject had issues:', refreshErr);
       }
@@ -258,7 +258,7 @@ const Wallet = () => {
         {/* Tab Switcher */}
         <div style={{display: 'flex', gap: '8px', marginBottom: '20px'}}>
           <button
-            onClick={() => setActiveTab('clients')}
+            onClick={() => setWalletTab('clients')}
             style={{
               padding: '12px 24px',
               fontSize: '14px',
@@ -266,15 +266,15 @@ const Wallet = () => {
               borderRadius: '12px',
               border: 'none',
               cursor: 'pointer',
-              backgroundColor: activeTab === 'clients' ? '#6366f1' : '#f1f5f9',
-              color: activeTab === 'clients' ? '#fff' : '#64748b',
+              backgroundColor: walletTab === 'clients' ? '#6366f1' : '#f1f5f9',
+              color: walletTab === 'clients' ? '#fff' : '#64748b',
               transition: 'all 0.2s'
             }}
           >
             Client Wallets
           </button>
           <button
-            onClick={() => setActiveTab('requests')}
+            onClick={() => setWalletTab('rechargeRequests')}
             style={{
               padding: '12px 24px',
               fontSize: '14px',
@@ -282,8 +282,8 @@ const Wallet = () => {
               borderRadius: '12px',
               border: 'none',
               cursor: 'pointer',
-              backgroundColor: activeTab === 'requests' ? '#6366f1' : '#f1f5f9',
-              color: activeTab === 'requests' ? '#fff' : '#64748b',
+              backgroundColor: walletTab === 'rechargeRequests' ? '#6366f1' : '#f1f5f9',
+              color: walletTab === 'rechargeRequests' ? '#fff' : '#64748b',
               transition: 'all 0.2s',
               position: 'relative'
             }}
@@ -302,7 +302,7 @@ const Wallet = () => {
             )}
           </button>
           <button
-            onClick={() => setActiveTab('plans')}
+            onClick={() => setWalletTab('planRequests')}
             style={{
               padding: '12px 24px',
               fontSize: '14px',
@@ -310,8 +310,8 @@ const Wallet = () => {
               borderRadius: '12px',
               border: 'none',
               cursor: 'pointer',
-              backgroundColor: activeTab === 'plans' ? '#6366f1' : '#f1f5f9',
-              color: activeTab === 'plans' ? '#fff' : '#64748b',
+              backgroundColor: walletTab === 'planRequests' ? '#6366f1' : '#f1f5f9',
+              color: walletTab === 'planRequests' ? '#fff' : '#64748b',
               transition: 'all 0.2s',
               position: 'relative'
             }}
@@ -331,7 +331,7 @@ const Wallet = () => {
           </button>
         </div>
 
-        {activeTab === 'clients' ? (
+        {walletTab === 'clients' ? (
         <div style={{display: 'grid', gridTemplateColumns: '380px 1fr', gap: '24px'}}>
           {/* Client List */}
           <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
@@ -448,13 +448,13 @@ const Wallet = () => {
             ) : null}
           </div>
         </div>
-        ) : activeTab === 'requests' ? (
+        ) : walletTab === 'rechargeRequests' ? (
         /* Recharge Requests Tab */
         <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
           <h2 style={{fontSize: '18px', fontWeight: '700', color: '#334155', marginBottom: '20px'}}>Recharge Requests</h2>
           
           {rechargeRequests.length === 0 ? (
-            <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '40px 0'}}>No recharge requests</p>
+            <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '40px 0'}}>No recharge requests yet</p>
           ) : (
             <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
               {/* Pending Requests First */}
@@ -573,7 +573,7 @@ const Wallet = () => {
           <h2 style={{fontSize: '18px', fontWeight: '700', color: '#334155', marginBottom: '20px'}}>Plan Requests</h2>
           
           {subscriptionRequests.length === 0 ? (
-            <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '40px 0'}}>No plan requests</p>
+            <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '40px 0'}}>No plan requests yet</p>
           ) : (
             <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
               {/* Pending Requests First */}
