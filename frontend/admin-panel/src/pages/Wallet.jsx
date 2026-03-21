@@ -6,13 +6,14 @@ import Header from '../components/Header';
 const Wallet = () => {
   const [wallets, setWallets] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [subscriptionRequests, setSubscriptionRequests] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientWallet, setClientWallet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
-  const [activeTab, setActiveTab] = useState('clients'); // 'clients' or 'requests'
+  const [activeTab, setActiveTab] = useState('clients'); // 'clients' | 'requests' | 'plans'
   
   // Add funds modal
   const [showAddFunds, setShowAddFunds] = useState(false);
@@ -27,12 +28,14 @@ const Wallet = () => {
 
   const fetchData = async () => {
     try {
-      const [walletsRes, requestsRes] = await Promise.all([
+      const [walletsRes, requestsRes, subRequestsRes] = await Promise.all([
         api.get('/admin/wallets'),
-        api.get('/admin/recharge-requests')
+        api.get('/admin/recharge-requests'),
+        api.get('/admin/subscription-requests')
       ]);
       setWallets(walletsRes.data.wallets || []);
       setRechargeRequests(requestsRes.data.requests || []);
+      setSubscriptionRequests(subRequestsRes.data.requests || []);
     } catch (err) {
       console.error('Fetch error:', err);
       setError('Failed to load data');
@@ -56,6 +59,15 @@ const Wallet = () => {
       setRechargeRequests(response.data.requests || []);
     } catch (err) {
       console.error('Recharge requests error:', err);
+    }
+  };
+
+  const fetchSubscriptionRequests = async () => {
+    try {
+      const response = await api.get('/admin/subscription-requests');
+      setSubscriptionRequests(response.data.requests || []);
+    } catch (err) {
+      console.error('Subscription requests error:', err);
     }
   };
 
@@ -107,6 +119,48 @@ const Wallet = () => {
     } catch (err) {
       console.error('Reject API error:', err);
       setToast(err.response?.data?.error || 'Failed to reject request');
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
+  // Subscription Request Handlers
+  const handleSubscriptionApprove = async (requestId) => {
+    setProcessingRequestId(requestId);
+    try {
+      await api.post(`/admin/subscription-requests/${requestId}/approve`);
+      setToast('Plan request approved - Credits added');
+      setTimeout(() => setToast(null), 3000);
+      try {
+        await Promise.all([fetchWallets(), fetchSubscriptionRequests()]);
+        if (selectedClient) await fetchClientWallet(selectedClient);
+      } catch (refreshErr) {
+        console.warn('Refresh after approve had issues:', refreshErr);
+      }
+    } catch (err) {
+      console.error('Subscription approve error:', err);
+      setToast(err.response?.data?.error || 'Failed to approve plan request');
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
+  const handleSubscriptionReject = async (requestId) => {
+    setProcessingRequestId(requestId);
+    try {
+      await api.post(`/admin/subscription-requests/${requestId}/reject`);
+      setToast('Plan request rejected');
+      setTimeout(() => setToast(null), 3000);
+      try {
+        await fetchSubscriptionRequests();
+      } catch (refreshErr) {
+        console.warn('Refresh after reject had issues:', refreshErr);
+      }
+    } catch (err) {
+      console.error('Subscription reject error:', err);
+      setToast(err.response?.data?.error || 'Failed to reject plan request');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setProcessingRequestId(null);
@@ -247,6 +301,34 @@ const Wallet = () => {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('plans')}
+            style={{
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '600',
+              borderRadius: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'plans' ? '#6366f1' : '#f1f5f9',
+              color: activeTab === 'plans' ? '#fff' : '#64748b',
+              transition: 'all 0.2s',
+              position: 'relative'
+            }}
+          >
+            Plan Requests
+            {subscriptionRequests.filter(r => r.status === 'PENDING').length > 0 && (
+              <span style={{
+                position: 'absolute', top: '-6px', right: '-6px',
+                width: '20px', height: '20px',
+                backgroundColor: '#ef4444', color: '#fff',
+                borderRadius: '50%', fontSize: '11px', fontWeight: '700',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                {subscriptionRequests.filter(r => r.status === 'PENDING').length}
+              </span>
+            )}
+          </button>
         </div>
 
         {activeTab === 'clients' ? (
@@ -366,7 +448,7 @@ const Wallet = () => {
             ) : null}
           </div>
         </div>
-        ) : (
+        ) : activeTab === 'requests' ? (
         /* Recharge Requests Tab */
         <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
           <h2 style={{fontSize: '18px', fontWeight: '700', color: '#334155', marginBottom: '20px'}}>Recharge Requests</h2>
@@ -463,6 +545,128 @@ const Wallet = () => {
                         </p>
                         <p style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0'}}>
                           ₹{req.amount.toFixed(2)}
+                        </p>
+                        <p style={{fontSize: '11px', color: '#94a3b8', margin: 0}}>
+                          {new Date(req.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <span style={{
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        backgroundColor: req.status === 'APPROVED' ? '#dcfce7' : '#fee2e2',
+                        color: req.status === 'APPROVED' ? '#15803d' : '#dc2626'
+                      }}>
+                        {req.status}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        ) : (
+        /* Plan Requests Tab */
+        <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
+          <h2 style={{fontSize: '18px', fontWeight: '700', color: '#334155', marginBottom: '20px'}}>Plan Requests</h2>
+          
+          {subscriptionRequests.length === 0 ? (
+            <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '40px 0'}}>No plan requests</p>
+          ) : (
+            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+              {/* Pending Requests First */}
+              {subscriptionRequests.filter(r => r.status === 'PENDING').length > 0 && (
+                <>
+                  <h3 style={{fontSize: '14px', fontWeight: '600', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '8px 0'}}>Pending Approval</h3>
+                  {subscriptionRequests.filter(r => r.status === 'PENDING').map(req => (
+                    <div key={req.id} style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '16px',
+                      backgroundColor: '#fffbeb',
+                      borderRadius: '12px',
+                      border: '2px solid #fcd34d'
+                    }}>
+                      <div style={{flex: '1 1 200px', minWidth: 0}}>
+                        <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0'}}>
+                          {req.clientIdentifier}
+                        </p>
+                        <p style={{fontSize: '16px', fontWeight: '700', color: '#6366f1', margin: '0 0 4px 0'}}>
+                          {req.planId?.name || 'Plan'}
+                        </p>
+                        <p style={{fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0'}}>
+                          ₹{(req.planId?.baseCredits || 0) + (req.planId?.bonusCredits || 0)} credits
+                        </p>
+                        <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
+                          {new Date(req.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div style={{display: 'flex', gap: '8px', flexShrink: 0}}>
+                        <button
+                          onClick={() => handleSubscriptionReject(req.id)}
+                          disabled={processingRequestId === req.id}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#fee2e2',
+                            color: '#dc2626',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            borderRadius: '10px',
+                            border: 'none',
+                            cursor: processingRequestId === req.id ? 'not-allowed' : 'pointer',
+                            opacity: processingRequestId === req.id ? 0.6 : 1
+                          }}
+                        >
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => handleSubscriptionApprove(req.id)}
+                          disabled={processingRequestId === req.id}
+                          style={{
+                            padding: '8px 16px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: '#fff',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            borderRadius: '10px',
+                            border: 'none',
+                            cursor: processingRequestId === req.id ? 'not-allowed' : 'pointer',
+                            opacity: processingRequestId === req.id ? 0.6 : 1,
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                          }}
+                        >
+                          {processingRequestId === req.id ? 'Processing...' : 'Approve'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* Processed Requests */}
+              {subscriptionRequests.filter(r => r.status !== 'PENDING').length > 0 && (
+                <>
+                  <h3 style={{fontSize: '14px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '16px 0 8px 0'}}>History</h3>
+                  {subscriptionRequests.filter(r => r.status !== 'PENDING').map(req => (
+                    <div key={req.id} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '14px 20px',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: '12px'
+                    }}>
+                      <div>
+                        <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 2px 0'}}>
+                          {req.clientIdentifier}
+                        </p>
+                        <p style={{fontSize: '14px', fontWeight: '600', color: '#6366f1', margin: '0 0 4px 0'}}>
+                          {req.planId?.name || 'Plan'}
                         </p>
                         <p style={{fontSize: '11px', color: '#94a3b8', margin: 0}}>
                           {new Date(req.createdAt).toLocaleString()}

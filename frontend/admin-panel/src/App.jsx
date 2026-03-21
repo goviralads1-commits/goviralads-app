@@ -155,9 +155,7 @@ const App = () => {
             </ProtectedRoute>
           } />
           <Route path="/subscription-requests" element={
-            <ProtectedRoute allowedRoles={['ADMIN']}>
-              <SubscriptionRequests />
-            </ProtectedRoute>
+            <Navigate to="/wallet" replace />
           } />
           
           <Route path="/" element={<Navigate to="/login" replace />} />

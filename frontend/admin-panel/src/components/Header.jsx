@@ -122,10 +122,10 @@ const Header = ({ title }) => {
     } else if (entityType === 'RECHARGE_REQUEST') {
       navigate(`/recharges`);
     } else if (entityType === 'SUBSCRIPTION_REQUEST') {
-      navigate(`/subscription-requests`);
+      navigate(`/wallet`);
     } else if (notif.type === 'SUBSCRIPTION_REQUEST_SUBMITTED' || notif.type?.includes('SUBSCRIPTION')) {
       // ISSUE 4 FIX: Handle subscription notification types
-      navigate(`/subscription-requests`);
+      navigate(`/wallet`);
     } else if (entityType === 'NOTICE') {
       navigate(`/notifications`);
     } else if (notif.type === 'NOTICE_RESPONSE') {
@@ -386,9 +386,6 @@ const Header = ({ title }) => {
                     </Link>
                     <Link to="/credit-plans" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>💳</span> Credit Plans
-                    </Link>
-                    <Link to="/subscription-requests" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
-                      <span style={{ fontSize: '16px' }}>📋</span> Subscription Requests
                     </Link>
                     {isMainAdmin && (
                       <Link to="/roles" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#6366f1', fontSize: '14px', fontWeight: '600', transition: 'background 0.2s' }}>
