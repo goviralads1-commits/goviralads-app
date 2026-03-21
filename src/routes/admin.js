@@ -543,12 +543,13 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     const { id } = req.params;
     const adminId = req.user.id;
     
-    // ROLE CHECK: Only main admin can approve subscription requests
+    // ROLE CHECK: Main admin OR manager with canApproveRecharge permission
     const adminUser = await User.findById(req.user.id).populate('customRole');
     const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    const canApprove = isMainAdmin || adminUser?.customRole?.permissions?.canApproveRecharge === true;
     
-    if (!isMainAdmin) {
-      return res.status(403).json({ error: 'Access denied: Only main admin can approve subscription requests' });
+    if (!canApprove) {
+      return res.status(403).json({ error: 'Access denied: You do not have permission to approve subscription requests' });
     }
     
     console.log('=== SUBSCRIPTION APPROVE START ===');
@@ -562,51 +563,35 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Only PENDING requests can be approved' });
     }
 
-    // 1. Get wallet
-    const wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
+    // 1. Get or create wallet
+    let wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
     if (!wallet) {
-      return res.status(404).json({ error: 'Wallet not found for this client' });
+      wallet = await Wallet.create({ clientId: request.clientId, balance: 0, walletCredits: 0, subscriptionCredits: 0 });
     }
 
-    // 2. Check balance
-    const availableBalance = (wallet.walletCredits || 0) + (wallet.balance || 0);
-    if (availableBalance < request.finalPrice) {
-      return res.status(400).json({ error: `Insufficient balance. Client has ${availableBalance} credits but needs ${request.finalPrice}` });
-    }
-
-    // 3. Deduct from walletCredits first, then balance
-    let remaining = request.finalPrice;
-    if (wallet.walletCredits >= remaining) {
-      wallet.walletCredits -= remaining;
-    } else {
-      remaining -= (wallet.walletCredits || 0);
-      wallet.walletCredits = 0;
-      wallet.balance = Math.max(0, (wallet.balance || 0) - remaining);
-    }
-
-    // 4. Add subscription credits + set expiry
+    // 2. Add subscription credits + set expiry (NO deduction - prepaid externally)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + (request.planValidityDays || 30));
     wallet.subscriptionCredits = (wallet.subscriptionCredits || 0) + request.totalCredits;
     wallet.subscriptionExpiresAt = expiresAt;
     await wallet.save();
 
-    // 5. Record wallet transaction
+    // 3. Record wallet transaction (credit added via subscription approval)
     await WalletTransaction.create({
       walletId: wallet._id,
-      type: 'SUBSCRIPTION_PURCHASE',
-      amount: -request.finalPrice,
-      description: `Subscription Plan: ${request.planName} (+${request.totalCredits} subscription credits)`,
+      type: 'SUBSCRIPTION_CREDIT',
+      amount: request.totalCredits,
+      description: `Subscription Plan Approved: ${request.planName} (+${request.totalCredits} subscription credits)`,
       referenceId: request._id,
     });
 
-    // 6. Expire any existing active UserSubscription (legacy support)
+    // 4. Expire any existing active UserSubscription (legacy support)
     await UserSubscription.updateMany(
       { userId: request.clientId, isActive: true },
       { $set: { isActive: false } }
     );
 
-    // 7. Create new UserSubscription for legacy compatibility
+    // 5. Create new UserSubscription for legacy compatibility
     await UserSubscription.create({
       userId: request.clientId,
       planId: request.planId,
@@ -616,7 +601,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       isActive: true,
     });
 
-    // 8. Update request status
+    // 6. Update request status
     const updatedRequest = await SubscriptionRequest.findByIdAndUpdate(
       id,
       { status: SUBSCRIPTION_REQUEST_STATUS.APPROVED, reviewedBy: adminId, reviewedAt: new Date() },
@@ -626,7 +611,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${request.totalCredits}, Expires: ${expiresAt}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
-    // 9. Notify client
+    // 7. Notify client
     try {
       await createNotification({
         recipientId: request.clientId,

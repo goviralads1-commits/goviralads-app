@@ -115,7 +115,7 @@ const SubscriptionRequests = () => {
                   {actionType === 'approve' ? 'Approve' : 'Reject'} Subscription Request
                 </h3>
                 <div className="mt-2 text-sm text-gray-500">
-                  <p><strong>Client:</strong> {selectedRequest.clientId?.email || 'N/A'}</p>
+                  <p><strong>Client:</strong> {selectedRequest.clientIdentifier || 'N/A'}</p>
                   <p><strong>Plan:</strong> {selectedRequest.planName}</p>
                   <p><strong>Amount:</strong> ₹{selectedRequest.finalPrice?.toFixed(2)}</p>
                   <p><strong>Credits:</strong> {selectedRequest.totalCredits}</p>
