@@ -218,7 +218,7 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     
     // Use correct field based on plan type (strict, no fallback)
     let planCredits;
-    if (plan.type === 'PLAN') {
+    if (plan.type === 'PLAN' || plan.type?.toLowerCase().includes('subscription')) {
       planCredits = Number(plan.baseCredits) || 0;
     } else {
       planCredits = Number(plan.credits) || 0;

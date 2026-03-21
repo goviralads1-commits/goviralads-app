@@ -579,7 +579,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
 
     // Calculate credits based on plan type (strict, no fallback)
     let baseCredits;
-    if (plan.type === 'PLAN') {
+    if (plan.type === 'PLAN' || plan.type?.toLowerCase().includes('subscription')) {
       baseCredits = Number(plan.baseCredits) || 0;
     } else {
       baseCredits = Number(plan.credits) || 0;
