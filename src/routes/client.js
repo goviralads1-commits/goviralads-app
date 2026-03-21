@@ -1202,36 +1202,58 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
-    // Deduct from subscriptionCredits first
+    // Calculate deduction amounts (subscriptionCredits first, then walletCredits, then balance)
     let deductedFromSub = 0;
     let deductedFromWallet = 0;
+    let deductedFromBalance = 0;
     let remaining = price;
 
+    // 1. From subscriptionCredits (if not expired)
     if (availableSubCredits >= remaining) {
-      wallet.subscriptionCredits -= remaining;
       deductedFromSub = remaining;
       remaining = 0;
     } else if (availableSubCredits > 0) {
       deductedFromSub = availableSubCredits;
-      wallet.subscriptionCredits = 0;
       remaining -= deductedFromSub;
     }
 
-    // Deduct remaining from walletCredits, then balance
+    // 2. From walletCredits
     if (remaining > 0) {
-      if ((wallet.walletCredits || 0) >= remaining) {
-        wallet.walletCredits -= remaining;
+      const walletCreditsAvail = wallet.walletCredits || 0;
+      if (walletCreditsAvail >= remaining) {
         deductedFromWallet = remaining;
+        remaining = 0;
       } else {
-        deductedFromWallet = (wallet.walletCredits || 0);
+        deductedFromWallet = walletCreditsAvail;
         remaining -= deductedFromWallet;
-        wallet.walletCredits = 0;
-        wallet.balance = Math.max(0, (wallet.balance || 0) - remaining);
-        deductedFromWallet += remaining;
       }
     }
 
-    await wallet.save();
+    // 3. From balance (legacy)
+    if (remaining > 0) {
+      deductedFromBalance = Math.min(wallet.balance || 0, remaining);
+    }
+
+    // ATOMIC UPDATE: Apply all deductions in one operation
+    const incUpdate = {};
+    if (deductedFromSub > 0) incUpdate.subscriptionCredits = -deductedFromSub;
+    if (deductedFromWallet > 0) incUpdate.walletCredits = -deductedFromWallet;
+    if (deductedFromBalance > 0) incUpdate.balance = -deductedFromBalance;
+
+    const updatedWallet = await Wallet.findByIdAndUpdate(
+      wallet._id,
+      { $inc: incUpdate },
+      { new: true }
+    );
+
+    // Safety: ensure no negative values
+    const safetyFixes = {};
+    if (updatedWallet.subscriptionCredits < 0) safetyFixes.subscriptionCredits = 0;
+    if (updatedWallet.walletCredits < 0) safetyFixes.walletCredits = 0;
+    if (updatedWallet.balance < 0) safetyFixes.balance = 0;
+    if (Object.keys(safetyFixes).length > 0) {
+      await Wallet.findByIdAndUpdate(wallet._id, { $set: safetyFixes });
+    }
 
     // Also update legacy UserSubscription for backward compatibility
     if (deductedFromSub > 0) {
@@ -1252,7 +1274,8 @@ router.post('/plans/:planId/purchase', async (req, res) => {
     await WalletTransaction.create({
       walletId: wallet._id,
       type: deductedFromSub > 0 ? 'SUBSCRIPTION_DEDUCTION' : 'PLAN_PURCHASE',
-      amount: -price,
+      amount: 0,
+      credits: -price,
       description: `Plan Purchase: ${plan.title}${deductedFromSub > 0 ? ' (from subscription)' : ''}`,
       referenceId: null,
     });
@@ -1434,36 +1457,58 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
 
-    // Deduct from subscriptionCredits first
+    // Calculate deduction amounts (subscriptionCredits first, then walletCredits, then balance)
     let deductedFromSubBundle = 0;
     let deductedFromWalletBundle = 0;
+    let deductedFromBalanceBundle = 0;
     let remainingBundle = price;
 
+    // 1. From subscriptionCredits (if not expired)
     if (availableSubCreditsBundle >= remainingBundle) {
-      wallet.subscriptionCredits -= remainingBundle;
       deductedFromSubBundle = remainingBundle;
       remainingBundle = 0;
     } else if (availableSubCreditsBundle > 0) {
       deductedFromSubBundle = availableSubCreditsBundle;
-      wallet.subscriptionCredits = 0;
       remainingBundle -= deductedFromSubBundle;
     }
 
-    // Deduct remaining from walletCredits, then balance
+    // 2. From walletCredits
     if (remainingBundle > 0) {
-      if ((wallet.walletCredits || 0) >= remainingBundle) {
-        wallet.walletCredits -= remainingBundle;
+      const walletCreditsAvailBundle = wallet.walletCredits || 0;
+      if (walletCreditsAvailBundle >= remainingBundle) {
         deductedFromWalletBundle = remainingBundle;
+        remainingBundle = 0;
       } else {
-        deductedFromWalletBundle = (wallet.walletCredits || 0);
+        deductedFromWalletBundle = walletCreditsAvailBundle;
         remainingBundle -= deductedFromWalletBundle;
-        wallet.walletCredits = 0;
-        wallet.balance = Math.max(0, (wallet.balance || 0) - remainingBundle);
-        deductedFromWalletBundle += remainingBundle;
       }
     }
 
-    await wallet.save();
+    // 3. From balance (legacy)
+    if (remainingBundle > 0) {
+      deductedFromBalanceBundle = Math.min(wallet.balance || 0, remainingBundle);
+    }
+
+    // ATOMIC UPDATE: Apply all deductions in one operation
+    const incUpdateBundle = {};
+    if (deductedFromSubBundle > 0) incUpdateBundle.subscriptionCredits = -deductedFromSubBundle;
+    if (deductedFromWalletBundle > 0) incUpdateBundle.walletCredits = -deductedFromWalletBundle;
+    if (deductedFromBalanceBundle > 0) incUpdateBundle.balance = -deductedFromBalanceBundle;
+
+    const updatedWalletBundle = await Wallet.findByIdAndUpdate(
+      wallet._id,
+      { $inc: incUpdateBundle },
+      { new: true }
+    );
+
+    // Safety: ensure no negative values
+    const safetyFixesBundle = {};
+    if (updatedWalletBundle.subscriptionCredits < 0) safetyFixesBundle.subscriptionCredits = 0;
+    if (updatedWalletBundle.walletCredits < 0) safetyFixesBundle.walletCredits = 0;
+    if (updatedWalletBundle.balance < 0) safetyFixesBundle.balance = 0;
+    if (Object.keys(safetyFixesBundle).length > 0) {
+      await Wallet.findByIdAndUpdate(wallet._id, { $set: safetyFixesBundle });
+    }
 
     // Also update legacy UserSubscription for backward compatibility
     if (deductedFromSubBundle > 0) {
@@ -1484,7 +1529,8 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
     await WalletTransaction.create({
       walletId: wallet._id,
       type: deductedFromSubBundle > 0 ? 'SUBSCRIPTION_DEDUCTION' : 'SUBSCRIPTION_PURCHASE',
-      amount: -price,
+      amount: 0,
+      credits: -price,
       description: `Subscription Purchase: ${subscription.title}${deductedFromSubBundle > 0 ? ' (from subscription)' : ''}`,
       referenceId: null,
     });
