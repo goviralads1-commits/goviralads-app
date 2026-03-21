@@ -223,12 +223,19 @@ const styles = {
   modal: {
     backgroundColor: colors.background.secondary,
     borderRadius: '12px',
-    padding: spacing.lg,
     width: '100%',
     maxWidth: '500px',
     maxHeight: '90vh',
-    overflowY: 'auto',
     margin: `${spacing.lg} auto`,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  modalContent: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: spacing.lg,
+    paddingBottom: 0,
   },
   modalTitle: {
     fontSize: '1.25rem',
@@ -293,7 +300,10 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: spacing.sm,
-    marginTop: spacing.xl,
+    padding: spacing.md,
+    backgroundColor: colors.background.secondary,
+    borderTop: `1px solid ${colors.border.light}`,
+    flexShrink: 0,
   },
   cancelBtn: {
     width: '100%',
@@ -846,18 +856,19 @@ const CreditPlans = () => {
       {showModal && (
         <div style={styles.modalOverlay} onClick={handleCloseModal}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
-            <h2 style={styles.modalTitle}>
-              {editingPlan ? 'Edit Credit Plan' : `Create New ${formData.type === 'PLAN' ? 'Plan' : 'Credit Pack'}`}
-            </h2>
-            <form onSubmit={handleSubmit}>
-              {/* Section: Plan Details */}
-              <div style={{marginBottom: '24px'}}>
-                <h4 style={{fontSize: '14px', fontWeight: '600', color: '#6366f1', margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Plan Details</h4>
-                
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Plan Name *</label>
-                  <input
-                    style={styles.input}
+            <div style={styles.modalContent}>
+              <h2 style={styles.modalTitle}>
+                {editingPlan ? 'Edit Credit Plan' : `Create New ${formData.type === 'PLAN' ? 'Plan' : 'Credit Pack'}`}
+              </h2>
+              <form id="planForm" onSubmit={handleSubmit}>
+                {/* Section: Plan Details */}
+                <div style={{marginBottom: '24px'}}>
+                  <h4 style={{fontSize: '14px', fontWeight: '600', color: '#6366f1', margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Plan Details</h4>
+                  
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Plan Name *</label>
+                    <input
+                      style={styles.input}
                     type="text"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -1038,16 +1049,17 @@ const CreditPlans = () => {
                 </label>
               </div>
               </div>
+              </form>
+            </div>
 
-              <div style={styles.modalActions}>
-                <button type="button" style={styles.cancelBtn} onClick={handleCloseModal}>
-                  Cancel
-                </button>
-                <button type="submit" style={{ ...styles.submitBtn, opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }} disabled={submitting}>
-                  {submitting ? 'Saving...' : (editingPlan ? 'Update Plan' : 'Create Plan')}
-                </button>
-              </div>
-            </form>
+            <div style={styles.modalActions}>
+              <button type="button" style={styles.cancelBtn} onClick={handleCloseModal}>
+                Cancel
+              </button>
+              <button type="submit" form="planForm" style={{ ...styles.submitBtn, opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }} disabled={submitting}>
+                {submitting ? 'Saving...' : (editingPlan ? 'Update Plan' : 'Create Plan')}
+              </button>
+            </div>
           </div>
         </div>
       )}
