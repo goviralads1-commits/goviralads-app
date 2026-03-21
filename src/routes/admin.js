@@ -575,10 +575,10 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     }
 
     // Calculate credits from plan (source of truth)
-    const baseCredits = Number(plan.credits) || 0;
+    const baseCredits = Number(plan.baseCredits) || 0;
     const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
-    const validityDays = Number(plan.validityDays) || 30;
+    const validityDays = Number(plan.validityDays) || 0;
 
     if (creditsToAdd <= 0) {
       return res.status(400).json({ error: 'Invalid plan: credits must be greater than 0' });
