@@ -213,8 +213,16 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       return res.status(404).json({ error: 'Subscription plan not found or inactive' });
     }
 
+    // DEBUG: Log plan credits
+    console.log('[SUB_REQ] PLAN DATA:', {
+      name: plan.name,
+      credits: plan.credits,
+      bonusCredits: plan.bonusCredits,
+      price: plan.price
+    });
+
     let finalPrice = plan.price;
-    let totalCredits = plan.credits + plan.bonusCredits;
+    let totalCredits = (plan.credits || 0) + (plan.bonusCredits || 0);
     let couponDiscount = 0;
     let appliedCouponCode = null;
 
@@ -239,14 +247,19 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       }
     }
 
-    // 4. Create subscription request
+    // 4. Create subscription request - use plan values directly
+    const planCredits = plan.credits || 0;
+    const planBonusCredits = plan.bonusCredits || 0;
+    
+    console.log('[SUB_REQ] Saving to request:', { planCredits, planBonusCredits, totalCredits });
+    
     const subRequest = await SubscriptionRequest.create({
       clientId,
       planId: plan._id,
       planName: plan.name,
       planPrice: plan.price,
-      planCredits: plan.credits,
-      planBonusCredits: plan.bonusCredits || 0,
+      planCredits: planCredits,
+      planBonusCredits: planBonusCredits,
       planValidityDays: plan.validityDays || 30,
       couponCode: appliedCouponCode,
       couponDiscount,
