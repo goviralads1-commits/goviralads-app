@@ -306,7 +306,7 @@ const Wallet = () => {
               return (
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                   <div>
-                    <p style={{fontSize: '13px', fontWeight: '600', color: '#fcd34d', margin: 0}}>Plan Credits</p>
+                    <p style={{fontSize: '13px', fontWeight: '600', color: '#fcd34d', margin: 0}}>Subscription Credits</p>
                     <p style={{fontSize: '11px', color: isExpired ? '#fca5a5' : '#fde68a', margin: '2px 0 0 0'}}>
                       {isExpired ? 'Expired' : `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}
                     </p>
@@ -1024,14 +1024,26 @@ const Wallet = () => {
                               +{tx.credits} credits
                             </p>
                           )}
-                          <p style={{
-                            fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
-                            fontWeight: '700',
-                            color: tx.amount > 0 ? '#10b981' : '#ef4444',
-                            margin: 0
-                          }}>
-                            {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount)}
-                          </p>
+                          {/* Show credits if amount=0 and credits!=0, otherwise show ₹ amount */}
+                          {tx.amount === 0 && tx.credits !== 0 ? (
+                            <p style={{
+                              fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
+                              fontWeight: '700',
+                              color: tx.credits > 0 ? '#10b981' : '#ef4444',
+                              margin: 0
+                            }}>
+                              {tx.credits > 0 ? '+' : ''}{tx.credits} credits
+                            </p>
+                          ) : (
+                            <p style={{
+                              fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
+                              fontWeight: '700',
+                              color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                              margin: 0
+                            }}>
+                              {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount)}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
