@@ -116,8 +116,9 @@ const Wallet = () => {
   const handleSubscriptionApprove = async (requestId) => {
     try {
       setLoadingId(requestId);
-      await api.post(`/admin/subscription-requests/${requestId}/approve`);
-      setToast('Approved successfully');
+      const res = await api.post(`/admin/subscription-requests/${requestId}/approve`);
+      // Success - show green toast
+      setToast({ type: 'success', message: `✅ Approved! ${res.data.totalCredits || ''} credits added` });
       setTimeout(() => setToast(null), 3000);
       try {
         await Promise.all([fetchWallets(), fetchSubscriptionRequests()]);
@@ -127,7 +128,8 @@ const Wallet = () => {
       }
     } catch (err) {
       console.error('Subscription approve error:', err);
-      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
+      // Error - show red toast
+      setToast({ type: 'error', message: err.response?.data?.details || err.response?.data?.error || 'Failed to approve' });
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
@@ -228,16 +230,24 @@ const Wallet = () => {
       <Header />
       
       {/* Toast */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
-          backgroundColor: toast.toLowerCase().includes('fail') || toast.toLowerCase().includes('error') || toast.toLowerCase().includes('insufficient') ? '#ef4444' : '#10b981',
-          color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 100
-        }}>
-          {toast}
-        </div>
-      )}
+      {toast && ((
+        () => {
+          const msg = typeof toast === 'object' ? toast.message : toast;
+          const isError = typeof toast === 'object' 
+            ? toast.type === 'error' 
+            : (msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') || msg.toLowerCase().includes('insufficient'));
+          return (
+            <div style={{
+              position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
+              backgroundColor: isError ? '#ef4444' : '#10b981',
+              color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 100
+            }}>
+              {msg}
+            </div>
+          );
+        }
+      )())}
 
       <div style={{maxWidth: '1400px', margin: '0 auto', padding: '24px 20px'}}>
         <h1 style={{fontSize: '28px', fontWeight: '700', color: '#0f172a', marginBottom: '24px'}}>Wallet Management</h1>

@@ -36,13 +36,13 @@ const SubscriptionRequests = () => {
     
     try {
       if (actionType === 'approve') {
-        await api.post(`/admin/subscription-requests/${selectedRequest.id}/approve`);
-        setToast('Subscription approved successfully');
+        const res = await api.post(`/admin/subscription-requests/${selectedRequest.id}/approve`);
+        setToast({ type: 'success', message: `✅ Approved! ${res.data.totalCredits || ''} credits added` });
       } else if (actionType === 'reject') {
         await api.post(`/admin/subscription-requests/${selectedRequest.id}/reject`, {
           rejectionReason
         });
-        setToast('Subscription request rejected');
+        setToast({ type: 'success', message: 'Request rejected' });
       }
       
       // Refresh data
@@ -52,8 +52,8 @@ const SubscriptionRequests = () => {
       setRejectionReason('');
       setShowActionForm(false);
     } catch (err) {
-      const msg = err.response?.data?.error || `Failed to ${actionType} subscription request`;
-      setToast(msg);
+      const msg = err.response?.data?.details || err.response?.data?.error || `Failed to ${actionType} subscription request`;
+      setToast({ type: 'error', message: msg });
       console.error('Action error:', err);
     } finally {
       setActionSubmitting(false);
@@ -86,16 +86,24 @@ const SubscriptionRequests = () => {
       <Header />
       
       {/* Toast */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
-          backgroundColor: toast.toLowerCase().includes('fail') || toast.toLowerCase().includes('error') ? '#ef4444' : '#10b981',
-          color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 100
-        }}>
-          {toast}
-        </div>
-      )}
+      {toast && ((
+        () => {
+          const msg = typeof toast === 'object' ? toast.message : toast;
+          const isError = typeof toast === 'object' 
+            ? toast.type === 'error' 
+            : (msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'));
+          return (
+            <div style={{
+              position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)',
+              backgroundColor: isError ? '#ef4444' : '#10b981',
+              color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 100
+            }}>
+              {msg}
+            </div>
+          );
+        }
+      )())}
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">

@@ -368,7 +368,7 @@ const Wallet = () => {
               const daysLeft = Math.ceil((new Date(walletData.subscriptionExpiresAt) - now) / (1000 * 60 * 60 * 24));
               return (
                 <>
-                  {/* Active Plan Info */}
+                  {/* Subscription Credits Info */}
                   <div style={{
                     marginTop: '10px',
                     width: '100%',
@@ -381,9 +381,12 @@ const Wallet = () => {
                     fontWeight: '600',
                     textAlign: 'center'
                   }}>
-                    <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Active Plan</div>
+                    <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Subscription Credits: {walletData.subscriptionCredits}</div>
                     <div style={{fontSize: '13px', opacity: 0.9}}>
-                      {walletData.subscriptionCredits} credits • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                      {daysLeft} day{daysLeft !== 1 ? 's' : ''} remaining
+                    </div>
+                    <div style={{fontSize: '11px', opacity: 0.7, marginTop: '4px'}}>
+                      Combined from all plan purchases
                     </div>
                   </div>
                   {/* Upgrade Plans Button */}
