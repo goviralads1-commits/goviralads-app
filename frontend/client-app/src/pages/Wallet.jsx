@@ -356,7 +356,7 @@ const Wallet = () => {
             💳 {activeSection === 'recharge' ? 'Hide Add Money' : 'Add Money'}
           </button>
 
-          {/* View Plans Button */}
+          {/* View Plans Button - Always show, even with active subscription */}
           {(() => {
             const now = new Date();
             const hasActiveSubscription = 
@@ -367,23 +367,47 @@ const Wallet = () => {
             if (hasActiveSubscription) {
               const daysLeft = Math.ceil((new Date(walletData.subscriptionExpiresAt) - now) / (1000 * 60 * 60 * 24));
               return (
-                <div style={{
-                  marginTop: '10px',
-                  width: '100%',
-                  padding: '14px 24px',
-                  background: 'rgba(16,185,129,0.3)',
-                  border: '2px solid rgba(16,185,129,0.5)',
-                  borderRadius: '14px',
-                  color: '#86efac',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  textAlign: 'center'
-                }}>
-                  <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Active Plan</div>
-                  <div style={{fontSize: '13px', opacity: 0.9}}>
-                    ₹{walletData.subscriptionCredits.toFixed(2)} credits • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                <>
+                  {/* Active Plan Info */}
+                  <div style={{
+                    marginTop: '10px',
+                    width: '100%',
+                    padding: '14px 24px',
+                    background: 'rgba(16,185,129,0.3)',
+                    border: '2px solid rgba(16,185,129,0.5)',
+                    borderRadius: '14px',
+                    color: '#86efac',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Active Plan</div>
+                    <div style={{fontSize: '13px', opacity: 0.9}}>
+                      ₹{walletData.subscriptionCredits.toFixed(2)} credits • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                    </div>
                   </div>
-                </div>
+                  {/* Upgrade Plans Button */}
+                  <button
+                    onClick={() => {
+                      setActiveSection(prev => prev === 'subscription' ? null : 'subscription');
+                    }}
+                    style={{
+                      marginTop: '10px',
+                      width: '100%',
+                      padding: '14px 24px',
+                      background: activeSection === 'subscription' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
+                      border: '2px solid rgba(255,255,255,0.4)',
+                      borderRadius: '14px',
+                      color: '#fff',
+                      fontSize: '15px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    ⬆️ {activeSection === 'subscription' ? 'Hide Upgrade Options' : 'View Upgrade Options'}
+                  </button>
+                </>
               );
             }
             
@@ -449,30 +473,41 @@ const Wallet = () => {
               gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
               gap: '16px'
             }}>
-              {creditPlans.filter(p => p.type === 'PLAN').sort((a, b) => (b.totalCredits || b.credits) - (a.totalCredits || a.credits)).map((plan, index) => {
+              {creditPlans.filter(p => p.type === 'PLAN').sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)).map((plan, index) => {
                 const planId = plan.id || plan._id;
-                const isCurrentPlan = subscription?.planId === planId;
+                const isCurrentPlan = subscription?.planId === planId || walletData?.currentPlanId === planId;
                 const isBuying = purchasingPlan === planId;
                 const isPendingApproval = pendingSubscriptionRequests.some(r => r.planId === planId);
                 const isBestValue = index === 0 && !isCurrentPlan && !isPendingApproval;
+                
+                // Upgrade logic - check if user has active subscription
+                const hasActiveSubscription = walletData?.subscriptionCredits > 0 && 
+                  walletData?.subscriptionExpiresAt && 
+                  new Date(walletData.subscriptionExpiresAt) > new Date();
+                const currentPlanPrice = Number(walletData?.currentPlanPrice) || 0;
+                const canUpgrade = !hasActiveSubscription || (plan.price > currentPlanPrice);
+                const isLowerPlan = hasActiveSubscription && plan.price <= currentPlanPrice && !isCurrentPlan;
+                
                 return (
                   <button
                     key={planId}
-                    onClick={() => !isPendingApproval && handleSubscriptionPurchase(planId, plan)}
-                    disabled={isBuying || isPendingApproval}
+                    onClick={() => !isPendingApproval && canUpgrade && handleSubscriptionPurchase(planId, plan)}
+                    disabled={isBuying || isPendingApproval || isLowerPlan}
                     style={{
                       padding: '24px 16px',
                       borderRadius: '20px',
-                      border: isPendingApproval ? '2px solid #f59e0b' : isCurrentPlan ? '2px solid #16a34a' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                      border: isPendingApproval ? '2px solid #f59e0b' : isCurrentPlan ? '2px solid #16a34a' : isLowerPlan ? '1px solid #e2e8f0' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
                       background: isPendingApproval
                         ? 'linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%)'
                         : isCurrentPlan
                         ? 'linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%)'
+                        : isLowerPlan
+                        ? 'linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)'
                         : isBestValue
                         ? 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'
                         : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
-                      cursor: isBuying || isPendingApproval ? 'not-allowed' : 'pointer',
-                      opacity: isBuying ? 0.7 : 1,
+                      cursor: isBuying || isPendingApproval || isLowerPlan ? 'not-allowed' : 'pointer',
+                      opacity: isBuying ? 0.7 : isLowerPlan ? 0.6 : 1,
                       textAlign: 'center',
                       position: 'relative',
                       transition: 'all 0.25s ease',
@@ -506,6 +541,23 @@ const Wallet = () => {
                         fontSize: '9px', fontWeight: '700',
                         padding: '4px 12px', borderRadius: '20px'
                       }}>ACTIVE</span>
+                    )}
+                    {!isPendingApproval && !isCurrentPlan && isLowerPlan && (
+                      <span style={{
+                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
+                        backgroundColor: '#94a3b8', color: '#fff',
+                        fontSize: '9px', fontWeight: '700',
+                        padding: '4px 12px', borderRadius: '20px'
+                      }}>NOT AVAILABLE</span>
+                    )}
+                    {!isPendingApproval && !isCurrentPlan && !isLowerPlan && canUpgrade && hasActiveSubscription && (
+                      <span style={{
+                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
+                        background: 'linear-gradient(90deg, #10b981, #059669)',
+                        color: '#fff', fontSize: '9px', fontWeight: '700',
+                        padding: '4px 12px', borderRadius: '20px', letterSpacing: '0.5px',
+                        boxShadow: '0 2px 8px rgba(16,185,129,0.4)'
+                      }}>UPGRADE</span>
                     )}
 
                     {/* Price */}

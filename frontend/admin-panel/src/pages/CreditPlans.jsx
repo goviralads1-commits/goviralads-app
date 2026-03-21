@@ -850,43 +850,62 @@ const CreditPlans = () => {
               {editingPlan ? 'Edit Credit Plan' : `Create New ${formData.type === 'PLAN' ? 'Plan' : 'Credit Pack'}`}
             </h2>
             <form onSubmit={handleSubmit}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Plan Name *</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Starter Pack"
-                  required
-                />
+              {/* Section: Plan Details */}
+              <div style={{marginBottom: '24px'}}>
+                <h4 style={{fontSize: '14px', fontWeight: '600', color: '#6366f1', margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Plan Details</h4>
+                
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Plan Name *</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g., Starter Pack"
+                    required
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Type</label>
+                  <select
+                    style={styles.select}
+                    value={formData.type}
+                    onChange={e => setFormData({ ...formData, type: e.target.value })}
+                  >
+                    <option value="PLAN">Subscription Plan (with Bonus)</option>
+                    <option value="PACK">One-time Credit Pack (Simple)</option>
+                  </select>
+                  <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>This plan will be visible to clients based on visibility setting</p>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Description (optional)</label>
+                  <textarea
+                    style={styles.textarea}
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Brief description of this plan..."
+                  />
+                </div>
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Type</label>
-                <select
-                  style={styles.select}
-                  value={formData.type}
-                  onChange={e => setFormData({ ...formData, type: e.target.value })}
-                >
-                  <option value="PLAN">Subscription Plan (with Bonus)</option>
-                  <option value="PACK">One-time Credit Pack (Simple)</option>
-                </select>
-                <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>This plan will be visible to clients based on visibility setting</p>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Price (₹) * (min ₹100)</label>
-                <input
-                  style={styles.input}
-                  type="number"
-                  min="100"
-                  value={formData.price}
-                  onChange={e => setFormData({ ...formData, price: e.target.value })}
-                  placeholder="e.g., 500"
-                  required
-                />
-              </div>
+              {/* Section: Pricing & Credits */}
+              <div style={{marginBottom: '24px'}}>
+                <h4 style={{fontSize: '14px', fontWeight: '600', color: '#10b981', margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Pricing & Credits</h4>
+                
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Price (₹) * (min ₹100)</label>
+                  <input
+                    style={styles.input}
+                    type="number"
+                    min="100"
+                    value={formData.price}
+                    onChange={e => setFormData({ ...formData, price: e.target.value })}
+                    placeholder="e.g., 500"
+                    required
+                  />
+                </div>
 
               <div style={styles.formGroup}>
                 <label style={styles.label}>Base Credits *</label>
@@ -915,16 +934,6 @@ const CreditPlans = () => {
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Description (optional)</label>
-                <textarea
-                  style={styles.textarea}
-                  value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Brief description of this plan..."
-                />
-              </div>
-
-              <div style={styles.formGroup}>
                 <label style={styles.label}>Display Order</label>
                 <input
                   style={styles.input}
@@ -947,6 +956,11 @@ const CreditPlans = () => {
                 />
                 <p style={{fontSize: '11px', color: '#64748b', margin: '4px 0 0 0'}}>Validity in days (for subscription plans only - credits expire after this period)</p>
               </div>
+              </div>
+
+              {/* Section: Visibility */}
+              <div style={{marginBottom: '24px'}}>
+                <h4 style={{fontSize: '14px', fontWeight: '600', color: '#f59e0b', margin: '0 0 16px 0', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Visibility</h4>
 
               <div style={styles.formGroup}>
                 <label style={styles.label}>Visibility</label>
@@ -1022,6 +1036,7 @@ const CreditPlans = () => {
                   />
                   Active (visible to clients)
                 </label>
+              </div>
               </div>
 
               <div style={styles.modalActions}>
