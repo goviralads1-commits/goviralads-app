@@ -33,6 +33,11 @@ const walletSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Current plan price (for upgrade comparison)
+    currentPlanPrice: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

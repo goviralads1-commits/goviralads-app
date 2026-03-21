@@ -213,16 +213,16 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       return res.status(404).json({ error: 'Subscription plan not found or inactive' });
     }
 
-    // DEBUG: Log plan credits
-    console.log('[SUB_REQ] PLAN DATA:', {
-      name: plan.name,
-      baseCredits: plan.baseCredits,
-      bonusCredits: plan.bonusCredits,
-      price: plan.price
-    });
-
+    // DEBUG: Log full plan object
+    console.log('[SUB_REQ] FULL PLAN OBJECT:', JSON.stringify(plan, null, 2));
+    
+    // Use correct field based on plan type
+    // PACK uses 'credits', PLAN may use 'baseCredits' or 'credits'
+    const planCredits = Number(plan.baseCredits) || Number(plan.credits) || 0;
+    const planBonusCredits = Number(plan.bonusCredits) || 0;
+    
     let finalPrice = plan.price;
-    let totalCredits = (Number(plan.baseCredits) || 0) + (Number(plan.bonusCredits) || 0);
+    let totalCredits = planCredits + planBonusCredits;
     let couponDiscount = 0;
     let appliedCouponCode = null;
 
@@ -247,10 +247,7 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       }
     }
 
-    // 4. Create subscription request - use plan values directly
-    const planCredits = Number(plan.baseCredits) || 0;
-    const planBonusCredits = Number(plan.bonusCredits) || 0;
-    
+    // 4. Create subscription request - use calculated plan values
     console.log('[SUB_REQ] Saving to request:', { planCredits, planBonusCredits, totalCredits });
     
     const subRequest = await SubscriptionRequest.create({

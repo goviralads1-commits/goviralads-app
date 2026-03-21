@@ -574,11 +574,17 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       return res.status(404).json({ error: 'Plan not found' });
     }
 
-    // Calculate credits from plan (source of truth)
-    const baseCredits = Number(plan.credits) || 0;
+    // DEBUG: Log full plan object
+    console.log('[SUB_APPROVE] FULL PLAN:', JSON.stringify(plan, null, 2));
+
+    // Calculate credits from plan (use baseCredits or credits)
+    const baseCredits = Number(plan.baseCredits) || Number(plan.credits) || 0;
     const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
     const validityDays = Number(plan.validityDays) || 0;
+    const planPrice = Number(plan.price) || 0;
+
+    console.log('[SUB_APPROVE] Credits:', { baseCredits, bonusCredits, creditsToAdd, validityDays, planPrice });
 
     if (creditsToAdd <= 0) {
       return res.status(400).json({ error: 'Invalid plan: credits must be greater than 0' });
@@ -598,14 +604,20 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       });
     }
     
-    // Check if user already has active subscription
+    // Check if user already has active subscription - allow UPGRADE if new price > current
     if (wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt > now && wallet.subscriptionCredits > 0) {
-      return res.status(400).json({ error: 'User already has an active subscription' });
+      const currentPlanPrice = Number(wallet.currentPlanPrice) || 0;
+      if (planPrice <= currentPlanPrice) {
+        return res.status(400).json({ error: 'User already has an active subscription. Upgrade to a higher plan.' });
+      }
+      // Allow upgrade - continue processing
+      console.log('[SUB_APPROVE] Upgrading from', currentPlanPrice, 'to', planPrice);
     }
     
     // SET subscription credits and expiry
     wallet.subscriptionCredits = creditsToAdd;
     wallet.subscriptionExpiresAt = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+    wallet.currentPlanPrice = planPrice;
     await wallet.save();
 
     const expiresAt = wallet.subscriptionExpiresAt;
