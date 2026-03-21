@@ -306,7 +306,7 @@ const Wallet = () => {
               return (
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                   <div>
-                    <p style={{fontSize: '13px', fontWeight: '600', color: '#fcd34d', margin: 0}}>Subscription Credits</p>
+                    <p style={{fontSize: '13px', fontWeight: '600', color: '#fcd34d', margin: 0}}>Plan Credits</p>
                     <p style={{fontSize: '11px', color: isExpired ? '#fca5a5' : '#fde68a', margin: '2px 0 0 0'}}>
                       {isExpired ? 'Expired' : `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}
                     </p>
@@ -319,7 +319,7 @@ const Wallet = () => {
             {/* Wallet Credits Row */}
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
               <div>
-                <p style={{fontSize: '13px', fontWeight: '600', color: '#86efac', margin: 0}}>Wallet Credits</p>
+                <p style={{fontSize: '13px', fontWeight: '600', color: '#86efac', margin: 0}}>Wallet Balance</p>
                 <p style={{fontSize: '11px', color: '#bbf7d0', margin: '2px 0 0 0'}}>No expiry</p>
               </div>
               <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>₹{(walletData?.walletCredits || walletData?.balance || 0).toFixed(2)}</span>
@@ -346,7 +346,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            💳 {activeSection === 'recharge' ? 'Hide Recharge' : 'Upgrade Credits'}
+            💳 {activeSection === 'recharge' ? 'Hide' : 'Add Money'}
           </button>
 
           {/* View Plans Button */}
@@ -368,7 +368,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            📦 {activeSection === 'subscription' ? 'Hide Plans' : 'View Plans'}
+            📦 {activeSection === 'subscription' ? 'Hide' : 'Buy Plan'}
           </button>
         </div>
 
@@ -947,7 +947,7 @@ const Wallet = () => {
                 marginBottom: '20px',
                 border: '1px solid #e2e8f0'
               }}>
-                <h4 style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0'}}>Add Credits</h4>
+                <h4 style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0'}}>Add Money</h4>
                 <div style={{marginBottom: '12px'}}>
                   <input
                     type="number"
