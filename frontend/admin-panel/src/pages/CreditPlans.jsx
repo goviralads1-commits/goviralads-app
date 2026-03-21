@@ -226,6 +226,8 @@ const styles = {
     padding: spacing.lg,
     width: '100%',
     maxWidth: '500px',
+    maxHeight: '90vh',
+    overflowY: 'auto',
     margin: `${spacing.lg} auto`,
   },
   modalTitle: {
@@ -391,7 +393,10 @@ const CreditPlans = () => {
     try {
       setLoading(true);
       const res = await api.get('/admin/credit-plans');
-      setPlans(res.data.plans || []);
+      const fetchedPlans = res.data.plans || [];
+      // Sort by displayOrder
+      fetchedPlans.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      setPlans(fetchedPlans);
     } catch (err) {
       showToast('Failed to load credit plans', 'error');
     } finally {

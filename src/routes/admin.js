@@ -577,8 +577,13 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     // DEBUG: Log full plan object
     console.log('[SUB_APPROVE] FULL PLAN:', JSON.stringify(plan, null, 2));
 
-    // Calculate credits from plan (use baseCredits or credits)
-    const baseCredits = Number(plan.baseCredits) || Number(plan.credits) || 0;
+    // Calculate credits based on plan type (strict, no fallback)
+    let baseCredits;
+    if (plan.type === 'PLAN') {
+      baseCredits = Number(plan.baseCredits) || 0;
+    } else {
+      baseCredits = Number(plan.credits) || 0;
+    }
     const bonusCredits = Number(plan.bonusCredits) || 0;
     const creditsToAdd = baseCredits + bonusCredits;
     const validityDays = Number(plan.validityDays) || 0;
@@ -618,6 +623,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     wallet.subscriptionCredits = creditsToAdd;
     wallet.subscriptionExpiresAt = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
     wallet.currentPlanPrice = planPrice;
+    wallet.currentPlanId = plan._id;
     await wallet.save();
 
     const expiresAt = wallet.subscriptionExpiresAt;

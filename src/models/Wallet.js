@@ -38,6 +38,12 @@ const walletSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Current plan ID
+    currentPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CreditPlan',
+      default: null,
+    },
   },
   {
     timestamps: true,
