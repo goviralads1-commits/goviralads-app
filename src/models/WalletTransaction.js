@@ -62,12 +62,25 @@ const walletTransactionSchema = new mongoose.Schema(
 );
 
 // IMMUTABLE: Prevent updates and deletes at schema level
+// EXCEPTION: Allow updating ONLY isHidden field for admin visibility control
 walletTransactionSchema.pre('updateOne', function () {
-  throw new Error('WalletTransaction records are immutable and cannot be updated');
+  const update = this.getUpdate();
+  const allowedFields = ['isHidden'];
+  const updateFields = Object.keys(update.$set || update);
+  const isAllowed = updateFields.every(f => allowedFields.includes(f));
+  if (!isAllowed) {
+    throw new Error('WalletTransaction records are immutable and cannot be updated');
+  }
 });
 
 walletTransactionSchema.pre('findOneAndUpdate', function () {
-  throw new Error('WalletTransaction records are immutable and cannot be updated');
+  const update = this.getUpdate();
+  const allowedFields = ['isHidden'];
+  const updateFields = Object.keys(update.$set || update);
+  const isAllowed = updateFields.every(f => allowedFields.includes(f));
+  if (!isAllowed) {
+    throw new Error('WalletTransaction records are immutable and cannot be updated');
+  }
 });
 
 walletTransactionSchema.pre('deleteOne', function () {

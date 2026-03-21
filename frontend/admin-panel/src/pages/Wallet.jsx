@@ -22,6 +22,12 @@ const Wallet = () => {
   const [submitting, setSubmitting] = useState(false);
   const [loadingId, setLoadingId] = useState(null);
 
+  // Deduct funds modal
+  const [showDeductFunds, setShowDeductFunds] = useState(false);
+  const [deductAmount, setDeductAmount] = useState('');
+  const [deductDescription, setDeductDescription] = useState('');
+  const [deductHidden, setDeductHidden] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -178,7 +184,7 @@ const Wallet = () => {
     setSubmitting(true);
     try {
       await api.post(`/admin/wallets/${selectedClient}/adjust`, {
-        amount: parseFloat(addAmount),
+        credits: parseFloat(addAmount),
         description: addDescription || 'Admin credit adjustment'
       });
       
@@ -189,11 +195,49 @@ const Wallet = () => {
       setShowAddFunds(false);
       setAddAmount('');
       setAddDescription('');
-      setToast('Funds added successfully');
+      setToast({ type: 'success', message: `+${addAmount} credits added successfully` });
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
       console.error('Add funds error:', err);
-      setToast(err.response?.data?.error || 'Failed to add funds');
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to add funds' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeductFunds = async (e) => {
+    e.preventDefault();
+    if (!selectedClient || !deductAmount) return;
+    
+    const amount = parseFloat(deductAmount);
+    if (amount <= 0) {
+      setToast({ type: 'error', message: 'Amount must be greater than 0' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      await api.post(`/admin/wallets/${selectedClient}/adjust`, {
+        credits: -amount, // Negative for deduction
+        description: deductDescription || 'Admin credit deduction',
+        isHidden: deductHidden
+      });
+      
+      // Refresh data
+      await fetchWallets();
+      await fetchClientWallet(selectedClient);
+      
+      setShowDeductFunds(false);
+      setDeductAmount('');
+      setDeductDescription('');
+      setDeductHidden(false);
+      setToast({ type: 'success', message: `-${amount} credits deducted successfully` });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      console.error('Deduct funds error:', err);
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to deduct funds' });
       setTimeout(() => setToast(null), 4000);
     } finally {
       setSubmitting(false);
@@ -385,22 +429,40 @@ const Wallet = () => {
                       ₹{clientWallet.balance.toFixed(2)}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setShowAddFunds(true)}
-                    style={{
-                      padding: '12px 24px',
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: '#fff',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      borderRadius: '12px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
-                    }}
-                  >
-                    + Add Funds
-                  </button>
+                  <div style={{display: 'flex', gap: '8px'}}>
+                    <button
+                      onClick={() => setShowAddFunds(true)}
+                      style={{
+                        padding: '12px 20px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        borderRadius: '12px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                      }}
+                    >
+                      + Add Funds
+                    </button>
+                    <button
+                      onClick={() => setShowDeductFunds(true)}
+                      style={{
+                        padding: '12px 20px',
+                        background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        borderRadius: '12px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(239,68,68,0.3)'
+                      }}
+                    >
+                      − Deduct Funds
+                    </button>
+                  </div>
                 </div>
 
                 {/* Transaction History */}
@@ -717,7 +779,7 @@ const Wallet = () => {
             <form onSubmit={handleAddFunds}>
               <div style={{marginBottom: '20px'}}>
                 <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>
-                  Amount (₹)
+                  Credits
                 </label>
                 <input
                   type="number"
@@ -793,6 +855,142 @@ const Wallet = () => {
                   }}
                 >
                   {submitting ? 'Adding...' : 'Add Funds'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {/* Deduct Funds Modal */}
+      {showDeductFunds && (
+        <>
+          <div 
+            onClick={() => setShowDeductFunds(false)}
+            style={{
+              position: 'fixed', inset: 0,
+              backgroundColor: 'rgba(15,23,42,0.6)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 80
+            }}
+          />
+          <div style={{
+            position: 'fixed',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: '#fff',
+            borderRadius: '24px',
+            padding: '32px',
+            width: '90%',
+            maxWidth: '400px',
+            zIndex: 90,
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+          }}>
+            <h3 style={{fontSize: '20px', fontWeight: '700', color: '#ef4444', margin: '0 0 24px 0'}}>Deduct Funds</h3>
+            <form onSubmit={handleDeductFunds}>
+              <div style={{marginBottom: '20px'}}>
+                <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>
+                  Credits to Deduct
+                </label>
+                <input
+                  type="number"
+                  value={deductAmount}
+                  onChange={(e) => setDeductAmount(e.target.value)}
+                  placeholder="500"
+                  required
+                  min="1"
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    border: '2px solid #fecaca',
+                    borderRadius: '12px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{marginBottom: '20px'}}>
+                <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>
+                  Reason (required)
+                </label>
+                <input
+                  type="text"
+                  value={deductDescription}
+                  onChange={(e) => setDeductDescription(e.target.value)}
+                  placeholder="e.g., Payment reversal, Manual correction"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    fontSize: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '12px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{marginBottom: '24px'}}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#64748b',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={deductHidden}
+                    onChange={(e) => setDeductHidden(e.target.checked)}
+                    style={{width: '18px', height: '18px', accentColor: '#6366f1'}}
+                  />
+                  Hide from client (admin-only record)
+                </label>
+              </div>
+              <div style={{display: 'flex', gap: '12px'}}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeductFunds(false);
+                    setDeductAmount('');
+                    setDeductDescription('');
+                    setDeductHidden(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    backgroundColor: 'transparent',
+                    color: '#64748b',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    borderRadius: '12px',
+                    border: '2px solid #e2e8f0',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || !deductAmount || !deductDescription}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    borderRadius: '12px',
+                    border: 'none',
+                    cursor: submitting ? 'not-allowed' : 'pointer',
+                    opacity: (submitting || !deductDescription) ? 0.6 : 1
+                  }}
+                >
+                  {submitting ? 'Processing...' : 'Deduct Funds'}
                 </button>
               </div>
             </form>

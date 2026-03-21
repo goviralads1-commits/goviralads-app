@@ -25,6 +25,7 @@ const Wallet = () => {
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
   const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
   const [activeSection, setActiveSection] = useState(null); // null | 'recharge' | 'subscription'
+  const [showAddMoneyModal, setShowAddMoneyModal] = useState(false);
   const subscriptionRef = useRef(null);
   const addCreditRef = useRef(null);
 
@@ -335,24 +336,14 @@ const Wallet = () => {
             </p>
           )}
 
-          {/* Upgrade Credits Button */}
+          {/* Add Money Button */}
           <button
-            onClick={() => {
-              const newSection = activeSection === 'recharge' ? null : 'recharge';
-              setActiveSection(newSection);
-              setActiveTab('recharge');
-              // Scroll to form after state update
-              if (newSection === 'recharge') {
-                setTimeout(() => {
-                  addCreditRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-              }
-            }}
+            onClick={() => setShowAddMoneyModal(true)}
             style={{
               marginTop: '20px',
               width: '100%',
               padding: '14px 24px',
-              background: activeSection === 'recharge' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
+              background: 'rgba(255,255,255,0.2)',
               border: '2px solid rgba(255,255,255,0.4)',
               borderRadius: '14px',
               color: '#fff',
@@ -362,7 +353,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            💳 {activeSection === 'recharge' ? 'Hide Add Money' : 'Add Money'}
+            💳 Add Money
           </button>
 
           {/* View Plans Button - Always show, even with active subscription */}
@@ -1066,105 +1057,27 @@ const Wallet = () => {
           )}
 
           {/* Recharge Requests Tab */}
-          {activeSection === 'recharge' && activeTab === 'recharge' && (
+          {activeTab === 'recharge' && (
             <>
-              {/* Manual Recharge Form */}
-              <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '16px'}}>Add Money to Wallet</h3>
-              <div ref={addCreditRef} style={{
-                backgroundColor: '#f8fafc',
-                borderRadius: '16px',
-                padding: '20px',
-                marginBottom: '20px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <h4 style={{fontSize: '16px', fontWeight: '600', color: '#475569', margin: '0 0 16px 0'}}>Enter Details</h4>
-                <div style={{marginBottom: '12px'}}>
-                  <input
-                    type="number"
-                    placeholder="Enter Amount"
-                    value={rechargeAmount}
-                    onChange={(e) => setRechargeAmount(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '14px 16px',
-                      fontSize: '15px',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '12px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
-                <div style={{marginBottom: '16px'}}>
-                  <input
-                    type="text"
-                    placeholder="Enter UTR / Transaction ID"
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '14px 16px',
-                      fontSize: '15px',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '12px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
+              {/* Recharge History */}
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+                <h4 style={{fontSize: '14px', fontWeight: '600', color: '#64748b', margin: 0}}>Request History</h4>
                 <button
-                  onClick={async () => {
-                    if (!rechargeAmount || parseFloat(rechargeAmount) < 1) {
-                      setToast('Please enter a valid amount');
-                      setTimeout(() => setToast(null), 3000);
-                      return;
-                    }
-                    if (!paymentRef.trim()) {
-                      setToast('Please enter UTR / Transaction ID');
-                      setTimeout(() => setToast(null), 3000);
-                      return;
-                    }
-                    setRechargeSubmitting(true);
-                    try {
-                      await api.post('/client/wallet/recharge', {
-                        amount: parseFloat(rechargeAmount),
-                        paymentReference: paymentRef.trim()
-                      });
-                      setToast('Request submitted. Waiting for admin approval.');
-                      setTimeout(() => setToast(null), 4000);
-                      setRechargeAmount('');
-                      setPaymentRef('');
-                      // Refresh recharge requests
-                      const requestsResponse = await api.get('/client/wallet/recharge-requests');
-                      setRechargeRequests(requestsResponse.data.requests || []);
-                    } catch (err) {
-                      const msg = err.response?.data?.error || 'Failed to submit request';
-                      setToast(msg);
-                      setTimeout(() => setToast(null), 4000);
-                    } finally {
-                      setRechargeSubmitting(false);
-                    }
-                  }}
-                  disabled={rechargeSubmitting}
+                  onClick={() => setShowAddMoneyModal(true)}
                   style={{
-                    width: '100%',
-                    padding: '14px',
+                    padding: '8px 16px',
                     background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
                     color: '#fff',
-                    fontSize: '15px',
-                    fontWeight: '700',
-                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    borderRadius: '10px',
                     border: 'none',
-                    cursor: rechargeSubmitting ? 'not-allowed' : 'pointer',
-                    opacity: rechargeSubmitting ? 0.6 : 1
+                    cursor: 'pointer'
                   }}
                 >
-                  {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
+                  + Add Money
                 </button>
               </div>
-
-              {/* Recharge History */}
-              <h4 style={{fontSize: '14px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0'}}>Request History</h4>
               {rechargeRequests.length === 0 ? (
                 <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No recharge requests</p>
               ) : (
@@ -1283,6 +1196,150 @@ const Wallet = () => {
           )}
         </div>
       </div>
+
+      {/* Add Money Modal */}
+      {showAddMoneyModal && (
+        <>
+          <div 
+            onClick={() => setShowAddMoneyModal(false)}
+            style={{
+              position: 'fixed', inset: 0,
+              backgroundColor: 'rgba(15,23,42,0.6)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 80
+            }}
+          />
+          <div style={{
+            position: 'fixed',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: '#fff',
+            borderRadius: '24px',
+            padding: '28px',
+            width: '90%',
+            maxWidth: '400px',
+            zIndex: 90,
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+          }}>
+            <h3 style={{fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px 0'}}>Add Money to Wallet</h3>
+            <div style={{marginBottom: '16px'}}>
+              <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>
+                Amount (₹)
+              </label>
+              <input
+                type="number"
+                placeholder="Enter amount"
+                value={rechargeAmount}
+                onChange={(e) => setRechargeAmount(e.target.value)}
+                min="1"
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div style={{marginBottom: '20px'}}>
+              <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>
+                UTR / Transaction ID
+              </label>
+              <input
+                type="text"
+                placeholder="Enter payment reference"
+                value={paymentRef}
+                onChange={(e) => setPaymentRef(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '14px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '12px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div style={{display: 'flex', gap: '12px'}}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMoneyModal(false);
+                  setRechargeAmount('');
+                  setPaymentRef('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: 'transparent',
+                  color: '#64748b',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '12px',
+                  border: '2px solid #e2e8f0',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!rechargeAmount || parseFloat(rechargeAmount) < 1) {
+                    setToast('Please enter a valid amount');
+                    setTimeout(() => setToast(null), 3000);
+                    return;
+                  }
+                  if (!paymentRef.trim()) {
+                    setToast('Please enter UTR / Transaction ID');
+                    setTimeout(() => setToast(null), 3000);
+                    return;
+                  }
+                  setRechargeSubmitting(true);
+                  try {
+                    await api.post('/client/wallet/recharge', {
+                      amount: parseFloat(rechargeAmount),
+                      paymentReference: paymentRef.trim()
+                    });
+                    setToast('Request submitted. Waiting for admin approval.');
+                    setTimeout(() => setToast(null), 4000);
+                    setRechargeAmount('');
+                    setPaymentRef('');
+                    setShowAddMoneyModal(false);
+                    // Refresh recharge requests
+                    const requestsResponse = await api.get('/client/wallet/recharge-requests');
+                    setRechargeRequests(requestsResponse.data.requests || []);
+                  } catch (err) {
+                    const msg = err.response?.data?.error || 'Failed to submit request';
+                    setToast(msg);
+                    setTimeout(() => setToast(null), 4000);
+                  } finally {
+                    setRechargeSubmitting(false);
+                  }
+                }}
+                disabled={rechargeSubmitting}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  borderRadius: '12px',
+                  border: 'none',
+                  cursor: rechargeSubmitting ? 'not-allowed' : 'pointer',
+                  opacity: rechargeSubmitting ? 0.6 : 1
+                }}
+              >
+                {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -237,6 +237,50 @@ router.post('/wallets/:clientId/adjust', async (req, res) => {
   }
 });
 
+// POST /admin/wallet/hide-transaction - Hide a specific transaction
+router.post('/wallet/hide-transaction', async (req, res) => {
+  try {
+    const { transactionId } = req.body;
+
+    if (!transactionId) {
+      return res.status(400).json({ error: 'transactionId is required' });
+    }
+
+    const transaction = await WalletTransaction.findById(transactionId).exec();
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    await WalletTransaction.findByIdAndUpdate(transactionId, { $set: { isHidden: true } });
+
+    return res.status(200).json({ success: true, transactionId, isHidden: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to hide transaction' });
+  }
+});
+
+// POST /admin/wallet/unhide-transaction - Unhide a specific transaction
+router.post('/wallet/unhide-transaction', async (req, res) => {
+  try {
+    const { transactionId } = req.body;
+
+    if (!transactionId) {
+      return res.status(400).json({ error: 'transactionId is required' });
+    }
+
+    const transaction = await WalletTransaction.findById(transactionId).exec();
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    await WalletTransaction.findByIdAndUpdate(transactionId, { $set: { isHidden: false } });
+
+    return res.status(200).json({ success: true, transactionId, isHidden: false });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to unhide transaction' });
+  }
+});
+
 router.get('/recharge-requests', async (req, res) => {
   try {
     const { status } = req.query;

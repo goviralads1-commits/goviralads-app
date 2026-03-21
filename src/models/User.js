@@ -80,6 +80,11 @@ const userSchema = new mongoose.Schema(
       emailNotifications: { type: Boolean, default: true },
       inAppNotifications: { type: Boolean, default: true },
       marketingEmails: { type: Boolean, default: false },
+      defaultDeductionMode: { 
+        type: String, 
+        enum: ['AUTO', 'SUBSCRIPTION_ONLY', 'WALLET_ONLY'], 
+        default: 'AUTO' 
+      },
     },
     // Admin settings (reminders, etc.)
     settings: {

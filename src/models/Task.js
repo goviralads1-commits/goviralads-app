@@ -155,6 +155,12 @@ const taskSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // DEDUCTION MODE CONTROL
+    deductionMode: {
+      type: String,
+      enum: ['AUTO', 'SUBSCRIPTION_ONLY', 'WALLET_ONLY'],
+      default: 'AUTO',
+    },
     templateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaskTemplate',
