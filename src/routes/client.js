@@ -216,13 +216,13 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     // DEBUG: Log plan credits
     console.log('[SUB_REQ] PLAN DATA:', {
       name: plan.name,
-      credits: plan.credits,
+      baseCredits: plan.baseCredits,
       bonusCredits: plan.bonusCredits,
       price: plan.price
     });
 
     let finalPrice = plan.price;
-    let totalCredits = (plan.credits || 0) + (plan.bonusCredits || 0);
+    let totalCredits = (Number(plan.baseCredits) || 0) + (Number(plan.bonusCredits) || 0);
     let couponDiscount = 0;
     let appliedCouponCode = null;
 
@@ -248,8 +248,8 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     }
 
     // 4. Create subscription request - use plan values directly
-    const planCredits = plan.credits || 0;
-    const planBonusCredits = plan.bonusCredits || 0;
+    const planCredits = Number(plan.baseCredits) || 0;
+    const planBonusCredits = Number(plan.bonusCredits) || 0;
     
     console.log('[SUB_REQ] Saving to request:', { planCredits, planBonusCredits, totalCredits });
     
