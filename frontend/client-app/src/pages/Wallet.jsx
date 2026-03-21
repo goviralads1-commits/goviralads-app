@@ -24,6 +24,7 @@ const Wallet = () => {
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
   const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
+  const [activeSection, setActiveSection] = useState(null); // null | 'recharge' | 'subscription'
   const subscriptionRef = useRef(null);
   const addCreditRef = useRef(null);
 
@@ -328,16 +329,14 @@ const Wallet = () => {
           {/* Upgrade Credits Button */}
           <button
             onClick={() => {
+              setActiveSection(prev => prev === 'recharge' ? null : 'recharge');
               setActiveTab('recharge');
-              setTimeout(() => {
-                addCreditRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }, 100);
             }}
             style={{
               marginTop: '20px',
               width: '100%',
               padding: '14px 24px',
-              background: 'rgba(255,255,255,0.2)',
+              background: activeSection === 'recharge' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
               border: '2px solid rgba(255,255,255,0.4)',
               borderRadius: '14px',
               color: '#fff',
@@ -347,12 +346,34 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            💳 Upgrade Credits
+            💳 {activeSection === 'recharge' ? 'Hide Recharge' : 'Upgrade Credits'}
+          </button>
+
+          {/* View Plans Button */}
+          <button
+            onClick={() => {
+              setActiveSection(prev => prev === 'subscription' ? null : 'subscription');
+            }}
+            style={{
+              marginTop: '10px',
+              width: '100%',
+              padding: '14px 24px',
+              background: activeSection === 'subscription' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
+              border: '2px solid rgba(255,255,255,0.4)',
+              borderRadius: '14px',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            📦 {activeSection === 'subscription' ? 'Hide Plans' : 'View Plans'}
           </button>
         </div>
 
         {/* Subscription Plans - Premium Product Cards */}
-        {creditPlans.filter(p => p.type === 'PLAN').length > 0 && (
+        {activeSection === 'subscription' && creditPlans.filter(p => p.type === 'PLAN').length > 0 && (
           <div style={{marginBottom: '24px'}}>
             {/* Coupon Input - Inline */}
             <div style={{display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px'}}>
@@ -916,7 +937,7 @@ const Wallet = () => {
           )}
 
           {/* Recharge Requests Tab */}
-          {activeTab === 'recharge' && (
+          {activeSection === 'recharge' && activeTab === 'recharge' && (
             <>
               {/* Manual Recharge Form */}
               <div ref={addCreditRef} style={{
