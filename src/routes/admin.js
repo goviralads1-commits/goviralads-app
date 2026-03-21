@@ -588,6 +588,11 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     const now = new Date();
     let wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
     
+    // Check if user already has active subscription
+    if (wallet && wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt > now && wallet.subscriptionCredits > 0) {
+      return res.status(400).json({ error: 'User already has an active subscription' });
+    }
+    
     if (!wallet) {
       wallet = await Wallet.create({
         clientId: request.clientId,
@@ -597,14 +602,9 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
         subscriptionExpiresAt: new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000)
       });
     } else {
-      // 2. Add subscription credits + extend expiry (safe math)
-      wallet.subscriptionCredits = (Number(wallet.subscriptionCredits) || 0) + creditsToAdd;
-      
-      // Extend from current expiry if active, otherwise from now
-      const currentExpiry = wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt > now
-        ? wallet.subscriptionExpiresAt
-        : now;
-      wallet.subscriptionExpiresAt = new Date(currentExpiry.getTime() + validityDays * 24 * 60 * 60 * 1000);
+      // SET subscription credits (not add) and SET expiry from now
+      wallet.subscriptionCredits = creditsToAdd;
+      wallet.subscriptionExpiresAt = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
       await wallet.save();
     }
 

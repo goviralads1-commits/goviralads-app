@@ -357,26 +357,53 @@ const Wallet = () => {
           </button>
 
           {/* View Plans Button */}
-          <button
-            onClick={() => {
-              setActiveSection(prev => prev === 'subscription' ? null : 'subscription');
-            }}
-            style={{
-              marginTop: '10px',
-              width: '100%',
-              padding: '14px 24px',
-              background: activeSection === 'subscription' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
-              border: '2px solid rgba(255,255,255,0.4)',
-              borderRadius: '14px',
-              color: '#fff',
-              fontSize: '15px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            📦 {activeSection === 'subscription' ? 'Hide Plans' : 'Buy Plan'}
-          </button>
+          {(() => {
+            const hasActiveSubscription = walletData?.subscriptionCredits > 0 && 
+              walletData?.subscriptionExpiresAt && 
+              new Date(walletData.subscriptionExpiresAt) > new Date();
+            
+            if (hasActiveSubscription) {
+              return (
+                <div style={{
+                  marginTop: '10px',
+                  width: '100%',
+                  padding: '14px 24px',
+                  background: 'rgba(16,185,129,0.3)',
+                  border: '2px solid rgba(16,185,129,0.5)',
+                  borderRadius: '14px',
+                  color: '#86efac',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                  textAlign: 'center'
+                }}>
+                  ✅ Active Plan
+                </div>
+              );
+            }
+            
+            return (
+              <button
+                onClick={() => {
+                  setActiveSection(prev => prev === 'subscription' ? null : 'subscription');
+                }}
+                style={{
+                  marginTop: '10px',
+                  width: '100%',
+                  padding: '14px 24px',
+                  background: activeSection === 'subscription' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
+                  border: '2px solid rgba(255,255,255,0.4)',
+                  borderRadius: '14px',
+                  color: '#fff',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                📦 {activeSection === 'subscription' ? 'Hide Plans' : 'Buy Plan'}
+              </button>
+            );
+          })()}
         </div>
 
         {/* Subscription Plans - Premium Product Cards */}
