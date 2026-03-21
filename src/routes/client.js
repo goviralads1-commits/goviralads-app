@@ -51,13 +51,19 @@ router.get('/wallet', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
 
-    const transactions = await WalletTransaction.find({ walletId: wallet._id })
+    const transactions = await WalletTransaction.find({ 
+      walletId: wallet._id,
+      isHidden: { $ne: true }  // Don't show hidden admin adjustments
+    })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .exec();
 
-    const totalTransactions = await WalletTransaction.countDocuments({ walletId: wallet._id }).exec();
+    const totalTransactions = await WalletTransaction.countDocuments({ 
+      walletId: wallet._id,
+      isHidden: { $ne: true }
+    }).exec();
 
     return res.status(200).json({
       balance: totalCredits, // totalCredits for backward compatibility
@@ -69,6 +75,7 @@ router.get('/wallet', async (req, res) => {
         id: t._id.toString(),
         type: t.type,
         amount: t.amount,
+        credits: t.credits || 0,
         description: t.description,
         createdAt: t.createdAt,
       })),
