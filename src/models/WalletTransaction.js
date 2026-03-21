@@ -42,6 +42,10 @@ const walletTransactionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
     referenceId: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,

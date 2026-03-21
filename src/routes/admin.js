@@ -604,24 +604,30 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       });
     }
     
-    // Check if user already has active subscription - allow UPGRADE if new price > current
-    if (wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt > now && wallet.subscriptionCredits > 0) {
-      const currentPlanPrice = Number(wallet.currentPlanPrice) || 0;
-      if (planPrice <= currentPlanPrice) {
-        return res.status(400).json({ error: 'User already has an active subscription. Upgrade to a higher plan.' });
-      }
-      // Allow upgrade - continue processing
-      console.log('[SUB_APPROVE] Upgrading from', currentPlanPrice, 'to', planPrice);
-    }
+    // REVENUE-FIRST: No blocking - always allow plan purchase
+    // Credits ADD (not replace), Expiry MAX (not reset)
     
-    // SET subscription credits and expiry
-    wallet.subscriptionCredits = creditsToAdd;
-    wallet.subscriptionExpiresAt = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
-    wallet.currentPlanPrice = planPrice;
-    wallet.currentPlanId = plan._id;
-    await wallet.save();
+    // Calculate new expiry: MAX(current, new)
+    const newExpiry = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+    const currentExpiry = wallet.subscriptionExpiresAt ? new Date(wallet.subscriptionExpiresAt) : new Date(0);
+    const finalExpiry = newExpiry > currentExpiry ? newExpiry : currentExpiry;
+    
+    // Atomic update: ADD credits, MAX expiry
+    const updatedWallet = await Wallet.findByIdAndUpdate(
+      wallet._id,
+      {
+        $inc: { subscriptionCredits: creditsToAdd },
+        $set: { subscriptionExpiresAt: finalExpiry }
+      },
+      { new: true }
+    );
+    
+    // Safety check: ensure credits not negative
+    if (updatedWallet.subscriptionCredits < 0) {
+      await Wallet.findByIdAndUpdate(wallet._id, { $set: { subscriptionCredits: 0 } });
+    }
 
-    const expiresAt = wallet.subscriptionExpiresAt;
+    const expiresAt = finalExpiry;
 
     // 3. Record wallet transaction
     await WalletTransaction.create({

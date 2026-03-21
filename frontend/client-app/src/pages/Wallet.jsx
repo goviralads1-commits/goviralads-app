@@ -290,7 +290,7 @@ const Wallet = () => {
               style={{cursor: 'help', opacity: 0.7, fontSize: '14px'}}
             >ⓘ</span>
           </div>
-          <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 20px 0'}}>₹{walletData?.totalCredits?.toFixed(2) || walletData?.balance?.toFixed(2) || '0.00'}</p>
+          <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 20px 0'}}>{walletData?.totalCredits || walletData?.balance || 0} <span style={{fontSize: '20px', opacity: 0.8}}>credits</span></p>
 
           {/* Credit Breakdown */}
           <div style={{display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '16px'}}>
@@ -311,7 +311,7 @@ const Wallet = () => {
                       {isExpired ? 'Expired' : `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}
                     </p>
                   </div>
-                  <span style={{fontSize: '18px', fontWeight: '700', color: '#fcd34d'}}>₹{subCredits.toFixed(2)}</span>
+                  <span style={{fontSize: '18px', fontWeight: '700', color: '#fcd34d'}}>{subCredits} credits</span>
                 </div>
               );
             })()}
@@ -383,7 +383,7 @@ const Wallet = () => {
                   }}>
                     <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Active Plan</div>
                     <div style={{fontSize: '13px', opacity: 0.9}}>
-                      ₹{walletData.subscriptionCredits.toFixed(2)} credits • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                      {walletData.subscriptionCredits} credits • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
                     </div>
                   </div>
                   {/* Upgrade Plans Button */}
