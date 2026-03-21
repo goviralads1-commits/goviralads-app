@@ -358,11 +358,14 @@ const Wallet = () => {
 
           {/* View Plans Button */}
           {(() => {
-            const hasActiveSubscription = walletData?.subscriptionCredits > 0 && 
+            const now = new Date();
+            const hasActiveSubscription = 
               walletData?.subscriptionExpiresAt && 
-              new Date(walletData.subscriptionExpiresAt) > new Date();
+              new Date(walletData.subscriptionExpiresAt) > now && 
+              walletData?.subscriptionCredits > 0;
             
             if (hasActiveSubscription) {
+              const daysLeft = Math.ceil((new Date(walletData.subscriptionExpiresAt) - now) / (1000 * 60 * 60 * 24));
               return (
                 <div style={{
                   marginTop: '10px',
@@ -372,11 +375,14 @@ const Wallet = () => {
                   border: '2px solid rgba(16,185,129,0.5)',
                   borderRadius: '14px',
                   color: '#86efac',
-                  fontSize: '15px',
-                  fontWeight: '700',
+                  fontSize: '14px',
+                  fontWeight: '600',
                   textAlign: 'center'
                 }}>
-                  ✅ Active Plan
+                  <div style={{fontSize: '15px', fontWeight: '700', marginBottom: '4px'}}>✅ Active Plan</div>
+                  <div style={{fontSize: '13px', opacity: 0.9}}>
+                    ₹{walletData.subscriptionCredits.toFixed(2)} credits • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                  </div>
                 </div>
               );
             }
