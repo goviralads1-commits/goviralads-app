@@ -3,6 +3,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const { connectDB: connectToDatabase } = require('./config/db');
 const { ensureMainAdminSeed } = require('./models/seedMainAdmin');
@@ -19,8 +22,48 @@ app.use(cors({
 }));
 
 // ============== BODY PARSERS ==============
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
+
+// ============== STATIC FILE SERVING (uploads) ==============
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(path.join(uploadsDir, 'chat'))) fs.mkdirSync(path.join(uploadsDir, 'chat'), { recursive: true });
+app.use('/uploads', express.static(uploadsDir));
+
+// ============== MULTER CONFIG (Chat Image Upload) ==============
+const chatStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(uploadsDir, 'chat')),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, uniqueSuffix + ext);
+  }
+});
+const chatUpload = multer({
+  storage: chatStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Invalid file type. Only jpg, png, webp, gif allowed.'));
+  }
+});
+
+// ============== IMAGE UPLOAD ENDPOINT ==============
+const { authenticateJWT } = require('./middleware/auth');
+app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+    const urls = req.files.map(f => `${baseUrl}/uploads/chat/${f.filename}`);
+    return res.status(200).json({ urls });
+  } catch (err) {
+    return res.status(500).json({ error: 'Upload failed' });
+  }
+});
 
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/client');

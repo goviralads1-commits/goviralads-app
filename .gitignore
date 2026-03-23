@@ -13,6 +13,13 @@ build/
 */dist/
 */build/
 
+# Uploads (user files)
+uploads/*
+!uploads/.gitkeep
+!uploads/chat/
+uploads/chat/*
+!uploads/chat/.gitkeep
+
 # Logs
 *.log
 npm-debug.log*

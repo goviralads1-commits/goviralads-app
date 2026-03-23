@@ -45,7 +45,10 @@ const TaskDetail = () => {
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageAttachments, setMessageAttachments] = useState([]);
+  const [lightboxImage, setLightboxImage] = useState(null);
   const discussionRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const fetchTask = useCallback(async () => {
     try {
@@ -145,12 +148,31 @@ const TaskDetail = () => {
 
   // Send discussion message (Phase 6)
   const handleSendMessage = async () => {
-    if (!messageText.trim() || sendingMessage) return;
+    if ((!messageText.trim() && messageAttachments.length === 0) || sendingMessage) return;
     
     setSendingMessage(true);
     try {
-      await api.post(`/client/tasks/${taskId}/message`, { text: messageText.trim() });
+      let attachmentUrls = [];
+      
+      // Upload images first if any
+      if (messageAttachments.length > 0) {
+        const formData = new FormData();
+        messageAttachments.forEach(att => formData.append('images', att.file));
+        const uploadRes = await api.post('/upload/chat', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        attachmentUrls = uploadRes.data.urls || [];
+      }
+      
+      await api.post(`/client/tasks/${taskId}/message`, { 
+        text: messageText.trim(),
+        attachments: attachmentUrls
+      });
+      
+      // Cleanup preview URLs
+      messageAttachments.forEach(att => URL.revokeObjectURL(att.previewUrl));
       setMessageText('');
+      setMessageAttachments([]);
       fetchTask(); // Refresh to get new message
     } catch (err) {
       setContentToast({ type: 'error', message: err.response?.data?.error || 'Failed to send message' });
@@ -158,6 +180,52 @@ const TaskDetail = () => {
     } finally {
       setSendingMessage(false);
     }
+  };
+
+  // Handle image selection for chat
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    const remaining = 5 - messageAttachments.length;
+    const toProcess = files.slice(0, remaining);
+    
+    toProcess.forEach(file => {
+      if (!file.type.startsWith('image/')) {
+        setContentToast({ type: 'error', message: 'Only images allowed' });
+        setTimeout(() => setContentToast(null), 3000);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setContentToast({ type: 'error', message: 'Image too large (max 5MB)' });
+        setTimeout(() => setContentToast(null), 3000);
+        return;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      setMessageAttachments(prev => [...prev, { file, previewUrl }]);
+    });
+    e.target.value = '';
+  };
+
+  // Remove attachment and cleanup preview URL
+  const removeAttachment = (idx) => {
+    setMessageAttachments(prev => {
+      URL.revokeObjectURL(prev[idx].previewUrl);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  // Linkify text - convert URLs to clickable links
+  const linkifyText = (text) => {
+    if (!text) return text;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>{part}</a>;
+      }
+      return part;
+    });
   };
 
   useEffect(() => {
@@ -547,7 +615,22 @@ const TaskDetail = () => {
                     backgroundColor: msg.sender === 'CLIENT' ? '#6366f1' : '#f1f5f9',
                     color: msg.sender === 'CLIENT' ? '#fff' : '#0f172a',
                   }}>
-                    <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: msg.text && msg.text !== '[Image]' ? '8px' : 0 }}>
+                        {msg.attachments.map((att, attIdx) => (
+                          <img 
+                            key={attIdx} 
+                            src={att} 
+                            alt="" 
+                            onClick={() => setLightboxImage(att)}
+                            style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }} 
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {msg.text && msg.text !== '[Image]' && (
+                      <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkifyText(msg.text)}</p>
+                    )}
                     <p style={{ 
                       fontSize: '10px', margin: '6px 0 0', 
                       color: msg.sender === 'CLIENT' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
@@ -562,34 +645,79 @@ const TaskDetail = () => {
           </div>
 
           {/* Input */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Type your message..."
-              rows={2}
-              style={{
-                flex: 1, padding: '12px 16px', fontSize: '14px',
-                border: '2px solid #e2e8f0', borderRadius: '14px',
-                outline: 'none', resize: 'none', lineHeight: 1.5
-              }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!messageText.trim() || sendingMessage}
-              style={{
-                padding: '12px 20px', backgroundColor: messageText.trim() ? '#6366f1' : '#e2e8f0',
-                color: messageText.trim() ? '#fff' : '#94a3b8', fontSize: '14px', fontWeight: '600',
-                borderRadius: '14px', border: 'none',
-                cursor: messageText.trim() && !sendingMessage ? 'pointer' : 'not-allowed',
-                opacity: sendingMessage ? 0.6 : 1
-              }}
-            >
-              {sendingMessage ? '...' : 'Send'}
-            </button>
+          <div>
+            {/* Attachment Preview */}
+            {messageAttachments.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                {messageAttachments.map((att, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    <img src={att.previewUrl} alt="" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
+                    <button 
+                      onClick={() => removeAttachment(idx)}
+                      style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={messageAttachments.length >= 5}
+                style={{
+                  padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none',
+                  cursor: messageAttachments.length >= 5 ? 'not-allowed' : 'pointer', opacity: messageAttachments.length >= 5 ? 0.5 : 1
+                }}
+                title="Attach image"
+              >
+                📎
+              </button>
+              <textarea
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                placeholder="Type your message..."
+                rows={2}
+                style={{
+                  flex: 1, padding: '12px 16px', fontSize: '14px',
+                  border: '2px solid #e2e8f0', borderRadius: '14px',
+                  outline: 'none', resize: 'none', lineHeight: 1.5
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={(!messageText.trim() && messageAttachments.length === 0) || sendingMessage}
+                style={{
+                  padding: '12px 20px', backgroundColor: (messageText.trim() || messageAttachments.length > 0) ? '#6366f1' : '#e2e8f0',
+                  color: (messageText.trim() || messageAttachments.length > 0) ? '#fff' : '#94a3b8', fontSize: '14px', fontWeight: '600',
+                  borderRadius: '14px', border: 'none',
+                  cursor: (messageText.trim() || messageAttachments.length > 0) && !sendingMessage ? 'pointer' : 'not-allowed',
+                  opacity: sendingMessage ? 0.6 : 1
+                }}
+              >
+                {sendingMessage ? '...' : 'Send'}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Lightbox */}
+        {lightboxImage && (
+          <div 
+            onClick={() => setLightboxImage(null)}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'pointer' }}
+          >
+            <img src={lightboxImage} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px' }} />
+          </div>
+        )}
 
         {/* PROGRESS CARD - Clean Client View */}
         <div style={{

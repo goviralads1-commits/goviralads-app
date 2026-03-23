@@ -346,6 +346,9 @@ const taskSchema = new mongoose.Schema(
         trim: true,
         maxlength: 2000,
       },
+      attachments: [{
+        type: String, // Image URLs (data URLs or hosted URLs)
+      }],
       createdAt: {
         type: Date,
         default: Date.now,

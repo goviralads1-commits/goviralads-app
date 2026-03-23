@@ -1207,14 +1207,27 @@ router.post('/tasks/:taskId/message', async (req, res) => {
   try {
     const { taskId } = req.params;
     const adminId = req.user.id;
-    const { text } = req.body || {};
+    const { text, attachments } = req.body || {};
 
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: 'Message text is required' });
+    // Allow empty text if there are attachments
+    if ((!text || !text.trim()) && (!attachments || attachments.length === 0)) {
+      return res.status(400).json({ error: 'Message text or attachment is required' });
     }
 
-    if (text.length > 2000) {
+    if (text && text.length > 2000) {
       return res.status(400).json({ error: 'Message too long (max 2000 characters)' });
+    }
+
+    // Validate attachments (URLs only, max 5)
+    if (attachments && attachments.length > 0) {
+      if (attachments.length > 5) {
+        return res.status(400).json({ error: 'Maximum 5 attachments allowed' });
+      }
+      for (const att of attachments) {
+        if (typeof att !== 'string' || !att.startsWith('http')) {
+          return res.status(400).json({ error: 'Attachments must be valid URLs' });
+        }
+      }
     }
 
     const task = await Task.findById(taskId).exec();
@@ -1227,7 +1240,8 @@ router.post('/tasks/:taskId/message', async (req, res) => {
     const newMessage = {
       sender: 'ADMIN',
       senderId: adminId,
-      text: text.trim(),
+      text: (text || '').trim() || (attachments?.length ? '[Image]' : ''),
+      attachments: attachments || [],
       createdAt: new Date(),
     };
 
@@ -4525,10 +4539,23 @@ router.post('/tickets/:ticketId/reply', async (req, res) => {
   try {
     const adminId = req.user.id;
     const { ticketId } = req.params;
-    const { message } = req.body;
+    const { message, attachments } = req.body;
 
-    if (!message || message.trim().length === 0) {
-      return res.status(400).json({ error: 'Message is required' });
+    // Allow empty message if there are attachments
+    if ((!message || message.trim().length === 0) && (!attachments || attachments.length === 0)) {
+      return res.status(400).json({ error: 'Message or attachment is required' });
+    }
+
+    // Validate attachments (URLs only, max 5)
+    if (attachments && attachments.length > 0) {
+      if (attachments.length > 5) {
+        return res.status(400).json({ error: 'Maximum 5 attachments allowed' });
+      }
+      for (const att of attachments) {
+        if (typeof att !== 'string' || !att.startsWith('http')) {
+          return res.status(400).json({ error: 'Attachments must be valid URLs' });
+        }
+      }
     }
 
     const ticket = await Ticket.findById(ticketId);
@@ -4540,7 +4567,8 @@ router.post('/tickets/:ticketId/reply', async (req, res) => {
     ticket.messages.push({
       senderId: adminId,
       senderRole: 'ADMIN',
-      message: message.trim(),
+      message: (message || '').trim() || (attachments?.length ? '[Image]' : ''),
+      attachments: attachments || [],
     });
     ticket.lastReplyAt = new Date();
     ticket.lastReplyBy = 'ADMIN';

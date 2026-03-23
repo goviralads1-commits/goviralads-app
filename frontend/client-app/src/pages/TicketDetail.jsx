@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
@@ -9,7 +9,10 @@ const TicketDetail = () => {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState([]);
   const [replying, setReplying] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchTicket();
@@ -28,21 +31,72 @@ const TicketDetail = () => {
   };
 
   const handleReply = async () => {
-    if (!replyText.trim()) {
-      alert('Please enter a message');
+    if (!replyText.trim() && replyAttachments.length === 0) {
+      alert('Please enter a message or attach an image');
       return;
     }
 
     try {
       setReplying(true);
-      await api.post(`/client/tickets/${ticketId}/reply`, { message: replyText });
+      let attachmentUrls = [];
+      
+      // Upload images first if any
+      if (replyAttachments.length > 0) {
+        const formData = new FormData();
+        replyAttachments.forEach(att => formData.append('images', att.file));
+        const uploadRes = await api.post('/upload/chat', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        attachmentUrls = uploadRes.data.urls || [];
+      }
+      
+      await api.post(`/client/tickets/${ticketId}/reply`, { 
+        message: replyText,
+        attachments: attachmentUrls
+      });
+      
+      // Cleanup preview URLs
+      replyAttachments.forEach(att => URL.revokeObjectURL(att.previewUrl));
       setReplyText('');
+      setReplyAttachments([]);
       fetchTicket();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to send reply');
     } finally {
       setReplying(false);
     }
+  };
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const remaining = 5 - replyAttachments.length;
+    files.slice(0, remaining).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 5 * 1024 * 1024) return;
+      const previewUrl = URL.createObjectURL(file);
+      setReplyAttachments(prev => [...prev, { file, previewUrl }]);
+    });
+    e.target.value = '';
+  };
+
+  const removeAttachment = (idx) => {
+    setReplyAttachments(prev => {
+      URL.revokeObjectURL(prev[idx].previewUrl);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const linkifyText = (text) => {
+    if (!text) return text;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>{part}</a>;
+      }
+      return part;
+    });
   };
 
   const getStatusColor = (status) => {
@@ -148,8 +202,21 @@ const TicketDetail = () => {
                   </span>
                 </div>
                 <p style={{ fontSize: '14px', color: '#1e293b', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                  {msg.message}
+                  {linkifyText(msg.message)}
                 </p>
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
+                    {msg.attachments.map((att, attIdx) => (
+                      <img 
+                        key={attIdx} 
+                        src={att} 
+                        alt="" 
+                        onClick={() => setLightboxImage(att)}
+                        style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }} 
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -159,16 +226,50 @@ const TicketDetail = () => {
         {ticket.status !== 'CLOSED' && (
           <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '16px' }}>Reply</h3>
-            <textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Type your message here..."
-              rows={5}
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none', resize: 'vertical', marginBottom: '16px' }}
-            />
+            
+            {/* Attachment Preview */}
+            {replyAttachments.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                {replyAttachments.map((att, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    <img src={att.previewUrl} alt="" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
+                    <button 
+                      onClick={() => removeAttachment(idx)}
+                      style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px' }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={replyAttachments.length >= 5}
+                style={{ padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '12px', border: 'none', cursor: 'pointer' }}
+                title="Attach image"
+              >
+                📎
+              </button>
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Type your message here..."
+                rows={3}
+                style={{ flex: 1, padding: '14px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none', resize: 'vertical' }}
+              />
+            </div>
             <button
               onClick={handleReply}
-              disabled={replying}
+              disabled={replying || (!replyText.trim() && replyAttachments.length === 0)}
               style={{
                 padding: '14px 28px',
                 background: replying ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -189,6 +290,16 @@ const TicketDetail = () => {
         {ticket.status === 'CLOSED' && (
           <div style={{ backgroundColor: '#fef3f2', borderRadius: '16px', padding: '16px', textAlign: 'center', border: '1px solid #fecaca' }}>
             <p style={{ fontSize: '14px', color: '#dc2626', margin: 0 }}>This ticket is closed and cannot receive new replies.</p>
+          </div>
+        )}
+
+        {/* Lightbox */}
+        {lightboxImage && (
+          <div 
+            onClick={() => setLightboxImage(null)}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'pointer' }}
+          >
+            <img src={lightboxImage} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px' }} />
           </div>
         )}
       </div>
