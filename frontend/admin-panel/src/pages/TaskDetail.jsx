@@ -311,18 +311,31 @@ const TaskDetail = () => {
     try {
       let attachmentUrls = [];
       
-      // Upload images first if any
+      // STEP 1: Upload images first if any
       if (messageAttachments.length > 0) {
-        const formData = new FormData();
-        messageAttachments.forEach(att => formData.append('images', att.file));
-        const uploadRes = await api.post('/upload/chat', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        attachmentUrls = uploadRes.data.urls || [];
+        try {
+          const formData = new FormData();
+          messageAttachments.forEach(att => formData.append('images', att.file));
+          const uploadRes = await api.post('/upload/chat', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          attachmentUrls = uploadRes.data?.urls || [];
+          
+          // If upload returned no URLs, fail
+          if (messageAttachments.length > 0 && attachmentUrls.length === 0) {
+            throw new Error('Image upload failed - no URLs returned');
+          }
+        } catch (uploadErr) {
+          setToast({ type: 'error', message: 'Failed to upload image' });
+          setTimeout(() => setToast(null), 3000);
+          setSendingMessage(false);
+          return; // DO NOT send message
+        }
       }
       
+      // STEP 2: Only send message after successful upload
       await api.post(`/admin/tasks/${taskId}/message`, { 
-        text: messageText.trim(),
+        text: messageText.trim() || (attachmentUrls.length > 0 ? '[Image]' : ''),
         attachments: attachmentUrls
       });
       

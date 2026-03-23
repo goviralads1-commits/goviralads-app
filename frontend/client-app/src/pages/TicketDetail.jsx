@@ -40,18 +40,30 @@ const TicketDetail = () => {
       setReplying(true);
       let attachmentUrls = [];
       
-      // Upload images first if any
+      // STEP 1: Upload images first if any
       if (replyAttachments.length > 0) {
-        const formData = new FormData();
-        replyAttachments.forEach(att => formData.append('images', att.file));
-        const uploadRes = await api.post('/upload/chat', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        attachmentUrls = uploadRes.data.urls || [];
+        try {
+          const formData = new FormData();
+          replyAttachments.forEach(att => formData.append('images', att.file));
+          const uploadRes = await api.post('/upload/chat', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          attachmentUrls = uploadRes.data?.urls || [];
+          
+          // If upload returned no URLs, fail
+          if (replyAttachments.length > 0 && attachmentUrls.length === 0) {
+            throw new Error('Image upload failed');
+          }
+        } catch (uploadErr) {
+          alert('Failed to upload image');
+          setReplying(false);
+          return; // DO NOT send message
+        }
       }
       
+      // STEP 2: Only send message after successful upload
       await api.post(`/client/tickets/${ticketId}/reply`, { 
-        message: replyText,
+        message: replyText.trim() || (attachmentUrls.length > 0 ? '[Image]' : ''),
         attachments: attachmentUrls
       });
       
