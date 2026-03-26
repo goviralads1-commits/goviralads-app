@@ -642,6 +642,7 @@ router.get('/tasks/:taskId', async (req, res) => {
         messages: (task.messages || []).map(m => ({
           sender: m.sender,
           text: m.text,
+          attachments: m.attachments || [],
           createdAt: m.createdAt,
         })),
       },
