@@ -314,10 +314,19 @@ const TaskDetail = () => {
       // STEP 1: Upload images first if any
       if (messageAttachments.length > 0) {
         try {
+          console.log('[UPLOAD DEBUG] Starting upload...');
+          console.log('[UPLOAD DEBUG] API URL:', import.meta.env.VITE_API_URL);
+          console.log('[UPLOAD DEBUG] Files to upload:', messageAttachments.length);
+          
           const formData = new FormData();
-          messageAttachments.forEach(att => formData.append('images', att.file));
+          messageAttachments.forEach((att, idx) => {
+            console.log(`[UPLOAD DEBUG] File ${idx}:`, att.file.name, att.file.type, att.file.size, 'bytes');
+            formData.append('images', att.file);
+          });
+          
           // Note: Don't set Content-Type manually - browser sets it with correct boundary for FormData
           const uploadRes = await api.post('/upload/chat', formData);
+          console.log('[UPLOAD DEBUG] Response:', uploadRes.status, uploadRes.data);
           attachmentUrls = uploadRes.data?.urls || [];
           
           // If upload returned no URLs, fail
@@ -325,8 +334,12 @@ const TaskDetail = () => {
             throw new Error('Image upload failed - no URLs returned');
           }
         } catch (uploadErr) {
-          setToast({ type: 'error', message: 'Failed to upload image' });
-          setTimeout(() => setToast(null), 3000);
+          console.error('[UPLOAD DEBUG] ERROR:', uploadErr);
+          console.error('[UPLOAD DEBUG] Response status:', uploadErr.response?.status);
+          console.error('[UPLOAD DEBUG] Response data:', uploadErr.response?.data);
+          console.error('[UPLOAD DEBUG] Error message:', uploadErr.message);
+          setToast({ type: 'error', message: uploadErr.response?.data?.error || uploadErr.message || 'Failed to upload image' });
+          setTimeout(() => setToast(null), 5000);
           setSendingMessage(false);
           return; // DO NOT send message
         }
