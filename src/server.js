@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
 
 const { connectDB: connectToDatabase } = require('./config/db');
 const { ensureMainAdminSeed } = require('./models/seedMainAdmin');
@@ -25,23 +26,41 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 
+// ============== CLOUDINARY CONFIG ==============
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Helper: upload a single file buffer to Cloudinary, returns secure_url
+const uploadBufferToCloudinary = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'goviralads/chat',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+        transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result.secure_url);
+      }
+    );
+    uploadStream.end(buffer);
+  });
+};
+
 // ============== STATIC FILE SERVING (uploads) ==============
+// Kept for backward compatibility — existing messages stored before Cloudinary migration
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-if (!fs.existsSync(path.join(uploadsDir, 'chat'))) fs.mkdirSync(path.join(uploadsDir, 'chat'), { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
-// ============== MULTER CONFIG (Chat Image Upload) ==============
-const chatStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(uploadsDir, 'chat')),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    cb(null, uniqueSuffix + ext);
-  }
-});
+// ============== MULTER CONFIG (Chat Image Upload — memory storage for Cloudinary) ==============
 const chatUpload = multer({
-  storage: chatStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -52,15 +71,20 @@ const chatUpload = multer({
 
 // ============== IMAGE UPLOAD ENDPOINT ==============
 const { authenticateJWT } = require('./middleware/auth');
-app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), (req, res) => {
+app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
     }
-    const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-    const urls = req.files.map(f => `${baseUrl}/uploads/chat/${f.filename}`);
+
+    // Upload all files to Cloudinary in parallel
+    const urls = await Promise.all(
+      req.files.map(f => uploadBufferToCloudinary(f.buffer))
+    );
+
     return res.status(200).json({ urls });
   } catch (err) {
+    console.error('[UPLOAD] Cloudinary upload error:', err.message);
     return res.status(500).json({ error: 'Upload failed' });
   }
 });

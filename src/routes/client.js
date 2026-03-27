@@ -813,7 +813,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
           recipientId: admin._id,
           type: NOTIFICATION_TYPES.TASK_MESSAGE,
           title: `New message on: ${task.title}`,
-          message: text.trim().substring(0, 200) + (text.length > 200 ? '...' : ''),
+          message: (text || '').trim().substring(0, 200) + ((text || '').length > 200 ? '...' : ''),
           relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
           taskUrl: taskUrl,
           recentMessages: recentMessages,
