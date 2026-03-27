@@ -647,6 +647,22 @@ router.get('/tasks/:taskId', async (req, res) => {
           attachments: m.attachments || [],
           createdAt: m.createdAt,
         })),
+        // APPROVAL REQUESTS (Phase 7) - Only visible ones
+        approvalRequests: (task.approvalRequests || [])
+          .filter(a => a.isVisibleToClient !== false)
+          .map(a => ({
+            id: a.id,
+            title: a.title,
+            type: a.type,
+            options: a.options || [],
+            selectionsHistory: (a.selectionsHistory || []).map(h => ({
+              selectedOptions: h.selectedOptions || [],
+              selectedBy: h.selectedBy,
+              timestamp: h.timestamp,
+            })),
+            isLocked: a.isLocked || false,
+            createdAt: a.createdAt,
+          })),
       },
     });
   } catch (err) {
@@ -836,6 +852,104 @@ router.post('/tasks/:taskId/message', async (req, res) => {
   } catch (err) {
     console.error('[DISCUSSION ERROR]', err);
     return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// =======================================================================
+// APPROVAL REQUEST SYSTEM (Phase 7) - Client Endpoints
+// =======================================================================
+
+// POST /client/tasks/:taskId/approvals/:approvalId/select - Submit selection
+router.post('/tasks/:taskId/approvals/:approvalId/select', async (req, res) => {
+  try {
+    const { taskId, approvalId } = req.params;
+    const clientId = req.user.id;
+    const { selectedOptions } = req.body || {};
+
+    // Validation
+    if (!selectedOptions || !Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+      return res.status(400).json({ error: 'At least one option must be selected' });
+    }
+
+    const task = await Task.findById(taskId).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Verify task belongs to client
+    if (task.clientId?.toString() !== clientId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const approval = task.approvalRequests?.find(a => a.id === approvalId);
+    if (!approval) {
+      return res.status(404).json({ error: 'Approval request not found' });
+    }
+
+    // Check if visible to client
+    if (!approval.isVisibleToClient) {
+      return res.status(403).json({ error: 'Approval request is not visible' });
+    }
+
+    // Check if locked
+    if (approval.isLocked) {
+      return res.status(403).json({ error: 'Approval request is locked' });
+    }
+
+    // Validate selected options
+    const validOptions = approval.options || [];
+    const invalidSelections = selectedOptions.filter(opt => !validOptions.includes(opt));
+    if (invalidSelections.length > 0) {
+      return res.status(400).json({ error: 'Invalid option(s) selected' });
+    }
+
+    // For single type, only allow one selection
+    if (approval.type === 'single' && selectedOptions.length > 1) {
+      return res.status(400).json({ error: 'Only one option can be selected for single-type approvals' });
+    }
+
+    // Add to history
+    approval.selectionsHistory = approval.selectionsHistory || [];
+    approval.selectionsHistory.push({
+      selectedOptions: selectedOptions.map(o => o.trim()),
+      selectedBy: 'CLIENT',
+      timestamp: new Date(),
+    });
+
+    await task.save();
+
+    // Notify admin(s)
+    try {
+      const { createNotification, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
+      const admins = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } }).select('_id').exec();
+      const adminUrl = process.env.ADMIN_FRONTEND_URL || process.env.ADMIN_URL || 'https://admin.goviralads.com';
+      const taskUrl = `${adminUrl}/tasks/${task._id}?scrollToChat=true`;
+      
+      for (const admin of admins) {
+        await createNotification({
+          recipientId: admin._id,
+          type: NOTIFICATION_TYPES.TASK_MESSAGE,
+          title: `Approval updated: ${task.title}`,
+          message: `Client selected: ${selectedOptions.join(', ')}`,
+          relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
+          taskUrl: taskUrl,
+          notifyByEmail: true,
+        });
+      }
+      console.log(`[APPROVAL] Notified ${admins.length} admin(s) of client selection`);
+    } catch (notifErr) {
+      console.error('[APPROVAL] Notification error:', notifErr.message);
+    }
+
+    console.log(`[APPROVAL] Client ${clientId} submitted selection on approval ${approvalId}`);
+
+    return res.status(200).json({
+      success: true,
+      approval,
+    });
+  } catch (err) {
+    console.error('[APPROVAL SELECTION ERROR]', err);
+    return res.status(500).json({ error: 'Failed to submit selection' });
   }
 });
 

@@ -361,6 +361,62 @@ const taskSchema = new mongoose.Schema(
         default: Date.now,
       },
     }],
+    // APPROVAL REQUEST SYSTEM (Phase 7)
+    // Structured approval requests within task chat
+    approvalRequests: [{
+      id: {
+        type: String,
+        required: true,
+      },
+      title: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 200,
+      },
+      type: {
+        type: String,
+        enum: ['single', 'multi'],
+        required: true,
+      },
+      options: [{
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 100,
+      }],
+      selectionsHistory: [{
+        selectedOptions: [{
+          type: String,
+          trim: true,
+        }],
+        selectedBy: {
+          type: String,
+          enum: ['CLIENT', 'ADMIN'],
+          required: true,
+        },
+        timestamp: {
+          type: Date,
+          default: Date.now,
+        },
+      }],
+      isVisibleToClient: {
+        type: Boolean,
+        default: true,
+      },
+      showBelowChat: {
+        type: Boolean,
+        default: true,
+      },
+      isLocked: {
+        type: Boolean,
+        default: false,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
   },
   {
     timestamps: true,

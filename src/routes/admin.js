@@ -975,6 +975,22 @@ router.get('/tasks/:taskId', async (req, res) => {
           attachments: m.attachments || [],
           createdAt: m.createdAt,
         })),
+        // APPROVAL REQUESTS (Phase 7)
+        approvalRequests: (task.approvalRequests || []).map(a => ({
+          id: a.id,
+          title: a.title,
+          type: a.type,
+          options: a.options || [],
+          selectionsHistory: (a.selectionsHistory || []).map(h => ({
+            selectedOptions: h.selectedOptions || [],
+            selectedBy: h.selectedBy,
+            timestamp: h.timestamp,
+          })),
+          isVisibleToClient: a.isVisibleToClient !== false,
+          showBelowChat: a.showBelowChat !== false,
+          isLocked: a.isLocked || false,
+          createdAt: a.createdAt,
+        })),
         // TASK ASSIGNMENT SYSTEM
         assignedTo: task.assignedTo ? task.assignedTo._id.toString() : null,
         assignedToIdentifier: task.assignedTo ? task.assignedTo.identifier : null,
@@ -1294,6 +1310,138 @@ router.post('/tasks/:taskId/message', async (req, res) => {
   } catch (err) {
     console.error('[DISCUSSION ERROR]', err);
     return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// =======================================================================
+// APPROVAL REQUEST SYSTEM (Phase 7)
+// Structured approval requests within task chat
+// =======================================================================
+
+// POST /admin/tasks/:taskId/approvals - Create new approval request
+router.post('/tasks/:taskId/approvals', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const adminId = req.user.id;
+    const { title, type, options, isVisibleToClient, showBelowChat } = req.body || {};
+
+    // Validation
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!type || !['single', 'multi'].includes(type)) {
+      return res.status(400).json({ error: 'Type must be "single" or "multi"' });
+    }
+    if (!options || !Array.isArray(options) || options.length < 2) {
+      return res.status(400).json({ error: 'At least 2 options are required' });
+    }
+
+    const task = await Task.findById(taskId).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Generate unique ID
+    const approvalId = `apr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const newApproval = {
+      id: approvalId,
+      title: title.trim(),
+      type,
+      options: options.map(o => o.trim()).filter(o => o),
+      selectionsHistory: [],
+      isVisibleToClient: isVisibleToClient !== false,
+      showBelowChat: showBelowChat !== false,
+      isLocked: false,
+      createdAt: new Date(),
+    };
+
+    task.approvalRequests = task.approvalRequests || [];
+    task.approvalRequests.push(newApproval);
+    await task.save();
+
+    console.log(`[APPROVAL] Admin ${adminId} created approval ${approvalId} on task ${taskId}`);
+
+    return res.status(201).json({
+      success: true,
+      approval: newApproval,
+    });
+  } catch (err) {
+    console.error('[APPROVAL CREATE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to create approval request' });
+  }
+});
+
+// PATCH /admin/tasks/:taskId/approvals/:approvalId - Update approval settings
+router.patch('/tasks/:taskId/approvals/:approvalId', async (req, res) => {
+  try {
+    const { taskId, approvalId } = req.params;
+    const adminId = req.user.id;
+    const { isVisibleToClient, showBelowChat, isLocked } = req.body || {};
+
+    const task = await Task.findById(taskId).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const approval = task.approvalRequests?.find(a => a.id === approvalId);
+    if (!approval) {
+      return res.status(404).json({ error: 'Approval request not found' });
+    }
+
+    // Update fields if provided
+    if (typeof isVisibleToClient === 'boolean') {
+      approval.isVisibleToClient = isVisibleToClient;
+    }
+    if (typeof showBelowChat === 'boolean') {
+      approval.showBelowChat = showBelowChat;
+    }
+    if (typeof isLocked === 'boolean') {
+      approval.isLocked = isLocked;
+    }
+
+    await task.save();
+
+    console.log(`[APPROVAL] Admin ${adminId} updated approval ${approvalId} on task ${taskId}`);
+
+    return res.status(200).json({
+      success: true,
+      approval,
+    });
+  } catch (err) {
+    console.error('[APPROVAL UPDATE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to update approval request' });
+  }
+});
+
+// DELETE /admin/tasks/:taskId/approvals/:approvalId - Delete approval request
+router.delete('/tasks/:taskId/approvals/:approvalId', async (req, res) => {
+  try {
+    const { taskId, approvalId } = req.params;
+    const adminId = req.user.id;
+
+    const task = await Task.findById(taskId).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const approvalIndex = task.approvalRequests?.findIndex(a => a.id === approvalId);
+    if (approvalIndex === -1) {
+      return res.status(404).json({ error: 'Approval request not found' });
+    }
+
+    task.approvalRequests.splice(approvalIndex, 1);
+    await task.save();
+
+    console.log(`[APPROVAL] Admin ${adminId} deleted approval ${approvalId} on task ${taskId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Approval request deleted',
+    });
+  } catch (err) {
+    console.error('[APPROVAL DELETE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to delete approval request' });
   }
 });
 
