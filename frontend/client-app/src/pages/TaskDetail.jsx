@@ -771,6 +771,43 @@ const TaskDetail = () => {
           </div>
         </div>
 
+        {/* CLIENT UPLOAD FOLDER - Upload Your Files (Phase 4B) */}
+        {task.clientUploadFolderLink && (
+          <div style={{ 
+            backgroundColor: '#eff6ff', borderRadius: '28px', padding: '28px', marginBottom: '20px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #3b82f6'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e40af', margin: 0 }}>Upload Your Files</h3>
+                <p style={{ fontSize: '13px', color: '#3b82f6', margin: '2px 0 0' }}>Click to open the upload folder</p>
+              </div>
+            </div>
+            <a
+              href={task.clientUploadFolderLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block', width: '100%', padding: '16px 24px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: '#fff', fontSize: '15px', fontWeight: '600',
+                borderRadius: '14px', textAlign: 'center', textDecoration: 'none',
+                boxSizing: 'border-box', marginBottom: '12px'
+              }}
+            >
+              Upload Content →
+            </a>
+            <p style={{ fontSize: '13px', color: '#64748b', margin: 0, textAlign: 'center' }}>
+              Upload your files directly in this Google Drive folder
+            </p>
+          </div>
+        )}
+
         {/* Lightbox */}
         {lightboxImage && (
           <div 
@@ -1084,40 +1121,6 @@ const TaskDetail = () => {
                 </div>
 
                 {/* Content Folder Link - REMOVED: Now handled by admin-set upload folder */}
-
-                {/* Upload Content Button - if admin has set upload folder */}
-                {task.clientUploadFolderLink && (
-                  <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#eff6ff', borderRadius: '16px', border: '2px solid #3b82f6' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#1e40af', margin: 0 }}>Upload Your Files</h4>
-                        <p style={{ fontSize: '13px', color: '#3b82f6', margin: '2px 0 0' }}>Click to open the upload folder</p>
-                      </div>
-                    </div>
-                    <a
-                      href={task.clientUploadFolderLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'block', width: '100%', padding: '14px 20px',
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                        color: '#fff', fontSize: '15px', fontWeight: '600',
-                        borderRadius: '12px', textAlign: 'center', textDecoration: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      Upload Content →
-                    </a>
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: '10px 0 0', textAlign: 'center' }}>
-                      Upload your files directly in this Google Drive folder
-                    </p>
-                  </div>
-                )}
 
                 {/* Content Links - REMOVED: Simplified workflow */}
 
