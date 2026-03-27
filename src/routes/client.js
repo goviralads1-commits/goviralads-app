@@ -1801,6 +1801,10 @@ router.get('/notifications', async (req, res) => {
         isRead: n.isRead,
         createdAt: n.createdAt,
         readAt: n.readAt,
+        relatedEntity: {
+          entityId: n.relatedEntity?.entityId,
+          entityType: n.relatedEntity?.entityType
+        }
       })),
       unreadCount,
     });

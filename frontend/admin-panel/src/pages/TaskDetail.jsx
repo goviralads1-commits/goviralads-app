@@ -30,6 +30,17 @@ const TaskDetail = () => {
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
+  
+  // Auto-resize textarea
+  const handleTextareaChange = (e) => {
+    setMessageText(e.target.value);
+    // Auto-expand
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '44px';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
+    }
+  };
   
   // Form state for editable fields
   const [formData, setFormData] = useState({
@@ -712,32 +723,33 @@ const TaskDetail = () => {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={messageAttachments.length >= 5}
                 style={{
-                  padding: '10px', backgroundColor: '#f1f5f9', borderRadius: '12px', border: 'none',
-                  cursor: messageAttachments.length >= 5 ? 'not-allowed' : 'pointer', opacity: messageAttachments.length >= 5 ? 0.5 : 1
+                  padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none',
+                  cursor: messageAttachments.length >= 5 ? 'not-allowed' : 'pointer', opacity: messageAttachments.length >= 5 ? 0.5 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px'
                 }}
                 title="Attach image"
               >
                 📎
               </button>
               <textarea
+                ref={textareaRef}
                 value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
+                onChange={handleTextareaChange}
                 placeholder="Reply to client..."
-                rows={2}
                 style={{
-                  flex: 1, padding: '10px 14px', fontSize: '13px',
-                  border: '2px solid #e2e8f0', borderRadius: '12px',
-                  outline: 'none', resize: 'none', lineHeight: 1.5
+                  flex: 1, padding: '12px 16px', fontSize: '14px',
+                  border: '2px solid #e2e8f0', borderRadius: '14px',
+                  outline: 'none', resize: 'none', lineHeight: 1.5,
+                  minHeight: '44px', maxHeight: '120px', overflow: 'auto'
                 }}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
               />
               <button
                 onClick={handleSendMessage}
                 disabled={(!messageText.trim() && messageAttachments.length === 0) || sendingMessage}
                 style={{
-                  padding: '10px 16px', backgroundColor: (messageText.trim() || messageAttachments.length > 0) ? '#6366f1' : '#e2e8f0',
-                  color: (messageText.trim() || messageAttachments.length > 0) ? '#fff' : '#94a3b8', fontSize: '13px', fontWeight: '600',
-                  borderRadius: '12px', border: 'none',
+                  padding: '12px 20px', backgroundColor: (messageText.trim() || messageAttachments.length > 0) ? '#6366f1' : '#e2e8f0',
+                  color: (messageText.trim() || messageAttachments.length > 0) ? '#fff' : '#94a3b8', fontSize: '14px', fontWeight: '600',
+                  borderRadius: '14px', border: 'none', minHeight: '44px',
                   cursor: (messageText.trim() || messageAttachments.length > 0) && !sendingMessage ? 'pointer' : 'not-allowed',
                   opacity: sendingMessage ? 0.6 : 1
                 }}

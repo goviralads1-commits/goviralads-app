@@ -55,11 +55,14 @@ const Notifications = () => {
     }
     
     // Navigate based on entity type
-    if (notif.relatedEntity?.entityType === 'TASK') {
-      navigate(`/tasks/${notif.relatedEntity.entityId}`);
-    } else if (notif.relatedEntity?.entityType === 'TICKET') {
+    const entityType = notif.relatedEntity?.entityType;
+    const entityId = notif.relatedEntity?.entityId;
+    
+    if (entityType === 'TASK' && entityId) {
+      navigate(`/tasks/${entityId}?scrollToChat=true`);
+    } else if (entityType === 'TICKET') {
       navigate('/tickets');
-    } else if (notif.relatedEntity?.entityType === 'WALLET' || notif.type?.includes('WALLET') || notif.type?.includes('RECHARGE')) {
+    } else if (entityType === 'WALLET' || notif.type?.includes('WALLET') || notif.type?.includes('RECHARGE')) {
       navigate('/wallet');
     } else if (notif.type?.includes('TASK')) {
       navigate('/tasks');

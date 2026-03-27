@@ -63,11 +63,14 @@ const Notifications = () => {
     }
     
     // Navigate based on entity type
-    if (notification.relatedEntity?.entityType === 'ORDER') {
-      navigate(`/orders?orderId=${notification.relatedEntity.entityId}`);
-    } else if (notification.relatedEntity?.entityType === 'TASK') {
-      navigate(`/tasks/${notification.relatedEntity.entityId}`);
-    } else if (notification.relatedEntity?.entityType === 'TICKET') {
+    const entityType = notification.relatedEntity?.entityType;
+    const entityId = notification.relatedEntity?.entityId;
+    
+    if (entityType === 'ORDER' && entityId) {
+      navigate(`/orders?orderId=${entityId}`);
+    } else if (entityType === 'TASK' && entityId) {
+      navigate(`/tasks/${entityId}?scrollToChat=true`);
+    } else if (entityType === 'TICKET') {
       navigate(`/tickets`);
     } else if (notification.type === 'NEW_ORDER' || notification.type?.includes('ORDER')) {
       navigate(`/orders`);
