@@ -27,25 +27,44 @@ app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 
 // ============== CLOUDINARY CONFIG ==============
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Validate Cloudinary env vars at startup
+const cloudinaryConfigured = !!(
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+);
+
+if (cloudinaryConfigured) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  console.log('[CLOUDINARY] Configured with cloud:', process.env.CLOUDINARY_CLOUD_NAME);
+} else {
+  console.error('[CLOUDINARY] WARNING: Missing env vars!');
+}
 
 // Helper: upload a single file buffer to Cloudinary, returns secure_url
 const uploadBufferToCloudinary = (buffer) => {
   return new Promise((resolve, reject) => {
+    if (!cloudinaryConfigured) {
+      return reject(new Error('Cloudinary not configured - missing env vars'));
+    }
+    
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: 'goviralads/chat',
         resource_type: 'image',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-        transformation: [{ quality: 'auto', fetch_format: 'auto' }],
       },
       (error, result) => {
-        if (error) reject(error);
-        else resolve(result.secure_url);
+        if (error) {
+          console.error('[CLOUDINARY] Upload error:', error.message);
+          reject(error);
+        } else {
+          console.log('[CLOUDINARY] Upload success:', result.secure_url);
+          resolve(result.secure_url);
+        }
       }
     );
     uploadStream.end(buffer);
@@ -72,20 +91,29 @@ const chatUpload = multer({
 // ============== IMAGE UPLOAD ENDPOINT ==============
 const { authenticateJWT } = require('./middleware/auth');
 app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), async (req, res) => {
+  console.log('[UPLOAD] Request received, files:', req.files?.length || 0);
+  
   try {
     if (!req.files || req.files.length === 0) {
+      console.log('[UPLOAD] No files in request');
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
+    console.log('[UPLOAD] Processing', req.files.length, 'file(s)');
+    
     // Upload all files to Cloudinary in parallel
     const urls = await Promise.all(
-      req.files.map(f => uploadBufferToCloudinary(f.buffer))
+      req.files.map(f => {
+        console.log('[UPLOAD] Uploading file:', f.originalname, f.mimetype, f.size, 'bytes');
+        return uploadBufferToCloudinary(f.buffer);
+      })
     );
 
+    console.log('[UPLOAD] Success, URLs:', urls);
     return res.status(200).json({ urls });
   } catch (err) {
-    console.error('[UPLOAD] Cloudinary upload error:', err.message);
-    return res.status(500).json({ error: 'Upload failed' });
+    console.error('[UPLOAD] Error:', err.message);
+    return res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
 
