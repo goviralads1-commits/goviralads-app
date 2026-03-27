@@ -159,9 +159,8 @@ const TaskDetail = () => {
         try {
           const formData = new FormData();
           messageAttachments.forEach(att => formData.append('images', att.file));
-          const uploadRes = await api.post('/upload/chat', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          // Note: Don't set Content-Type manually - browser sets it with correct boundary for FormData
+          const uploadRes = await api.post('/upload/chat', formData);
           attachmentUrls = uploadRes.data?.urls || [];
           
           // If upload returned no URLs, fail
