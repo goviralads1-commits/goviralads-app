@@ -616,8 +616,11 @@ const Tasks = () => {
                       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                         <div>
                           <h3 style={{fontSize: '16px', fontWeight: '700', color: '#1e293b', margin: 0}}>{task.title}</h3>
-                          <p style={{fontSize: '13px', color: '#64748b', margin: '4px 0 0 0'}}>
-                            Client: <strong>{task.clientName || task.client?.name || `Client #${task.clientId?.slice(-6)}`}</strong>
+                          <p style={{fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0', lineHeight: 1.4}}>
+                            {task.clientName || task.client?.name || 'Unknown Client'}
+                          </p>
+                          <p style={{fontSize: '11px', color: '#9ca3af', margin: '2px 0 0 0'}}>
+                            ID: {task.clientIdentifier || task.clientId?.slice(-6) || 'N/A'}
                           </p>
                         </div>
                         <span style={{fontSize: '18px', fontWeight: '800', color: '#6366f1'}}>₹{task.creditCost}</span>

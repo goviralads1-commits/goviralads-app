@@ -840,6 +840,7 @@ router.get('/tasks', async (req, res) => {
         id: t._id.toString(),
         clientId: t.clientId ? t.clientId._id.toString() : null,
         clientIdentifier: t.clientId ? t.clientId.identifier : 'Marketplace/N/A',
+        clientName: t.clientId?.profile?.name || null,
         title: t.title,
         description: t.description,
         creditCost: t.creditCost,
