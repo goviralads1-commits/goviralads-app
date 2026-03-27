@@ -3,6 +3,41 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 
+// Helper: Extract video thumbnail URL
+const getVideoThumbnail = (url) => {
+  if (!url) return null;
+  
+  // YouTube: youtube.com/watch?v= or youtu.be/
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+  if (ytMatch) {
+    return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+  }
+  
+  // Cloudinary video: /video/upload/ → convert to thumbnail
+  if (url.includes('/video/upload/')) {
+    // Insert so_0 (first frame) and change extension to .jpg
+    return url.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov|avi)$/i, '.jpg');
+  }
+  
+  // Vimeo: Extract ID and use vumbnail service
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) {
+    return `https://vumbnail.com/${vimeoMatch[1]}.jpg`;
+  }
+  
+  // Direct video file - no thumbnail available
+  return null;
+};
+
+// Helper: Get display URL for media (thumbnail for video, direct URL for image)
+const getMediaDisplayUrl = (media) => {
+  if (!media?.url) return null;
+  if (media.type === 'video') {
+    return getVideoThumbnail(media.url);
+  }
+  return media.url;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [config, setConfig] = useState(null);
@@ -230,25 +265,53 @@ const Dashboard = () => {
             )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-            {featuredPlans.slice(0, config?.featuredPlansConfig?.displayCount || 4).map((plan, idx) => (
-              <div 
-                key={plan.id || idx} 
-                onClick={() => navigate(`/plans/${plan.id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
-              >
-                <div style={{ height: '100px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {plan.planMedia?.[0]?.url || plan.featureImage ? (
-                    <img src={plan.planMedia?.[0]?.url || plan.featureImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: '32px', opacity: 0.3 }}>📦</span>
-                  )}
+            {featuredPlans.slice(0, config?.featuredPlansConfig?.displayCount || 4).map((plan, idx) => {
+              const coverMedia = plan.planMedia?.[0];
+              const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
+              const isVideo = coverMedia?.type === 'video';
+              
+              return (
+                <div 
+                  key={plan.id || idx} 
+                  onClick={() => navigate(`/plans/${plan.id}`)}
+                  style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+                >
+                  {/* 1:1 Aspect Ratio Container */}
+                  <div style={{ position: 'relative', width: '100%', paddingBottom: '100%', backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
+                    {displayUrl ? (
+                      <>
+                        <img 
+                          src={displayUrl} 
+                          alt="" 
+                          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} 
+                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex'); }}
+                        />
+                        {/* Fallback if image fails */}
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'none', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}>
+                          <span style={{ fontSize: '32px' }}>{isVideo ? '🎬' : '📦'}</span>
+                        </div>
+                        {/* Play icon overlay for videos */}
+                        {isVideo && (
+                          <div style={{ position: 'absolute', top: '8px', right: '8px', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
+                              <polygon points="5,3 19,12 5,21" />
+                            </svg>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' }}>
+                        <span style={{ fontSize: '32px', opacity: 0.8 }}>📦</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ padding: '12px' }}>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.title}</p>
+                    <p style={{ fontSize: '16px', fontWeight: '800', color: '#22c55e', margin: 0 }}>₹{plan.offerPrice || plan.creditCost || 0}</p>
+                  </div>
                 </div>
-                <div style={{ padding: '12px' }}>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.title}</p>
-                  <p style={{ fontSize: '16px', fontWeight: '800', color: '#22c55e', margin: 0 }}>₹{plan.offerPrice || plan.creditCost || 0}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         )}

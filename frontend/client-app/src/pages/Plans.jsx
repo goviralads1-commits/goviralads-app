@@ -5,6 +5,39 @@ import api from '../services/api';
 import DOMPurify from 'dompurify';
 import { useCart } from '../context/CartContext';
 
+// Helper: Extract video thumbnail URL
+const getVideoThumbnail = (url) => {
+  if (!url) return null;
+  
+  // YouTube: youtube.com/watch?v= or youtu.be/
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+  if (ytMatch) {
+    return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+  }
+  
+  // Cloudinary video: /video/upload/ → convert to thumbnail
+  if (url.includes('/video/upload/')) {
+    return url.replace('/video/upload/', '/video/upload/so_0/').replace(/\.(mp4|webm|mov|avi)$/i, '.jpg');
+  }
+  
+  // Vimeo: Extract ID and use vumbnail service
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) {
+    return `https://vumbnail.com/${vimeoMatch[1]}.jpg`;
+  }
+  
+  return null;
+};
+
+// Helper: Get display URL for media
+const getMediaDisplayUrl = (media) => {
+  if (!media?.url) return null;
+  if (media.type === 'video') {
+    return getVideoThumbnail(media.url);
+  }
+  return media.url;
+};
+
 const Plans = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -418,7 +451,9 @@ const Plans = () => {
               const mediaArray = Array.isArray(plan.planMedia) ? plan.planMedia : [];
               const currentMediaIdx = activeMediaIndex[plan.id] || 0;
               const coverMedia = mediaArray[currentMediaIdx] || mediaArray[0];
-              const coverUrl = coverMedia?.url || plan.featureImage;
+              const isVideo = coverMedia?.type === 'video';
+              // Use thumbnail for videos, direct URL for images
+              const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
               const hasDiscount = plan.offerPrice && plan.originalPrice && plan.offerPrice < plan.originalPrice;
               const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.originalPrice) * 100) : 0;
               
@@ -458,38 +493,41 @@ const Plans = () => {
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.08)';
                   }}
-                >
-                  {/* Image Section - Compact Design */}
+                >  
+                  {/* Image Section - 1:1 Aspect Ratio */}
                   <div style={{ 
                     width: viewMode === 'list' ? '160px' : '100%',
-                    aspectRatio: viewMode === 'list' ? undefined : '4/5',
+                    aspectRatio: viewMode === 'list' ? undefined : '1/1',
                     height: viewMode === 'list' ? '160px' : undefined,
-                    background: coverUrl ? '#f1f5f9' : fallbackGradient, 
+                    background: displayUrl ? '#f1f5f9' : fallbackGradient, 
                     position: 'relative',
                     overflow: 'hidden',
                     flexShrink: 0
                   }}>
-                    {coverUrl ? (
-                      coverMedia?.type === 'video' ? (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' }}>
-                          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff">
+                    {displayUrl ? (
+                      <>
+                        <img 
+                          src={displayUrl} 
+                          alt={plan.title} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          loading="lazy"
+                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex'); }}
+                        />
+                        {/* Fallback if image fails */}
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'none', alignItems: 'center', justifyContent: 'center', background: fallbackGradient }}>
+                          <span style={{ fontSize: '48px', opacity: 0.8 }}>{isVideo ? '🎬' : '📦'}</span>
+                        </div>
+                        {/* Subtle overlay gradient */}
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, transparent 100%)' }} />
+                        {/* Play icon overlay for videos */}
+                        {isVideo && (
+                          <div style={{ position: 'absolute', top: '12px', right: '12px', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
                               <polygon points="5,3 19,12 5,21" />
                             </svg>
                           </div>
-                        </div>
-                      ) : (
-                        <>
-                          <img 
-                            src={coverUrl} 
-                            alt={plan.title} 
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                            loading="lazy"
-                          />
-                          {/* Subtle overlay gradient */}
-                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, transparent 100%)' }} />
-                        </>
-                      )
+                        )}
+                      </>
                     ) : (
                       /* PREMIUM FALLBACK - No grey empty boxes */
                       <div style={{ 
