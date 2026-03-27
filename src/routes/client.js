@@ -663,6 +663,8 @@ router.get('/tasks/:taskId', async (req, res) => {
             isLocked: a.isLocked || false,
             createdAt: a.createdAt,
           })),
+        // PROGRESS ICON
+        progressIcon: task.progressIcon || { type: 'default', value: '' },
       },
     });
   } catch (err) {

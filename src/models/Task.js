@@ -417,6 +417,20 @@ const taskSchema = new mongoose.Schema(
         default: Date.now,
       },
     }],
+    // PROGRESS ICON CUSTOMIZATION
+    // Allows custom icon on progress bar
+    progressIcon: {
+      type: {
+        type: String,
+        enum: ['default', 'preset', 'custom'],
+        default: 'default',
+      },
+      value: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+    },
   },
   {
     timestamps: true,

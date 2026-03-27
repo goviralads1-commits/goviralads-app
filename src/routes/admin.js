@@ -992,6 +992,8 @@ router.get('/tasks/:taskId', async (req, res) => {
           isLocked: a.isLocked || false,
           createdAt: a.createdAt,
         })),
+        // PROGRESS ICON
+        progressIcon: task.progressIcon || { type: 'default', value: '' },
         // TASK ASSIGNMENT SYSTEM
         assignedTo: task.assignedTo ? task.assignedTo._id.toString() : null,
         assignedToIdentifier: task.assignedTo ? task.assignedTo.identifier : null,
