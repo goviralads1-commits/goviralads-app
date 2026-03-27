@@ -808,6 +808,179 @@ const TaskDetail = () => {
           </div>
         )}
 
+        {/* CLIENT CONTENT SUBMISSION (Phase 2) */}
+        {/* Show if content not yet submitted - regardless of status */}
+        {!task.clientContentSubmitted && (
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', 
+            border: task.clientContentSubmitted ? '2px solid #bbf7d0' : (task.requireClientContent ? '2px solid #fbbf24' : '2px solid #e0e7ff')
+          }}>
+            {/* Content Required Warning */}
+            {task.requireClientContent && !task.clientContentSubmitted && (
+              <div style={{
+                padding: '14px 18px', backgroundColor: '#fef3c7', borderRadius: '14px', marginBottom: '20px',
+                border: '1px solid #fcd34d', display: 'flex', alignItems: 'flex-start', gap: '12px'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: 0 }}>Please submit content to start this task</p>
+                  <p style={{ fontSize: '13px', color: '#b45309', margin: '4px 0 0', lineHeight: 1.4 }}>Work will begin once you submit the required content below.</p>
+                </div>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                {task.clientContentSubmitted ? 'Submitted Content' : 'Submit Content'}
+              </p>
+              {task.clientContentSubmitted && (
+                <span style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700',
+                  backgroundColor: '#dcfce7', color: '#15803d'
+                }}>
+                  ✓ Submitted
+                </span>
+              )}
+            </div>
+
+            {/* Content Toast */}
+            {contentToast && (
+              <div style={{
+                padding: '12px 16px', borderRadius: '12px', marginBottom: '16px',
+                backgroundColor: contentToast.type === 'error' ? '#fef2f2' : '#f0fdf4',
+                color: contentToast.type === 'error' ? '#dc2626' : '#15803d',
+                fontSize: '14px', fontWeight: '500'
+              }}>
+                {contentToast.message}
+              </div>
+            )}
+
+            {/* IF NOT SUBMITTED - Show Form */}
+            {!task.clientContentSubmitted ? (
+              <>
+                {/* Content Text */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
+                    Content / Instructions
+                  </label>
+                  <textarea
+                    value={contentText}
+                    onChange={(e) => setContentText(e.target.value)}
+                    placeholder="Enter your content, captions, instructions, or any details..."
+                    maxLength={5000}
+                    style={{
+                      width: '100%', minHeight: '120px', padding: '14px 16px',
+                      fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '14px',
+                      outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                      fontFamily: 'inherit', lineHeight: 1.6
+                    }}
+                  />
+                  <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', textAlign: 'right' }}>
+                    {contentText.length}/5000
+                  </p>
+                </div>
+
+                {/* Content Folder Link - REMOVED: Now handled by admin-set upload folder */}
+
+                {/* Content Links - REMOVED: Simplified workflow */}
+
+                {/* Submit Button */}
+                <button
+                  onClick={handleContentSubmit}
+                  disabled={submittingContent}
+                  style={{
+                    width: '100%', padding: '16px 24px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    color: '#fff', fontSize: '15px', fontWeight: '600',
+                    borderRadius: '14px', border: 'none',
+                    cursor: submittingContent ? 'not-allowed' : 'pointer',
+                    opacity: submittingContent ? 0.6 : 1
+                  }}
+                >
+                  {submittingContent ? 'Submitting...' : 'Submit Content'}
+                </button>
+              </>
+            ) : (
+              /* IF SUBMITTED - Show Read-Only Content */
+              <>
+                {/* Submitted Text */}
+                {task.clientContentText && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+                      Content / Instructions
+                    </label>
+                    <div style={{
+                      padding: '16px', backgroundColor: '#f8fafc', borderRadius: '14px',
+                      fontSize: '14px', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap'
+                    }}>
+                      {task.clientContentText}
+                    </div>
+                  </div>
+                )}
+
+                {/* Submitted Content Folder */}
+                {task.clientDriveLink && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+                      Content Folder Link
+                    </label>
+                    <a
+                      href={task.clientDriveLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'block', padding: '14px 16px', backgroundColor: '#eff6ff',
+                        borderRadius: '12px', fontSize: '14px', color: '#3b82f6',
+                        textDecoration: 'none', wordBreak: 'break-all'
+                      }}
+                    >
+                      {task.clientDriveLink}
+                    </a>
+                  </div>
+                )}
+
+                {/* Submitted Links */}
+                {task.clientContentLinks && task.clientContentLinks.length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+                      Additional Links
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {task.clientContentLinks.map((link, index) => (
+                        <a
+                          key={index}
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'block', padding: '12px 14px', backgroundColor: '#f1f5f9',
+                            borderRadius: '10px', fontSize: '14px', color: '#6366f1',
+                            textDecoration: 'none', wordBreak: 'break-all'
+                          }}
+                        >
+                          {link}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Submitted At */}
+                {task.clientContentSubmittedAt && (
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '16px 0 0 0', textAlign: 'right' }}>
+                    Submitted on {new Date(task.clientContentSubmittedAt).toLocaleString('en-IN', {
+                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Lightbox */}
         {lightboxImage && (
           <div 
@@ -1041,179 +1214,6 @@ const TaskDetail = () => {
                   day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 })}
               </p>
-            )}
-          </div>
-        )}
-
-        {/* CLIENT CONTENT SUBMISSION (Phase 2) */}
-        {/* Show if content not yet submitted - regardless of status */}
-        {!task.clientContentSubmitted && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', 
-            border: task.clientContentSubmitted ? '2px solid #bbf7d0' : (task.requireClientContent ? '2px solid #fbbf24' : '2px solid #e0e7ff')
-          }}>
-            {/* Content Required Warning */}
-            {task.requireClientContent && !task.clientContentSubmitted && (
-              <div style={{
-                padding: '14px 18px', backgroundColor: '#fef3c7', borderRadius: '14px', marginBottom: '20px',
-                border: '1px solid #fcd34d', display: 'flex', alignItems: 'flex-start', gap: '12px'
-              }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
-                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: 0 }}>Please submit content to start this task</p>
-                  <p style={{ fontSize: '13px', color: '#b45309', margin: '4px 0 0', lineHeight: 1.4 }}>Work will begin once you submit the required content below.</p>
-                </div>
-              </div>
-            )}
-            
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
-                {task.clientContentSubmitted ? 'Submitted Content' : 'Submit Content'}
-              </p>
-              {task.clientContentSubmitted && (
-                <span style={{
-                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700',
-                  backgroundColor: '#dcfce7', color: '#15803d'
-                }}>
-                  ✓ Submitted
-                </span>
-              )}
-            </div>
-
-            {/* Content Toast */}
-            {contentToast && (
-              <div style={{
-                padding: '12px 16px', borderRadius: '12px', marginBottom: '16px',
-                backgroundColor: contentToast.type === 'error' ? '#fef2f2' : '#f0fdf4',
-                color: contentToast.type === 'error' ? '#dc2626' : '#15803d',
-                fontSize: '14px', fontWeight: '500'
-              }}>
-                {contentToast.message}
-              </div>
-            )}
-
-            {/* IF NOT SUBMITTED - Show Form */}
-            {!task.clientContentSubmitted ? (
-              <>
-                {/* Content Text */}
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
-                    Content / Instructions
-                  </label>
-                  <textarea
-                    value={contentText}
-                    onChange={(e) => setContentText(e.target.value)}
-                    placeholder="Enter your content, captions, instructions, or any details..."
-                    maxLength={5000}
-                    style={{
-                      width: '100%', minHeight: '120px', padding: '14px 16px',
-                      fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '14px',
-                      outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-                      fontFamily: 'inherit', lineHeight: 1.6
-                    }}
-                  />
-                  <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', textAlign: 'right' }}>
-                    {contentText.length}/5000
-                  </p>
-                </div>
-
-                {/* Content Folder Link - REMOVED: Now handled by admin-set upload folder */}
-
-                {/* Content Links - REMOVED: Simplified workflow */}
-
-                {/* Submit Button */}
-                <button
-                  onClick={handleContentSubmit}
-                  disabled={submittingContent}
-                  style={{
-                    width: '100%', padding: '16px 24px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#fff', fontSize: '15px', fontWeight: '600',
-                    borderRadius: '14px', border: 'none',
-                    cursor: submittingContent ? 'not-allowed' : 'pointer',
-                    opacity: submittingContent ? 0.6 : 1
-                  }}
-                >
-                  {submittingContent ? 'Submitting...' : 'Submit Content'}
-                </button>
-              </>
-            ) : (
-              /* IF SUBMITTED - Show Read-Only Content */
-              <>
-                {/* Submitted Text */}
-                {task.clientContentText && (
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-                      Content / Instructions
-                    </label>
-                    <div style={{
-                      padding: '16px', backgroundColor: '#f8fafc', borderRadius: '14px',
-                      fontSize: '14px', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap'
-                    }}>
-                      {task.clientContentText}
-                    </div>
-                  </div>
-                )}
-
-                {/* Submitted Content Folder */}
-                {task.clientDriveLink && (
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-                      Content Folder Link
-                    </label>
-                    <a
-                      href={task.clientDriveLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'block', padding: '14px 16px', backgroundColor: '#eff6ff',
-                        borderRadius: '12px', fontSize: '14px', color: '#3b82f6',
-                        textDecoration: 'none', wordBreak: 'break-all'
-                      }}
-                    >
-                      {task.clientDriveLink}
-                    </a>
-                  </div>
-                )}
-
-                {/* Submitted Links */}
-                {task.clientContentLinks && task.clientContentLinks.length > 0 && (
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-                      Additional Links
-                    </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {task.clientContentLinks.map((link, index) => (
-                        <a
-                          key={index}
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'block', padding: '12px 14px', backgroundColor: '#f1f5f9',
-                            borderRadius: '10px', fontSize: '14px', color: '#6366f1',
-                            textDecoration: 'none', wordBreak: 'break-all'
-                          }}
-                        >
-                          {link}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Submitted At */}
-                {task.clientContentSubmittedAt && (
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '16px 0 0 0', textAlign: 'right' }}>
-                    Submitted on {new Date(task.clientContentSubmittedAt).toLocaleString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </p>
-                )}
-              </>
             )}
           </div>
         )}
