@@ -48,6 +48,7 @@ const TaskDetail = () => {
   const [messageAttachments, setMessageAttachments] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
   const discussionRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const fetchTask = useCallback(async () => {
@@ -286,6 +287,13 @@ const TaskDetail = () => {
       }, 100);
     }
   }, [loading, task, searchParams]);
+
+  // Auto-scroll to latest message when messages update
+  useEffect(() => {
+    if (task?.messages?.length > 0 && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [task?.messages?.length]);
 
   // Human-readable status labels (hide internal codes)
   const getHumanStatus = (status) => {
@@ -629,43 +637,60 @@ const TaskDetail = () => {
                 No messages yet. Start a conversation!
               </p>
             ) : (
-              task.messages.map((msg, idx) => (
-                <div key={idx} style={{ 
-                  display: 'flex', 
-                  justifyContent: msg.sender === 'CLIENT' ? 'flex-end' : 'flex-start',
-                  marginBottom: '12px'
-                }}>
-                  <div style={{
-                    maxWidth: '75%', padding: '12px 16px', borderRadius: '16px',
-                    backgroundColor: msg.sender === 'CLIENT' ? '#6366f1' : '#f1f5f9',
-                    color: msg.sender === 'CLIENT' ? '#fff' : '#0f172a',
+              <>
+                {task.messages.map((msg, idx) => (
+                  <div key={idx} style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    alignItems: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start',
+                    marginBottom: '12px'
                   }}>
-                    {msg.attachments && msg.attachments.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: msg.text && msg.text !== '[Image]' ? '8px' : 0 }}>
-                        {msg.attachments.map((att, attIdx) => (
-                          <img 
-                            key={attIdx} 
-                            src={att} 
-                            alt="" 
-                            onClick={() => setLightboxImage(att)}
-                            style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }} 
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {msg.text && msg.text !== '[Image]' && (
-                      <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkifyText(msg.text)}</p>
-                    )}
-                    <p style={{ 
-                      fontSize: '10px', margin: '6px 0 0', 
-                      color: msg.sender === 'CLIENT' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
-                      textAlign: 'right'
+                    {/* Sender Label */}
+                    <span style={{ 
+                      fontSize: '11px', 
+                      fontWeight: '600', 
+                      color: msg.sender === 'ADMIN' ? '#6366f1' : '#64748b',
+                      marginBottom: '4px',
+                      paddingLeft: msg.sender === 'ADMIN' ? '0' : '4px',
+                      paddingRight: msg.sender === 'ADMIN' ? '4px' : '0'
                     }}>
-                      {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                      {msg.sender === 'ADMIN' ? 'Admin' : 'Client'}
+                    </span>
+                    {/* Message Bubble */}
+                    <div style={{
+                      maxWidth: '75%', padding: '12px 16px', borderRadius: '16px',
+                      backgroundColor: msg.sender === 'ADMIN' ? '#6366f1' : '#f1f5f9',
+                      color: msg.sender === 'ADMIN' ? '#fff' : '#0f172a',
+                    }}>
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: msg.text && msg.text !== '[Image]' ? '8px' : 0 }}>
+                          {msg.attachments.map((att, attIdx) => (
+                            <img 
+                              key={attIdx} 
+                              src={att} 
+                              alt="" 
+                              onClick={() => setLightboxImage(att)}
+                              style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }} 
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {msg.text && msg.text !== '[Image]' && (
+                        <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkifyText(msg.text)}</p>
+                      )}
+                      <p style={{ 
+                        fontSize: '10px', margin: '6px 0 0', 
+                        color: msg.sender === 'ADMIN' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
+                        textAlign: 'right'
+                      }}>
+                        {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+                {/* Scroll anchor */}
+                <div ref={messagesEndRef} />
+              </>
             )}
           </div>
 
