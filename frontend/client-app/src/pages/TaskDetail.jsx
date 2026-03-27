@@ -1083,80 +1083,43 @@ const TaskDetail = () => {
                   </p>
                 </div>
 
-                {/* Content Folder Link */}
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
-                    Content Folder Link (Google Drive)
-                  </label>
-                  <input
-                    type="url"
-                    value={driveLink}
-                    onChange={(e) => setDriveLink(e.target.value)}
-                    placeholder="https://drive.google.com/drive/folders/..."
-                    style={{
-                      width: '100%', padding: '14px 16px',
-                      fontSize: '14px', 
-                      border: driveLink && !driveLink.includes('drive.google.com') ? '2px solid #f59e0b' : '2px solid #e2e8f0', 
-                      borderRadius: '14px',
-                      outline: 'none', boxSizing: 'border-box'
-                    }}
-                  />
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: '6px 0 0', lineHeight: 1.4 }}>
-                    Upload all files in one folder and paste the link here
-                  </p>
-                  {driveLink && !driveLink.includes('drive.google.com') && (
-                    <p style={{ fontSize: '12px', color: '#f59e0b', margin: '6px 0 0', fontWeight: '500' }}>
-                      ⚠ Link should be a Google Drive folder URL
-                    </p>
-                  )}
-                </div>
+                {/* Content Folder Link - REMOVED: Now handled by admin-set upload folder */}
 
-                {/* Content Links */}
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
-                    Additional Links (optional)
-                  </label>
-                  {contentLinks.map((link, index) => (
-                    <div key={index} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                      <input
-                        type="url"
-                        value={link}
-                        onChange={(e) => updateContentLink(index, e.target.value)}
-                        placeholder={`Link ${index + 1}`}
-                        style={{
-                          flex: 1, padding: '12px 14px',
-                          fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px',
-                          outline: 'none', boxSizing: 'border-box'
-                        }}
-                      />
-                      {contentLinks.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeContentLink(index)}
-                          style={{
-                            padding: '12px 14px', backgroundColor: '#fef2f2', color: '#dc2626',
-                            border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '14px'
-                          }}
-                        >
-                          ✕
-                        </button>
-                      )}
+                {/* Upload Content Button - if admin has set upload folder */}
+                {task.clientUploadFolderLink && (
+                  <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#eff6ff', borderRadius: '16px', border: '2px solid #3b82f6' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#1e40af', margin: 0 }}>Upload Your Files</h4>
+                        <p style={{ fontSize: '13px', color: '#3b82f6', margin: '2px 0 0' }}>Click to open the upload folder</p>
+                      </div>
                     </div>
-                  ))}
-                  {contentLinks.length < 10 && (
-                    <button
-                      type="button"
-                      onClick={addContentLink}
+                    <a
+                      href={task.clientUploadFolderLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       style={{
-                        padding: '10px 16px', backgroundColor: '#f1f5f9', color: '#64748b',
-                        border: 'none', borderRadius: '10px', cursor: 'pointer',
-                        fontSize: '13px', fontWeight: '500'
+                        display: 'block', width: '100%', padding: '14px 20px',
+                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                        color: '#fff', fontSize: '15px', fontWeight: '600',
+                        borderRadius: '12px', textAlign: 'center', textDecoration: 'none',
+                        boxSizing: 'border-box'
                       }}
                     >
-                      + Add Link
-                    </button>
-                  )}
-                </div>
+                      Upload Content →
+                    </a>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: '10px 0 0', textAlign: 'center' }}>
+                      Upload your files directly in this Google Drive folder
+                    </p>
+                  </div>
+                )}
+
+                {/* Content Links - REMOVED: Simplified workflow */}
 
                 {/* Submit Button */}
                 <button

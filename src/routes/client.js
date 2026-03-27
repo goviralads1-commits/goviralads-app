@@ -634,6 +634,8 @@ router.get('/tasks/:taskId', async (req, res) => {
         clientDriveLink: task.clientDriveLink || '',
         clientContentSubmittedAt: task.clientContentSubmittedAt || null,
         clientContentSubmitted: task.clientContentSubmitted || false,
+        // CLIENT UPLOAD FOLDER (Phase 4B)
+        clientUploadFolderLink: task.clientUploadFolderLink || '',
         // FINAL DELIVERY (Phase 3)
         finalDeliveryLink: task.finalDeliveryLink || '',
         finalDeliveryText: task.finalDeliveryText || '',

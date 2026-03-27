@@ -22,6 +22,10 @@ const TaskDetail = () => {
   const [deliveryText, setDeliveryText] = useState('');
   const [savingDelivery, setSavingDelivery] = useState(false);
   
+  // Client Upload Folder state (Phase 4B)
+  const [clientUploadFolderLink, setClientUploadFolderLink] = useState('');
+  const [savingClientUploadFolder, setSavingClientUploadFolder] = useState(false);
+  
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -102,6 +106,9 @@ const TaskDetail = () => {
       // Initialize delivery state (Phase 3)
       setDeliveryLink(taskData.finalDeliveryLink || '');
       setDeliveryText(taskData.finalDeliveryText || '');
+      
+      // Initialize client upload folder state (Phase 4B)
+      setClientUploadFolderLink(taskData.clientUploadFolderLink || '');
     } catch (err) {
       console.error('Task fetch error:', err);
       setError(err.response?.data?.error || 'Failed to load task');
@@ -319,6 +326,24 @@ const TaskDetail = () => {
       setTimeout(() => setToast(null), 4000);
     } finally {
       setSavingDelivery(false);
+    }
+  };
+
+  // Save Client Upload Folder (Phase 4B)
+  const handleSaveClientUploadFolder = async () => {
+    setSavingClientUploadFolder(true);
+    try {
+      await api.patch(`/admin/tasks/${taskId}`, {
+        clientUploadFolderLink: clientUploadFolderLink.trim()
+      });
+      await fetchTask();
+      setToast({ type: 'success', message: 'Client upload folder saved' });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to save upload folder' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setSavingClientUploadFolder(false);
     }
   };
 
@@ -1131,6 +1156,62 @@ const TaskDetail = () => {
                   rows={4}
                   style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #fcd34d', borderRadius: '12px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', lineHeight: 1.6, boxSizing: 'border-box' }}
                 />
+              </div>
+
+              {/* CLIENT UPLOAD FOLDER SECTION (Phase 4B) */}
+              <div style={{ backgroundColor: clientUploadFolderLink ? '#eff6ff' : '#fff', borderRadius: '20px', padding: '28px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: clientUploadFolderLink ? '2px solid #3b82f6' : '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: clientUploadFolderLink ? '#dbeafe' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={clientUploadFolderLink ? '#3b82f6' : '#64748b'} strokeWidth="2">
+                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M12 11v6M9 14h6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Client Upload Folder</h2>
+                  </div>
+                  {clientUploadFolderLink && (
+                    <span style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700', backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                      ✓ Set
+                    </span>
+                  )}
+                </div>
+
+                {/* Upload Folder Link Input */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Google Drive Folder Link</label>
+                  <input
+                    type="url"
+                    value={clientUploadFolderLink}
+                    onChange={(e) => setClientUploadFolderLink(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    disabled={task.status === 'COMPLETED'}
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: task.status === 'COMPLETED' ? '#f8fafc' : '#fff', boxSizing: 'border-box', opacity: task.status === 'COMPLETED' ? 0.7 : 1 }}
+                  />
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 0' }}>
+                    Client will see an "Upload Content" button that opens this folder
+                  </p>
+                </div>
+
+                {/* Save Button */}
+                {task.status !== 'COMPLETED' ? (
+                  <button
+                    onClick={handleSaveClientUploadFolder}
+                    disabled={savingClientUploadFolder}
+                    style={{
+                      width: '100%', padding: '14px 20px',
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                      color: '#fff',
+                      fontSize: '14px', fontWeight: '600', borderRadius: '12px', border: 'none',
+                      cursor: savingClientUploadFolder ? 'not-allowed' : 'pointer',
+                      opacity: savingClientUploadFolder ? 0.6 : 1, transition: 'all 0.2s'
+                    }}
+                  >
+                    {savingClientUploadFolder ? 'Saving...' : (clientUploadFolderLink ? 'Update Folder' : 'Save Folder')}
+                  </button>
+                ) : (
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, textAlign: 'center' }}>Editing disabled for COMPLETED tasks</p>
+                )}
               </div>
 
               {/* FINAL DELIVERY SECTION (Phase 3) */}

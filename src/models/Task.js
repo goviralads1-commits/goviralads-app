@@ -328,6 +328,13 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // CLIENT UPLOAD FOLDER (Phase 4B)
+    // Admin sets folder where client uploads content
+    clientUploadFolderLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     // TASK DISCUSSION SYSTEM (Phase 6)
     // Client-Admin messaging within task context
     messages: [{
