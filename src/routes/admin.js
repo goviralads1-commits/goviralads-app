@@ -28,6 +28,7 @@ const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/
 const billingService = require('../services/billingService');
 const CommissionLog = require('../models/CommissionLog');
 const pdfService = require('../services/pdfService');
+const { ProgressIconLibrary } = require('../models/ProgressIconLibrary');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
 const { requirePermission, ALL_PERMISSIONS } = require('../middleware/permissions');
@@ -6307,6 +6308,101 @@ router.get('/commissions', async (req, res) => {
   } catch (err) {
     console.error('[COMMISSIONS] Fetch error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch commissions' });
+  }
+});
+
+// =============================================================================
+// PROGRESS ICON LIBRARY SYSTEM
+// Dedicated collection for progress bar icons (admin-only)
+// =============================================================================
+
+// GET /admin/progress-icons - List all icons in library
+router.get('/progress-icons', async (req, res) => {
+  try {
+    const icons = await ProgressIconLibrary.find()
+      .sort({ createdAt: -1 })
+      .select('_id name url createdAt');
+    
+    return res.json({
+      success: true,
+      icons: icons.map(icon => ({
+        _id: icon._id.toString(),
+        name: icon.name,
+        url: icon.url,
+        createdAt: icon.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[PROGRESS ICONS LIST ERROR]', err);
+    return res.status(500).json({ error: 'Failed to load icon library' });
+  }
+});
+
+// POST /admin/progress-icons - Upload new icon to library
+router.post('/progress-icons', async (req, res) => {
+  try {
+    const { name, url, publicId } = req.body;
+    
+    if (!name || !url || !publicId) {
+      return res.status(400).json({ error: 'Name, URL, and publicId are required' });
+    }
+    
+    const icon = new ProgressIconLibrary({
+      name: name.trim(),
+      url: url.trim(),
+      publicId: publicId.trim(),
+      uploadedBy: req.user.id,
+    });
+    
+    await icon.save();
+    
+    return res.status(201).json({
+      success: true,
+      icon: {
+        _id: icon._id.toString(),
+        name: icon.name,
+        url: icon.url,
+        createdAt: icon.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('[PROGRESS ICON UPLOAD ERROR]', err);
+    return res.status(500).json({ error: 'Failed to save icon' });
+  }
+});
+
+// DELETE /admin/progress-icons/:iconId - Remove icon from library
+router.delete('/progress-icons/:iconId', async (req, res) => {
+  try {
+    const { iconId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(iconId)) {
+      return res.status(400).json({ error: 'Invalid icon ID' });
+    }
+    
+    const icon = await ProgressIconLibrary.findById(iconId);
+    if (!icon) {
+      return res.status(404).json({ error: 'Icon not found' });
+    }
+    
+    // Delete from Cloudinary
+    const { v2: cloudinary } = require('cloudinary');
+    try {
+      await cloudinary.uploader.destroy(icon.publicId);
+    } catch (cloudErr) {
+      console.warn('[CLOUDINARY DELETE WARNING]', cloudErr.message);
+      // Continue even if Cloudinary delete fails
+    }
+    
+    await ProgressIconLibrary.findByIdAndDelete(iconId);
+    
+    return res.json({
+      success: true,
+      message: 'Icon deleted successfully',
+    });
+  } catch (err) {
+    console.error('[PROGRESS ICON DELETE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to delete icon' });
   }
 });
 
