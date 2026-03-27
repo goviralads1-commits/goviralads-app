@@ -1185,8 +1185,7 @@ const TaskDetail = () => {
                     value={clientUploadFolderLink}
                     onChange={(e) => setClientUploadFolderLink(e.target.value)}
                     placeholder="https://drive.google.com/drive/folders/..."
-                    disabled={task.status === 'COMPLETED'}
-                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: task.status === 'COMPLETED' ? '#f8fafc' : '#fff', boxSizing: 'border-box', opacity: task.status === 'COMPLETED' ? 0.7 : 1 }}
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', boxSizing: 'border-box' }}
                   />
                   <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 0' }}>
                     Client will see an "Upload Content" button that opens this folder
@@ -1194,24 +1193,20 @@ const TaskDetail = () => {
                 </div>
 
                 {/* Save Button */}
-                {task.status !== 'COMPLETED' ? (
-                  <button
-                    onClick={handleSaveClientUploadFolder}
-                    disabled={savingClientUploadFolder}
-                    style={{
-                      width: '100%', padding: '14px 20px',
-                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                      color: '#fff',
-                      fontSize: '14px', fontWeight: '600', borderRadius: '12px', border: 'none',
-                      cursor: savingClientUploadFolder ? 'not-allowed' : 'pointer',
-                      opacity: savingClientUploadFolder ? 0.6 : 1, transition: 'all 0.2s'
-                    }}
-                  >
-                    {savingClientUploadFolder ? 'Saving...' : (clientUploadFolderLink ? 'Update Folder' : 'Save Folder')}
-                  </button>
-                ) : (
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, textAlign: 'center' }}>Editing disabled for COMPLETED tasks</p>
-                )}
+                <button
+                  onClick={handleSaveClientUploadFolder}
+                  disabled={savingClientUploadFolder}
+                  style={{
+                    width: '100%', padding: '14px 20px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    color: '#fff',
+                    fontSize: '14px', fontWeight: '600', borderRadius: '12px', border: 'none',
+                    cursor: savingClientUploadFolder ? 'not-allowed' : 'pointer',
+                    opacity: savingClientUploadFolder ? 0.6 : 1, transition: 'all 0.2s'
+                  }}
+                >
+                  {savingClientUploadFolder ? 'Saving...' : (clientUploadFolderLink ? 'Update Folder' : 'Save Folder')}
+                </button>
               </div>
 
               {/* FINAL DELIVERY SECTION (Phase 3) */}
@@ -1248,8 +1243,7 @@ const TaskDetail = () => {
                     value={deliveryLink}
                     onChange={(e) => setDeliveryLink(e.target.value)}
                     placeholder="https://drive.google.com/drive/folders/..."
-                    disabled={task.status === 'COMPLETED'}
-                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: task.status === 'COMPLETED' ? '#f8fafc' : '#fff', boxSizing: 'border-box', opacity: task.status === 'COMPLETED' ? 0.7 : 1 }}
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', boxSizing: 'border-box' }}
                   />
                 </div>
 
@@ -1261,30 +1255,25 @@ const TaskDetail = () => {
                     onChange={(e) => setDeliveryText(e.target.value)}
                     placeholder="Instructions for the client..."
                     rows={3}
-                    disabled={task.status === 'COMPLETED'}
-                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: task.status === 'COMPLETED' ? '#f8fafc' : '#fff', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box', opacity: task.status === 'COMPLETED' ? 0.7 : 1 }}
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box' }}
                   />
                 </div>
 
                 {/* Save Button */}
-                {task.status !== 'COMPLETED' ? (
-                  <button
-                    onClick={handleSaveDelivery}
-                    disabled={savingDelivery || !deliveryLink.trim()}
-                    style={{
-                      width: '100%', padding: '14px 20px',
-                      background: deliveryLink.trim() ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : '#e2e8f0',
-                      color: deliveryLink.trim() ? '#fff' : '#94a3b8',
-                      fontSize: '14px', fontWeight: '600', borderRadius: '12px', border: 'none',
-                      cursor: deliveryLink.trim() && !savingDelivery ? 'pointer' : 'not-allowed',
-                      opacity: savingDelivery ? 0.6 : 1, transition: 'all 0.2s'
-                    }}
-                  >
-                    {savingDelivery ? 'Saving...' : (task.finalDeliveryLink ? 'Update Delivery' : 'Save Delivery')}
-                  </button>
-                ) : (
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, textAlign: 'center' }}>Editing disabled for COMPLETED tasks</p>
-                )}
+                <button
+                  onClick={handleSaveDelivery}
+                  disabled={savingDelivery || !deliveryLink.trim()}
+                  style={{
+                    width: '100%', padding: '14px 20px',
+                    background: deliveryLink.trim() ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' : '#e2e8f0',
+                    color: deliveryLink.trim() ? '#fff' : '#94a3b8',
+                    fontSize: '14px', fontWeight: '600', borderRadius: '12px', border: 'none',
+                    cursor: deliveryLink.trim() && !savingDelivery ? 'pointer' : 'not-allowed',
+                    opacity: savingDelivery ? 0.6 : 1, transition: 'all 0.2s'
+                  }}
+                >
+                  {savingDelivery ? 'Saving...' : (task.finalDeliveryLink ? 'Update Delivery' : 'Save Delivery')}
+                </button>
               </div>
             </div>
 
