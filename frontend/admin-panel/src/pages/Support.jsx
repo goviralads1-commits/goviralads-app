@@ -111,16 +111,39 @@ const Support = () => {
       const taskId = selectedTask._id || selectedTask.id;
       let attachmentUrls = [];
       
-      // Upload images (messageAttachments contains { file, previewUrl })
+      // STEP 1: Upload images first if any (MUST match TaskDetail exactly)
       if (messageAttachments.length > 0) {
-        for (const att of messageAttachments) {
+        try {
+          console.log('[Support Upload] Starting upload...');
+          console.log('[Support Upload] Files to upload:', messageAttachments.length);
+          
           const formData = new FormData();
-          formData.append('image', att.file);
+          messageAttachments.forEach((att, idx) => {
+            console.log(`[Support Upload] File ${idx}:`, att.file.name, att.file.type, att.file.size, 'bytes');
+            formData.append('images', att.file); // MUST be 'images' (plural) to match backend
+          });
+          
+          // Note: Don't set Content-Type manually - browser sets it with correct boundary for FormData
           const uploadRes = await api.post('/upload/chat', formData);
-          if (uploadRes.data.url) attachmentUrls.push(uploadRes.data.url);
+          console.log('[Support Upload] Response:', uploadRes.status, uploadRes.data);
+          attachmentUrls = uploadRes.data?.urls || [];
+          
+          // If upload returned no URLs, fail
+          if (messageAttachments.length > 0 && attachmentUrls.length === 0) {
+            throw new Error('Image upload failed - no URLs returned');
+          }
+        } catch (uploadErr) {
+          console.error('[Support Upload] ERROR:', uploadErr);
+          console.error('[Support Upload] Response status:', uploadErr.response?.status);
+          console.error('[Support Upload] Response data:', uploadErr.response?.data);
+          setToast({ type: 'error', message: uploadErr.response?.data?.error || uploadErr.message || 'Failed to upload image' });
+          setTimeout(() => setToast(null), 5000);
+          setSendingMessage(false);
+          return; // DO NOT send message
         }
       }
       
+      // STEP 2: Only send message after successful upload
       await api.post(`/admin/tasks/${taskId}/message`, {
         text: messageText.trim() || (attachmentUrls.length > 0 ? '[Image]' : ''),
         attachments: attachmentUrls
