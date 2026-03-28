@@ -145,7 +145,8 @@ const TaskDetail = () => {
         formData.status !== (originalTask.status || 'PENDING') ||
         formData.progress !== (originalTask.progress || 0) ||
         formData.startDate !== (originalTask.startDate ? originalTask.startDate.split('T')[0] : '') ||
-        formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '');
+        formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '') ||
+        JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' });
       setHasChanges(changed);
     }
   }, [formData, originalTask]);
