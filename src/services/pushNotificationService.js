@@ -116,14 +116,15 @@ const sendToUser = async (userId, notification, data = {}) => {
  */
 const sendMessageNotification = async (recipientUserId, senderName, taskTitle, taskId, messagePreview) => {
   const notification = {
-    title: `New message from ${senderName}`,
-    body: messagePreview.length > 100 ? messagePreview.substring(0, 97) + '...' : messagePreview
+    title: 'New Message - Go Viral Ads',
+    body: `${senderName}: ${messagePreview.length > 80 ? messagePreview.substring(0, 77) + '...' : messagePreview}`
   };
   
   const data = {
-    type: 'new_message',
+    type: 'chat',
     taskId: taskId,
-    taskTitle: taskTitle
+    taskTitle: taskTitle,
+    url: `/support?taskId=${taskId}`
   };
 
   return sendToUser(recipientUserId, notification, data);

@@ -3,6 +3,7 @@ import api from '../services/api';
 import Header from '../components/Header';
 import { getCurrentUser, logout } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
+import { isPushEnabled, enablePushNotifications, disablePushNotifications } from '../services/pushService';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -35,9 +36,14 @@ const Profile = () => {
   const [activityFetched, setActivityFetched] = useState(false);
   // Toast/error state
   const [toast, setToast] = useState(null);
+  // Push notification state
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   useEffect(() => {
     fetchProfile();
+    // Check push notification status
+    setPushEnabled(isPushEnabled());
   }, []);
 
   // Auto-dismiss toast
@@ -915,6 +921,50 @@ const Profile = () => {
                   />
                   <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, backgroundColor: localStorage.getItem('notificationSoundEnabled') !== 'false' ? '#6366f1' : '#e2e8f0', borderRadius: '28px', transition: '0.3s' }}>
                     <span style={{ position: 'absolute', height: '22px', width: '22px', left: localStorage.getItem('notificationSoundEnabled') !== 'false' ? '23px' : '3px', bottom: '3px', backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s' }} />
+                  </span>
+                </label>
+              </div>
+
+              {/* Push Notifications Toggle */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: pushEnabled ? '#f0fdf4' : '#f8fafc', borderRadius: '12px', marginTop: '12px', border: pushEnabled ? '2px solid #86efac' : '2px solid transparent' }}>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Push Notifications</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Receive instant notifications on your device</p>
+                  {Notification.permission === 'denied' && (
+                    <p style={{ fontSize: '11px', color: '#dc2626', margin: '4px 0 0 0' }}>⚠️ Blocked in browser settings</p>
+                  )}
+                </div>
+                <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '28px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={pushEnabled}
+                    disabled={pushLoading || Notification.permission === 'denied'}
+                    onChange={async (e) => {
+                      setPushLoading(true);
+                      try {
+                        if (e.target.checked) {
+                          const success = await enablePushNotifications();
+                          setPushEnabled(success);
+                          if (success) {
+                            setToast({ type: 'success', message: 'Push notifications enabled!' });
+                          } else {
+                            setToast({ type: 'error', message: 'Failed to enable notifications' });
+                          }
+                        } else {
+                          await disablePushNotifications();
+                          setPushEnabled(false);
+                          setToast({ type: 'success', message: 'Push notifications disabled' });
+                        }
+                      } catch (err) {
+                        console.error('Push toggle error:', err);
+                      } finally {
+                        setPushLoading(false);
+                      }
+                    }} 
+                    style={{ opacity: 0, width: 0, height: 0 }} 
+                  />
+                  <span style={{ position: 'absolute', cursor: pushLoading || Notification.permission === 'denied' ? 'not-allowed' : 'pointer', inset: 0, backgroundColor: pushEnabled ? '#22c55e' : '#e2e8f0', borderRadius: '28px', transition: '0.3s', opacity: pushLoading ? 0.5 : 1 }}>
+                    <span style={{ position: 'absolute', height: '22px', width: '22px', left: pushEnabled ? '23px' : '3px', bottom: '3px', backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s' }} />
                   </span>
                 </label>
               </div>

@@ -1,8 +1,9 @@
 // Push Notification Service for Admin Panel
-// Phase 1: Permission + Token generation only (no backend yet)
+// Complete implementation with backend integration
 
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import api from './api';
 
 // Session flag to only ask once per session
 const SESSION_KEY = 'push_permission_asked';
@@ -17,6 +18,10 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+// Firebase instances
+let app = null;
+let messaging = null;
+
 // Check if Firebase is configured
 const isFirebaseConfigured = () => {
   return !!(
@@ -24,6 +29,27 @@ const isFirebaseConfigured = () => {
     firebaseConfig.projectId &&
     firebaseConfig.messagingSenderId
   );
+};
+
+// Initialize Firebase (singleton)
+const initFirebase = () => {
+  if (app) return { app, messaging };
+  
+  if (!isFirebaseConfigured()) {
+    console.log('[Push] Firebase not configured');
+    return { app: null, messaging: null };
+  }
+
+  try {
+    app = initializeApp(firebaseConfig);
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      messaging = getMessaging(app);
+    }
+    return { app, messaging };
+  } catch (error) {
+    console.error('[Push] Firebase init error:', error);
+    return { app: null, messaging: null };
+  }
 };
 
 // Request notification permission (only once per session)
@@ -55,7 +81,7 @@ export const requestPermission = async () => {
   }
 };
 
-// Generate FCM token (requires VAPID key)
+// Generate FCM token and send to backend
 export const generateToken = async () => {
   try {
     // Check Firebase config
@@ -78,8 +104,11 @@ export const generateToken = async () => {
     }
 
     // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const messaging = getMessaging(app);
+    const { messaging: msg } = initFirebase();
+    if (!msg) {
+      console.log('[Push] Messaging not available');
+      return null;
+    }
 
     // Register service worker
     let swRegistration = null;
@@ -98,14 +127,16 @@ export const generateToken = async () => {
       tokenOptions.serviceWorkerRegistration = swRegistration;
     }
 
-    const fcmToken = await getToken(messaging, tokenOptions);
+    const fcmToken = await getToken(msg, tokenOptions);
     
     if (fcmToken) {
-      console.log('[Push] ✅ FCM Token generated successfully:');
-      console.log('[Push] Token:', fcmToken);
+      console.log('[Push] ✅ FCM Token generated successfully');
       
-      // Store locally for reference (will send to backend in Phase 2)
+      // Store locally
       localStorage.setItem('fcmToken', fcmToken);
+      
+      // Send to backend
+      await sendTokenToBackend(fcmToken);
       
       return fcmToken;
     } else {
@@ -118,6 +149,100 @@ export const generateToken = async () => {
   }
 };
 
+// Send token to backend
+const sendTokenToBackend = async (fcmToken) => {
+  try {
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      console.log('[Push] No auth token, skipping backend save');
+      return false;
+    }
+
+    await api.post('/admin/device-token', {
+      token: fcmToken,
+      platform: 'web'
+    });
+    
+    console.log('[Push] ✅ Token sent to backend');
+    localStorage.setItem('pushNotificationsEnabled', 'true');
+    return true;
+  } catch (error) {
+    console.error('[Push] Failed to send token to backend:', error);
+    return false;
+  }
+};
+
+// Remove token from backend (disable notifications)
+export const disablePushNotifications = async () => {
+  try {
+    const fcmToken = localStorage.getItem('fcmToken');
+    if (fcmToken) {
+      await api.delete('/admin/device-token', { data: { token: fcmToken } });
+      console.log('[Push] Token removed from backend');
+    }
+    
+    localStorage.removeItem('fcmToken');
+    localStorage.setItem('pushNotificationsEnabled', 'false');
+    return true;
+  } catch (error) {
+    console.error('[Push] Failed to disable notifications:', error);
+    return false;
+  }
+};
+
+// Enable push notifications (re-register)
+export const enablePushNotifications = async () => {
+  try {
+    // Clear session flag to allow re-requesting
+    sessionStorage.removeItem(SESSION_KEY);
+    
+    const permission = await requestPermission();
+    if (permission === 'granted') {
+      const token = await generateToken();
+      return !!token;
+    }
+    return false;
+  } catch (error) {
+    console.error('[Push] Failed to enable notifications:', error);
+    return false;
+  }
+};
+
+// Check if push notifications are enabled
+export const isPushEnabled = () => {
+  return localStorage.getItem('pushNotificationsEnabled') === 'true' &&
+         localStorage.getItem('fcmToken') &&
+         Notification.permission === 'granted';
+};
+
+// Setup foreground message handler
+export const setupForegroundHandler = (onMessageCallback) => {
+  const { messaging: msg } = initFirebase();
+  if (!msg) return () => {};
+
+  return onMessage(msg, (payload) => {
+    console.log('[Push] Foreground message received:', payload);
+    
+    // Show browser notification if page is not focused
+    if (document.hidden && Notification.permission === 'granted') {
+      const title = payload.notification?.title || 'New Message - Go Viral Ads';
+      const body = payload.notification?.body || 'You have a new message';
+      
+      new Notification(title, {
+        body,
+        icon: '/icon-192.png',
+        tag: 'message-notification',
+        data: payload.data
+      });
+    }
+    
+    // Call custom handler
+    if (onMessageCallback) {
+      onMessageCallback(payload);
+    }
+  });
+};
+
 // Initialize push notifications (call after login)
 export const initPushNotifications = async () => {
   try {
@@ -125,6 +250,12 @@ export const initPushNotifications = async () => {
     const authToken = localStorage.getItem('token');
     if (!authToken) {
       console.log('[Push] Not authenticated, skipping push init');
+      return;
+    }
+
+    // Check if user has disabled push notifications
+    if (localStorage.getItem('pushNotificationsEnabled') === 'false') {
+      console.log('[Push] User has disabled push notifications');
       return;
     }
 

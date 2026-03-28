@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Header from '../components/Header';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { isPushEnabled, enablePushNotifications, disablePushNotifications } from '../services/pushService';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -72,10 +73,15 @@ const Profile = () => {
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', confirmPassword: '', role: 'CLIENT', status: 'ACTIVE', name: '', phone: '', company: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  // Push notification state
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   useEffect(() => {
     fetchAdminProfile();
     fetchPlans();
+    // Check push notification status
+    setPushEnabled(isPushEnabled());
   }, []);
 
   // Scroll lock effect for modals
@@ -962,6 +968,57 @@ const Profile = () => {
                     <h4 style={{ fontWeight: '600', color: '#0f172a', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                       💻 Session Management
                     </h4>
+                    
+                    {/* Push Notifications Toggle */}
+                    <div style={{ padding: '20px', borderRadius: '14px', background: pushEnabled ? '#f0fdf4' : '#f8fafc', border: pushEnabled ? '2px solid #86efac' : '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: pushEnabled ? '#dcfce7' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '20px' }}>{pushEnabled ? '🔔' : '🔕'}</span>
+                          </div>
+                          <div>
+                            <p style={{ fontWeight: '600', color: '#0f172a', fontSize: '15px', margin: '0 0 2px' }}>Push Notifications</p>
+                            <p style={{ fontSize: '12px', color: pushEnabled ? '#16a34a' : '#64748b', fontWeight: '500', margin: 0 }}>
+                              {pushEnabled ? 'Enabled' : 'Disabled'}
+                            </p>
+                            {Notification.permission === 'denied' && (
+                              <p style={{ fontSize: '11px', color: '#dc2626', margin: '4px 0 0 0' }}>⚠️ Blocked in browser</p>
+                            )}
+                          </div>
+                        </div>
+                        <label style={{ position: 'relative', display: 'inline-block', width: '52px', height: '30px' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={pushEnabled}
+                            disabled={pushLoading || Notification.permission === 'denied'}
+                            onChange={async (e) => {
+                              setPushLoading(true);
+                              try {
+                                if (e.target.checked) {
+                                  const success = await enablePushNotifications();
+                                  setPushEnabled(success);
+                                  setToast({ show: true, message: success ? 'Push notifications enabled!' : 'Failed to enable', type: success ? 'success' : 'error' });
+                                } else {
+                                  await disablePushNotifications();
+                                  setPushEnabled(false);
+                                  setToast({ show: true, message: 'Push notifications disabled', type: 'success' });
+                                }
+                              } catch (err) {
+                                console.error('Push toggle error:', err);
+                              } finally {
+                                setPushLoading(false);
+                              }
+                            }} 
+                            style={{ opacity: 0, width: 0, height: 0 }} 
+                          />
+                          <span style={{ position: 'absolute', cursor: pushLoading || Notification.permission === 'denied' ? 'not-allowed' : 'pointer', inset: 0, backgroundColor: pushEnabled ? '#22c55e' : '#e2e8f0', borderRadius: '30px', transition: '0.3s', opacity: pushLoading ? 0.5 : 1 }}>
+                            <span style={{ position: 'absolute', height: '24px', width: '24px', left: pushEnabled ? '25px' : '3px', bottom: '3px', backgroundColor: '#fff', borderRadius: '50%', transition: '0.3s', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                          </span>
+                        </label>
+                      </div>
+                      <p style={{ fontSize: '13px', color: '#64748b', margin: '12px 0 0', lineHeight: 1.5 }}>Get instant notifications when clients send messages.</p>
+                    </div>
+                    
                     <div style={{ padding: '20px', borderRadius: '14px', background: '#f8fafc', border: '1px solid #f1f5f9' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
                         <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
