@@ -48,6 +48,7 @@ const TaskDetail = () => {
   const [messageAttachments, setMessageAttachments] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
   const [isChatFullScreen, setIsChatFullScreen] = useState(false); // Full screen chat mode
+  const [showOnlyApprovals, setShowOnlyApprovals] = useState(false); // Approval filter toggle
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -690,6 +691,22 @@ const TaskDetail = () => {
               <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
               <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Chat with admin about this task</p>
             </div>
+            {/* Approval Filter Toggle */}
+            {(task.approvalRequests?.filter(a => a.isVisibleToClient !== false).length > 0) && (
+              <button
+                onClick={() => setShowOnlyApprovals(!showOnlyApprovals)}
+                style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '600',
+                  backgroundColor: showOnlyApprovals ? '#fef3c7' : '#f1f5f9',
+                  color: showOnlyApprovals ? '#92400e' : '#64748b',
+                  border: showOnlyApprovals ? '2px solid #fbbf24' : '1px solid #e2e8f0',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                ✅ Approvals ({task.approvalRequests.filter(a => a.isVisibleToClient !== false).length})
+              </button>
+            )}
             {/* Full Screen Toggle */}
             <button
               onClick={() => {
@@ -712,12 +729,99 @@ const TaskDetail = () => {
 
           {/* Messages */}
           <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
-            {(!task.messages || task.messages.length === 0) ? (
-              <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '40px 0' }}>
-                No messages yet. Start a conversation!
-              </p>
+            {/* Approval Filter: Show only approvals */}
+            {showOnlyApprovals ? (
+              (!task.approvalRequests || task.approvalRequests.filter(a => a.isVisibleToClient !== false).length === 0) ? (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '40px 0' }}>
+                  No approvals found
+                </p>
+              ) : (
+                <>
+                  {/* Render only approval cards */}
+                  {task.approvalRequests.filter(a => a.isVisibleToClient !== false).map((approval, idx) => {
+                    const latestSel = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
+                    const savedOpts = latestSel?.selectedOptions || [];
+                    const localSel = approvalSelections[approval.id] || [];
+                    const currentSel = localSel.length > 0 ? localSel : savedOpts;
+                    const hasHistory = (approval.selectionsHistory || []).length > 0;
+                    const isLocked = approval.isLocked;
+
+                    return (
+                      <div key={`filter-approval-${approval.id || idx}`} style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '16px'
+                      }}>
+                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
+                        <div style={{
+                          maxWidth: '90%', padding: '16px', borderRadius: '16px',
+                          backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
+                        }}>
+                          <p style={{ fontSize: '15px', fontWeight: '600', color: '#92400e', margin: '0 0 12px 0' }}>{approval.title}</p>
+                          {approval.options.map((opt, optIdx) => {
+                            const isSel = currentSel.includes(opt);
+                            return (
+                              <button
+                                key={optIdx}
+                                onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
+                                disabled={isLocked}
+                                style={{
+                                  width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: '14px', marginBottom: '8px',
+                                  backgroundColor: isSel ? '#dcfce7' : '#fff',
+                                  border: isSel ? '2px solid #22c55e' : '2px solid #e5e7eb',
+                                  textAlign: 'left', cursor: isLocked ? 'not-allowed' : 'pointer',
+                                  opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px'
+                                }}
+                              >
+                                <span style={{ fontSize: '16px' }}>
+                                  {approval.type === 'single' ? (isSel ? '◉' : '○') : (isSel ? '☑' : '☐')}
+                                </span>
+                                {opt}
+                              </button>
+                            );
+                          })}
+                          {!isLocked && (
+                            <button
+                              onClick={() => handleSubmitApproval(approval.id)}
+                              disabled={submittingApproval === approval.id || localSel.length === 0}
+                              style={{
+                                width: '100%', padding: '10px', fontSize: '14px', fontWeight: '600',
+                                backgroundColor: localSel.length > 0 ? '#6366f1' : '#e2e8f0',
+                                color: localSel.length > 0 ? '#fff' : '#94a3b8',
+                                border: 'none', borderRadius: '10px',
+                                cursor: localSel.length > 0 ? 'pointer' : 'not-allowed'
+                              }}
+                            >
+                              {submittingApproval === approval.id ? 'Submitting...' : (savedOpts.length > 0 ? 'Update Selection' : 'Submit Selection')}
+                            </button>
+                          )}
+                          <p style={{ fontSize: '11px', color: '#92400e', margin: '8px 0', textAlign: 'center' }}>
+                            {isLocked && hasHistory ? '✅ Approved (Locked)' : isLocked ? '🔒 Locked' : (savedOpts.length > 0 ? '✓ Submitted' : 'Awaiting selection')}
+                          </p>
+                          {/* View in Chat button */}
+                          <button
+                            onClick={() => setShowOnlyApprovals(false)}
+                            style={{
+                              padding: '6px 12px', fontSize: '11px', fontWeight: '600',
+                              backgroundColor: '#f1f5f9', color: '#64748b',
+                              border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer',
+                              width: '100%'
+                            }}
+                          >
+                            ← View in Chat
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )
             ) : (
-              <>
+              /* Normal chat view */
+              (!task.messages || task.messages.length === 0) ? (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '40px 0' }}>
+                  No messages yet. Start a conversation!
+                </p>
+              ) : (
+                <>
                 {task.messages.map((msg, idx) => (
                   <div key={idx} style={{ 
                     display: 'flex', 
@@ -870,6 +974,7 @@ const TaskDetail = () => {
                 {/* Scroll anchor */}
                 <div ref={messagesEndRef} />
               </>
+              )
             )}
           </div>
 

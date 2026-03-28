@@ -47,6 +47,7 @@ const TaskDetail = () => {
   const [messageAttachments, setMessageAttachments] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
   const [isChatFullScreen, setIsChatFullScreen] = useState(false); // Full screen chat mode
+  const [showOnlyApprovals, setShowOnlyApprovals] = useState(false); // Approval filter toggle
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -734,20 +735,31 @@ const TaskDetail = () => {
           backgroundColor: '#fff', borderRadius: '16px', padding: '20px', marginBottom: '24px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
                 <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div>
+            <div style={{ flex: 1 }}>
               <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Client Discussion</h3>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Chat history with client</p>
             </div>
-            {task.messages && task.messages.length > 0 && (
-              <span style={{ marginLeft: 'auto', padding: '4px 10px', backgroundColor: '#eff6ff', color: '#3b82f6', fontSize: '11px', fontWeight: '600', borderRadius: '8px' }}>
-                {task.messages.length} message{task.messages.length !== 1 ? 's' : ''}
-              </span>
+            {/* Approval Filter Toggle */}
+            {(task.approvalRequests?.length > 0) && (
+              <button
+                onClick={() => setShowOnlyApprovals(!showOnlyApprovals)}
+                style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '600',
+                  backgroundColor: showOnlyApprovals ? '#fef3c7' : '#f1f5f9',
+                  color: showOnlyApprovals ? '#92400e' : '#64748b',
+                  border: showOnlyApprovals ? '2px solid #fbbf24' : '1px solid #e2e8f0',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                ✅ Approvals ({task.approvalRequests.length})
+              </button>
             )}
             {/* Full Screen Toggle */}
             <button
@@ -757,7 +769,6 @@ const TaskDetail = () => {
               }}
               title="Expand chat"
               style={{
-                marginLeft: task.messages?.length > 0 ? '8px' : 'auto',
                 width: '32px', height: '32px', borderRadius: '8px',
                 backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -772,12 +783,77 @@ const TaskDetail = () => {
 
           {/* Messages */}
           <div style={{ maxHeight: '250px', overflowY: 'auto', marginBottom: '12px', padding: '4px' }}>
-            {(!task.messages || task.messages.length === 0) ? (
-              <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '30px 0' }}>
-                No messages yet
-              </p>
+            {/* Approval Filter: Show only approvals */}
+            {showOnlyApprovals ? (
+              (!task.approvalRequests || task.approvalRequests.length === 0) ? (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '30px 0' }}>
+                  No approvals found
+                </p>
+              ) : (
+                <>
+                  {/* Render only approval cards */}
+                  {task.approvalRequests.map((approval, idx) => {
+                    const hasHistory = (approval.selectionsHistory || []).length > 0;
+                    const isLocked = hasHistory && !approval.allowChanges;
+                    return (
+                      <div key={`filter-approval-${approval.id || idx}`} style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '12px'
+                      }}>
+                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
+                        <div style={{
+                          maxWidth: '85%', padding: '14px', borderRadius: '14px',
+                          backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
+                        }}>
+                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 10px 0' }}>
+                            {approval.title}
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                            {approval.options.map((opt, optIdx) => {
+                              const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
+                              const isSelected = latestSelection?.selectedOptions?.includes(opt);
+                              return (
+                                <div key={optIdx} style={{
+                                  padding: '8px 12px', borderRadius: '8px', fontSize: '13px',
+                                  backgroundColor: isSelected ? '#dcfce7' : '#fff',
+                                  border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                                  color: isSelected ? '#15803d' : '#374151'
+                                }}>
+                                  {approval.type === 'single' ? '○' : '☐'} {opt} {isSelected && '✓'}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p style={{ fontSize: '11px', color: '#92400e', margin: '0 0 8px 0' }}>
+                            {hasHistory 
+                              ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
+                              : 'Awaiting selection'}
+                            {isLocked && ' 🔒 (Locked)'}
+                          </p>
+                          {/* View in Chat button */}
+                          <button
+                            onClick={() => setShowOnlyApprovals(false)}
+                            style={{
+                              padding: '6px 12px', fontSize: '11px', fontWeight: '600',
+                              backgroundColor: '#f1f5f9', color: '#64748b',
+                              border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer'
+                            }}
+                          >
+                            ← View in Chat
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )
             ) : (
-              <>
+              /* Normal chat view */
+              (!task.messages || task.messages.length === 0) ? (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '30px 0' }}>
+                  No messages yet
+                </p>
+              ) : (
+                <>
                 {task.messages.map((msg, idx) => (
                   <div key={idx} style={{ 
                     display: 'flex', 
@@ -929,6 +1005,7 @@ const TaskDetail = () => {
                 {/* Scroll anchor */}
                 <div ref={messagesEndRef} />
               </>
+              )
             )}
           </div>
 
