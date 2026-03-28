@@ -60,13 +60,25 @@ const LoginForm = () => {
       }
       
       console.log('[ADMIN LOGIN] ✓✓✓ Success - checking for intended URL');
+      
+      // VERIFY TOKEN IS SAVED
+      const savedToken = localStorage.getItem('token');
+      console.log('[ADMIN LOGIN] Token saved in localStorage:', savedToken ? `Yes (${savedToken.length} chars)` : 'NO!');
+      if (!savedToken) {
+        console.error('[ADMIN LOGIN] ❌ CRITICAL: Token not saved!');
+        setError('Login failed - token not saved');
+        return;
+      }
 
       // Fetch and cache permissions for frontend guards
       try {
+        console.log('[ADMIN LOGIN] Fetching permissions...');
         const permRes = await api.get('/admin/me/permissions');
         savePermissions(permRes.data);
-      } catch {
+        console.log('[ADMIN LOGIN] Permissions saved');
+      } catch (permErr) {
         // Non-fatal: guards will default to allowing access
+        console.log('[ADMIN LOGIN] Permissions fetch failed (non-fatal):', permErr.message);
       }
 
       // Check for intended URL (from email link redirect)

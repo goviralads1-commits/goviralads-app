@@ -32,7 +32,7 @@ api.interceptors.request.use(
       delete config.headers['Content-Type'];
     }
     
-    console.log('[API] Request:', config.method?.toUpperCase(), config.url);
+    console.log('[API] Request:', config.method?.toUpperCase(), config.url, token ? '(with token)' : '(no token)');
     return config;
   },
   (error) => {
@@ -48,16 +48,26 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    const requestUrl = error.config?.url || 'unknown';
     console.error('[API] Response error:', error.message);
-    console.error('[API] Status:', error.response?.status);
+    console.error('[API] Status:', error.response?.status, 'URL:', requestUrl);
     console.error('[API] Data:', error.response?.data);
+    
     if (error.response?.status === 401) {
-      // Clear token on 401
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Only redirect if NOT already on login page (prevents reload loop)
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+      // IMPORTANT: Do NOT clear token or redirect for login/auth requests
+      // 401 on login just means bad credentials, not session expiry
+      const isAuthRequest = requestUrl.includes('/auth/') || requestUrl.includes('/login');
+      
+      if (isAuthRequest) {
+        console.log('[API] 401 on auth request - NOT clearing token (bad credentials)');
+      } else {
+        console.log('[API] 401 on protected request - clearing token');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // Only redirect if NOT already on login page (prevents reload loop)
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);
