@@ -715,8 +715,15 @@ const TaskDetail = () => {
       );
     }
 
-    // Normal chat view
-    if (!task.messages || task.messages.length === 0) {
+    // Merge messages and approvals into single timeline, sorted by timestamp
+    const messages = task.messages || [];
+    const approvals = task.approvalRequests || [];
+    const approvalItems = approvals.map(a => ({ ...a, _type: 'approval', _timestamp: new Date(a.createdAt || 0).getTime() }));
+    const messageItems = messages.map(m => ({ ...m, _type: 'message', _timestamp: new Date(m.createdAt || 0).getTime() }));
+    const timeline = [...messageItems, ...approvalItems].sort((a, b) => a._timestamp - b._timestamp);
+
+    // Empty state
+    if (timeline.length === 0) {
       return (
         <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: isFullScreen ? '14px' : '13px', padding: isFullScreen ? '40px 0' : '30px 0' }}>
           No messages yet{isFullScreen ? '. Start the conversation!' : ''}
@@ -724,166 +731,170 @@ const TaskDetail = () => {
       );
     }
 
-    return (
-      <>
-        {task.messages.map((msg, idx) => (
-          <div key={idx} style={{ 
-            display: 'flex', flexDirection: 'column',
-            alignItems: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start',
-            marginBottom: isFullScreen ? '16px' : '12px'
+    // Render helper for approval card
+    const renderApprovalCard = (approval, idx) => {
+      const hasHistory = (approval.selectionsHistory || []).length > 0;
+      const isLocked = hasHistory && !approval.allowChanges;
+      return (
+        <div key={`approval-${approval.id || idx}`} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: isFullScreen ? '16px' : '12px'
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
+          <div style={{
+            maxWidth: isFullScreen ? '85%' : '85%', padding: '14px', borderRadius: '14px',
+            backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
           }}>
-            <span style={{ 
-              fontSize: '11px', fontWeight: '600', 
-              color: msg.sender === 'ADMIN' ? '#6366f1' : '#64748b',
-              marginBottom: '4px',
-              paddingLeft: msg.sender === 'ADMIN' ? '0' : '4px',
-              paddingRight: msg.sender === 'ADMIN' ? '4px' : '0'
-            }}>
-              {msg.sender === 'ADMIN' ? 'Admin' : 'Client'}
-            </span>
-            <div style={{
-              maxWidth: isFullScreen ? '80%' : '70%', padding: isFullScreen ? '12px 16px' : '10px 14px', borderRadius: isFullScreen ? '16px' : '14px',
-              backgroundColor: msg.sender === 'ADMIN' ? '#6366f1' : '#f1f5f9',
-              color: msg.sender === 'ADMIN' ? '#fff' : '#0f172a',
-            }}>
-              {msg.attachments && msg.attachments.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: isFullScreen ? '8px' : '6px', marginBottom: msg.text && msg.text !== '[Image]' ? (isFullScreen ? '8px' : '6px') : 0 }}>
-                  {msg.attachments.map((att, attIdx) => {
-                    const imgUrl = typeof att === 'string' ? att : att.url;
-                    return (
-                      <img 
-                        key={attIdx} 
-                        src={imgUrl} 
-                        alt="" 
-                        onClick={() => setLightboxImage(imgUrl)}
-                        style={{ 
-                          maxWidth: isFullScreen ? '120px' : '160px', 
-                          maxHeight: isFullScreen ? '120px' : '120px', 
-                          borderRadius: isFullScreen ? '8px' : '6px', 
-                          cursor: 'pointer', 
-                          objectFit: 'cover' 
-                        }} 
-                      />
-                    );
-                  })}
-                </div>
-              )}
-              {msg.text && msg.text !== '[Image]' && (
-                <p style={{ fontSize: isFullScreen ? '15px' : '13px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkifyText(msg.text)}</p>
-              )}
-              <p style={{ 
-                fontSize: '10px', margin: '5px 0 0', 
-                color: msg.sender === 'ADMIN' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
-                textAlign: 'right'
-              }}>
-                {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-              </p>
+            <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 10px 0' }}>
+              {approval.title}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+              {approval.options.map((opt, optIdx) => {
+                const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
+                const isSelected = latestSelection?.selectedOptions?.includes(opt);
+                return (
+                  <div key={optIdx} style={{
+                    padding: '8px 12px', borderRadius: '8px', fontSize: '13px',
+                    backgroundColor: isSelected ? '#dcfce7' : '#fff',
+                    border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                    color: isSelected ? '#15803d' : '#374151'
+                  }}>
+                    {approval.type === 'single' ? '○' : '☐'} {opt} {isSelected && '✓'}
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        ))}
-        
-        {/* Approval Cards */}
-        {task.approvalRequests && task.approvalRequests.length > 0 && task.approvalRequests.map((approval, idx) => {
-          const hasHistory = (approval.selectionsHistory || []).length > 0;
-          const isLocked = hasHistory && !approval.allowChanges;
-          return (
-            <div key={`approval-${approval.id || idx}`} style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: isFullScreen ? '16px' : '12px'
-            }}>
-              <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
-              <div style={{
-                maxWidth: isFullScreen ? '85%' : '85%', padding: '14px', borderRadius: '14px',
-                backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
-              }}>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 10px 0' }}>
-                  {approval.title}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
-                  {approval.options.map((opt, optIdx) => {
-                    const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
-                    const isSelected = latestSelection?.selectedOptions?.includes(opt);
-                    return (
-                      <div key={optIdx} style={{
-                        padding: '8px 12px', borderRadius: '8px', fontSize: '13px',
-                        backgroundColor: isSelected ? '#dcfce7' : '#fff',
-                        border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
-                        color: isSelected ? '#15803d' : '#374151'
-                      }}>
-                        {approval.type === 'single' ? '○' : '☐'} {opt} {isSelected && '✓'}
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                {/* Status */}
-                <p style={{ fontSize: '11px', color: '#92400e', margin: '0 0 8px 0' }}>
-                  {hasHistory 
-                    ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
-                    : 'Awaiting selection'}
-                  {isLocked && ' 🔒 (Locked)'}
-                </p>
-                
-                {/* View History Button - Admin always sees */}
-                {(approval.selectionsHistory || []).length > 0 && (
-                  <button
-                    onClick={() => setHistoryModalApproval(approval)}
-                    style={{
-                      width: '100%', padding: '8px 12px', borderRadius: '8px',
-                      fontSize: '12px', fontWeight: '600',
-                      backgroundColor: '#e0f2fe', color: '#0369a1',
-                      border: '1px solid #7dd3fc', cursor: 'pointer',
-                      marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    View History ({approval.selectionsHistory.length} {approval.selectionsHistory.length === 1 ? 'selection' : 'selections'})
-                  </button>
-                )}
-                
-                {/* Admin Controls */}
-                <div style={{ borderTop: '1px solid #fcd34d', paddingTop: '10px', marginTop: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '11px', color: '#92400e' }}>Allow client to change</span>
-                    <button
-                      onClick={() => handleUpdateApprovalSetting(approval.id, 'allowChanges', !approval.allowChanges)}
-                      style={{
-                        padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                        fontSize: '10px', fontWeight: '600',
-                        backgroundColor: approval.allowChanges ? '#22c55e' : '#e5e7eb',
-                        color: approval.allowChanges ? '#fff' : '#6b7280'
-                      }}
-                    >
-                      {approval.allowChanges ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '11px', color: '#92400e' }}>Show history to client</span>
-                    <button
-                      onClick={() => handleUpdateApprovalSetting(approval.id, 'showHistoryToClient', !approval.showHistoryToClient)}
-                      style={{
-                        padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                        fontSize: '10px', fontWeight: '600',
-                        backgroundColor: approval.showHistoryToClient ? '#22c55e' : '#e5e7eb',
-                        color: approval.showHistoryToClient ? '#fff' : '#6b7280'
-                      }}
-                    >
-                      {approval.showHistoryToClient ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
-                </div>
-                
-                <p style={{ fontSize: '10px', color: '#b45309', margin: '8px 0 0' }}>
-                  {new Date(approval.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </p>
+            
+            {/* Status */}
+            <p style={{ fontSize: '11px', color: '#92400e', margin: '0 0 8px 0' }}>
+              {hasHistory 
+                ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
+                : 'Awaiting selection'}
+              {isLocked && ' 🔒 (Locked)'}
+            </p>
+            
+            {/* View History Button - Admin always sees */}
+            {(approval.selectionsHistory || []).length > 0 && (
+              <button
+                onClick={() => setHistoryModalApproval(approval)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: '8px',
+                  fontSize: '12px', fontWeight: '600',
+                  backgroundColor: '#e0f2fe', color: '#0369a1',
+                  border: '1px solid #7dd3fc', cursor: 'pointer',
+                  marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                View History ({approval.selectionsHistory.length} {approval.selectionsHistory.length === 1 ? 'selection' : 'selections'})
+              </button>
+            )}
+            
+            {/* Admin Controls */}
+            <div style={{ borderTop: '1px solid #fcd34d', paddingTop: '10px', marginTop: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', color: '#92400e' }}>Allow client to change</span>
+                <button
+                  onClick={() => handleUpdateApprovalSetting(approval.id, 'allowChanges', !approval.allowChanges)}
+                  style={{
+                    padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                    fontSize: '10px', fontWeight: '600',
+                    backgroundColor: approval.allowChanges ? '#22c55e' : '#e5e7eb',
+                    color: approval.allowChanges ? '#fff' : '#6b7280'
+                  }}
+                >
+                  {approval.allowChanges ? 'ON' : 'OFF'}
+                </button>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', color: '#92400e' }}>Show history to client</span>
+                <button
+                  onClick={() => handleUpdateApprovalSetting(approval.id, 'showHistoryToClient', !approval.showHistoryToClient)}
+                  style={{
+                    padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                    fontSize: '10px', fontWeight: '600',
+                    backgroundColor: approval.showHistoryToClient ? '#22c55e' : '#e5e7eb',
+                    color: approval.showHistoryToClient ? '#fff' : '#6b7280'
+                  }}
+                >
+                  {approval.showHistoryToClient ? 'ON' : 'OFF'}
+                </button>
               </div>
             </div>
-          );
-        })}
-        
+            
+            <p style={{ fontSize: '10px', color: '#b45309', margin: '8px 0 0' }}>
+              {new Date(approval.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+      );
+    };
+
+    // Render helper for message
+    const renderMessage = (msg, idx) => (
+      <div key={`msg-${idx}`} style={{ 
+        display: 'flex', flexDirection: 'column',
+        alignItems: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start',
+        marginBottom: isFullScreen ? '16px' : '12px'
+      }}>
+        <span style={{ 
+          fontSize: '11px', fontWeight: '600', 
+          color: msg.sender === 'ADMIN' ? '#6366f1' : '#64748b',
+          marginBottom: '4px',
+          paddingLeft: msg.sender === 'ADMIN' ? '0' : '4px',
+          paddingRight: msg.sender === 'ADMIN' ? '4px' : '0'
+        }}>
+          {msg.sender === 'ADMIN' ? 'Admin' : 'Client'}
+        </span>
+        <div style={{
+          maxWidth: isFullScreen ? '80%' : '70%', padding: isFullScreen ? '12px 16px' : '10px 14px', borderRadius: isFullScreen ? '16px' : '14px',
+          backgroundColor: msg.sender === 'ADMIN' ? '#6366f1' : '#f1f5f9',
+          color: msg.sender === 'ADMIN' ? '#fff' : '#0f172a',
+        }}>
+          {msg.attachments && msg.attachments.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: isFullScreen ? '8px' : '6px', marginBottom: msg.text && msg.text !== '[Image]' ? (isFullScreen ? '8px' : '6px') : 0 }}>
+              {msg.attachments.map((att, attIdx) => {
+                const imgUrl = typeof att === 'string' ? att : att.url;
+                return (
+                  <img 
+                    key={attIdx} 
+                    src={imgUrl} 
+                    alt="" 
+                    onClick={() => setLightboxImage(imgUrl)}
+                    style={{ 
+                      maxWidth: isFullScreen ? '120px' : '160px', 
+                      maxHeight: isFullScreen ? '120px' : '120px', 
+                      borderRadius: isFullScreen ? '8px' : '6px', 
+                      cursor: 'pointer', 
+                      objectFit: 'cover' 
+                    }} 
+                  />
+                );
+              })}
+            </div>
+          )}
+          {msg.text && msg.text !== '[Image]' && (
+            <p style={{ fontSize: isFullScreen ? '15px' : '13px', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkifyText(msg.text)}</p>
+          )}
+          <p style={{ 
+            fontSize: '10px', margin: '5px 0 0', 
+            color: msg.sender === 'ADMIN' ? 'rgba(255,255,255,0.7)' : '#94a3b8',
+            textAlign: 'right'
+          }}>
+            {new Date(msg.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        {timeline.map((item, idx) => 
+          item._type === 'approval' ? renderApprovalCard(item, idx) : renderMessage(item, idx)
+        )}
         {/* Scroll anchor */}
         <div ref={messagesEndRef} />
       </>
