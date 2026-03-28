@@ -33,6 +33,8 @@ const { authenticateJWT } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/authorization');
 const { requirePermission, ALL_PERMISSIONS } = require('../middleware/permissions');
 const { stripHtmlTags } = require('../utils/validators');
+const DeviceToken = require('../models/DeviceToken');
+const pushNotificationService = require('../services/pushNotificationService');
 
 const router = express.Router();
 
@@ -1312,6 +1314,19 @@ router.post('/tasks/:taskId/message', async (req, res) => {
           notifyByEmail: true,
         });
         console.log('[DISCUSSION] Notification created + email triggered for client:', task.clientId);
+        
+        // Send push notification to client
+        const adminUser = await User.findById(adminId).select('name email').exec();
+        const senderName = adminUser?.name || adminUser?.email || 'Admin';
+        const messagePreview = (text || '').trim() || '[Image attachment]';
+        
+        pushNotificationService.sendMessageNotification(
+          task.clientId.toString(),
+          senderName,
+          task.title,
+          task._id.toString(),
+          messagePreview
+        ).catch(err => console.error('[PUSH] Client notification failed:', err.message));
       } catch (notifErr) {
         console.error('[DISCUSSION] Notification/email error:', notifErr.message);
       }
@@ -6424,6 +6439,65 @@ router.delete('/progress-icons/:iconId', async (req, res) => {
   } catch (err) {
     console.error('[PROGRESS ICON DELETE ERROR]', err);
     return res.status(500).json({ error: 'Failed to delete icon' });
+  }
+});
+
+// =======================================================================
+// PUSH NOTIFICATION - DEVICE TOKEN MANAGEMENT
+// =======================================================================
+
+// POST /admin/device-token - Save device token for push notifications
+router.post('/device-token', async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { token, platform } = req.body || {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Upsert token (update if exists, create if new)
+    await DeviceToken.findOneAndUpdate(
+      { token },
+      {
+        userId: adminId,
+        token,
+        platform: platform || 'web',
+        userAgent: req.headers['user-agent'],
+        isActive: true,
+        lastUsed: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(`[PUSH] Device token saved for admin ${adminId}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUSH] Save device token error:', err.message);
+    return res.status(500).json({ error: 'Failed to save device token' });
+  }
+});
+
+// DELETE /admin/device-token - Remove device token (logout/disable notifications)
+router.delete('/device-token', async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { token } = req.body || {};
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    await DeviceToken.findOneAndUpdate(
+      { token, userId: adminId },
+      { $set: { isActive: false } }
+    );
+
+    console.log(`[PUSH] Device token removed for admin ${adminId}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUSH] Remove device token error:', err.message);
+    return res.status(500).json({ error: 'Failed to remove device token' });
   }
 });
 

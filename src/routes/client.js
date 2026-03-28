@@ -24,6 +24,8 @@ const { getClientWalletSummary, getClientTaskSummary, getClientRecentActivity } 
 const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsRead, createNotification, getUnreadCount, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
 const { authenticateJWT } = require('../middleware/auth');
 const { requireClient } = require('../middleware/authorization');
+const DeviceToken = require('../models/DeviceToken');
+const pushNotificationService = require('../services/pushNotificationService');
 
 const router = express.Router();
 
@@ -871,6 +873,21 @@ router.post('/tasks/:taskId/message', async (req, res) => {
         });
       }
       console.log(`[DISCUSSION] Notified ${admins.length} admin(s) with email`);
+      
+      // Send push notifications to admins
+      const clientUser = await User.findById(clientId).select('name email').exec();
+      const senderName = clientUser?.name || clientUser?.email || 'Client';
+      const messagePreview = (text || '').trim() || '[Image attachment]';
+      
+      for (const admin of admins) {
+        pushNotificationService.sendMessageNotification(
+          admin._id.toString(),
+          senderName,
+          task.title,
+          task._id.toString(),
+          messagePreview
+        ).catch(err => console.error('[PUSH] Admin notification failed:', err.message));
+      }
     } catch (notifErr) {
       console.error('[DISCUSSION] Notification error:', notifErr.message);
     }
@@ -3369,6 +3386,65 @@ router.get('/orders/:orderId/invoice', async (req, res) => {
   } catch (err) {
     console.error('[CLIENT/ORDERS] Fetch invoice error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch invoice' });
+  }
+});
+
+// =======================================================================
+// PUSH NOTIFICATION - DEVICE TOKEN MANAGEMENT
+// =======================================================================
+
+// POST /client/device-token - Save device token for push notifications
+router.post('/device-token', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { token, platform } = req.body || {};
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Upsert token (update if exists, create if new)
+    await DeviceToken.findOneAndUpdate(
+      { token },
+      {
+        userId: clientId,
+        token,
+        platform: platform || 'web',
+        userAgent: req.headers['user-agent'],
+        isActive: true,
+        lastUsed: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(`[PUSH] Device token saved for client ${clientId}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUSH] Save device token error:', err.message);
+    return res.status(500).json({ error: 'Failed to save device token' });
+  }
+});
+
+// DELETE /client/device-token - Remove device token (logout/disable notifications)
+router.delete('/device-token', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { token } = req.body || {};
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    await DeviceToken.findOneAndUpdate(
+      { token, userId: clientId },
+      { $set: { isActive: false } }
+    );
+
+    console.log(`[PUSH] Device token removed for client ${clientId}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUSH] Remove device token error:', err.message);
+    return res.status(500).json({ error: 'Failed to remove device token' });
   }
 });
 
