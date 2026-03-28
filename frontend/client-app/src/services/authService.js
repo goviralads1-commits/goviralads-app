@@ -22,7 +22,11 @@ export const login = async (email, password) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     
+    // DEBUG: Verify token is actually saved
+    const verifyToken = localStorage.getItem('token');
     console.log('[AUTH SERVICE] ✓ Token and user saved to localStorage');
+    console.log('[AUTH SERVICE] DEBUG: Token verify immediately after save:', verifyToken ? `YES (${verifyToken.length} chars)` : 'NO - NOT SAVED!');
+    console.log('[AUTH SERVICE] DEBUG: User verify:', localStorage.getItem('user') ? 'YES' : 'NO');
     
     return { token, user };
   } catch (error) {

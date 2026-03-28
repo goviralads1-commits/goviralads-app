@@ -70,6 +70,13 @@ api.interceptors.response.use(
     console.error('[API] Current token exists:', !!currentToken);
     
     if (error.response?.status === 401) {
+      console.error('\n========== 401 ERROR DEBUG ==========');
+      console.error('[401 DEBUG] URL that returned 401:', requestUrl);
+      console.error('[401 DEBUG] Token in localStorage:', currentToken ? `YES (${currentToken.length} chars)` : 'NO');
+      console.error('[401 DEBUG] Request had Authorization header:', !!error.config?.headers?.Authorization);
+      console.error('[401 DEBUG] Response data:', error.response?.data);
+      console.error('======================================\n');
+      
       // IMPORTANT: Do NOT clear token or redirect for login/auth requests
       const isAuthRequest = requestUrl.includes('/auth/') || requestUrl.includes('/login');
       
