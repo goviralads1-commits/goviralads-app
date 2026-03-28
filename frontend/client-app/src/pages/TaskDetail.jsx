@@ -289,27 +289,34 @@ const TaskDetail = () => {
     let report = `--- CLIENT APPROVAL REPORT ---\n\n`;
     report += `Task: ${task.title}\n\n`;
     
-    approvedItems.forEach((approval) => {
+    approvedItems.forEach((approval, idx) => {
       const latest = approval.selectionsHistory[approval.selectionsHistory.length - 1];
+      const status = approval.allowChanges === false ? 'Locked ✓' : 'Editable';
       
-      report += `${approval.title}:\n`;
-      report += `Final → ${latest?.selectedOptions?.join(', ') || 'No selection'}\n`;
+      report += `[ ${approval.title} ]\n\n`;
+      report += `Final: ${latest?.selectedOptions?.join(', ') || 'No selection'}\n\n`;
+      report += `Status: ${status}\n`;
       
-      if ((approval.selectionsHistory || []).length > 1) {
+      if ((approval.selectionsHistory || []).length > 0) {
         report += `\nHistory:\n`;
-        approval.selectionsHistory.forEach((h, idx) => {
+        approval.selectionsHistory.forEach((h) => {
           report += `  • ${h.selectedOptions?.join(', ')} (${formatTimestamp(h.timestamp)})\n`;
         });
       }
-      report += `\n`;
+      
+      // Add spacing between approvals
+      if (idx < approvedItems.length - 1) {
+        report += `\n${'—'.repeat(30)}\n\n`;
+      }
     });
     
-    report += `---`;
+    report += `\n---`;
     
     navigator.clipboard.writeText(report).then(() => {
       setCopyToast('Report copied');
       setTimeout(() => setCopyToast(null), 2500);
-    }).catch(() => {
+    }).catch((error) => {
+      console.error('Copy failed:', error);
       setCopyToast('Copy failed');
       setTimeout(() => setCopyToast(null), 2500);
     });

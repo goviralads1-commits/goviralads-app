@@ -49,6 +49,7 @@ const TaskDetail = () => {
   const [isChatFullScreen, setIsChatFullScreen] = useState(false); // Full screen chat mode
   const [showOnlyApprovals, setShowOnlyApprovals] = useState(false); // Approval filter toggle
   const [historyModalApproval, setHistoryModalApproval] = useState(null); // Approval history modal
+  const [copyToast, setCopyToast] = useState(null); // Export proof toast
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -392,6 +393,55 @@ const TaskDetail = () => {
     } finally {
       setSavingClientUploadFolder(false);
     }
+  };
+
+  // Export Proof: Generate text report and copy to clipboard
+  const handleExportProof = () => {
+    const approvedItems = (task.approvalRequests || [])
+      .filter(a => (a.selectionsHistory || []).length > 0);
+    
+    if (approvedItems.length === 0) return;
+    
+    const formatTimestamp = (ts) => {
+      return new Date(ts).toLocaleString('en-US', { 
+        day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true 
+      });
+    };
+    
+    let report = `--- CLIENT APPROVAL REPORT ---\n\n`;
+    report += `Task: ${task.title}\n\n`;
+    
+    approvedItems.forEach((approval, idx) => {
+      const latest = approval.selectionsHistory[approval.selectionsHistory.length - 1];
+      const status = approval.allowChanges === false ? 'Locked ✓' : 'Editable';
+      
+      report += `[ ${approval.title} ]\n\n`;
+      report += `Final: ${latest?.selectedOptions?.join(', ') || 'No selection'}\n\n`;
+      report += `Status: ${status}\n`;
+      
+      if ((approval.selectionsHistory || []).length > 0) {
+        report += `\nHistory:\n`;
+        approval.selectionsHistory.forEach((h) => {
+          report += `  • ${h.selectedOptions?.join(', ')} (${formatTimestamp(h.timestamp)})\n`;
+        });
+      }
+      
+      // Add spacing between approvals
+      if (idx < approvedItems.length - 1) {
+        report += `\n${'—'.repeat(30)}\n\n`;
+      }
+    });
+    
+    report += `\n---`;
+    
+    navigator.clipboard.writeText(report).then(() => {
+      setCopyToast('Report copied');
+      setTimeout(() => setCopyToast(null), 2500);
+    }).catch((error) => {
+      console.error('Copy failed:', error);
+      setCopyToast('Copy failed');
+      setTimeout(() => setCopyToast(null), 2500);
+    });
   };
 
   // Send discussion message (Phase 6)
@@ -1153,11 +1203,40 @@ const TaskDetail = () => {
           return (
             <div style={{
               backgroundColor: '#f0fdf4', borderRadius: '16px', padding: '16px', marginBottom: '24px',
-              border: '1px solid #bbf7d0'
+              border: '1px solid #bbf7d0', position: 'relative'
             }}>
-              <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#166534', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>✅</span> Final Approved Decisions
-              </h4>
+              {/* Copy Toast */}
+              {copyToast && (
+                <div style={{
+                  position: 'absolute', top: '12px', right: '12px',
+                  backgroundColor: '#166534', color: '#fff', padding: '6px 12px',
+                  borderRadius: '6px', fontSize: '11px', fontWeight: '600',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 10
+                }}>
+                  {copyToast}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#166534', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>✅</span> Final Approved Decisions
+                </h4>
+                <button
+                  onClick={handleExportProof}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    padding: '5px 10px', borderRadius: '6px',
+                    fontSize: '11px', fontWeight: '600',
+                    backgroundColor: '#dcfce7', color: '#166534',
+                    border: '1px solid #bbf7d0', cursor: 'pointer'
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                  </svg>
+                  Export Proof
+                </button>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {approvedItems.map((approval, idx) => {
                   const latest = approval.selectionsHistory[approval.selectionsHistory.length - 1];
