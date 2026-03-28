@@ -655,6 +655,25 @@ const TaskDetail = () => {
     }
   }, [task?.messages?.length]);
 
+  // History modal: ESC key handler + scroll lock
+  useEffect(() => {
+    if (historyModalApproval) {
+      // Lock body scroll
+      document.body.style.overflow = 'hidden';
+      
+      // ESC key handler
+      const handleEsc = (e) => {
+        if (e.key === 'Escape') setHistoryModalApproval(null);
+      };
+      window.addEventListener('keydown', handleEsc);
+      
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleEsc);
+      };
+    }
+  }, [historyModalApproval]);
+
   // Human-readable status labels (hide internal codes)
   const getHumanStatus = (status) => {
     const labels = {
@@ -1858,7 +1877,7 @@ const TaskDetail = () => {
                             {isLatest ? 'Current (Final)' : `v${hIdx + 1}`}
                           </span>
                           <span style={{ fontSize: '10px', color: '#94a3b8' }}>
-                            {new Date(h.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            {new Date(h.timestamp).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}
                           </span>
                         </div>
                         <p style={{
