@@ -60,8 +60,13 @@ const ProgressWithFlag = ({
   const renderIcon = () => {
     const iconSize = parseInt(config.flagSize) - 4;
     
-    // Default or no icon - show flag
-    if (!progressIcon || progressIcon.type === 'default') {
+    // SAFETY CHECK: Validate progressIcon is proper object
+    if (!progressIcon || typeof progressIcon !== 'object' || !progressIcon.type) {
+      return <DefaultFlagIcon size={iconSize} />;
+    }
+    
+    // Default icon
+    if (progressIcon.type === 'default') {
       return <DefaultFlagIcon size={iconSize} />;
     }
     
