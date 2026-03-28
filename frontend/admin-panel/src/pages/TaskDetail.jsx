@@ -94,6 +94,7 @@ const TaskDetail = () => {
   };
 
   const fetchTask = useCallback(async () => {
+    console.log('Task ID from URL:', taskId); // Debug log
     try {
       const response = await api.get(`/admin/tasks/${taskId}`);
       
@@ -135,7 +136,13 @@ const TaskDetail = () => {
       setClientUploadFolderLink(taskData.clientUploadFolderLink || '');
     } catch (err) {
       console.error('Task fetch error:', err);
-      setError(err.response?.data?.error || 'Failed to load task');
+      // Better error message for access/not found errors
+      const status = err.response?.status;
+      if (status === 404 || status === 403 || status === 401) {
+        setError('Task not found or access denied');
+      } else {
+        setError(err.response?.data?.error || 'Failed to load task');
+      }
     } finally {
       setLoading(false);
     }
@@ -973,7 +980,7 @@ const TaskDetail = () => {
             </svg>
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-            {isPlanError ? 'This is a Plan, Not a Task' : 'Failed to Load Task'}
+            {isPlanError ? 'This is a Plan, Not a Task' : 'Unable to Load Task'}
           </h2>
           <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '24px' }}>{error}</p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>

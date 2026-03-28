@@ -59,8 +59,19 @@ const LoginForm = () => {
         return;
       }
       
-      console.log('[CLIENT LOGIN] ✓✓✓ Success - redirecting to dashboard');
-      navigate('/dashboard');
+      console.log('[CLIENT LOGIN] ✓✓✓ Success - checking for intended URL');
+      
+      // Check for intended URL (from email link redirect)
+      const intendedUrl = sessionStorage.getItem('intendedUrl');
+      sessionStorage.removeItem('intendedUrl');
+      
+      if (intendedUrl && intendedUrl !== '/login' && intendedUrl !== '/') {
+        console.log('[CLIENT LOGIN] Redirecting to intended URL:', intendedUrl);
+        navigate(intendedUrl);
+      } else {
+        console.log('[CLIENT LOGIN] Redirecting to dashboard');
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error('[CLIENT LOGIN] ❌ Error:', err.message);
       console.error('[CLIENT LOGIN] Error details:', err);

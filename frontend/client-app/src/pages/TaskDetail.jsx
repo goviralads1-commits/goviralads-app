@@ -72,6 +72,7 @@ const TaskDetail = () => {
   };
 
   const fetchTask = useCallback(async () => {
+    console.log('Task ID from URL:', taskId); // Debug log
     try {
       const [taskResponse, receiptResponse] = await Promise.all([
         api.get(`/client/tasks/${taskId}`),
@@ -82,7 +83,13 @@ const TaskDetail = () => {
       setError('');
     } catch (err) {
       console.error('Task detail error:', err.response?.data || err.message);
-      setError(err.response?.data?.error || 'Failed to load task details');
+      // Better error message for access/not found errors
+      const status = err.response?.status;
+      if (status === 404 || status === 403 || status === 401) {
+        setError('Task not found or access denied');
+      } else {
+        setError(err.response?.data?.error || 'Failed to load task details');
+      }
     } finally {
       setLoading(false);
     }
@@ -825,7 +832,7 @@ const TaskDetail = () => {
               <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
             </svg>
           </div>
-          <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#1a1a1a', marginBottom: '12px' }}>Something went wrong</h2>
+          <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#1a1a1a', marginBottom: '12px' }}>Unable to Load Task</h2>
           <p style={{ fontSize: '15px', color: '#666', marginBottom: '32px', lineHeight: 1.5 }}>{error}</p>
           <button
             onClick={() => navigate('/tasks')}

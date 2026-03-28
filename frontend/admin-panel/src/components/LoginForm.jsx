@@ -59,7 +59,7 @@ const LoginForm = () => {
         return;
       }
       
-      console.log('[ADMIN LOGIN] ✓✓✓ Success - redirecting to dashboard');
+      console.log('[ADMIN LOGIN] ✓✓✓ Success - checking for intended URL');
 
       // Fetch and cache permissions for frontend guards
       try {
@@ -69,7 +69,17 @@ const LoginForm = () => {
         // Non-fatal: guards will default to allowing access
       }
 
-      navigate('/dashboard');
+      // Check for intended URL (from email link redirect)
+      const intendedUrl = sessionStorage.getItem('intendedUrl');
+      sessionStorage.removeItem('intendedUrl');
+      
+      if (intendedUrl && intendedUrl !== '/login' && intendedUrl !== '/') {
+        console.log('[ADMIN LOGIN] Redirecting to intended URL:', intendedUrl);
+        navigate(intendedUrl);
+      } else {
+        console.log('[ADMIN LOGIN] Redirecting to dashboard');
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error('[ADMIN LOGIN] ❌ Error:', err.message);
       console.error('[ADMIN LOGIN] Error details:', err);

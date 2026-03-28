@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { isAuthenticated, getUserRole } from './services/authService';
 import { CartProvider } from './context/CartContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -27,8 +27,12 @@ import NotFound from './pages/NotFound';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const isAuthenticatedUser = isAuthenticated();
   const userRole = getUserRole();
+  const location = useLocation();
 
   if (!isAuthenticatedUser) {
+    // Store intended URL for redirect after login
+    const intendedUrl = location.pathname + location.search;
+    sessionStorage.setItem('intendedUrl', intendedUrl);
     return <Navigate to="/login" replace />;
   }
 
