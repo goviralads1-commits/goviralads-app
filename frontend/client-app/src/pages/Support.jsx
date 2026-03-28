@@ -24,16 +24,37 @@ const Support = () => {
       const res = await api.get('/client/tasks');
       const allTasks = res.data.tasks || res.data || [];
       
-      // DEBUG: Log all tasks to see what we receive
-      console.log('Support: All tasks received:', allTasks.length);
-      console.log('Support: Sample task structure:', allTasks[0]);
+      // DEBUG: Log raw data
+      console.log('[Support] ========== DEBUG START ==========');
+      console.log('[Support] Total tasks received:', allTasks.length);
       
-      // Filter: Tasks with messages OR approvalRequests (using counts from API)
-      const tasksWithActivity = allTasks.filter(t => 
-        (t.messagesCount > 0) || (t.approvalRequestsCount > 0)
-      );
+      if (allTasks.length > 0) {
+        const sample = allTasks[0];
+        console.log('[Support] Sample task fields:', {
+          id: sample.id || sample._id,
+          title: sample.title,
+          messagesCount: sample.messagesCount,
+          approvalRequestsCount: sample.approvalRequestsCount,
+          lastMessageAt: sample.lastMessageAt,
+          lastApprovalAt: sample.lastApprovalAt,
+          hasMessagesArray: Array.isArray(sample.messages),
+          hasApprovalsArray: Array.isArray(sample.approvalRequests),
+        });
+      }
       
-      console.log('Support: Tasks with activity:', tasksWithActivity.length);
+      // Filter: Tasks with messages OR approvalRequests
+      // Check both count fields AND array fields (in case API differs)
+      const tasksWithActivity = allTasks.filter(t => {
+        const hasCountMessages = (t.messagesCount || 0) > 0;
+        const hasCountApprovals = (t.approvalRequestsCount || 0) > 0;
+        const hasArrayMessages = Array.isArray(t.messages) && t.messages.length > 0;
+        const hasArrayApprovals = Array.isArray(t.approvalRequests) && t.approvalRequests.length > 0;
+        
+        return hasCountMessages || hasCountApprovals || hasArrayMessages || hasArrayApprovals;
+      });
+      
+      console.log('[Support] Tasks with activity:', tasksWithActivity.length);
+      console.log('[Support] ========== DEBUG END ==========');
       
       // Sort by last activity timestamp (most recent first)
       tasksWithActivity.sort((a, b) => {

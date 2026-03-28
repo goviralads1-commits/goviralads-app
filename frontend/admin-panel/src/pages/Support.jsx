@@ -26,16 +26,43 @@ const Support = () => {
       const res = await api.get('/admin/tasks');
       const allTasks = res.data.tasks || res.data || [];
       
-      // DEBUG: Log all tasks to see what we receive
-      console.log('Support: All tasks received:', allTasks.length);
-      console.log('Support: Sample task structure:', allTasks[0]);
+      // DEBUG: Log raw data
+      console.log('[Support] ========== DEBUG START ==========');
+      console.log('[Support] Total tasks received:', allTasks.length);
       
-      // Filter: Tasks with messages OR approvalRequests (using counts from API)
-      const tasksWithActivity = allTasks.filter(t => 
-        (t.messagesCount > 0) || (t.approvalRequestsCount > 0)
-      );
+      if (allTasks.length > 0) {
+        const sample = allTasks[0];
+        console.log('[Support] Sample task fields:', {
+          id: sample.id,
+          title: sample.title,
+          clientId: sample.clientId,
+          clientName: sample.clientName,
+          clientIdentifier: sample.clientIdentifier,
+          messagesCount: sample.messagesCount,
+          approvalRequestsCount: sample.approvalRequestsCount,
+          lastMessageAt: sample.lastMessageAt,
+          lastApprovalAt: sample.lastApprovalAt,
+          // Check for array fields (TaskDetail API might include these)
+          hasMessagesArray: Array.isArray(sample.messages),
+          hasApprovalsArray: Array.isArray(sample.approvalRequests),
+        });
+      }
       
-      console.log('Support: Tasks with activity:', tasksWithActivity.length);
+      // Filter: Tasks with messages OR approvalRequests
+      // Check both count fields AND array fields (in case API differs)
+      const tasksWithActivity = allTasks.filter(t => {
+        const hasCountMessages = (t.messagesCount || 0) > 0;
+        const hasCountApprovals = (t.approvalRequestsCount || 0) > 0;
+        const hasArrayMessages = Array.isArray(t.messages) && t.messages.length > 0;
+        const hasArrayApprovals = Array.isArray(t.approvalRequests) && t.approvalRequests.length > 0;
+        
+        return hasCountMessages || hasCountApprovals || hasArrayMessages || hasArrayApprovals;
+      });
+      
+      console.log('[Support] Tasks with activity:', tasksWithActivity.length);
+      if (tasksWithActivity.length > 0) {
+        console.log('[Support] First active task:', tasksWithActivity[0].title);
+      }
       
       // Group by client
       const grouped = {};
@@ -82,7 +109,15 @@ const Support = () => {
         });
       });
       
-      console.log('Support: Client groups:', groupedArray.length);
+      console.log('[Support] Client groups:', groupedArray.length);
+      if (groupedArray.length > 0) {
+        console.log('[Support] First group:', {
+          clientId: groupedArray[0].clientId,
+          clientName: groupedArray[0].clientName,
+          taskCount: groupedArray[0].tasks.length
+        });
+      }
+      console.log('[Support] ========== DEBUG END ==========');
       
       setClientGroups(groupedArray);
       setTasks(tasksWithActivity);
