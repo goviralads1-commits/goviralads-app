@@ -26,6 +26,7 @@ import Roles from './pages/Roles';
 import Commissions from './pages/Commissions';
 import SubscriptionRequests from './pages/SubscriptionRequests';
 import ProgressIcons from './pages/ProgressIcons';
+import Support from './pages/Support';
 import NotFound from './pages/NotFound';
 
 // Protected Route Component
@@ -158,6 +159,11 @@ const App = () => {
           <Route path="/progress-icons" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <ProgressIcons />
+            </ProtectedRoute>
+          } />
+          <Route path="/support" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Support />
             </ProtectedRoute>
           } />
           <Route path="/subscription-requests" element={

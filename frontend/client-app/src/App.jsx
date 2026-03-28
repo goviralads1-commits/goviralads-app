@@ -18,6 +18,7 @@ import Profile from './pages/Profile';
 import TaskDetail from './pages/TaskDetail';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
+import Support from './pages/Support';
 import Notifications from './pages/Notifications';
 import LegalPage from './pages/LegalPage';
 import NotFound from './pages/NotFound';
@@ -99,6 +100,11 @@ const App = () => {
           <Route path="/tickets/:ticketId" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <TicketDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/support" element={
+            <ProtectedRoute allowedRoles={['CLIENT']}>
+              <Support />
             </ProtectedRoute>
           } />
           <Route path="/notifications" element={
