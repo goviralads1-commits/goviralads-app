@@ -10,6 +10,13 @@ export const IconLibraryProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const fetchIcons = useCallback(async () => {
+    // CRITICAL: Do NOT call protected API without token
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('[IconLibrary] Skipping fetch - no token (not authenticated)');
+      return;
+    }
+    
     if (loading) return;
     
     setLoading(true);
@@ -29,8 +36,14 @@ export const IconLibraryProvider = ({ children }) => {
     }
   }, [loading]);
 
-  // Load once on mount
+  // Load once on mount - ONLY if authenticated
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('[IconLibrary] Skip initial fetch - no token');
+      return;
+    }
+    
     if (!loaded && !loading) {
       fetchIcons();
     }
