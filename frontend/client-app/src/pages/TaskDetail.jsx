@@ -1044,6 +1044,53 @@ const TaskDetail = () => {
           </div>
         </div>
 
+        {/* FINAL APPROVED DECISIONS - Summary below chat */}
+        {(() => {
+          const approvedItems = (task.approvalRequests || [])
+            .filter(a => a.isVisibleToClient !== false && (a.selectionsHistory || []).length > 0);
+          if (approvedItems.length === 0) return null;
+          return (
+            <div style={{
+              backgroundColor: '#f0fdf4', borderRadius: '20px', padding: '20px', marginBottom: '20px',
+              border: '1px solid #bbf7d0'
+            }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#166534', margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>✅</span> Final Approved Decisions
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {approvedItems.map((approval, idx) => {
+                  const latest = approval.selectionsHistory[approval.selectionsHistory.length - 1];
+                  const hasHistory = (approval.selectionsHistory || []).length > 0;
+                  const isLocked = approval.isLocked;
+                  return (
+                    <div key={`summary-${approval.id || idx}`} style={{
+                      backgroundColor: '#fff', padding: '14px', borderRadius: '12px',
+                      border: '1px solid #dcfce7'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px 0' }}>{approval.title}</p>
+                          <p style={{ fontSize: '15px', fontWeight: '600', color: '#166534', margin: 0 }}>
+                            {latest?.selectedOptions?.join(', ') || 'No selection'}
+                          </p>
+                        </div>
+                        {isLocked && (
+                          <span style={{
+                            padding: '4px 10px', fontSize: '11px', fontWeight: '600',
+                            backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px'
+                          }}>
+                            Locked ✓
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* CLIENT UPLOAD FOLDER - Upload Your Files (Phase 4B) */}
         {task.clientUploadFolderLink && (
           <div style={{ 
