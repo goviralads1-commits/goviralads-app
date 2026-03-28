@@ -142,11 +142,18 @@ const Support = () => {
             {tasks.map((task) => {
               const lastMessage = getLastMessage(task);
               const isAdminMessage = lastMessage?.sender === 'admin';
+              // CRITICAL: API returns 'id' not '_id'
+              const taskId = task._id || task.id;
+              
+              if (!taskId) {
+                console.error('[Support] Task ID missing:', task);
+                return null;
+              }
               
               return (
                 <div
-                  key={task._id}
-                  onClick={() => navigate(`/tasks/${task._id}?scrollToChat=true`)}
+                  key={taskId}
+                  onClick={() => navigate(`/tasks/${taskId}?scrollToChat=true`)}
                   style={{
                     backgroundColor: '#fff', borderRadius: '16px', padding: '16px',
                     border: '1px solid #e2e8f0', cursor: 'pointer',
