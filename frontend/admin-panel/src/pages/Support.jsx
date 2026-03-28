@@ -23,9 +23,9 @@ const Support = () => {
       console.log('Support: All tasks received:', allTasks.length);
       console.log('Support: Sample task structure:', allTasks[0]);
       
-      // Filter: Tasks with messages OR approvalRequests (any conversation activity)
+      // Filter: Tasks with messages OR approvalRequests (using counts from API)
       const tasksWithActivity = allTasks.filter(t => 
-        (t.messages?.length > 0) || (t.approvalRequests?.length > 0)
+        (t.messagesCount > 0) || (t.approvalRequestsCount > 0)
       );
       
       console.log('Support: Tasks with activity:', tasksWithActivity.length);
@@ -33,8 +33,8 @@ const Support = () => {
       // Group by client
       const grouped = {};
       tasksWithActivity.forEach(task => {
-        const clientId = task.client?._id || task.client || 'unknown';
-        const clientName = task.client?.name || task.client?.email || 'Unknown Client';
+        const clientId = task.clientId || 'unknown';
+        const clientName = task.clientName || task.clientIdentifier || 'Unknown Client';
         
         if (!grouped[clientId]) {
           grouped[clientId] = {
@@ -46,11 +46,9 @@ const Support = () => {
         }
         grouped[clientId].tasks.push(task);
         
-        // Track latest activity from messages OR approvals
-        const lastMsg = task.messages?.[task.messages?.length - 1];
-        const lastApproval = task.approvalRequests?.[task.approvalRequests?.length - 1];
-        const msgTime = new Date(lastMsg?.createdAt || 0).getTime();
-        const approvalTime = new Date(lastApproval?.createdAt || 0).getTime();
+        // Track latest activity using timestamps from API
+        const msgTime = new Date(task.lastMessageAt || 0).getTime();
+        const approvalTime = new Date(task.lastApprovalAt || 0).getTime();
         const latestTime = new Date(Math.max(msgTime, approvalTime));
         
         if (!grouped[clientId].lastActivity || latestTime > grouped[clientId].lastActivity) {
@@ -65,20 +63,14 @@ const Support = () => {
       // Sort tasks within each group
       groupedArray.forEach(group => {
         group.tasks.sort((a, b) => {
-          const aLastMsg = a.messages?.[a.messages?.length - 1];
-          const aLastApproval = a.approvalRequests?.[a.approvalRequests?.length - 1];
           const aTime = Math.max(
-            new Date(aLastMsg?.createdAt || 0).getTime(),
-            new Date(aLastApproval?.createdAt || 0).getTime()
+            new Date(a.lastMessageAt || 0).getTime(),
+            new Date(a.lastApprovalAt || 0).getTime()
           );
-          
-          const bLastMsg = b.messages?.[b.messages?.length - 1];
-          const bLastApproval = b.approvalRequests?.[b.approvalRequests?.length - 1];
           const bTime = Math.max(
-            new Date(bLastMsg?.createdAt || 0).getTime(),
-            new Date(bLastApproval?.createdAt || 0).getTime()
+            new Date(b.lastMessageAt || 0).getTime(),
+            new Date(b.lastApprovalAt || 0).getTime()
           );
-          
           return bTime - aTime;
         });
       });
@@ -107,17 +99,18 @@ const Support = () => {
   };
 
   const getLastMessage = (task) => {
-    const lastMsg = task.messages?.[task.messages?.length - 1];
-    const lastApproval = task.approvalRequests?.[task.approvalRequests?.length - 1];
+    // With counts-only API, we can only show activity exists, not content
+    // Return a placeholder based on most recent timestamp
+    const msgTime = new Date(task.lastMessageAt || 0).getTime();
+    const approvalTime = new Date(task.lastApprovalAt || 0).getTime();
     
-    // Return whichever is more recent
-    const msgTime = new Date(lastMsg?.createdAt || 0).getTime();
-    const approvalTime = new Date(lastApproval?.createdAt || 0).getTime();
-    
-    if (approvalTime > msgTime && lastApproval) {
-      return { _isApproval: true, title: lastApproval.title, createdAt: lastApproval.createdAt };
+    if (approvalTime > msgTime && task.approvalRequestsCount > 0) {
+      return { _isApproval: true, createdAt: task.lastApprovalAt };
     }
-    return lastMsg || null;
+    if (task.messagesCount > 0) {
+      return { createdAt: task.lastMessageAt };
+    }
+    return null;
   };
 
   const truncateText = (text, maxLength = 45) => {
@@ -242,37 +235,27 @@ const Support = () => {
                 {lastMessage && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
-                      {lastMessage._isApproval ? '✅' : (isClientMessage ? 'Client:' : 'You:')}
+                      {lastMessage._isApproval ? '✅ Approval' : '💬 Chat'}
                     </span>
-                    <p style={{
-                      fontSize: '12px', color: '#64748b', margin: 0,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                    }}>
-                      {lastMessage._isApproval 
-                        ? `Approval: ${truncateText(lastMessage.title, 35)}`
-                        : (lastMessage.attachments?.length > 0 && !lastMessage.text 
-                          ? '📎 Image' 
-                          : truncateText(lastMessage.text))}
-                    </p>
                   </div>
                 )}
                 
                 {/* Activity Count */}
                 <div style={{ marginTop: '6px', display: 'flex', gap: '6px' }}>
-                  {(task.messages?.length || 0) > 0 && (
+                  {(task.messagesCount || 0) > 0 && (
                     <span style={{
                       fontSize: '10px', fontWeight: '600', color: '#3b82f6',
                       backgroundColor: '#eff6ff', padding: '3px 6px', borderRadius: '4px'
                     }}>
-                      {task.messages.length} msg
+                      {task.messagesCount} msg
                     </span>
                   )}
-                  {(task.approvalRequests?.length || 0) > 0 && (
+                  {(task.approvalRequestsCount || 0) > 0 && (
                     <span style={{
                       fontSize: '10px', fontWeight: '600', color: '#f59e0b',
                       backgroundColor: '#fef3c7', padding: '3px 6px', borderRadius: '4px'
                     }}>
-                      {task.approvalRequests.length} approval{task.approvalRequests.length !== 1 ? 's' : ''}
+                      {task.approvalRequestsCount} approval{task.approvalRequestsCount !== 1 ? 's' : ''}
                     </span>
                   )}
                 </div>

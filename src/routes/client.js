@@ -1765,6 +1765,12 @@ router.get('/tasks', async (req, res) => {
           reached: m.reached || false,
           reachedAt: m.reachedAt || null,
         })),
+        // SUPPORT NAVIGATION: Include counts for filtering
+        messagesCount: t.messages?.length || 0,
+        approvalRequestsCount: t.approvalRequests?.length || 0,
+        // Include last activity timestamps for sorting
+        lastMessageAt: t.messages?.length > 0 ? t.messages[t.messages.length - 1].createdAt : null,
+        lastApprovalAt: t.approvalRequests?.length > 0 ? t.approvalRequests[t.approvalRequests.length - 1].createdAt : null,
       });
     }
 
