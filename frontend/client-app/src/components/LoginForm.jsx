@@ -61,17 +61,32 @@ const LoginForm = () => {
       
       console.log('[CLIENT LOGIN] ✓✓✓ Success - checking for intended URL');
       
+      // VERIFY TOKEN IS SAVED
+      const savedToken = localStorage.getItem('token');
+      console.log('[CLIENT LOGIN] Token saved in localStorage:', savedToken ? `Yes (${savedToken.length} chars)` : 'NO!');
+      if (!savedToken) {
+        console.error('[CLIENT LOGIN] ❌ CRITICAL: Token not saved!');
+        setError('Login failed - token not saved');
+        return;
+      }
+      
       // Check for intended URL (from email link redirect)
       const intendedUrl = sessionStorage.getItem('intendedUrl');
       sessionStorage.removeItem('intendedUrl');
       
-      if (intendedUrl && intendedUrl !== '/login' && intendedUrl !== '/') {
-        console.log('[CLIENT LOGIN] Redirecting to intended URL:', intendedUrl);
-        navigate(intendedUrl);
-      } else {
-        console.log('[CLIENT LOGIN] Redirecting to dashboard');
-        navigate('/dashboard');
-      }
+      // IMPORTANT: Add delay before redirect for mobile devices
+      // This ensures localStorage token is fully persisted before Dashboard loads
+      const targetUrl = (intendedUrl && intendedUrl !== '/login' && intendedUrl !== '/') 
+        ? intendedUrl 
+        : '/dashboard';
+      
+      console.log('[CLIENT LOGIN] Will redirect to:', targetUrl, 'in 300ms');
+      
+      // Delay redirect for mobile localStorage sync
+      setTimeout(() => {
+        console.log('[CLIENT LOGIN] Executing redirect now');
+        navigate(targetUrl);
+      }, 300);
     } catch (err) {
       console.error('[CLIENT LOGIN] ❌ Error:', err.message);
       console.error('[CLIENT LOGIN] Error details:', err);

@@ -9,6 +9,14 @@ if (!API_BASE_URL) {
 
 console.log('[API CONFIG] Base URL:', API_BASE_URL);
 
+// Auth ready flag - prevents API calls before login completes
+let isAuthReady = true; // Default true for page refresh with existing token
+
+export const setAuthReady = (ready) => {
+  isAuthReady = ready;
+  console.log('[API] Auth ready:', ready);
+};
+
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -23,6 +31,13 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    const requestUrl = config.url || '';
+    
+    // Allow auth requests without token
+    const isAuthRequest = requestUrl.includes('/auth/') || requestUrl.includes('/login');
+    
+    console.log('[API] Request:', config.method?.toUpperCase(), requestUrl, token ? '(with token)' : '(no token)');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -32,7 +47,6 @@ api.interceptors.request.use(
       delete config.headers['Content-Type'];
     }
     
-    console.log('[API] Request:', config.method?.toUpperCase(), config.url, token ? '(with token)' : '(no token)');
     return config;
   },
   (error) => {
@@ -49,25 +63,32 @@ api.interceptors.response.use(
   },
   (error) => {
     const requestUrl = error.config?.url || 'unknown';
+    const currentToken = localStorage.getItem('token');
+    
     console.error('[API] Response error:', error.message);
     console.error('[API] Status:', error.response?.status, 'URL:', requestUrl);
-    console.error('[API] Data:', error.response?.data);
+    console.error('[API] Current token exists:', !!currentToken);
     
     if (error.response?.status === 401) {
       // IMPORTANT: Do NOT clear token or redirect for login/auth requests
-      // 401 on login just means bad credentials, not session expiry
       const isAuthRequest = requestUrl.includes('/auth/') || requestUrl.includes('/login');
       
       if (isAuthRequest) {
         console.log('[API] 401 on auth request - NOT clearing token (bad credentials)');
-      } else {
-        console.log('[API] 401 on protected request - clearing token');
+      } else if (currentToken) {
+        // Only clear if token exists (prevents clearing during login race condition)
+        console.log('[API] 401 on protected request with token - session expired');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        // Only redirect if NOT already on login page (prevents reload loop)
+        localStorage.removeItem('permissions');
+        // Use setTimeout to prevent immediate redirect race condition on mobile
         if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
         }
+      } else {
+        console.log('[API] 401 but no token - likely race condition, ignoring');
       }
     }
     return Promise.reject(error);

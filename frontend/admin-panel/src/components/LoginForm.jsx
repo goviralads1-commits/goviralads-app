@@ -85,13 +85,19 @@ const LoginForm = () => {
       const intendedUrl = sessionStorage.getItem('intendedUrl');
       sessionStorage.removeItem('intendedUrl');
       
-      if (intendedUrl && intendedUrl !== '/login' && intendedUrl !== '/') {
-        console.log('[ADMIN LOGIN] Redirecting to intended URL:', intendedUrl);
-        navigate(intendedUrl);
-      } else {
-        console.log('[ADMIN LOGIN] Redirecting to dashboard');
-        navigate('/dashboard');
-      }
+      // IMPORTANT: Add delay before redirect for mobile devices
+      // This ensures localStorage token is fully persisted before Dashboard loads
+      const targetUrl = (intendedUrl && intendedUrl !== '/login' && intendedUrl !== '/') 
+        ? intendedUrl 
+        : '/dashboard';
+      
+      console.log('[ADMIN LOGIN] Will redirect to:', targetUrl, 'in 300ms');
+      
+      // Delay redirect for mobile localStorage sync
+      setTimeout(() => {
+        console.log('[ADMIN LOGIN] Executing redirect now');
+        navigate(targetUrl);
+      }, 300);
     } catch (err) {
       console.error('[ADMIN LOGIN] ❌ Error:', err.message);
       console.error('[ADMIN LOGIN] Error details:', err);
