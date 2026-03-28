@@ -26,7 +26,7 @@ import Roles from './pages/Roles';
 import Commissions from './pages/Commissions';
 import SubscriptionRequests from './pages/SubscriptionRequests';
 import ProgressIcons from './pages/ProgressIcons';
-import Support from './pages/Support';
+// import Support from './pages/Support'; // TEMP DISABLED FOR DEBUG
 import NotFound from './pages/NotFound';
 
 // Protected Route Component
@@ -168,7 +168,7 @@ const App = () => {
           } />
           <Route path="/support" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
-              <Support />
+              <div style={{ padding: '40px', textAlign: 'center' }}>Support page temporarily disabled for debugging</div>
             </ProtectedRoute>
           } />
           <Route path="/subscription-requests" element={
