@@ -755,7 +755,9 @@ const TaskDetail = () => {
                   const savedOptions = latestSelection?.selectedOptions || [];
                   const localSelection = approvalSelections[approval.id] || [];
                   const currentSelection = localSelection.length > 0 ? localSelection : savedOptions;
+                  // Phase 2: isLocked now includes submitted + !allowChanges from backend
                   const isLocked = approval.isLocked;
+                  const hasSubmission = (approval.selectionsHistory || []).length > 0;
                   
                   return (
                     <div key={`approval-${approval.id || idx}`} style={{
@@ -800,7 +802,7 @@ const TaskDetail = () => {
                           })}
                         </div>
                         
-                        {/* Submit Button */}
+                        {/* Submit Button - Only show if not locked */}
                         {!isLocked && (
                           <button
                             onClick={() => handleSubmitApproval(approval.id)}
@@ -820,8 +822,26 @@ const TaskDetail = () => {
                         
                         {/* Status */}
                         <p style={{ fontSize: '11px', color: '#92400e', margin: '8px 0 0', textAlign: 'center' }}>
-                          {isLocked ? '🔒 Locked' : (savedOptions.length > 0 ? `✓ Submitted (${savedOptions.join(', ')})` : 'Awaiting your selection')}
+                          {isLocked && hasSubmission 
+                            ? '✅ Approved ✓ (Locked by admin)' 
+                            : isLocked 
+                              ? '🔒 Locked' 
+                              : (savedOptions.length > 0 
+                                  ? `✓ Submitted (${savedOptions.join(', ')})` 
+                                  : 'Awaiting your selection')}
                         </p>
+                        
+                        {/* Phase 2: History - Only show if allowed by admin */}
+                        {approval.showHistoryToClient && (approval.selectionsHistory || []).length > 1 && (
+                          <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#fef9c3', borderRadius: '8px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: '600', color: '#a16207', margin: '0 0 6px 0' }}>Previous selections:</p>
+                            {approval.selectionsHistory.slice(0, -1).map((h, hIdx) => (
+                              <div key={hIdx} style={{ fontSize: '10px', color: '#a16207', marginBottom: '2px' }}>
+                                • {h.selectedOptions?.join(', ')} ({new Date(h.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

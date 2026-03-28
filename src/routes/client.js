@@ -650,19 +650,32 @@ router.get('/tasks/:taskId', async (req, res) => {
         // APPROVAL REQUESTS (Phase 7) - Only visible ones
         approvalRequests: (task.approvalRequests || [])
           .filter(a => a.isVisibleToClient !== false)
-          .map(a => ({
-            id: a.id,
-            title: a.title,
-            type: a.type,
-            options: a.options || [],
-            selectionsHistory: (a.selectionsHistory || []).map(h => ({
-              selectedOptions: h.selectedOptions || [],
-              selectedBy: h.selectedBy,
-              timestamp: h.timestamp,
-            })),
-            isLocked: a.isLocked || false,
-            createdAt: a.createdAt,
-          })),
+          .map(a => {
+            const hasSubmission = (a.selectionsHistory || []).length > 0;
+            const isLockedForClient = a.isLocked || (hasSubmission && !a.allowChanges);
+            return {
+              id: a.id,
+              title: a.title,
+              type: a.type,
+              options: a.options || [],
+              // Phase 2: Only show history if allowed by admin
+              selectionsHistory: a.showHistoryToClient
+                ? (a.selectionsHistory || []).map(h => ({
+                    selectedOptions: h.selectedOptions || [],
+                    selectedBy: h.selectedBy,
+                    timestamp: h.timestamp,
+                  }))
+                : (a.selectionsHistory || []).slice(-1).map(h => ({
+                    selectedOptions: h.selectedOptions || [],
+                    selectedBy: h.selectedBy,
+                    timestamp: h.timestamp,
+                  })), // Only show latest selection if history hidden
+              isLocked: isLockedForClient,
+              allowChanges: a.allowChanges || false,
+              showHistoryToClient: a.showHistoryToClient || false,
+              createdAt: a.createdAt,
+            };
+          }),
         // PROGRESS ICON - resolve custom icon URL for client display
         progressIcon: await (async () => {
           const icon = task.progressIcon || { type: 'default', value: '' };
@@ -912,6 +925,12 @@ router.post('/tasks/:taskId/approvals/:approvalId/select', async (req, res) => {
     // Check if locked
     if (approval.isLocked) {
       return res.status(403).json({ error: 'Approval request is locked' });
+    }
+
+    // Phase 2: Check if already submitted and changes not allowed
+    const hasExistingSubmission = approval.selectionsHistory && approval.selectionsHistory.length > 0;
+    if (hasExistingSubmission && !approval.allowChanges) {
+      return res.status(403).json({ error: 'Approval locked. Contact admin to allow changes.' });
     }
 
     // Validate selected options

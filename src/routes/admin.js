@@ -991,6 +991,9 @@ router.get('/tasks/:taskId', async (req, res) => {
           isVisibleToClient: a.isVisibleToClient !== false,
           showBelowChat: a.showBelowChat !== false,
           isLocked: a.isLocked || false,
+          // Phase 2 fields
+          allowChanges: a.allowChanges || false,
+          showHistoryToClient: a.showHistoryToClient || false,
           createdAt: a.createdAt,
         })),
         // PROGRESS ICON
@@ -1381,7 +1384,7 @@ router.patch('/tasks/:taskId/approvals/:approvalId', async (req, res) => {
   try {
     const { taskId, approvalId } = req.params;
     const adminId = req.user.id;
-    const { isVisibleToClient, showBelowChat, isLocked } = req.body || {};
+    const { isVisibleToClient, showBelowChat, isLocked, allowChanges, showHistoryToClient } = req.body || {};
 
     const task = await Task.findById(taskId).exec();
     if (!task) {
@@ -1402,6 +1405,13 @@ router.patch('/tasks/:taskId/approvals/:approvalId', async (req, res) => {
     }
     if (typeof isLocked === 'boolean') {
       approval.isLocked = isLocked;
+    }
+    // Phase 2: New control fields
+    if (typeof allowChanges === 'boolean') {
+      approval.allowChanges = allowChanges;
+    }
+    if (typeof showHistoryToClient === 'boolean') {
+      approval.showHistoryToClient = showHistoryToClient;
     }
 
     await task.save();

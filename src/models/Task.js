@@ -412,6 +412,15 @@ const taskSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      // Phase 2: Control flags
+      allowChanges: {
+        type: Boolean,
+        default: false, // Client cannot change after first submission by default
+      },
+      showHistoryToClient: {
+        type: Boolean,
+        default: false, // History hidden from client by default
+      },
       createdAt: {
         type: Date,
         default: Date.now,

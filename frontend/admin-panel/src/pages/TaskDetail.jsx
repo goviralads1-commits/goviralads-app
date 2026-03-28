@@ -474,6 +474,21 @@ const TaskDetail = () => {
     }
   };
 
+  // Phase 2: Update approval settings (allowChanges, showHistoryToClient, isLocked)
+  const handleUpdateApprovalSetting = async (approvalId, field, value) => {
+    try {
+      await api.patch(`/admin/tasks/${taskId}/approvals/${approvalId}`, {
+        [field]: value
+      });
+      setToast({ type: 'success', message: 'Setting updated' });
+      setTimeout(() => setToast(null), 2000);
+      await fetchTask(); // Refresh to show updated settings
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to update' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
   // Handle image selection for chat
   const handleImageSelect = (e) => {
     const files = Array.from(e.target.files || []);
@@ -781,46 +796,116 @@ const TaskDetail = () => {
                 ))}
                 
                 {/* Approval Cards */}
-                {task.approvalRequests && task.approvalRequests.length > 0 && task.approvalRequests.map((approval, idx) => (
-                  <div key={`approval-${approval.id || idx}`} style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '12px'
-                  }}>
-                    <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
-                    <div style={{
-                      maxWidth: '85%', padding: '14px', borderRadius: '14px',
-                      backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
+                {task.approvalRequests && task.approvalRequests.length > 0 && task.approvalRequests.map((approval, idx) => {
+                  const hasSubmission = (approval.selectionsHistory || []).length > 0;
+                  const isEffectivelyLocked = approval.isLocked || (hasSubmission && !approval.allowChanges);
+                  return (
+                    <div key={`approval-${approval.id || idx}`} style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '12px'
                     }}>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 10px 0' }}>
-                        {approval.title}
-                      </p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
-                        {approval.options.map((opt, optIdx) => {
-                          const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
-                          const isSelected = latestSelection?.selectedOptions?.includes(opt);
-                          return (
-                            <div key={optIdx} style={{
-                              padding: '8px 12px', borderRadius: '8px', fontSize: '13px',
-                              backgroundColor: isSelected ? '#dcfce7' : '#fff',
-                              border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
-                              color: isSelected ? '#15803d' : '#374151'
-                            }}>
-                              {approval.type === 'single' ? '○' : '☐'} {opt} {isSelected && '✓'}
-                            </div>
-                          );
-                        })}
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
+                      <div style={{
+                        maxWidth: '85%', padding: '14px', borderRadius: '14px',
+                        backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
+                      }}>
+                        <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 10px 0' }}>
+                          {approval.title}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                          {approval.options.map((opt, optIdx) => {
+                            const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
+                            const isSelected = latestSelection?.selectedOptions?.includes(opt);
+                            return (
+                              <div key={optIdx} style={{
+                                padding: '8px 12px', borderRadius: '8px', fontSize: '13px',
+                                backgroundColor: isSelected ? '#dcfce7' : '#fff',
+                                border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                                color: isSelected ? '#15803d' : '#374151'
+                              }}>
+                                {approval.type === 'single' ? '○' : '☐'} {opt} {isSelected && '✓'}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Status */}
+                        <p style={{ fontSize: '11px', color: '#92400e', margin: '0 0 8px 0' }}>
+                          {hasSubmission 
+                            ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
+                            : 'Awaiting selection'}
+                          {isEffectivelyLocked && ' (Locked)'}
+                        </p>
+                        
+                        {/* Phase 2: Full History (Admin always sees) */}
+                        {(approval.selectionsHistory || []).length > 1 && (
+                          <div style={{ marginBottom: '10px', padding: '8px', backgroundColor: '#fef9c3', borderRadius: '8px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: '600', color: '#a16207', margin: '0 0 6px 0' }}>Selection History:</p>
+                            {approval.selectionsHistory.map((h, hIdx) => (
+                              <div key={hIdx} style={{ fontSize: '10px', color: '#a16207', marginBottom: '2px' }}>
+                                • {h.selectedOptions?.join(', ')} – {h.selectedBy?.toLowerCase()} ({new Date(h.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Phase 2: Admin Controls */}
+                        <div style={{ borderTop: '1px solid #fcd34d', paddingTop: '10px', marginTop: '10px' }}>
+                          {/* Allow Changes Toggle */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '11px', color: '#92400e' }}>Allow client to change</span>
+                            <button
+                              onClick={() => handleUpdateApprovalSetting(approval.id, 'allowChanges', !approval.allowChanges)}
+                              style={{
+                                padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                                fontSize: '10px', fontWeight: '600',
+                                backgroundColor: approval.allowChanges ? '#22c55e' : '#e5e7eb',
+                                color: approval.allowChanges ? '#fff' : '#6b7280'
+                              }}
+                            >
+                              {approval.allowChanges ? 'ON' : 'OFF'}
+                            </button>
+                          </div>
+                          
+                          {/* Show History to Client Toggle */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '11px', color: '#92400e' }}>Show history to client</span>
+                            <button
+                              onClick={() => handleUpdateApprovalSetting(approval.id, 'showHistoryToClient', !approval.showHistoryToClient)}
+                              style={{
+                                padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                                fontSize: '10px', fontWeight: '600',
+                                backgroundColor: approval.showHistoryToClient ? '#22c55e' : '#e5e7eb',
+                                color: approval.showHistoryToClient ? '#fff' : '#6b7280'
+                              }}
+                            >
+                              {approval.showHistoryToClient ? 'ON' : 'OFF'}
+                            </button>
+                          </div>
+                          
+                          {/* Lock Toggle */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '11px', color: '#92400e' }}>Lock approval</span>
+                            <button
+                              onClick={() => handleUpdateApprovalSetting(approval.id, 'isLocked', !approval.isLocked)}
+                              style={{
+                                padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                                fontSize: '10px', fontWeight: '600',
+                                backgroundColor: approval.isLocked ? '#ef4444' : '#e5e7eb',
+                                color: approval.isLocked ? '#fff' : '#6b7280'
+                              }}
+                            >
+                              {approval.isLocked ? '🔒 LOCKED' : 'LOCK'}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <p style={{ fontSize: '10px', color: '#b45309', margin: '8px 0 0' }}>
+                          {new Date(approval.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
                       </div>
-                      <p style={{ fontSize: '11px', color: '#92400e', margin: 0 }}>
-                        {approval.selectionsHistory?.length > 0 
-                          ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
-                          : 'Awaiting selection'}
-                        {approval.isLocked && ' (Locked)'}
-                      </p>
-                      <p style={{ fontSize: '10px', color: '#b45309', margin: '4px 0 0' }}>
-                        {new Date(approval.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </p>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {/* Scroll anchor */}
                 <div ref={messagesEndRef} />
