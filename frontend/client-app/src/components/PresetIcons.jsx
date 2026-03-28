@@ -1,31 +1,31 @@
 import React from 'react';
 
-// Import preset SVG icons
-import InstagramIcon from '../assets/icons/presets/instagram.svg';
-import FacebookIcon from '../assets/icons/presets/facebook.svg';
-import YoutubeIcon from '../assets/icons/presets/youtube.svg';
-import GoogleIcon from '../assets/icons/presets/google.svg';
-import AdsIcon from '../assets/icons/presets/ads.svg';
-import SeoIcon from '../assets/icons/presets/seo.svg';
-import ScriptIcon from '../assets/icons/presets/script.svg';
-import EditingIcon from '../assets/icons/presets/editing.svg';
+// Import preset SVG icons (Vite imports as URLs)
+import instagramIconUrl from '../assets/icons/presets/instagram.svg';
+import facebookIconUrl from '../assets/icons/presets/facebook.svg';
+import youtubeIconUrl from '../assets/icons/presets/youtube.svg';
+import googleIconUrl from '../assets/icons/presets/google.svg';
+import adsIconUrl from '../assets/icons/presets/ads.svg';
+import seoIconUrl from '../assets/icons/presets/seo.svg';
+import scriptIconUrl from '../assets/icons/presets/script.svg';
+import editingIconUrl from '../assets/icons/presets/editing.svg';
 
-// Preset icon configuration
+// Preset icon configuration (using URLs)
 export const PRESET_ICONS_CONFIG = {
-  instagram: { name: 'Instagram', component: InstagramIcon, color: '#E4405F' },
-  facebook: { name: 'Facebook', component: FacebookIcon, color: '#1877F2' },
-  youtube: { name: 'YouTube', component: YoutubeIcon, color: '#FF0000' },
-  google: { name: 'Google', component: GoogleIcon, color: '#4285F4' },
-  ads: { name: 'Ads', component: AdsIcon, color: '#F4B400' },
-  seo: { name: 'SEO', component: SeoIcon, color: '#34A853' },
-  script: { name: 'Script', component: ScriptIcon, color: '#9333EA' },
-  editing: { name: 'Editing', component: EditingIcon, color: '#F97316' },
+  instagram: { name: 'Instagram', url: instagramIconUrl, color: '#E4405F' },
+  facebook: { name: 'Facebook', url: facebookIconUrl, color: '#1877F2' },
+  youtube: { name: 'YouTube', url: youtubeIconUrl, color: '#FF0000' },
+  google: { name: 'Google', url: googleIconUrl, color: '#4285F4' },
+  ads: { name: 'Ads', url: adsIconUrl, color: '#F4B400' },
+  seo: { name: 'SEO', url: seoIconUrl, color: '#34A853' },
+  script: { name: 'Script', url: scriptIconUrl, color: '#9333EA' },
+  editing: { name: 'Editing', url: editingIconUrl, color: '#F97316' },
 };
 
-// Get preset icon component by name
-export const getPresetIcon = (iconName) => {
+// Get preset icon URL by name
+export const getPresetIconUrl = (iconName) => {
   const config = PRESET_ICONS_CONFIG[iconName];
-  return config?.component || null;
+  return config?.url || null;
 };
 
 // Check if preset exists
@@ -33,7 +33,7 @@ export const isValidPreset = (iconName) => {
   return iconName in PRESET_ICONS_CONFIG;
 };
 
-// Preset Icon Renderer Component
+// Preset Icon Renderer Component (renders as img)
 export const PresetIcon = ({ 
   name, 
   size = 20, 
@@ -41,13 +41,11 @@ export const PresetIcon = ({
   style = {},
   ...props 
 }) => {
-  const IconComponent = getPresetIcon(name);
+  const iconUrl = getPresetIconUrl(name);
   
-  if (!IconComponent) {
+  if (!iconUrl) {
     return null;
   }
-  
-  const iconColor = color || PRESET_ICONS_CONFIG[name]?.color || 'currentColor';
   
   return (
     <span
@@ -57,15 +55,16 @@ export const PresetIcon = ({
         justifyContent: 'center',
         width: size,
         height: size,
-        color: iconColor,
         ...style,
       }}
       {...props}
     >
-      <IconComponent 
+      <img 
+        src={iconUrl} 
+        alt={name}
         width={size} 
         height={size} 
-        style={{ display: 'block' }}
+        style={{ display: 'block', objectFit: 'contain' }}
       />
     </span>
   );
