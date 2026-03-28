@@ -1016,6 +1016,7 @@ const TaskDetail = () => {
               size="default"
               showLabel={true}
               showPercentage={true}
+              progressIcon={task.progressIcon}
             />
           )}
         </div>

@@ -663,8 +663,24 @@ router.get('/tasks/:taskId', async (req, res) => {
             isLocked: a.isLocked || false,
             createdAt: a.createdAt,
           })),
-        // PROGRESS ICON
-        progressIcon: task.progressIcon || { type: 'default', value: '' },
+        // PROGRESS ICON - resolve custom icon URL for client display
+        progressIcon: await (async () => {
+          const icon = task.progressIcon || { type: 'default', value: '' };
+          if (icon.type === 'custom' && icon.value) {
+            try {
+              const { ProgressIconLibrary } = require('../models/ProgressIconLibrary');
+              const customIcon = await ProgressIconLibrary.findById(icon.value).select('url').lean();
+              return {
+                type: 'custom',
+                value: icon.value,
+                url: customIcon?.url || null
+              };
+            } catch {
+              return icon;
+            }
+          }
+          return icon;
+        })(),
       },
     });
   } catch (err) {

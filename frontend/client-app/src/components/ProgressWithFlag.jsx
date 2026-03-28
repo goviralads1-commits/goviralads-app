@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { PresetIcon, DefaultFlagIcon, isValidPreset } from './PresetIcons';
 
 /**
- * ProgressWithFlag - Standardized progress bar with moving flag indicator
+ * ProgressWithFlag - Standardized progress bar with customizable icon indicator
  * 
  * Props:
  * - progress: number (0-100+, supports overachieving)
@@ -9,14 +10,19 @@ import React from 'react';
  * - size: 'default' | 'compact' (for list views)
  * - showLabel: boolean (show milestone label below bar)
  * - showPercentage: boolean (show percentage value)
+ * - progressIcon: { type: 'default' | 'preset' | 'custom', value: string, url?: string }
  */
 const ProgressWithFlag = ({ 
   progress = 0, 
   milestones = [], 
   size = 'default',
   showLabel = true,
-  showPercentage = true
+  showPercentage = true,
+  progressIcon = null
 }) => {
+  // State for image load error handling
+  const [imageError, setImageError] = useState(false);
+
   // Get progress color based on percentage (clean gradient journey)
   const getProgressColor = (p) => {
     if (p >= 100) return '#22c55e'; // Green
@@ -49,6 +55,48 @@ const ProgressWithFlag = ({
   const config = size === 'compact' 
     ? { trackHeight: '6px', flagSize: '18px', flagEmoji: '10px', paddingTop: '14px', percentSize: '14px', labelSize: '11px' }
     : { trackHeight: '6px', flagSize: '22px', flagEmoji: '10px', paddingTop: '20px', percentSize: '16px', labelSize: '14px' };
+
+  // ICON RENDERING LOGIC
+  const renderIcon = () => {
+    const iconSize = parseInt(config.flagSize) - 4;
+    
+    // Default or no icon - show flag
+    if (!progressIcon || progressIcon.type === 'default') {
+      return <DefaultFlagIcon size={iconSize} />;
+    }
+    
+    // Preset icon
+    if (progressIcon.type === 'preset') {
+      if (isValidPreset(progressIcon.value)) {
+        return <PresetIcon name={progressIcon.value} size={iconSize} />;
+      }
+      return <DefaultFlagIcon size={iconSize} />;
+    }
+    
+    // Custom icon - URL resolved by backend
+    if (progressIcon.type === 'custom') {
+      if (imageError || !progressIcon.url) {
+        return <DefaultFlagIcon size={iconSize} />;
+      }
+      
+      return (
+        <img 
+          src={progressIcon.url} 
+          alt="" 
+          width={iconSize} 
+          height={iconSize}
+          style={{ 
+            display: 'block',
+            objectFit: 'contain',
+            borderRadius: '2px'
+          }}
+          onError={() => setImageError(true)}
+        />
+      );
+    }
+    
+    return <DefaultFlagIcon size={iconSize} />;
+  };
 
   return (
     <div style={{ width: '100%' }}>
@@ -111,9 +159,10 @@ const ProgressWithFlag = ({
               boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center'
+              justifyContent: 'center',
+              overflow: 'hidden'
             }}>
-              <span style={{ fontSize: config.flagEmoji }}>🚩</span>
+              {renderIcon()}
             </div>
           </div>
         </div>
@@ -126,9 +175,13 @@ const ProgressWithFlag = ({
             fontSize: config.labelSize, 
             fontWeight: '500', 
             color: currentMilestone ? (currentMilestone.color || '#1a1a1a') : '#94a3b8', 
-            margin: 0 
+            margin: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px'
           }}>
-            {currentMilestone ? `🚩 ${currentMilestone.name}` : (progress > 0 ? 'In Progress' : 'Scheduled')}
+            {currentMilestone ? currentMilestone.name : (progress > 0 ? 'In Progress' : 'Scheduled')}
           </p>
         </div>
       )}

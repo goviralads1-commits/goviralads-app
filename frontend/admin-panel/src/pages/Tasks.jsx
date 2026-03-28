@@ -1075,6 +1075,7 @@ const Tasks = () => {
                     size="compact"
                     showLabel={true}
                     showPercentage={true}
+                    progressIcon={task.progressIcon}
                   />
                 </div>
 

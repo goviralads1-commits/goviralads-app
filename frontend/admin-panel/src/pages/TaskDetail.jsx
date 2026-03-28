@@ -2,11 +2,19 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import { PresetIcon, DefaultFlagIcon, PRESET_ICONS_CONFIG, getAllPresetKeys } from '../components/PresetIcons';
+import { useIconLibrary } from '../context/IconLibraryContext';
 
 const TaskDetail = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  
+  // Icon Library for custom progress icons
+  const { icons: iconLibrary, refresh: refreshIconLibrary } = useIconLibrary();
+  
+  // Progress Icon selector state
+  const [progressIconTab, setProgressIconTab] = useState('preset'); // 'preset' or 'custom'
   
   // State
   const [task, setTask] = useState(null);
@@ -60,7 +68,9 @@ const TaskDetail = () => {
     // Milestone & Progress Config
     milestones: [],
     autoCompletionCap: 100,
-    icon: ''
+    icon: '',
+    // Progress Bar Icon
+    progressIcon: { type: 'default', value: '' }
   });
 
   // Status transition rules
@@ -100,7 +110,9 @@ const TaskDetail = () => {
         // Milestone & Progress Config
         milestones: taskData.milestones || [],
         autoCompletionCap: taskData.autoCompletionCap || 100,
-        icon: taskData.icon || ''
+        icon: taskData.icon || '',
+        // Progress Bar Icon
+        progressIcon: taskData.progressIcon || { type: 'default', value: '' }
       });
       
       // Initialize delivery state (Phase 3)
@@ -213,6 +225,10 @@ const TaskDetail = () => {
     }
     if (formData.icon !== (originalTask.icon || '')) {
       payload.icon = formData.icon;
+    }
+    // Progress Bar Icon - Include if changed
+    if (JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' })) {
+      payload.progressIcon = formData.progressIcon;
     }
     
     // Handle status change separately (uses different endpoint)
@@ -1012,6 +1028,144 @@ const TaskDetail = () => {
                       placeholder="Enter emoji (e.g., 📊)"
                       style={{ flex: 1, padding: '10px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
                     />
+                  </div>
+                </div>
+
+                {/* Progress Bar Icon */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Progress Bar Icon</label>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '0', marginBottom: '12px' }}>Icon shown on the progress bar indicator</p>
+                  
+                  {/* Tab Toggle */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setProgressIconTab('preset')}
+                      style={{
+                        padding: '8px 16px', fontSize: '13px', fontWeight: '600', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                        backgroundColor: progressIconTab === 'preset' ? '#6366f1' : '#f1f5f9',
+                        color: progressIconTab === 'preset' ? '#fff' : '#64748b'
+                      }}
+                    >
+                      Preset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProgressIconTab('custom')}
+                      style={{
+                        padding: '8px 16px', fontSize: '13px', fontWeight: '600', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                        backgroundColor: progressIconTab === 'custom' ? '#6366f1' : '#f1f5f9',
+                        color: progressIconTab === 'custom' ? '#fff' : '#64748b'
+                      }}
+                    >
+                      Custom
+                    </button>
+                    {formData.progressIcon?.type !== 'default' && (
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange('progressIcon', { type: 'default', value: '' })}
+                        style={{
+                          padding: '8px 16px', fontSize: '13px', fontWeight: '600', border: 'none', borderRadius: '8px', cursor: 'pointer',
+                          backgroundColor: '#fef2f2', color: '#dc2626'
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Preset Icons Grid */}
+                  {progressIconTab === 'preset' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                      {getAllPresetKeys().map((key) => (
+                        <div
+                          key={key}
+                          onClick={() => handleInputChange('progressIcon', { type: 'preset', value: key })}
+                          style={{
+                            padding: '12px', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                            border: formData.progressIcon?.type === 'preset' && formData.progressIcon?.value === key
+                              ? '2px solid #6366f1'
+                              : '2px solid #e2e8f0',
+                            backgroundColor: formData.progressIcon?.type === 'preset' && formData.progressIcon?.value === key
+                              ? '#eef2ff'
+                              : '#f8fafc',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <PresetIcon name={key} size={24} />
+                          <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0 0', textTransform: 'capitalize' }}>
+                            {PRESET_ICONS_CONFIG[key]?.name || key}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Custom Icons Grid */}
+                  {progressIconTab === 'custom' && (
+                    <div>
+                      {iconLibrary.length === 0 ? (
+                        <div style={{ padding: '24px', backgroundColor: '#f8fafc', borderRadius: '12px', textAlign: 'center', border: '2px dashed #e2e8f0' }}>
+                          <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>No custom icons uploaded yet.</p>
+                          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '8px 0 0 0' }}>Upload icons via Settings → Progress Icons</p>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                          {iconLibrary.map((icon) => (
+                            <div
+                              key={icon._id}
+                              onClick={() => handleInputChange('progressIcon', { type: 'custom', value: icon._id })}
+                              style={{
+                                padding: '12px', borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                                border: formData.progressIcon?.type === 'custom' && formData.progressIcon?.value === icon._id
+                                  ? '2px solid #6366f1'
+                                  : '2px solid #e2e8f0',
+                                backgroundColor: formData.progressIcon?.type === 'custom' && formData.progressIcon?.value === icon._id
+                                  ? '#eef2ff'
+                                  : '#f8fafc',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <img 
+                                src={icon.url} 
+                                alt={icon.name}
+                                style={{ width: '24px', height: '24px', objectFit: 'contain' }}
+                              />
+                              <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {icon.name}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Current Selection Preview */}
+                  <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Current:</span>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                      {formData.progressIcon?.type === 'preset' ? (
+                        <PresetIcon name={formData.progressIcon.value} size={16} color="#fff" />
+                      ) : formData.progressIcon?.type === 'custom' ? (
+                        <img 
+                          src={iconLibrary.find(i => i._id === formData.progressIcon?.value)?.url || ''}
+                          alt=""
+                          style={{ width: '16px', height: '16px', objectFit: 'contain' }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <DefaultFlagIcon size={16} color="#fff" />
+                      )}
+                    </div>
+                    <span style={{ fontSize: '12px', color: '#475569', fontWeight: '500' }}>
+                      {formData.progressIcon?.type === 'preset' 
+                        ? PRESET_ICONS_CONFIG[formData.progressIcon?.value]?.name || 'Preset'
+                        : formData.progressIcon?.type === 'custom'
+                          ? iconLibrary.find(i => i._id === formData.progressIcon?.value)?.name || 'Custom'
+                          : 'Default Flag'
+                      }
+                    </span>
                   </div>
                 </div>
 
