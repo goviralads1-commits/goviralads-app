@@ -651,8 +651,9 @@ router.get('/tasks/:taskId', async (req, res) => {
         approvalRequests: (task.approvalRequests || [])
           .filter(a => a.isVisibleToClient !== false)
           .map(a => {
-            const hasSubmission = (a.selectionsHistory || []).length > 0;
-            const isLockedForClient = a.isLocked || (hasSubmission && !a.allowChanges);
+            const hasHistory = (a.selectionsHistory || []).length > 0;
+            // FIX 2: Single lock rule - DO NOT rely on separate isLocked flag
+            const isLocked = hasHistory && !a.allowChanges;
             return {
               id: a.id,
               title: a.title,
@@ -670,7 +671,7 @@ router.get('/tasks/:taskId', async (req, res) => {
                     selectedBy: h.selectedBy,
                     timestamp: h.timestamp,
                   })), // Only show latest selection if history hidden
-              isLocked: isLockedForClient,
+              isLocked: isLocked,
               allowChanges: a.allowChanges || false,
               showHistoryToClient: a.showHistoryToClient || false,
               createdAt: a.createdAt,
@@ -922,15 +923,11 @@ router.post('/tasks/:taskId/approvals/:approvalId/select', async (req, res) => {
       return res.status(403).json({ error: 'Approval request is not visible' });
     }
 
-    // Check if locked
-    if (approval.isLocked) {
-      return res.status(403).json({ error: 'Approval request is locked' });
-    }
-
-    // Phase 2: Check if already submitted and changes not allowed
-    const hasExistingSubmission = approval.selectionsHistory && approval.selectionsHistory.length > 0;
-    if (hasExistingSubmission && !approval.allowChanges) {
-      return res.status(403).json({ error: 'Approval locked. Contact admin to allow changes.' });
+    // FIX 1/2/5: Single lock rule - locked if has history AND allowChanges is false
+    const hasHistory = (approval.selectionsHistory || []).length > 0;
+    const isLocked = hasHistory && !approval.allowChanges;
+    if (isLocked) {
+      return res.status(400).json({ message: 'Approval locked' });
     }
 
     // Validate selected options

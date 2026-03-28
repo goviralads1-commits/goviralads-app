@@ -978,24 +978,29 @@ router.get('/tasks/:taskId', async (req, res) => {
           createdAt: m.createdAt,
         })),
         // APPROVAL REQUESTS (Phase 7)
-        approvalRequests: (task.approvalRequests || []).map(a => ({
-          id: a.id,
-          title: a.title,
-          type: a.type,
-          options: a.options || [],
-          selectionsHistory: (a.selectionsHistory || []).map(h => ({
-            selectedOptions: h.selectedOptions || [],
-            selectedBy: h.selectedBy,
-            timestamp: h.timestamp,
-          })),
-          isVisibleToClient: a.isVisibleToClient !== false,
-          showBelowChat: a.showBelowChat !== false,
-          isLocked: a.isLocked || false,
-          // Phase 2 fields
-          allowChanges: a.allowChanges || false,
-          showHistoryToClient: a.showHistoryToClient || false,
-          createdAt: a.createdAt,
-        })),
+        approvalRequests: (task.approvalRequests || []).map(a => {
+          const hasHistory = (a.selectionsHistory || []).length > 0;
+          // FIX 2: Computed lock state for display
+          const isEffectivelyLocked = hasHistory && !a.allowChanges;
+          return {
+            id: a.id,
+            title: a.title,
+            type: a.type,
+            options: a.options || [],
+            selectionsHistory: (a.selectionsHistory || []).map(h => ({
+              selectedOptions: h.selectedOptions || [],
+              selectedBy: h.selectedBy,
+              timestamp: h.timestamp,
+            })),
+            isVisibleToClient: a.isVisibleToClient !== false,
+            showBelowChat: a.showBelowChat !== false,
+            isLocked: isEffectivelyLocked,
+            // Phase 2 fields
+            allowChanges: a.allowChanges || false,
+            showHistoryToClient: a.showHistoryToClient || false,
+            createdAt: a.createdAt,
+          };
+        }),
         // PROGRESS ICON
         progressIcon: task.progressIcon || { type: 'default', value: '' },
         // TASK ASSIGNMENT SYSTEM

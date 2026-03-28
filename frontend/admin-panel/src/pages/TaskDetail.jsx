@@ -474,16 +474,29 @@ const TaskDetail = () => {
     }
   };
 
-  // Phase 2: Update approval settings (allowChanges, showHistoryToClient, isLocked)
+  // Phase 2: Update approval settings (allowChanges, showHistoryToClient)
+  // FIX 4: Immediate UI reaction - update local state first
   const handleUpdateApprovalSetting = async (approvalId, field, value) => {
+    // Immediate local state update (no refresh dependency)
+    setTask(prev => {
+      if (!prev || !prev.approvalRequests) return prev;
+      return {
+        ...prev,
+        approvalRequests: prev.approvalRequests.map(a =>
+          a.id === approvalId ? { ...a, [field]: value } : a
+        )
+      };
+    });
+
     try {
       await api.patch(`/admin/tasks/${taskId}/approvals/${approvalId}`, {
         [field]: value
       });
       setToast({ type: 'success', message: 'Setting updated' });
       setTimeout(() => setToast(null), 2000);
-      await fetchTask(); // Refresh to show updated settings
     } catch (err) {
+      // Revert on error
+      await fetchTask();
       setToast({ type: 'error', message: err.response?.data?.error || 'Failed to update' });
       setTimeout(() => setToast(null), 3000);
     }
@@ -797,8 +810,9 @@ const TaskDetail = () => {
                 
                 {/* Approval Cards */}
                 {task.approvalRequests && task.approvalRequests.length > 0 && task.approvalRequests.map((approval, idx) => {
-                  const hasSubmission = (approval.selectionsHistory || []).length > 0;
-                  const isEffectivelyLocked = approval.isLocked || (hasSubmission && !approval.allowChanges);
+                  const hasHistory = (approval.selectionsHistory || []).length > 0;
+                  // FIX 2: Single lock rule - DO NOT rely on separate isLocked flag
+                  const isLocked = hasHistory && !approval.allowChanges;
                   return (
                     <div key={`approval-${approval.id || idx}`} style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '12px'
@@ -830,10 +844,10 @@ const TaskDetail = () => {
                         
                         {/* Status */}
                         <p style={{ fontSize: '11px', color: '#92400e', margin: '0 0 8px 0' }}>
-                          {hasSubmission 
+                          {hasHistory 
                             ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
                             : 'Awaiting selection'}
-                          {isEffectivelyLocked && ' (Locked)'}
+                          {isLocked && ' 🔒 (Locked)'}
                         </p>
                         
                         {/* Phase 2: Full History (Admin always sees) */}
@@ -848,7 +862,7 @@ const TaskDetail = () => {
                           </div>
                         )}
                         
-                        {/* Phase 2: Admin Controls */}
+                        {/* Admin Controls - FIX 2: Only allowChanges and showHistoryToClient */}
                         <div style={{ borderTop: '1px solid #fcd34d', paddingTop: '10px', marginTop: '10px' }}>
                           {/* Allow Changes Toggle */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -867,7 +881,7 @@ const TaskDetail = () => {
                           </div>
                           
                           {/* Show History to Client Toggle */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span style={{ fontSize: '11px', color: '#92400e' }}>Show history to client</span>
                             <button
                               onClick={() => handleUpdateApprovalSetting(approval.id, 'showHistoryToClient', !approval.showHistoryToClient)}
@@ -879,22 +893,6 @@ const TaskDetail = () => {
                               }}
                             >
                               {approval.showHistoryToClient ? 'ON' : 'OFF'}
-                            </button>
-                          </div>
-                          
-                          {/* Lock Toggle */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '11px', color: '#92400e' }}>Lock approval</span>
-                            <button
-                              onClick={() => handleUpdateApprovalSetting(approval.id, 'isLocked', !approval.isLocked)}
-                              style={{
-                                padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                                fontSize: '10px', fontWeight: '600',
-                                backgroundColor: approval.isLocked ? '#ef4444' : '#e5e7eb',
-                                color: approval.isLocked ? '#fff' : '#6b7280'
-                              }}
-                            >
-                              {approval.isLocked ? '🔒 LOCKED' : 'LOCK'}
                             </button>
                           </div>
                         </div>
