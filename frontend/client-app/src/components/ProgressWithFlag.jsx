@@ -159,7 +159,6 @@ const ProgressWithFlag = ({
               width: config.flagSize, 
               height: config.flagSize, 
               borderRadius: '50%',
-              backgroundColor: currentMilestone ? '#22c55e' : progressColor,
               border: '3px solid #fff',
               boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
               display: 'flex', 

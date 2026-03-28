@@ -33,15 +33,21 @@ export const isValidPreset = (iconName) => {
   return iconName in PRESET_ICONS_CONFIG;
 };
 
-// Preset Icon Renderer Component (renders as img)
+// Get preset icon color by name
+export const getPresetIconColor = (iconName) => {
+  return PRESET_ICONS_CONFIG[iconName]?.color || '#6366f1';
+};
+
+// Preset Icon Renderer Component (colored circle + white icon)
 export const PresetIcon = ({ 
   name, 
   size = 20, 
-  color = null,
   style = {},
   ...props 
 }) => {
   const iconUrl = getPresetIconUrl(name);
+  const bgColor = getPresetIconColor(name);
+  const innerSize = Math.round(size * 0.6); // Icon is 60% of container
   
   if (!iconUrl) {
     return null;
@@ -55,6 +61,8 @@ export const PresetIcon = ({
         justifyContent: 'center',
         width: size,
         height: size,
+        borderRadius: '50%',
+        backgroundColor: bgColor,
         ...style,
       }}
       {...props}
@@ -62,42 +70,50 @@ export const PresetIcon = ({
       <img 
         src={iconUrl} 
         alt={name}
-        width={size} 
-        height={size} 
-        style={{ display: 'block', objectFit: 'contain' }}
+        width={innerSize} 
+        height={innerSize} 
+        style={{ 
+          display: 'block', 
+          objectFit: 'contain',
+          filter: 'brightness(0) invert(1)' // Makes icon white
+        }}
       />
     </span>
   );
 };
 
-// Default Flag Icon (used as fallback)
-export const DefaultFlagIcon = ({ size = 20, color = '#3b82f6', style = {}, ...props }) => (
-  <span
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: size,
-      height: size,
-      color,
-      ...style,
-    }}
-    {...props}
-  >
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+// Default Flag Icon (purple circle + white flag)
+export const DefaultFlagIcon = ({ size = 20, style = {}, ...props }) => {
+  const innerSize = Math.round(size * 0.6);
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        backgroundColor: '#6366f1',
+        ...style,
+      }}
+      {...props}
     >
-      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
-      <line x1="4" y1="22" x2="4" y2="15"></line>
-    </svg>
-  </span>
-);
+      <svg
+        width={innerSize}
+        height={innerSize}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+        <line x1="4" y1="22" x2="4" y2="15"></line>
+      </svg>
+    </span>
+  );
+};
 
 export default PresetIcon;
