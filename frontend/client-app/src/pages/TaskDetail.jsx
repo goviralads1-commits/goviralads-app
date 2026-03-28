@@ -1651,10 +1651,25 @@ const TaskDetail = () => {
                 <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <div>
+            <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
               <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{task.title}</p>
             </div>
+            {/* Approval Filter Toggle in Fullscreen */}
+            {(task.approvalRequests?.filter(a => a.isVisibleToClient !== false).length > 0) && (
+              <button
+                onClick={() => setShowOnlyApprovals(!showOnlyApprovals)}
+                style={{
+                  padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: '600',
+                  backgroundColor: showOnlyApprovals ? '#fef3c7' : '#f1f5f9',
+                  color: showOnlyApprovals ? '#92400e' : '#64748b',
+                  border: showOnlyApprovals ? '2px solid #fbbf24' : '1px solid #e2e8f0',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+              >
+                ✅ Approvals ({task.approvalRequests.filter(a => a.isVisibleToClient !== false).length})
+              </button>
+            )}
           </div>
 
           {/* Messages - Full Height */}
@@ -1686,12 +1701,15 @@ const TaskDetail = () => {
                       {msg.text && msg.text !== '[Image]' && <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.5 }}>{msg.text}</p>}
                       {msg.attachments?.length > 0 && (
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: msg.text && msg.text !== '[Image]' ? '8px' : 0 }}>
-                          {msg.attachments.map((att, attIdx) => (
-                            <img key={attIdx} src={att.url} alt="" 
-                              onClick={() => setLightboxImage(att.url)}
-                              style={{ width: '100px', height: '100px', borderRadius: '8px', objectFit: 'cover', cursor: 'pointer' }} 
-                            />
-                          ))}
+                          {msg.attachments.map((att, attIdx) => {
+                            const imgUrl = typeof att === 'string' ? att : att.url;
+                            return (
+                              <img key={attIdx} src={imgUrl} alt="" 
+                                onClick={() => setLightboxImage(imgUrl)}
+                                style={{ width: '100px', height: '100px', borderRadius: '8px', objectFit: 'cover', cursor: 'pointer' }} 
+                              />
+                            );
+                          })}
                         </div>
                       )}
                     </div>
