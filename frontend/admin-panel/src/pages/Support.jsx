@@ -308,7 +308,7 @@ const Support = () => {
           }}>
             <div style={{ fontSize: '44px', marginBottom: '14px' }}>💬</div>
             <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px 0' }}>
-              No conversations yet
+              No client chats yet
             </h3>
             <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
               Client conversations will appear here
