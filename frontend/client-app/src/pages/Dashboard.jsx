@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import { initPushNotifications } from '../services/pushService';
 
 // Helper: Extract video thumbnail URL
 const getVideoThumbnail = (url) => {
@@ -72,6 +73,11 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Initialize push notifications after login
+  useEffect(() => {
+    initPushNotifications();
+  }, []);
 
   // Auto-rotate banners
   useEffect(() => {
