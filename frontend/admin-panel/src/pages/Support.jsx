@@ -11,6 +11,13 @@ const Support = () => {
   const [clientGroups, setClientGroups] = useState([]);
 
   useEffect(() => {
+    // CRITICAL: Only fetch if authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('[Support] Skipping fetch - no token');
+      setLoading(false);
+      return;
+    }
     fetchTasksWithMessages();
   }, []);
 
