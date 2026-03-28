@@ -34,6 +34,13 @@ const TaskDetail = () => {
   const [clientUploadFolderLink, setClientUploadFolderLink] = useState('');
   const [savingClientUploadFolder, setSavingClientUploadFolder] = useState(false);
   
+  // Approval System state (Phase 7)
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalQuestion, setApprovalQuestion] = useState('');
+  const [approvalType, setApprovalType] = useState('single'); // 'single' or 'multi'
+  const [approvalOptions, setApprovalOptions] = useState(['', '']);
+  const [sendingApproval, setSendingApproval] = useState(false);
+  
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -425,6 +432,48 @@ const TaskDetail = () => {
     }
   };
 
+  // Handle sending approval request
+  const handleSendApproval = async () => {
+    // Validate
+    if (!approvalQuestion.trim()) {
+      setToast({ type: 'error', message: 'Please enter a question' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    const validOptions = approvalOptions.filter(o => o.trim());
+    if (validOptions.length < 2) {
+      setToast({ type: 'error', message: 'Please add at least 2 options' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    setSendingApproval(true);
+    try {
+      await api.post(`/admin/tasks/${taskId}/approvals`, {
+        title: approvalQuestion.trim(),
+        type: approvalType === 'single' ? 'single' : 'multi',
+        options: validOptions,
+        isVisibleToClient: true,
+        showBelowChat: false
+      });
+
+      // Reset modal
+      setShowApprovalModal(false);
+      setApprovalQuestion('');
+      setApprovalType('single');
+      setApprovalOptions(['', '']);
+      
+      setToast({ type: 'success', message: 'Approval request sent!' });
+      setTimeout(() => setToast(null), 3000);
+      await fetchTask(); // Refresh to show approval
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to send approval' });
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setSendingApproval(false);
+    }
+  };
+
   // Handle image selection for chat
   const handleImageSelect = (e) => {
     const files = Array.from(e.target.files || []);
@@ -730,6 +779,49 @@ const TaskDetail = () => {
                     </div>
                   </div>
                 ))}
+                
+                {/* Approval Cards */}
+                {task.approvalRequests && task.approvalRequests.length > 0 && task.approvalRequests.map((approval, idx) => (
+                  <div key={`approval-${approval.id || idx}`} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '12px'
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval)</span>
+                    <div style={{
+                      maxWidth: '85%', padding: '14px', borderRadius: '14px',
+                      backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
+                    }}>
+                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 10px 0' }}>
+                        {approval.title}
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                        {approval.options.map((opt, optIdx) => {
+                          const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
+                          const isSelected = latestSelection?.selectedOptions?.includes(opt);
+                          return (
+                            <div key={optIdx} style={{
+                              padding: '8px 12px', borderRadius: '8px', fontSize: '13px',
+                              backgroundColor: isSelected ? '#dcfce7' : '#fff',
+                              border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                              color: isSelected ? '#15803d' : '#374151'
+                            }}>
+                              {approval.type === 'single' ? '○' : '☐'} {opt} {isSelected && '✓'}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ fontSize: '11px', color: '#92400e', margin: 0 }}>
+                        {approval.selectionsHistory?.length > 0 
+                          ? `Selected by ${approval.selectionsHistory[approval.selectionsHistory.length - 1]?.selectedBy?.toLowerCase()}` 
+                          : 'Awaiting selection'}
+                        {approval.isLocked && ' (Locked)'}
+                      </p>
+                      <p style={{ fontSize: '10px', color: '#b45309', margin: '4px 0 0' }}>
+                        {new Date(approval.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                
                 {/* Scroll anchor */}
                 <div ref={messagesEndRef} />
               </>
@@ -773,6 +865,18 @@ const TaskDetail = () => {
               >
                 📎
               </button>
+              {/* Send Approval Button */}
+              <button
+                onClick={() => setShowApprovalModal(true)}
+                style={{
+                  padding: '12px', backgroundColor: '#fef3c7', borderRadius: '14px', border: 'none',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  minWidth: '44px', minHeight: '44px'
+                }}
+                title="Send Approval Request"
+              >
+                ✅
+              </button>
               <textarea
                 ref={textareaRef}
                 value={messageText}
@@ -809,6 +913,91 @@ const TaskDetail = () => {
             style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'pointer' }}
           >
             <img src={lightboxImage} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px' }} />
+          </div>
+        )}
+
+        {/* Approval Modal */}
+        {showApprovalModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '28px', maxWidth: '480px', width: '90%', maxHeight: '80vh', overflow: 'auto' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px 0' }}>Send Approval Request</h3>
+              
+              {/* Question */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Question</label>
+                <input
+                  type="text"
+                  value={approvalQuestion}
+                  onChange={(e) => setApprovalQuestion(e.target.value)}
+                  placeholder="e.g., Which design do you prefer?"
+                  style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              
+              {/* Type */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Selection Type</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="approvalType" checked={approvalType === 'single'} onChange={() => setApprovalType('single')} />
+                    <span style={{ fontSize: '14px' }}>Single Choice</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="approvalType" checked={approvalType === 'multi'} onChange={() => setApprovalType('multi')} />
+                    <span style={{ fontSize: '14px' }}>Multiple Choice</span>
+                  </label>
+                </div>
+              </div>
+              
+              {/* Options */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Options</label>
+                {approvalOptions.map((opt, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                    <input
+                      type="text"
+                      value={opt}
+                      onChange={(e) => {
+                        const newOpts = [...approvalOptions];
+                        newOpts[idx] = e.target.value;
+                        setApprovalOptions(newOpts);
+                      }}
+                      placeholder={`Option ${idx + 1}`}
+                      style={{ flex: 1, padding: '10px 12px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
+                    />
+                    {approvalOptions.length > 2 && (
+                      <button
+                        onClick={() => setApprovalOptions(approvalOptions.filter((_, i) => i !== idx))}
+                        style={{ padding: '10px', backgroundColor: '#fef2f2', color: '#dc2626', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                      >✕</button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setApprovalOptions([...approvalOptions, ''])}
+                  style={{ padding: '8px 14px', fontSize: '13px', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  + Add Option
+                </button>
+              </div>
+              
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => { setShowApprovalModal(false); setApprovalQuestion(''); setApprovalOptions(['', '']); }}
+                  style={{ padding: '12px 20px', fontSize: '14px', fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendApproval}
+                  disabled={sendingApproval}
+                  style={{ padding: '12px 20px', fontSize: '14px', fontWeight: '600', backgroundColor: '#6366f1', color: '#fff', border: 'none', borderRadius: '10px', cursor: sendingApproval ? 'not-allowed' : 'pointer', opacity: sendingApproval ? 0.6 : 1 }}
+                >
+                  {sendingApproval ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

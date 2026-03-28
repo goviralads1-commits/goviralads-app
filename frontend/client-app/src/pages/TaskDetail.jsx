@@ -52,6 +52,10 @@ const TaskDetail = () => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   
+  // Approval selection state (Phase 7)
+  const [approvalSelections, setApprovalSelections] = useState({}); // { approvalId: [selectedOptions] }
+  const [submittingApproval, setSubmittingApproval] = useState(null); // approvalId being submitted
+  
   // Auto-resize textarea
   const handleTextareaChange = (e) => {
     setMessageText(e.target.value);
@@ -216,6 +220,51 @@ const TaskDetail = () => {
       setTimeout(() => setContentToast(null), 3000);
     } finally {
       setSendingMessage(false);
+    }
+  };
+
+  // Handle approval selection toggle
+  const handleApprovalOptionToggle = (approvalId, option, type) => {
+    setApprovalSelections(prev => {
+      const current = prev[approvalId] || [];
+      if (type === 'single') {
+        // Single choice - replace
+        return { ...prev, [approvalId]: [option] };
+      } else {
+        // Multi choice - toggle
+        if (current.includes(option)) {
+          return { ...prev, [approvalId]: current.filter(o => o !== option) };
+        } else {
+          return { ...prev, [approvalId]: [...current, option] };
+        }
+      }
+    });
+  };
+
+  // Submit approval selection
+  const handleSubmitApproval = async (approvalId) => {
+    const selectedOptions = approvalSelections[approvalId] || [];
+    if (selectedOptions.length === 0) {
+      setContentToast({ type: 'error', message: 'Please select at least one option' });
+      setTimeout(() => setContentToast(null), 3000);
+      return;
+    }
+
+    setSubmittingApproval(approvalId);
+    try {
+      await api.post(`/client/tasks/${taskId}/approvals/${approvalId}/select`, {
+        selectedOptions
+      });
+
+      setContentToast({ type: 'success', message: 'Selection submitted!' });
+      setTimeout(() => setContentToast(null), 3000);
+      setApprovalSelections(prev => ({ ...prev, [approvalId]: [] })); // Clear local selection
+      fetchTask(); // Refresh to show updated selection
+    } catch (err) {
+      setContentToast({ type: 'error', message: err.response?.data?.error || 'Failed to submit selection' });
+      setTimeout(() => setContentToast(null), 3000);
+    } finally {
+      setSubmittingApproval(null);
     }
   };
 
@@ -699,6 +748,85 @@ const TaskDetail = () => {
                     </div>
                   </div>
                 ))}
+                
+                {/* Approval Cards - Client can select options */}
+                {task.approvalRequests && task.approvalRequests.filter(a => a.isVisibleToClient !== false).map((approval, idx) => {
+                  const latestSelection = approval.selectionsHistory?.[approval.selectionsHistory.length - 1];
+                  const savedOptions = latestSelection?.selectedOptions || [];
+                  const localSelection = approvalSelections[approval.id] || [];
+                  const currentSelection = localSelection.length > 0 ? localSelection : savedOptions;
+                  const isLocked = approval.isLocked;
+                  
+                  return (
+                    <div key={`approval-${approval.id || idx}`} style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '16px'
+                    }}>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', marginBottom: '4px' }}>Admin (Approval Request)</span>
+                      <div style={{
+                        maxWidth: '90%', padding: '16px', borderRadius: '16px',
+                        backgroundColor: '#fef3c7', border: '2px solid #fbbf24'
+                      }}>
+                        <p style={{ fontSize: '15px', fontWeight: '600', color: '#92400e', margin: '0 0 12px 0' }}>
+                          {approval.title}
+                        </p>
+                        
+                        {/* Options */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {approval.options.map((opt, optIdx) => {
+                            const isSelected = currentSelection.includes(opt);
+                            return (
+                              <button
+                                key={optIdx}
+                                onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
+                                disabled={isLocked}
+                                style={{
+                                  padding: '10px 14px', borderRadius: '10px', fontSize: '14px',
+                                  backgroundColor: isSelected ? '#dcfce7' : '#fff',
+                                  border: isSelected ? '2px solid #22c55e' : '2px solid #e5e7eb',
+                                  color: isSelected ? '#15803d' : '#374151',
+                                  cursor: isLocked ? 'not-allowed' : 'pointer',
+                                  textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
+                                  opacity: isLocked ? 0.7 : 1
+                                }}
+                              >
+                                <span style={{ fontSize: '16px' }}>
+                                  {approval.type === 'single' 
+                                    ? (isSelected ? '◉' : '○') 
+                                    : (isSelected ? '☑' : '☐')}
+                                </span>
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Submit Button */}
+                        {!isLocked && (
+                          <button
+                            onClick={() => handleSubmitApproval(approval.id)}
+                            disabled={submittingApproval === approval.id || localSelection.length === 0}
+                            style={{
+                              width: '100%', padding: '10px', fontSize: '14px', fontWeight: '600',
+                              backgroundColor: localSelection.length > 0 ? '#6366f1' : '#e2e8f0',
+                              color: localSelection.length > 0 ? '#fff' : '#94a3b8',
+                              border: 'none', borderRadius: '10px',
+                              cursor: localSelection.length > 0 && submittingApproval !== approval.id ? 'pointer' : 'not-allowed',
+                              opacity: submittingApproval === approval.id ? 0.6 : 1
+                            }}
+                          >
+                            {submittingApproval === approval.id ? 'Submitting...' : (savedOptions.length > 0 ? 'Update Selection' : 'Submit Selection')}
+                          </button>
+                        )}
+                        
+                        {/* Status */}
+                        <p style={{ fontSize: '11px', color: '#92400e', margin: '8px 0 0', textAlign: 'center' }}>
+                          {isLocked ? '🔒 Locked' : (savedOptions.length > 0 ? `✓ Submitted (${savedOptions.join(', ')})` : 'Awaiting your selection')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                
                 {/* Scroll anchor */}
                 <div ref={messagesEndRef} />
               </>
