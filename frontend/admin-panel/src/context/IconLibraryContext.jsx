@@ -72,8 +72,18 @@ export const IconLibraryProvider = ({ children }) => {
 
 export const useIconLibrary = () => {
   const context = useContext(IconLibraryContext);
+  // Return safe defaults if context not available (prevents crash)
   if (!context) {
-    throw new Error('useIconLibrary must be used within IconLibraryProvider');
+    console.warn('[IconLibrary] Context not available, using safe defaults');
+    return {
+      icons: [],
+      loaded: false,
+      loading: false,
+      error: null,
+      refresh: () => {},
+      getIconById: () => null,
+      resolveCustomIconUrl: () => null,
+    };
   }
   return context;
 };
