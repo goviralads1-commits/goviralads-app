@@ -21,48 +21,37 @@ const Support = () => {
     fetchTasksWithMessages();
   }, []);
 
+  // Helper: Get last activity timestamp from count-based fields
+  const getLastActivity = (task) => {
+    const msgTime = task.lastMessageAt ? new Date(task.lastMessageAt).getTime() : 0;
+    const approvalTime = task.lastApprovalAt ? new Date(task.lastApprovalAt).getTime() : 0;
+    return Math.max(msgTime, approvalTime);
+  };
+
   const fetchTasksWithMessages = async () => {
     try {
       const res = await api.get('/admin/tasks');
       const allTasks = res.data.tasks || res.data || [];
       
       // DEBUG: Log raw data
-      console.log('[Support] ========== DEBUG START ==========');
-      console.log('[Support] Total tasks received:', allTasks.length);
-      
+      console.log('[Support] Total tasks:', allTasks.length);
       if (allTasks.length > 0) {
-        const sample = allTasks[0];
-        console.log('[Support] Sample task fields:', {
-          id: sample.id,
-          title: sample.title,
-          clientId: sample.clientId,
-          clientName: sample.clientName,
-          clientIdentifier: sample.clientIdentifier,
-          messagesCount: sample.messagesCount,
-          approvalRequestsCount: sample.approvalRequestsCount,
-          lastMessageAt: sample.lastMessageAt,
-          lastApprovalAt: sample.lastApprovalAt,
-          // Check for array fields (TaskDetail API might include these)
-          hasMessagesArray: Array.isArray(sample.messages),
-          hasApprovalsArray: Array.isArray(sample.approvalRequests),
+        console.log('[Support] Sample:', {
+          title: allTasks[0].title,
+          messagesCount: allTasks[0].messagesCount,
+          approvalRequestsCount: allTasks[0].approvalRequestsCount,
         });
       }
       
-      // Filter: Tasks with messages OR approvalRequests
-      // Check both count fields AND array fields (in case API differs)
-      const tasksWithActivity = allTasks.filter(t => {
-        const hasCountMessages = (t.messagesCount || 0) > 0;
-        const hasCountApprovals = (t.approvalRequestsCount || 0) > 0;
-        const hasArrayMessages = Array.isArray(t.messages) && t.messages.length > 0;
-        const hasArrayApprovals = Array.isArray(t.approvalRequests) && t.approvalRequests.length > 0;
-        
-        return hasCountMessages || hasCountApprovals || hasArrayMessages || hasArrayApprovals;
-      });
+      // Filter: ONLY use count fields (list API does not return arrays)
+      const tasksWithActivity = allTasks.filter(t => 
+        (t.messagesCount > 0) || (t.approvalRequestsCount > 0)
+      );
       
       console.log('[Support] Tasks with activity:', tasksWithActivity.length);
-      if (tasksWithActivity.length > 0) {
-        console.log('[Support] First active task:', tasksWithActivity[0].title);
-      }
+      
+      // Sort by last activity (newest first)
+      tasksWithActivity.sort((a, b) => getLastActivity(b) - getLastActivity(a));
       
       // Group by client
       const grouped = {};
@@ -75,54 +64,28 @@ const Support = () => {
             clientId,
             clientName,
             tasks: [],
-            lastActivity: null
+            lastActivity: 0
           };
         }
         grouped[clientId].tasks.push(task);
         
-        // Track latest activity using timestamps from API
-        const msgTime = new Date(task.lastMessageAt || 0).getTime();
-        const approvalTime = new Date(task.lastApprovalAt || 0).getTime();
-        const latestTime = new Date(Math.max(msgTime, approvalTime));
-        
-        if (!grouped[clientId].lastActivity || latestTime > grouped[clientId].lastActivity) {
-          grouped[clientId].lastActivity = latestTime;
+        // Track latest activity
+        const taskActivity = getLastActivity(task);
+        if (taskActivity > grouped[clientId].lastActivity) {
+          grouped[clientId].lastActivity = taskActivity;
         }
       });
       
       // Convert to array and sort by last activity
       const groupedArray = Object.values(grouped);
-      groupedArray.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
-      
-      // Sort tasks within each group
-      groupedArray.forEach(group => {
-        group.tasks.sort((a, b) => {
-          const aTime = Math.max(
-            new Date(a.lastMessageAt || 0).getTime(),
-            new Date(a.lastApprovalAt || 0).getTime()
-          );
-          const bTime = Math.max(
-            new Date(b.lastMessageAt || 0).getTime(),
-            new Date(b.lastApprovalAt || 0).getTime()
-          );
-          return bTime - aTime;
-        });
-      });
+      groupedArray.sort((a, b) => b.lastActivity - a.lastActivity);
       
       console.log('[Support] Client groups:', groupedArray.length);
-      if (groupedArray.length > 0) {
-        console.log('[Support] First group:', {
-          clientId: groupedArray[0].clientId,
-          clientName: groupedArray[0].clientName,
-          taskCount: groupedArray[0].tasks.length
-        });
-      }
-      console.log('[Support] ========== DEBUG END ==========');
       
       setClientGroups(groupedArray);
       setTasks(tasksWithActivity);
     } catch (err) {
-      console.error('Failed to fetch tasks:', err);
+      console.error('[Support] Fetch error:', err);
     } finally {
       setLoading(false);
     }
