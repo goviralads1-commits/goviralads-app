@@ -117,6 +117,93 @@ app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), async (
   }
 });
 
+// ============== PROGRESS ICON UPLOAD ENDPOINT ==============
+const { requireAdmin } = require('./middleware/authorization');
+const { ProgressIconLibrary } = require('./models/ProgressIconLibrary');
+
+// Multer config for progress icons (smaller size limit)
+const iconUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 }, // 500KB max for icons
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/png', 'image/svg+xml', 'image/jpeg', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Invalid file type. Only PNG, SVG, JPG, WebP allowed for icons.'));
+  }
+});
+
+// Upload buffer to Cloudinary (progress-icons folder)
+const uploadIconToCloudinary = (buffer, mimetype) => {
+  return new Promise((resolve, reject) => {
+    if (!cloudinaryConfigured) {
+      return reject(new Error('Cloudinary not configured'));
+    }
+    
+    const resourceType = mimetype === 'image/svg+xml' ? 'raw' : 'image';
+    
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'goviralads/progress-icons',
+        resource_type: resourceType,
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id
+          });
+        }
+      }
+    );
+    uploadStream.end(buffer);
+  });
+};
+
+app.post('/admin/progress-icons/upload', authenticateJWT, requireAdmin, iconUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const name = req.body.name?.trim();
+    if (!name) {
+      return res.status(400).json({ error: 'Icon name is required' });
+    }
+    
+    console.log('[ICON UPLOAD] Processing:', name, req.file.mimetype, req.file.size, 'bytes');
+    
+    // Upload to Cloudinary
+    const { url, publicId } = await uploadIconToCloudinary(req.file.buffer, req.file.mimetype);
+    
+    // Save to database
+    const icon = new ProgressIconLibrary({
+      name,
+      url,
+      publicId,
+      uploadedBy: req.user.id,
+    });
+    
+    await icon.save();
+    
+    console.log('[ICON UPLOAD] Success:', icon._id, url);
+    
+    return res.status(201).json({
+      success: true,
+      icon: {
+        _id: icon._id.toString(),
+        name: icon.name,
+        url: icon.url,
+        createdAt: icon.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('[ICON UPLOAD] Error:', err.message);
+    return res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+});
+
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/client');
 const adminRoutes = require('./routes/admin');
