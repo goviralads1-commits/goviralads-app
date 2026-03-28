@@ -19,12 +19,20 @@ const Support = () => {
       const res = await api.get('/admin/tasks');
       const allTasks = res.data.tasks || res.data || [];
       
-      // Filter: Only tasks with messages
-      const tasksWithMessages = allTasks.filter(t => t.messages && t.messages.length > 0);
+      // DEBUG: Log all tasks to see what we receive
+      console.log('Support: All tasks received:', allTasks.length);
+      console.log('Support: Sample task structure:', allTasks[0]);
+      
+      // Filter: Tasks with messages OR approvalRequests (any conversation activity)
+      const tasksWithActivity = allTasks.filter(t => 
+        (t.messages?.length > 0) || (t.approvalRequests?.length > 0)
+      );
+      
+      console.log('Support: Tasks with activity:', tasksWithActivity.length);
       
       // Group by client
       const grouped = {};
-      tasksWithMessages.forEach(task => {
+      tasksWithActivity.forEach(task => {
         const clientId = task.client?._id || task.client || 'unknown';
         const clientName = task.client?.name || task.client?.email || 'Unknown Client';
         
@@ -38,11 +46,15 @@ const Support = () => {
         }
         grouped[clientId].tasks.push(task);
         
-        // Track latest activity
-        const lastMsg = task.messages[task.messages.length - 1];
-        const msgTime = new Date(lastMsg?.createdAt || 0);
-        if (!grouped[clientId].lastActivity || msgTime > grouped[clientId].lastActivity) {
-          grouped[clientId].lastActivity = msgTime;
+        // Track latest activity from messages OR approvals
+        const lastMsg = task.messages?.[task.messages?.length - 1];
+        const lastApproval = task.approvalRequests?.[task.approvalRequests?.length - 1];
+        const msgTime = new Date(lastMsg?.createdAt || 0).getTime();
+        const approvalTime = new Date(lastApproval?.createdAt || 0).getTime();
+        const latestTime = new Date(Math.max(msgTime, approvalTime));
+        
+        if (!grouped[clientId].lastActivity || latestTime > grouped[clientId].lastActivity) {
+          grouped[clientId].lastActivity = latestTime;
         }
       });
       
@@ -53,14 +65,28 @@ const Support = () => {
       // Sort tasks within each group
       groupedArray.forEach(group => {
         group.tasks.sort((a, b) => {
-          const aLast = a.messages[a.messages.length - 1];
-          const bLast = b.messages[b.messages.length - 1];
-          return new Date(bLast?.createdAt || 0) - new Date(aLast?.createdAt || 0);
+          const aLastMsg = a.messages?.[a.messages?.length - 1];
+          const aLastApproval = a.approvalRequests?.[a.approvalRequests?.length - 1];
+          const aTime = Math.max(
+            new Date(aLastMsg?.createdAt || 0).getTime(),
+            new Date(aLastApproval?.createdAt || 0).getTime()
+          );
+          
+          const bLastMsg = b.messages?.[b.messages?.length - 1];
+          const bLastApproval = b.approvalRequests?.[b.approvalRequests?.length - 1];
+          const bTime = Math.max(
+            new Date(bLastMsg?.createdAt || 0).getTime(),
+            new Date(bLastApproval?.createdAt || 0).getTime()
+          );
+          
+          return bTime - aTime;
         });
       });
       
+      console.log('Support: Client groups:', groupedArray.length);
+      
       setClientGroups(groupedArray);
-      setTasks(tasksWithMessages);
+      setTasks(tasksWithActivity);
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
     } finally {
@@ -81,8 +107,17 @@ const Support = () => {
   };
 
   const getLastMessage = (task) => {
-    if (!task.messages || task.messages.length === 0) return null;
-    return task.messages[task.messages.length - 1];
+    const lastMsg = task.messages?.[task.messages?.length - 1];
+    const lastApproval = task.approvalRequests?.[task.approvalRequests?.length - 1];
+    
+    // Return whichever is more recent
+    const msgTime = new Date(lastMsg?.createdAt || 0).getTime();
+    const approvalTime = new Date(lastApproval?.createdAt || 0).getTime();
+    
+    if (approvalTime > msgTime && lastApproval) {
+      return { _isApproval: true, title: lastApproval.title, createdAt: lastApproval.createdAt };
+    }
+    return lastMsg || null;
   };
 
   const truncateText = (text, maxLength = 45) => {
@@ -207,27 +242,39 @@ const Support = () => {
                 {lastMessage && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
-                      {isClientMessage ? 'Client:' : 'You:'}
+                      {lastMessage._isApproval ? '✅' : (isClientMessage ? 'Client:' : 'You:')}
                     </span>
                     <p style={{
                       fontSize: '12px', color: '#64748b', margin: 0,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                     }}>
-                      {lastMessage.attachments?.length > 0 && !lastMessage.text 
-                        ? '📎 Image' 
-                        : truncateText(lastMessage.text)}
+                      {lastMessage._isApproval 
+                        ? `Approval: ${truncateText(lastMessage.title, 35)}`
+                        : (lastMessage.attachments?.length > 0 && !lastMessage.text 
+                          ? '📎 Image' 
+                          : truncateText(lastMessage.text))}
                     </p>
                   </div>
                 )}
                 
-                {/* Message Count */}
-                <div style={{ marginTop: '6px' }}>
-                  <span style={{
-                    fontSize: '10px', fontWeight: '600', color: '#3b82f6',
-                    backgroundColor: '#eff6ff', padding: '3px 6px', borderRadius: '4px'
-                  }}>
-                    {task.messages.length} message{task.messages.length !== 1 ? 's' : ''}
-                  </span>
+                {/* Activity Count */}
+                <div style={{ marginTop: '6px', display: 'flex', gap: '6px' }}>
+                  {(task.messages?.length || 0) > 0 && (
+                    <span style={{
+                      fontSize: '10px', fontWeight: '600', color: '#3b82f6',
+                      backgroundColor: '#eff6ff', padding: '3px 6px', borderRadius: '4px'
+                    }}>
+                      {task.messages.length} msg
+                    </span>
+                  )}
+                  {(task.approvalRequests?.length || 0) > 0 && (
+                    <span style={{
+                      fontSize: '10px', fontWeight: '600', color: '#f59e0b',
+                      backgroundColor: '#fef3c7', padding: '3px 6px', borderRadius: '4px'
+                    }}>
+                      {task.approvalRequests.length} approval{task.approvalRequests.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
               </div>
               

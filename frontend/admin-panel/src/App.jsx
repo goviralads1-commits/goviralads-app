@@ -51,6 +51,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 // Main App Component
 const App = () => {
+  console.log('Admin app loaded'); // Debug log
   return (
     <ErrorBoundary>
       <Router>

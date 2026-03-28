@@ -17,17 +17,37 @@ const Support = () => {
       const res = await api.get('/client/tasks');
       const allTasks = res.data.tasks || res.data || [];
       
-      // Filter: Only tasks with messages
-      const tasksWithMessages = allTasks.filter(t => t.messages && t.messages.length > 0);
+      // DEBUG: Log all tasks to see what we receive
+      console.log('Support: All tasks received:', allTasks.length);
+      console.log('Support: Sample task structure:', allTasks[0]);
       
-      // Sort by last message timestamp (most recent first)
-      tasksWithMessages.sort((a, b) => {
-        const aLast = a.messages[a.messages.length - 1];
-        const bLast = b.messages[b.messages.length - 1];
-        return new Date(bLast?.createdAt || 0) - new Date(aLast?.createdAt || 0);
+      // Filter: Tasks with messages OR approvalRequests (any conversation activity)
+      const tasksWithActivity = allTasks.filter(t => 
+        (t.messages?.length > 0) || (t.approvalRequests?.length > 0)
+      );
+      
+      console.log('Support: Tasks with activity:', tasksWithActivity.length);
+      
+      // Sort by last activity timestamp (most recent first)
+      tasksWithActivity.sort((a, b) => {
+        const aLastMsg = a.messages?.[a.messages?.length - 1];
+        const aLastApproval = a.approvalRequests?.[a.approvalRequests?.length - 1];
+        const aTime = Math.max(
+          new Date(aLastMsg?.createdAt || 0).getTime(),
+          new Date(aLastApproval?.createdAt || 0).getTime()
+        );
+        
+        const bLastMsg = b.messages?.[b.messages?.length - 1];
+        const bLastApproval = b.approvalRequests?.[b.approvalRequests?.length - 1];
+        const bTime = Math.max(
+          new Date(bLastMsg?.createdAt || 0).getTime(),
+          new Date(bLastApproval?.createdAt || 0).getTime()
+        );
+        
+        return bTime - aTime;
       });
       
-      setTasks(tasksWithMessages);
+      setTasks(tasksWithActivity);
     } catch (err) {
       console.error('Failed to fetch tasks:', err);
     } finally {
@@ -48,8 +68,17 @@ const Support = () => {
   };
 
   const getLastMessage = (task) => {
-    if (!task.messages || task.messages.length === 0) return null;
-    return task.messages[task.messages.length - 1];
+    const lastMsg = task.messages?.[task.messages?.length - 1];
+    const lastApproval = task.approvalRequests?.[task.approvalRequests?.length - 1];
+    
+    // Return whichever is more recent
+    const msgTime = new Date(lastMsg?.createdAt || 0).getTime();
+    const approvalTime = new Date(lastApproval?.createdAt || 0).getTime();
+    
+    if (approvalTime > msgTime && lastApproval) {
+      return { _isApproval: true, title: lastApproval.title, createdAt: lastApproval.createdAt };
+    }
+    return lastMsg || null;
   };
 
   const truncateText = (text, maxLength = 50) => {
@@ -157,27 +186,39 @@ const Support = () => {
                       {lastMessage && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>
-                            {isAdminMessage ? 'Admin:' : 'You:'}
+                            {lastMessage._isApproval ? '✅' : (isAdminMessage ? 'Admin:' : 'You:')}
                           </span>
                           <p style={{
                             fontSize: '13px', color: '#64748b', margin: 0,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                           }}>
-                            {lastMessage.attachments?.length > 0 && !lastMessage.text 
-                              ? '📎 Image' 
-                              : truncateText(lastMessage.text)}
+                            {lastMessage._isApproval 
+                              ? `Approval: ${truncateText(lastMessage.title, 40)}`
+                              : (lastMessage.attachments?.length > 0 && !lastMessage.text 
+                                ? '📎 Image' 
+                                : truncateText(lastMessage.text))}
                           </p>
                         </div>
                       )}
                       
-                      {/* Message Count */}
-                      <div style={{ marginTop: '8px' }}>
-                        <span style={{
-                          fontSize: '11px', fontWeight: '600', color: '#22c55e',
-                          backgroundColor: '#f0fdf4', padding: '4px 8px', borderRadius: '6px'
-                        }}>
-                          {task.messages.length} message{task.messages.length !== 1 ? 's' : ''}
-                        </span>
+                      {/* Activity Count */}
+                      <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+                        {(task.messages?.length || 0) > 0 && (
+                          <span style={{
+                            fontSize: '11px', fontWeight: '600', color: '#22c55e',
+                            backgroundColor: '#f0fdf4', padding: '4px 8px', borderRadius: '6px'
+                          }}>
+                            {task.messages.length} msg
+                          </span>
+                        )}
+                        {(task.approvalRequests?.length || 0) > 0 && (
+                          <span style={{
+                            fontSize: '11px', fontWeight: '600', color: '#f59e0b',
+                            backgroundColor: '#fef3c7', padding: '4px 8px', borderRadius: '6px'
+                          }}>
+                            {task.approvalRequests.length} approval{task.approvalRequests.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
