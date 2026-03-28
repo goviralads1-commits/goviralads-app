@@ -52,10 +52,13 @@ api.interceptors.response.use(
     console.error('[API] Status:', error.response?.status);
     console.error('[API] Data:', error.response?.data);
     if (error.response?.status === 401) {
-      // Clear token and redirect to login on 401
+      // Clear token on 401
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Only redirect if NOT already on login page (prevents reload loop)
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
