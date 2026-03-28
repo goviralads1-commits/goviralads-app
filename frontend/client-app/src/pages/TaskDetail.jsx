@@ -49,6 +49,7 @@ const TaskDetail = () => {
   const [lightboxImage, setLightboxImage] = useState(null);
   const [isChatFullScreen, setIsChatFullScreen] = useState(false); // Full screen chat mode
   const [showOnlyApprovals, setShowOnlyApprovals] = useState(false); // Approval filter toggle
+  const [historyModalApproval, setHistoryModalApproval] = useState(null); // Approval history modal
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -396,6 +397,25 @@ const TaskDetail = () => {
                   <p style={{ fontSize: '11px', color: '#92400e', margin: '8px 0', textAlign: 'center' }}>
                     {isLocked && hasHistory ? '✅ Approved (Locked)' : isLocked ? '🔒 Locked' : (savedOpts.length > 0 ? '✓ Submitted' : 'Awaiting selection')}
                   </p>
+                  {/* View History Button - Only visible if admin allows */}
+                  {approval.showHistoryToClient && hasHistory && (
+                    <button
+                      onClick={() => setHistoryModalApproval(approval)}
+                      style={{
+                        width: '100%', padding: '8px 12px', borderRadius: '8px',
+                        fontSize: '12px', fontWeight: '600',
+                        backgroundColor: '#e0f2fe', color: '#0369a1',
+                        border: '1px solid #7dd3fc', cursor: 'pointer',
+                        marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      View History ({approval.selectionsHistory.length})
+                    </button>
+                  )}
                   {/* View in Chat button */}
                   <button
                     onClick={() => setShowOnlyApprovals(false)}
@@ -564,16 +584,24 @@ const TaskDetail = () => {
                           : 'Awaiting your selection')}
                 </p>
 
-                {/* Phase 2: History - Only show if allowed by admin */}
-                {approval.showHistoryToClient && (approval.selectionsHistory || []).length > 1 && (
-                  <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#fef9c3', borderRadius: '8px' }}>
-                    <p style={{ fontSize: '11px', fontWeight: '600', color: '#a16207', margin: '0 0 6px 0' }}>Previous selections:</p>
-                    {approval.selectionsHistory.slice(0, -1).map((h, hIdx) => (
-                      <div key={hIdx} style={{ fontSize: '10px', color: '#a16207', marginBottom: '2px' }}>
-                        • {h.selectedOptions?.join(', ')} ({new Date(h.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})
-                      </div>
-                    ))}
-                  </div>
+                {/* View History Button - Only visible if admin allows */}
+                {approval.showHistoryToClient && (approval.selectionsHistory || []).length > 0 && (
+                  <button
+                    onClick={() => setHistoryModalApproval(approval)}
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: '8px',
+                      fontSize: '12px', fontWeight: '600',
+                      backgroundColor: '#e0f2fe', color: '#0369a1',
+                      border: '1px solid #7dd3fc', cursor: 'pointer',
+                      marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    View History ({approval.selectionsHistory.length})
+                  </button>
                 )}
               </div>
             </div>
@@ -1759,6 +1787,105 @@ const TaskDetail = () => {
                 }}
               >
                 {sendingMessage ? '...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPROVAL HISTORY MODAL */}
+      {historyModalApproval && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }}
+        onClick={() => setHistoryModalApproval(null)}
+        >
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '20px', width: '100%', maxWidth: '420px',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.25)'
+          }}
+          onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px', borderBottom: '1px solid #e2e8f0',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Selection History</h3>
+                <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>{historyModalApproval.title}</p>
+              </div>
+              <button
+                onClick={() => setHistoryModalApproval(null)}
+                style={{
+                  width: '36px', height: '36px', borderRadius: '10px',
+                  backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body - Scrollable */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+              {(historyModalApproval.selectionsHistory || []).length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '30px 0' }}>
+                  No selections yet
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {historyModalApproval.selectionsHistory.map((h, hIdx) => {
+                    const isLatest = hIdx === historyModalApproval.selectionsHistory.length - 1;
+                    return (
+                      <div key={hIdx} style={{
+                        padding: '14px', borderRadius: '12px',
+                        backgroundColor: isLatest ? '#f0fdf4' : '#f8fafc',
+                        border: isLatest ? '2px solid #22c55e' : '1px solid #e2e8f0'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{
+                            fontSize: '11px', fontWeight: '700',
+                            color: isLatest ? '#16a34a' : '#64748b',
+                            textTransform: 'uppercase'
+                          }}>
+                            {isLatest ? 'Current (Final)' : `v${hIdx + 1}`}
+                          </span>
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                            {new Date(h.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p style={{
+                          fontSize: '14px', fontWeight: '600', margin: 0,
+                          color: isLatest ? '#166534' : '#334155'
+                        }}>
+                          {h.selectedOptions?.join(', ') || 'No selection'}
+                          {isLatest && ' ✓'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                onClick={() => setHistoryModalApproval(null)}
+                style={{
+                  width: '100%', padding: '12px', fontSize: '14px', fontWeight: '600',
+                  backgroundColor: '#f1f5f9', color: '#334155',
+                  border: 'none', borderRadius: '12px', cursor: 'pointer'
+                }}
+              >
+                Close
               </button>
             </div>
           </div>
