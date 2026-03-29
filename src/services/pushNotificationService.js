@@ -1,44 +1,17 @@
 // Push Notification Service using Firebase Admin SDK
+// Firebase Admin is initialized in server.js - we just use it here
 const admin = require('firebase-admin');
 const DeviceToken = require('../models/DeviceToken');
 
-// Initialize Firebase Admin SDK
-let firebaseInitialized = false;
-
-const initializeFirebase = () => {
-  if (firebaseInitialized) return true;
-  
-  // Firebase Admin requires a service account JSON
-  // Set FIREBASE_SERVICE_ACCOUNT env var with the JSON string
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-  
-  if (!serviceAccountJson) {
-    console.error('[Push] ❌ FIREBASE_SERVICE_ACCOUNT not set - push notifications DISABLED');
-    console.error('[Push] To fix: Go to Firebase Console → Project Settings → Service Accounts → Generate new private key');
-    console.error('[Push] Then add the FULL JSON as FIREBASE_SERVICE_ACCOUNT env var');
-    return false;
+// Check if Firebase Admin is initialized (done in server.js)
+const isFirebaseReady = () => {
+  const ready = admin.apps && admin.apps.length > 0;
+  if (!ready) {
+    console.error('[Push] Firebase Admin SDK is NOT initialized');
+    console.error('[Push] Check server.js startup logs for initialization errors');
   }
-  
-  try {
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    firebaseInitialized = true;
-    console.log('[Push] ✅ Firebase Admin SDK initialized successfully');
-    console.log('[Push] Project ID:', serviceAccount.project_id);
-    return true;
-  } catch (error) {
-    console.error('[Push] ❌ Failed to initialize Firebase:', error.message);
-    if (error.message.includes('JSON')) {
-      console.error('[Push] Check that FIREBASE_SERVICE_ACCOUNT is valid JSON');
-    }
-    return false;
-  }
+  return ready;
 };
-
-// Initialize on module load
-initializeFirebase();
 
 /**
  * Send push notification to a specific user
@@ -51,8 +24,8 @@ const sendToUser = async (userId, notification, data = {}) => {
   console.log('[Push] Recipient userId:', userId);
   console.log('[Push] Notification:', notification);
   
-  if (!firebaseInitialized) {
-    console.error('[Push] ❌ Firebase not initialized - cannot send');
+  if (!isFirebaseReady()) {
+    console.error('[Push] ❌ Cannot send - Firebase not initialized');
     return { success: false, reason: 'firebase_not_initialized' };
   }
 
@@ -189,13 +162,9 @@ const sendApprovalNotification = async (recipientUserId, taskTitle, taskId, appr
   return sendToUser(recipientUserId, notification, data);
 };
 
-// Check if Firebase is ready
-const isFirebaseReady = () => firebaseInitialized;
-
 module.exports = {
   sendToUser,
   sendMessageNotification,
   sendApprovalNotification,
-  initializeFirebase,
   isFirebaseReady
 };

@@ -7,6 +7,66 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('cloudinary').v2;
+const admin = require('firebase-admin');
+
+// ============== FIREBASE ADMIN SDK INITIALIZATION ==============
+// This MUST run before routes are loaded
+let firebaseInitialized = false;
+
+function initializeFirebaseAdmin() {
+  console.log('[Push] ========== FIREBASE ADMIN INIT START ==========');
+  
+  try {
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+      console.error('[Push] ❌ FIREBASE_SERVICE_ACCOUNT is MISSING from environment');
+      console.error('[Push] To fix: Go to Firebase Console → Project Settings → Service Accounts → Generate new private key');
+      console.error('[Push] Then add the FULL JSON as FIREBASE_SERVICE_ACCOUNT env var in Render');
+      return false;
+    }
+    
+    console.log('[Push] ✅ FIREBASE_SERVICE_ACCOUNT found in environment');
+    console.log('[Push] Parsing service account JSON...');
+    
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    
+    console.log('[Push] ✅ JSON parsed successfully');
+    console.log('[Push] Project ID:', serviceAccount.project_id);
+    console.log('[Push] Client Email:', serviceAccount.client_email);
+    
+    // Check if already initialized (prevent duplicate)
+    if (admin.apps.length > 0) {
+      console.log('[Push] Firebase Admin already initialized, skipping');
+      firebaseInitialized = true;
+      return true;
+    }
+    
+    console.log('[Push] Initializing Firebase Admin SDK...');
+    
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    
+    firebaseInitialized = true;
+    console.log('[Push] ✅ Firebase Admin SDK initialized SUCCESSFULLY');
+    console.log('[Push] ========== FIREBASE ADMIN INIT COMPLETE ==========');
+    return true;
+  } catch (err) {
+    console.error('[Push] ❌ Firebase Admin init ERROR:', err.message);
+    if (err.message.includes('JSON')) {
+      console.error('[Push] The FIREBASE_SERVICE_ACCOUNT env var is not valid JSON');
+      console.error('[Push] Make sure you copied the ENTIRE service account JSON file content');
+    }
+    console.error('[Push] ========== FIREBASE ADMIN INIT FAILED ==========');
+    return false;
+  }
+}
+
+// Initialize Firebase Admin immediately on module load
+initializeFirebaseAdmin();
+
+// Export for use in pushNotificationService
+module.exports.firebaseAdmin = admin;
+module.exports.isFirebaseInitialized = () => firebaseInitialized;
 
 const { connectDB: connectToDatabase } = require('./config/db');
 const { ensureMainAdminSeed } = require('./models/seedMainAdmin');
