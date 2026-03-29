@@ -995,16 +995,18 @@ const Profile = () => {
                               setPushLoading(true);
                               try {
                                 if (e.target.checked) {
-                                  const success = await enablePushNotifications();
-                                  setPushEnabled(success);
-                                  setToast({ show: true, message: success ? 'Push notifications enabled!' : 'Failed to enable', type: success ? 'success' : 'error' });
+                                  await enablePushNotifications();
+                                  setPushEnabled(true);
+                                  setToast({ show: true, message: 'Push notifications enabled!', type: 'success' });
                                 } else {
                                   await disablePushNotifications();
                                   setPushEnabled(false);
                                   setToast({ show: true, message: 'Push notifications disabled', type: 'success' });
                                 }
                               } catch (err) {
-                                console.error('Push toggle error:', err);
+                                console.error('[Push] Toggle error:', err);
+                                setPushEnabled(false);
+                                setToast({ show: true, message: err.message || 'Failed to enable notifications', type: 'error' });
                               } finally {
                                 setPushLoading(false);
                               }

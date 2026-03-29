@@ -1,12 +1,9 @@
 // Push Notification Service for Admin Panel
-// Complete implementation with backend integration
+// Production-level implementation with full debugging
 
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import api from './api';
-
-// Session flag to only ask once per session
-const SESSION_KEY = 'push_permission_asked';
 
 // Firebase config from environment
 const firebaseConfig = {
@@ -24,26 +21,38 @@ let messaging = null;
 
 // Check if Firebase is configured
 const isFirebaseConfigured = () => {
-  return !!(
+  const configured = !!(
     firebaseConfig.apiKey &&
     firebaseConfig.projectId &&
     firebaseConfig.messagingSenderId
   );
+  console.log('[Push] Firebase config check:', {
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasProjectId: !!firebaseConfig.projectId,
+    hasSenderId: !!firebaseConfig.messagingSenderId,
+    configured
+  });
+  return configured;
 };
 
 // Initialize Firebase (singleton)
 const initFirebase = () => {
-  if (app) return { app, messaging };
+  if (app) {
+    console.log('[Push] Firebase already initialized');
+    return { app, messaging };
+  }
   
   if (!isFirebaseConfigured()) {
-    console.log('[Push] Firebase not configured');
+    console.error('[Push] Firebase NOT configured - check .env variables');
     return { app: null, messaging: null };
   }
 
   try {
+    console.log('[Push] Initializing Firebase...');
     app = initializeApp(firebaseConfig);
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       messaging = getMessaging(app);
+      console.log('[Push] Firebase messaging initialized');
     }
     return { app, messaging };
   } catch (error) {
@@ -52,25 +61,34 @@ const initFirebase = () => {
   }
 };
 
-// Request notification permission (only once per session)
-export const requestPermission = async () => {
+// Request notification permission
+export const requestPermission = async (forceRequest = false) => {
   try {
-    // Check if already asked this session
-    if (sessionStorage.getItem(SESSION_KEY)) {
-      console.log('[Push] Permission already requested this session');
-      return Notification.permission;
-    }
-
+    console.log('[Push] Requesting permission... (force:', forceRequest, ')');
+    
     // Check if notifications are supported
     if (!('Notification' in window)) {
-      console.log('[Push] Notifications not supported in this browser');
+      console.error('[Push] Notifications NOT supported in this browser');
       return null;
     }
 
-    // Mark as asked for this session
-    sessionStorage.setItem(SESSION_KEY, 'true');
+    // Check current permission
+    const currentPermission = Notification.permission;
+    console.log('[Push] Current permission:', currentPermission);
+    
+    // If already granted or denied, return current state
+    if (currentPermission === 'granted') {
+      console.log('[Push] Permission already granted');
+      return 'granted';
+    }
+    
+    if (currentPermission === 'denied') {
+      console.error('[Push] Permission DENIED by user - cannot request again');
+      return 'denied';
+    }
 
-    // Request permission
+    // Request permission (only if 'default')
+    console.log('[Push] Showing permission prompt...');
     const permission = await Notification.requestPermission();
     console.log('[Push] Permission result:', permission);
     
@@ -84,44 +102,46 @@ export const requestPermission = async () => {
 // Generate FCM token and send to backend
 export const generateToken = async () => {
   try {
+    console.log('[Push] Starting token generation...');
+    
     // Check Firebase config
     if (!isFirebaseConfigured()) {
-      console.log('[Push] Firebase not configured, skipping token generation');
-      return null;
+      throw new Error('Firebase not configured - check VITE_FIREBASE_* env vars');
     }
 
     // Check VAPID key
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    console.log('[Push] VAPID key exists:', !!vapidKey, vapidKey ? `(${vapidKey.substring(0, 20)}...)` : '');
     if (!vapidKey) {
-      console.log('[Push] VAPID key not configured, skipping token generation');
-      return null;
+      throw new Error('VAPID key not configured - check VITE_FIREBASE_VAPID_KEY');
     }
 
     // Check permission
     if (Notification.permission !== 'granted') {
-      console.log('[Push] Notification permission not granted');
-      return null;
+      throw new Error(`Permission not granted (current: ${Notification.permission})`);
     }
 
     // Initialize Firebase
     const { messaging: msg } = initFirebase();
     if (!msg) {
-      console.log('[Push] Messaging not available');
-      return null;
+      throw new Error('Firebase messaging not available');
     }
 
     // Register service worker
     let swRegistration = null;
     if ('serviceWorker' in navigator) {
       try {
+        console.log('[Push] Registering service worker...');
         swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        console.log('[Push] Service worker registered');
+        console.log('[Push] Service worker registered:', swRegistration.scope);
       } catch (swError) {
         console.warn('[Push] Service worker registration failed:', swError.message);
+        // Continue without SW - might still work
       }
     }
 
     // Get FCM token
+    console.log('[Push] Requesting FCM token from Firebase...');
     const tokenOptions = { vapidKey };
     if (swRegistration) {
       tokenOptions.serviceWorkerRegistration = swRegistration;
@@ -130,22 +150,24 @@ export const generateToken = async () => {
     const fcmToken = await getToken(msg, tokenOptions);
     
     if (fcmToken) {
-      console.log('[Push] ✅ FCM Token generated successfully');
+      console.log('[Push] ✅ FCM Token generated:', fcmToken.substring(0, 30) + '...');
       
       // Store locally
       localStorage.setItem('fcmToken', fcmToken);
       
       // Send to backend
-      await sendTokenToBackend(fcmToken);
+      const backendResult = await sendTokenToBackend(fcmToken);
+      if (!backendResult) {
+        throw new Error('Failed to save token to backend');
+      }
       
       return fcmToken;
     } else {
-      console.log('[Push] No token received');
-      return null;
+      throw new Error('No FCM token received from Firebase');
     }
   } catch (error) {
-    console.error('[Push] Token generation failed:', error);
-    return null;
+    console.error('[Push] Token generation FAILED:', error.message);
+    throw error; // Re-throw so caller knows exactly what failed
   }
 };
 
@@ -153,22 +175,27 @@ export const generateToken = async () => {
 const sendTokenToBackend = async (fcmToken) => {
   try {
     const authToken = localStorage.getItem('token');
+    console.log('[Push] Auth token exists:', !!authToken);
     if (!authToken) {
-      console.log('[Push] No auth token, skipping backend save');
-      return false;
+      throw new Error('No auth token - user not logged in');
     }
 
-    await api.post('/admin/device-token', {
+    console.log('[Push] Sending token to backend: POST /admin/device-token');
+    const response = await api.post('/admin/device-token', {
       token: fcmToken,
       platform: 'web'
     });
     
-    console.log('[Push] ✅ Token sent to backend');
+    console.log('[Push] ✅ Backend response:', response.status, response.data);
     localStorage.setItem('pushNotificationsEnabled', 'true');
     return true;
   } catch (error) {
-    console.error('[Push] Failed to send token to backend:', error);
-    return false;
+    console.error('[Push] Backend save FAILED:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error; // Re-throw to propagate to caller
   }
 };
 
@@ -176,43 +203,74 @@ const sendTokenToBackend = async (fcmToken) => {
 export const disablePushNotifications = async () => {
   try {
     const fcmToken = localStorage.getItem('fcmToken');
+    console.log('[Push] Disabling notifications, token exists:', !!fcmToken);
+    
     if (fcmToken) {
-      await api.delete('/admin/device-token', { data: { token: fcmToken } });
-      console.log('[Push] Token removed from backend');
+      console.log('[Push] Sending DELETE /admin/device-token');
+      const response = await api.delete('/admin/device-token', { data: { token: fcmToken } });
+      console.log('[Push] ✅ Token removed from backend:', response.status, response.data);
     }
     
     localStorage.removeItem('fcmToken');
     localStorage.setItem('pushNotificationsEnabled', 'false');
+    console.log('[Push] ✅ Notifications disabled successfully');
     return true;
   } catch (error) {
-    console.error('[Push] Failed to disable notifications:', error);
+    console.error('[Push] Disable FAILED:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    // Still clear local state even if backend fails
+    localStorage.removeItem('fcmToken');
+    localStorage.setItem('pushNotificationsEnabled', 'false');
     return false;
   }
 };
 
 // Enable push notifications (re-register)
 export const enablePushNotifications = async () => {
+  console.log('[Push] ========== ENABLE PUSH START ==========');
   try {
-    // Clear session flag to allow re-requesting
-    sessionStorage.removeItem(SESSION_KEY);
+    // Step 1: Request permission
+    console.log('[Push] Step 1: Requesting permission...');
+    const permission = await requestPermission(true);
+    console.log('[Push] Permission result:', permission);
     
-    const permission = await requestPermission();
-    if (permission === 'granted') {
-      const token = await generateToken();
-      return !!token;
+    if (permission !== 'granted') {
+      const msg = permission === 'denied' 
+        ? 'Permission denied - please enable in browser settings' 
+        : 'Permission not granted';
+      console.error('[Push] FAILED:', msg);
+      throw new Error(msg);
     }
-    return false;
+    
+    // Step 2: Generate token and save to backend
+    console.log('[Push] Step 2: Generating token...');
+    const token = await generateToken();
+    
+    if (!token) {
+      throw new Error('Token generation returned null');
+    }
+    
+    console.log('[Push] ========== ENABLE PUSH SUCCESS ==========');
+    return true;
   } catch (error) {
-    console.error('[Push] Failed to enable notifications:', error);
-    return false;
+    console.error('[Push] ========== ENABLE PUSH FAILED ==========');
+    console.error('[Push] Error:', error.message);
+    throw error; // Re-throw so UI can show specific error
   }
 };
 
 // Check if push notifications are enabled
 export const isPushEnabled = () => {
-  return localStorage.getItem('pushNotificationsEnabled') === 'true' &&
-         localStorage.getItem('fcmToken') &&
-         Notification.permission === 'granted';
+  const enabled = localStorage.getItem('pushNotificationsEnabled') === 'true';
+  const hasToken = !!localStorage.getItem('fcmToken');
+  const permission = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+  const result = enabled && hasToken && permission === 'granted';
+  
+  console.log('[Push] isPushEnabled check:', { enabled, hasToken, permission, result });
+  return result;
 };
 
 // Setup foreground message handler
@@ -245,29 +303,53 @@ export const setupForegroundHandler = (onMessageCallback) => {
 
 // Initialize push notifications (call after login)
 export const initPushNotifications = async () => {
+  console.log('[Push] ========== AUTO INIT START ==========');
   try {
     // Check if user is authenticated
     const authToken = localStorage.getItem('token');
     if (!authToken) {
-      console.log('[Push] Not authenticated, skipping push init');
+      console.log('[Push] Not authenticated, skipping');
       return;
     }
 
-    // Check if user has disabled push notifications
+    // Check if user has explicitly disabled push notifications
     if (localStorage.getItem('pushNotificationsEnabled') === 'false') {
-      console.log('[Push] User has disabled push notifications');
+      console.log('[Push] User has disabled push - skipping');
       return;
     }
 
-    // Step 1: Request permission
-    const permission = await requestPermission();
-    
-    // Step 2: Generate token if granted
-    if (permission === 'granted') {
-      await generateToken();
+    // Check if already have a valid token
+    const existingToken = localStorage.getItem('fcmToken');
+    if (existingToken && Notification.permission === 'granted') {
+      console.log('[Push] Already have token, re-registering with backend...');
+      try {
+        await sendTokenToBackend(existingToken);
+        console.log('[Push] ✅ Token re-registered');
+      } catch (e) {
+        console.warn('[Push] Re-register failed, will try fresh token');
+      }
+      return;
     }
+
+    // Request permission if not yet granted
+    if (Notification.permission === 'default') {
+      console.log('[Push] First time - requesting permission...');
+      const permission = await requestPermission();
+      if (permission === 'granted') {
+        await generateToken();
+      }
+    } else if (Notification.permission === 'granted') {
+      console.log('[Push] Permission granted, generating token...');
+      await generateToken();
+    } else {
+      console.log('[Push] Permission denied by user');
+    }
+    
+    console.log('[Push] ========== AUTO INIT COMPLETE ==========');
   } catch (error) {
-    // Silent fail - never crash the app
-    console.error('[Push] Initialization error:', error);
+    console.error('[Push] Auto-init error (non-fatal):', error.message);
   }
 };
+
+// Export sendTokenToBackend for re-registration
+export { sendTokenToBackend };
