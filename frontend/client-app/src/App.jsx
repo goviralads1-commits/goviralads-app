@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, createContext, useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { isAuthenticated, getUserRole } from './services/authService';
 import { CartProvider } from './context/CartContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -23,34 +23,145 @@ import Notifications from './pages/Notifications';
 import LegalPage from './pages/LegalPage';
 import NotFound from './pages/NotFound';
 
-// Protected Route Component
+// Auth Context for managing auth state
+const AuthContext = createContext({
+  isReady: false,
+  isLoggedIn: false,
+  userRole: null
+});
+
+export const useAuth = () => useContext(AuthContext);
+
+// Auth Provider that waits for localStorage to be ready
+const AuthProvider = ({ children }) => {
+  const [authState, setAuthState] = useState({
+    isReady: false,
+    isLoggedIn: false,
+    userRole: null
+  });
+
+  useEffect(() => {
+    // Small delay to ensure localStorage is fully hydrated (important for new window/tab)
+    const initAuth = () => {
+      const token = localStorage.getItem('token');
+      const loggedIn = !!token;
+      const role = getUserRole();
+      
+      console.log('[Auth] Initializing auth state:', { hasToken: loggedIn, role });
+      
+      setAuthState({
+        isReady: true,
+        isLoggedIn: loggedIn,
+        userRole: role
+      });
+    };
+
+    // Check immediately
+    initAuth();
+    
+    // Also listen for storage changes (when another tab logs in/out)
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' || e.key === 'user') {
+        console.log('[Auth] Storage changed, reinitializing');
+        initAuth();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={authState}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Protected Route Component - waits for auth to be ready
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const isAuthenticatedUser = isAuthenticated();
-  const userRole = getUserRole();
+  const { isReady, isLoggedIn, userRole } = useAuth();
   const location = useLocation();
 
-  if (!isAuthenticatedUser) {
+  // Show loading while auth is initializing
+  if (!isReady) {
+    console.log('[ProtectedRoute] Waiting for auth initialization...');
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: '#f8fafc'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid #e2e8f0',
+            borderTopColor: '#6366f1',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ color: '#64748b', fontSize: '14px' }}>Loading...</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
     // Store intended URL for redirect after login
     const intendedUrl = location.pathname + location.search;
+    console.log('[ProtectedRoute] Not logged in, storing intended URL:', intendedUrl);
     sessionStorage.setItem('intendedUrl', intendedUrl);
     return <Navigate to="/login" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
+    console.log('[ProtectedRoute] Role mismatch:', userRole, 'not in', allowedRoles);
     return <Navigate to="/unauthorized" replace />;
   }
 
   return children;
 };
 
+// Notification Click Handler - handles messages from service worker
+const NotificationClickHandler = () => {
+  const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
+
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.taskId) {
+        console.log('[Notification] Click received, taskId:', event.data.taskId);
+        if (isLoggedIn) {
+          navigate(`/support?taskId=${event.data.taskId}`);
+        } else {
+          // Store for after login
+          sessionStorage.setItem('intendedUrl', `/support?taskId=${event.data.taskId}`);
+        }
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener('message', handleMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', handleMessage);
+  }, [navigate, isLoggedIn]);
+
+  return null;
+};
+
 // Main App Component
 const App = () => {
   return (
     <ErrorBoundary>
-      <CartProvider>
-        <Router>
-          <div className="App">
-            <Routes>
+      <AuthProvider>
+        <CartProvider>
+          <Router>
+            <NotificationClickHandler />
+            <div className="App">
+              <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginForm />} />
             <Route path="/legal/:slug" element={<LegalPage />} />
@@ -127,13 +238,14 @@ const App = () => {
             </ProtectedRoute>
           } />
           
-            <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <CookieConsent />
         </div>
       </Router>
     </CartProvider>
+    </AuthProvider>
     </ErrorBoundary>
   );
 };
