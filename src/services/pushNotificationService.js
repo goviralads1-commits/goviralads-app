@@ -138,6 +138,126 @@ const sendMessageNotification = async (recipientUserId, senderName, taskTitle, t
 };
 
 /**
+ * Send push notification to ALL users with a specific role
+ * @param {string} role - 'admin' or 'client'
+ * @param {object} notification - { title, body }
+ * @param {object} data - Additional data payload
+ */
+const sendToRole = async (role, notification, data = {}) => {
+  console.log(`[Push] ========== SEND TO ALL ${role.toUpperCase()}S ==========`);
+  console.log('[Push] Notification:', notification);
+  
+  if (!isFirebaseReady()) {
+    console.error('[Push] ❌ Cannot send - Firebase not initialized');
+    return { success: false, reason: 'firebase_not_initialized' };
+  }
+
+  try {
+    // Get all active tokens for the role
+    const tokens = await DeviceToken.getActiveTokensByRole(role);
+    
+    if (!tokens || tokens.length === 0) {
+      console.log(`[Push] ❌ No ${role} tokens found`);
+      return { success: false, reason: 'no_tokens' };
+    }
+
+    const tokenStrings = tokens.map(t => t.token);
+    console.log(`[Push] ${role.toUpperCase()} tokens found: ${tokenStrings.length}`);
+    console.log(`[Push] Sending to ${role}...`);
+    
+    // Ensure ALL data values are strings
+    const stringifiedData = {};
+    for (const [key, value] of Object.entries(data)) {
+      stringifiedData[key] = String(value);
+    }
+    
+    // Build FCM message
+    const message = {
+      notification: {
+        title: notification.title,
+        body: notification.body
+      },
+      data: stringifiedData,
+      webpush: {
+        notification: {
+          title: notification.title,
+          body: notification.body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          requireInteraction: true
+        },
+        fcm_options: {
+          link: stringifiedData.url || '/support'
+        }
+      },
+      tokens: tokenStrings
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    
+    console.log(`[Push] ✅ Sent to ${role}s: ${response.successCount} success, ${response.failureCount} failed`);
+    
+    // Handle failed tokens
+    if (response.failureCount > 0) {
+      const failedTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          const errorCode = resp.error?.code;
+          if (errorCode === 'messaging/invalid-registration-token' ||
+              errorCode === 'messaging/registration-token-not-registered') {
+            failedTokens.push(tokenStrings[idx]);
+          }
+        }
+      });
+      
+      if (failedTokens.length > 0) {
+        await DeviceToken.updateMany(
+          { token: { $in: failedTokens } },
+          { $set: { isActive: false } }
+        );
+        console.log(`[Push] Deactivated ${failedTokens.length} invalid tokens`);
+      }
+    }
+
+    console.log(`[Push] ========== SEND TO ${role.toUpperCase()}S COMPLETE ==========`);
+    return { 
+      success: response.successCount > 0, 
+      successCount: response.successCount,
+      failureCount: response.failureCount
+    };
+  } catch (error) {
+    console.error(`[Push] ❌ Error sending to ${role}s:`, error);
+    return { success: false, reason: 'error', error: error.message };
+  }
+};
+
+/**
+ * Send message notification to ALL admins
+ * @param {string} senderName - Name of message sender
+ * @param {string} taskTitle - Task title
+ * @param {string} taskId - Task ID
+ * @param {string} messagePreview - Message preview
+ */
+const sendMessageToAllAdmins = async (senderName, taskTitle, taskId, messagePreview) => {
+  console.log('[Push] sendMessageToAllAdmins called:', { senderName, taskTitle, taskId });
+  
+  const safePreview = (messagePreview || '[Attachment]').substring(0, 80);
+  const notification = {
+    title: 'New Message - Go Viral Ads',
+    body: `${senderName}: ${safePreview.length >= 80 ? safePreview.substring(0, 77) + '...' : safePreview}`
+  };
+  
+  const data = {
+    type: 'chat',
+    taskId: String(taskId),
+    taskTitle: String(taskTitle),
+    url: `/support?taskId=${taskId}`
+  };
+
+  return sendToRole('admin', notification, data);
+};
+
+/**
  * Send push notification for approval request
  * @param {string} recipientUserId - User to notify
  * @param {string} taskTitle - Task title
@@ -164,7 +284,9 @@ const sendApprovalNotification = async (recipientUserId, taskTitle, taskId, appr
 
 module.exports = {
   sendToUser,
+  sendToRole,
   sendMessageNotification,
+  sendMessageToAllAdmins,
   sendApprovalNotification,
   isFirebaseReady
 };

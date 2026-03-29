@@ -6456,12 +6456,16 @@ router.post('/device-token', async (req, res) => {
       return res.status(400).json({ error: 'Token is required' });
     }
 
+    console.log(`[PUSH] Saving device token for admin ${adminId}`);
+    console.log(`[PUSH] Token: ${token.substring(0, 30)}...`);
+
     // Upsert token (update if exists, create if new)
     await DeviceToken.findOneAndUpdate(
       { token },
       {
         userId: adminId,
         token,
+        role: 'admin',  // Mark as admin token
         platform: platform || 'web',
         userAgent: req.headers['user-agent'],
         isActive: true,
@@ -6470,7 +6474,7 @@ router.post('/device-token', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(`[PUSH] Device token saved for admin ${adminId}`);
+    console.log(`[PUSH] ✅ Device token saved for admin ${adminId} with role=admin`);
     return res.json({ success: true });
   } catch (err) {
     console.error('[PUSH] Save device token error:', err.message);

@@ -874,20 +874,18 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       }
       console.log(`[DISCUSSION] Notified ${admins.length} admin(s) with email`);
       
-      // Send push notifications to admins
+      // Send push notifications to ALL admins (using role-based lookup)
       const clientUser = await User.findById(clientId).select('name email').exec();
       const senderName = clientUser?.name || clientUser?.email || 'Client';
       const messagePreview = (text || '').trim() || '[Image attachment]';
       
-      for (const admin of admins) {
-        pushNotificationService.sendMessageNotification(
-          admin._id.toString(),
-          senderName,
-          task.title,
-          task._id.toString(),
-          messagePreview
-        ).catch(err => console.error('[PUSH] Admin notification failed:', err.message));
-      }
+      // Use sendMessageToAllAdmins to notify ALL admin device tokens
+      pushNotificationService.sendMessageToAllAdmins(
+        senderName,
+        task.title,
+        task._id.toString(),
+        messagePreview
+      ).catch(err => console.error('[PUSH] Admin notification failed:', err.message));
     } catch (notifErr) {
       console.error('[DISCUSSION] Notification error:', notifErr.message);
     }
@@ -3403,12 +3401,16 @@ router.post('/device-token', async (req, res) => {
       return res.status(400).json({ error: 'Token is required' });
     }
 
+    console.log(`[PUSH] Saving device token for client ${clientId}`);
+    console.log(`[PUSH] Token: ${token.substring(0, 30)}...`);
+
     // Upsert token (update if exists, create if new)
     await DeviceToken.findOneAndUpdate(
       { token },
       {
         userId: clientId,
         token,
+        role: 'client',  // Mark as client token
         platform: platform || 'web',
         userAgent: req.headers['user-agent'],
         isActive: true,
@@ -3417,7 +3419,7 @@ router.post('/device-token', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(`[PUSH] Device token saved for client ${clientId}`);
+    console.log(`[PUSH] ✅ Device token saved for client ${clientId} with role=client`);
     return res.json({ success: true });
   } catch (err) {
     console.error('[PUSH] Save device token error:', err.message);

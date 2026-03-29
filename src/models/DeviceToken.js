@@ -12,6 +12,12 @@ const deviceTokenSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  role: {
+    type: String,
+    enum: ['admin', 'client'],
+    required: true,
+    index: true
+  },
   platform: {
     type: String,
     enum: ['web', 'ios', 'android'],
@@ -34,6 +40,7 @@ const deviceTokenSchema = new mongoose.Schema({
 
 // Compound index for user lookup
 deviceTokenSchema.index({ userId: 1, isActive: 1 });
+deviceTokenSchema.index({ role: 1, isActive: 1 });
 
 // Update lastUsed on token access
 deviceTokenSchema.methods.touch = async function() {
@@ -44,6 +51,13 @@ deviceTokenSchema.methods.touch = async function() {
 // Static method to get all active tokens for a user
 deviceTokenSchema.statics.getActiveTokensForUser = async function(userId) {
   return this.find({ userId, isActive: true }).select('token');
+};
+
+// Static method to get all active tokens by role (admin or client)
+deviceTokenSchema.statics.getActiveTokensByRole = async function(role) {
+  const tokens = await this.find({ role, isActive: true }).select('token userId');
+  console.log(`[DeviceToken] Found ${tokens.length} active ${role} token(s)`);
+  return tokens;
 };
 
 // Static method to deactivate old tokens (not used in 30 days)
