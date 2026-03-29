@@ -1320,13 +1320,19 @@ router.post('/tasks/:taskId/message', async (req, res) => {
         const senderName = adminUser?.name || adminUser?.email || 'Admin';
         const messagePreview = (text || '').trim() || '[Image attachment]';
         
+        console.log('[PUSH] Admin → Client: Sending push notification');
+        console.log('[PUSH] Target clientId:', task.clientId.toString());
+        console.log('[PUSH] Sender:', senderName);
+        
         pushNotificationService.sendMessageNotification(
           task.clientId.toString(),
           senderName,
           task.title,
           task._id.toString(),
           messagePreview
-        ).catch(err => console.error('[PUSH] Client notification failed:', err.message));
+        ).then(result => {
+          console.log('[PUSH] Admin → Client result:', result);
+        }).catch(err => console.error('[PUSH] Client notification failed:', err.message));
       } catch (notifErr) {
         console.error('[DISCUSSION] Notification/email error:', notifErr.message);
       }

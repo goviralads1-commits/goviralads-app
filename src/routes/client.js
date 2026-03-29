@@ -879,13 +879,18 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       const senderName = clientUser?.name || clientUser?.email || 'Client';
       const messagePreview = (text || '').trim() || '[Image attachment]';
       
+      console.log('[PUSH] Client → Admin: Sending push notification to ALL admins');
+      console.log('[PUSH] Sender:', senderName);
+      
       // Use sendMessageToAllAdmins to notify ALL admin device tokens
       pushNotificationService.sendMessageToAllAdmins(
         senderName,
         task.title,
         task._id.toString(),
         messagePreview
-      ).catch(err => console.error('[PUSH] Admin notification failed:', err.message));
+      ).then(result => {
+        console.log('[PUSH] Client → Admin result:', result);
+      }).catch(err => console.error('[PUSH] Admin notification failed:', err.message));
     } catch (notifErr) {
       console.error('[DISCUSSION] Notification error:', notifErr.message);
     }
