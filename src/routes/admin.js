@@ -6452,6 +6452,54 @@ router.delete('/progress-icons/:iconId', async (req, res) => {
 // PUSH NOTIFICATION - DEVICE TOKEN MANAGEMENT
 // =======================================================================
 
+// GET /admin/push-status - Diagnostic endpoint for push notification status
+router.get('/push-status', async (req, res) => {
+  try {
+    const pushService = require('../services/pushNotificationService');
+    
+    // Check Firebase status
+    const firebaseReady = pushService.isFirebaseReady();
+    
+    // Get token counts
+    const tokenCounts = await pushService.getTokenCounts();
+    
+    // Get some sample tokens (for debugging)
+    const adminTokens = await DeviceToken.find({ role: 'admin', isActive: true })
+      .select('userId token createdAt lastUsed')
+      .lean();
+    const clientTokens = await DeviceToken.find({ role: 'client', isActive: true })
+      .select('userId token createdAt lastUsed')
+      .lean();
+    
+    const status = {
+      firebaseInitialized: firebaseReady,
+      tokenCounts: {
+        admin: tokenCounts.adminCount,
+        client: tokenCounts.clientCount,
+        total: tokenCounts.adminCount + tokenCounts.clientCount
+      },
+      adminTokens: adminTokens.map(t => ({
+        userId: t.userId,
+        tokenPreview: t.token ? t.token.substring(0, 30) + '...' : 'null',
+        createdAt: t.createdAt,
+        lastUsed: t.lastUsed
+      })),
+      clientTokens: clientTokens.map(t => ({
+        userId: t.userId,
+        tokenPreview: t.token ? t.token.substring(0, 30) + '...' : 'null',
+        createdAt: t.createdAt,
+        lastUsed: t.lastUsed
+      }))
+    };
+    
+    console.log('[PUSH] Status check:', JSON.stringify(status, null, 2));
+    return res.json(status);
+  } catch (err) {
+    console.error('[PUSH] Status check error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /admin/device-token - Save device token for push notifications
 router.post('/device-token', async (req, res) => {
   try {
@@ -6466,7 +6514,7 @@ router.post('/device-token', async (req, res) => {
     console.log(`[PUSH] Token: ${token.substring(0, 30)}...`);
 
     // Upsert token (update if exists, create if new)
-    await DeviceToken.findOneAndUpdate(
+    const result = await DeviceToken.findOneAndUpdate(
       { token },
       {
         userId: adminId,
@@ -6481,10 +6529,46 @@ router.post('/device-token', async (req, res) => {
     );
 
     console.log(`[PUSH] ✅ Device token saved for admin ${adminId} with role=admin`);
+    console.log(`[PUSH] Token document:`, { id: result._id, userId: result.userId, role: result.role, isActive: result.isActive });
+    
     return res.json({ success: true });
   } catch (err) {
     console.error('[PUSH] Save device token error:', err.message);
     return res.status(500).json({ error: 'Failed to save device token' });
+  }
+});
+
+// POST /admin/push-test - Send test push notification
+router.post('/push-test', async (req, res) => {
+  try {
+    const pushService = require('../services/pushNotificationService');
+    const { role, userId, message } = req.body || {};
+    
+    const notification = {
+      title: 'Test Notification - Go Viral Ads',
+      body: message || 'This is a test push notification'
+    };
+    
+    const data = {
+      type: 'test',
+      url: '/support'
+    };
+    
+    let result;
+    if (role) {
+      console.log(`[PUSH] Test send to all ${role}s`);
+      result = await pushService.sendToRole(role, notification, data);
+    } else if (userId) {
+      console.log(`[PUSH] Test send to user ${userId}`);
+      result = await pushService.sendToUser(userId, notification, data);
+    } else {
+      return res.status(400).json({ error: 'Provide role or userId' });
+    }
+    
+    return res.json({ success: true, result });
+  } catch (err) {
+    console.error('[PUSH] Test send error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 

@@ -3410,7 +3410,7 @@ router.post('/device-token', async (req, res) => {
     console.log(`[PUSH] Token: ${token.substring(0, 30)}...`);
 
     // Upsert token (update if exists, create if new)
-    await DeviceToken.findOneAndUpdate(
+    const result = await DeviceToken.findOneAndUpdate(
       { token },
       {
         userId: clientId,
@@ -3425,6 +3425,8 @@ router.post('/device-token', async (req, res) => {
     );
 
     console.log(`[PUSH] ✅ Device token saved for client ${clientId} with role=client`);
+    console.log(`[PUSH] Token document:`, { id: result._id, userId: result.userId, role: result.role, isActive: result.isActive });
+    
     return res.json({ success: true });
   } catch (err) {
     console.error('[PUSH] Save device token error:', err.message);
