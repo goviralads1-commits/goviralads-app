@@ -272,13 +272,7 @@ const Dashboard = () => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
             {featuredPlans.slice(0, config?.featuredPlansConfig?.displayCount || 4).map((plan, idx) => {
-              // SAFETY: Skip invalid plans
-              if (!plan || !plan.id) {
-                console.warn('[Dashboard] Invalid featured plan at index', idx);
-                return null;
-              }
-              
-              const coverMedia = plan.planMedia?.[0] || null;
+              const coverMedia = plan.planMedia?.[0];
               const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
               const isVideo = coverMedia?.type === 'video';
               

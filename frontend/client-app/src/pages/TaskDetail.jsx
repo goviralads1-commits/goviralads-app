@@ -450,21 +450,14 @@ const TaskDetail = () => {
                     return (
                       <button
                         key={optIdx}
-                        onClick={() => {
-                          console.log('[APPROVAL CLICK] Button clicked!', { opt, isLocked, approvalId: approval.id });
-                          alert('CLICK WORKING: ' + opt);
-                          if (!isLocked) {
-                            handleApprovalOptionToggle(approval.id, opt, approval.type);
-                          }
-                        }}
+                        onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
                         disabled={isLocked}
                         style={{
                           width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: isFullScreen ? '13px' : '14px', marginBottom: '8px',
                           backgroundColor: isSel ? '#dcfce7' : '#fff',
                           border: isSel ? '2px solid #22c55e' : '2px solid #e5e7eb',
                           textAlign: 'left', cursor: isLocked ? 'not-allowed' : 'pointer',
-                          opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px',
-                          userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none'
+                          opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px'
                         }}
                       >
                         <span style={{ fontSize: '16px' }}>
@@ -576,13 +569,7 @@ const TaskDetail = () => {
                 return (
                   <button
                     key={optIdx}
-                    onClick={() => {
-                      console.log('[APPROVAL CLICK 2] Button clicked!', { opt, isLocked, approvalId: approval.id });
-                      alert('CLICK WORKING: ' + opt);
-                      if (!isLocked) {
-                        handleApprovalOptionToggle(approval.id, opt, approval.type);
-                      }
-                    }}
+                    onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
                     disabled={isLocked}
                     style={{
                       padding: '10px 14px', borderRadius: '10px', fontSize: isFullScreen ? '13px' : '14px',
@@ -591,8 +578,7 @@ const TaskDetail = () => {
                       color: isSelected ? '#15803d' : '#374151',
                       cursor: isLocked ? 'not-allowed' : 'pointer',
                       textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
-                      opacity: isLocked ? 0.7 : 1,
-                      userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none'
+                      opacity: isLocked ? 0.7 : 1
                     }}
                   >
                     <span style={{ fontSize: '16px' }}>

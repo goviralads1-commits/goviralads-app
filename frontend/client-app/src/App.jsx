@@ -47,11 +47,7 @@ const AuthProvider = ({ children }) => {
       const loggedIn = !!token;
       const role = getUserRole();
       
-      console.log('[Auth] ========== INIT AUTH ==========');
-      console.log('[Auth] Token in localStorage:', token ? `YES (${token.length} chars)` : 'NO');
-      console.log('[Auth] isLoggedIn:', loggedIn);
-      console.log('[Auth] Role:', role);
-      console.log('[Auth] ================================');
+      console.log('[Auth] Initializing auth state:', { hasToken: loggedIn, role });
       
       setAuthState({
         isReady: true,
@@ -60,8 +56,8 @@ const AuthProvider = ({ children }) => {
       });
     };
 
-    // Add small delay for localStorage hydration on new tabs
-    const timer = setTimeout(initAuth, 50);
+    // Check immediately
+    initAuth();
     
     // Also listen for storage changes (when another tab logs in/out)
     const handleStorageChange = (e) => {
@@ -72,10 +68,7 @@ const AuthProvider = ({ children }) => {
     };
     
     window.addEventListener('storage', handleStorageChange);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('storage', handleStorageChange);
-    };
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   return (
@@ -89,36 +82,10 @@ const AuthProvider = ({ children }) => {
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isReady, isLoggedIn, userRole } = useAuth();
   const location = useLocation();
-  
-  // CRITICAL: Double-check localStorage directly as backup for BOTH token AND role
-  const tokenExists = !!localStorage.getItem('token');
-  
-  // SAFE JSON parse with try-catch to prevent crashes
-  let storedUser = {};
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      storedUser = JSON.parse(userStr);
-    }
-  } catch (e) {
-    console.error('[ProtectedRoute] Failed to parse user from localStorage:', e);
-  }
-  const directRole = storedUser?.role;
-  
-  // Use context role OR direct localStorage role as backup
-  const actualRole = userRole || directRole;
-  
-  // DEBUG: Log role sources
-  console.log('[ProtectedRoute]', {
-    contextRole: userRole,
-    localStorageRole: directRole,
-    finalRole: actualRole
-  });
 
   // Show loading while auth is initializing
   if (!isReady) {
     console.log('[ProtectedRoute] Waiting for auth initialization...');
-    console.log('[ProtectedRoute] Direct localStorage check - token:', tokenExists ? 'YES' : 'NO', 'role:', directRole);
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -144,15 +111,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  // Use context isLoggedIn OR direct localStorage check as backup
-  const actuallyLoggedIn = isLoggedIn || tokenExists;
-  
-  if (!actuallyLoggedIn) {
+  if (!isLoggedIn) {
     // Store intended URL for redirect after login
     const intendedUrl = location.pathname + location.search;
     console.log('[ProtectedRoute] ========== NOT LOGGED IN ==========');
-    console.log('[ProtectedRoute] Context isLoggedIn:', isLoggedIn);
-    console.log('[ProtectedRoute] Direct localStorage token:', tokenExists ? 'YES' : 'NO');
     console.log('[ProtectedRoute] Current URL:', intendedUrl);
     console.log('[ProtectedRoute] Storing in sessionStorage as intendedUrl');
     sessionStorage.setItem('intendedUrl', intendedUrl);
@@ -161,9 +123,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Use actualRole (with localStorage fallback) for role check
-  if (allowedRoles && !allowedRoles.includes(actualRole)) {
-    console.log('[ProtectedRoute] Role mismatch:', actualRole, 'not in', allowedRoles);
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    console.log('[ProtectedRoute] Role mismatch:', userRole, 'not in', allowedRoles);
     return <Navigate to="/unauthorized" replace />;
   }
 

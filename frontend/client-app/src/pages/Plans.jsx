@@ -39,8 +39,6 @@ const getMediaDisplayUrl = (media) => {
 };
 
 const Plans = () => {
-  console.log('[Plans] ========== COMPONENT MOUNTED ==========');
-  
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlCategory = searchParams.get('category');
@@ -50,7 +48,6 @@ const Plans = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [renderError, setRenderError] = useState(null);
   const [toast, setToast] = useState(null);
   
   // Filters & View
@@ -78,37 +75,22 @@ const Plans = () => {
   }, [urlCategory]);
 
   const fetchData = useCallback(async () => {
-    console.log('[Plans] ========== FETCHING DATA ==========');
     try {
       const params = { 
         categoryId: selectedCategory !== 'ALL' ? selectedCategory : undefined,
         search: debouncedSearch || undefined
       };
       
-      console.log('[Plans] API params:', params);
-      
       const [plansRes, categoriesRes] = await Promise.all([
         api.get('/client/plans', { params }),
         api.get('/client/categories').catch(() => ({ data: { categories: [] } }))
       ]);
       
-      console.log('[Plans] Plans API response:', plansRes.data);
-      console.log('[Plans] Plans count:', plansRes.data?.plans?.length || 0);
-      
-      const safePlans = Array.isArray(plansRes.data?.plans) ? plansRes.data.plans : [];
-      const safeCategories = Array.isArray(categoriesRes.data?.categories) ? categoriesRes.data.categories : [];
-      
-      setPlans(safePlans);
-      setCategories(safeCategories);
+      setPlans(plansRes.data.plans || []);
+      setCategories(categoriesRes.data.categories || []);
       setError(null);
-      
-      console.log('[Plans] State updated - plans:', safePlans.length, 'categories:', safeCategories.length);
-      console.log('[Plans] =====================================');
     } catch (err) {
-      console.error('[Plans] FETCH ERROR:', err);
-      console.error('[Plans] Error response:', err.response?.data);
       setError(err.response?.data?.error || 'Failed to load marketplace');
-      setPlans([]);
     } finally {
       setLoading(false);
     }
@@ -223,9 +205,8 @@ const Plans = () => {
     );
   }
 
-  // Error State - for fetch errors
+  // Error State
   if (error && plans.length === 0) {
-    console.log('[Plans] Showing error state:', error);
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
         <Header />
@@ -242,28 +223,6 @@ const Plans = () => {
       </div>
     );
   }
-
-  // Render error state - for any unexpected crashes
-  if (renderError) {
-    console.error('[Plans] Render error:', renderError);
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
-        <Header />
-        <div style={{ maxWidth: '400px', margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#fff5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <span style={{ fontSize: '36px' }}>⚠️</span>
-          </div>
-          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a1a2e', marginBottom: '12px' }}>Page Error</h2>
-          <p style={{ fontSize: '15px', color: '#6c757d', marginBottom: '28px' }}>An unexpected error occurred. Please try again.</p>
-          <button onClick={() => { setRenderError(null); setLoading(true); fetchData(); }} style={{ padding: '14px 32px', backgroundColor: '#28a745', color: '#fff', fontSize: '15px', fontWeight: '600', borderRadius: '14px', border: 'none', cursor: 'pointer' }}>
-            Reload
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('[Plans] Rendering main view. Plans count:', plans.length, 'Categories count:', categories.length);
 
   return (
     <div style={{ 
@@ -488,18 +447,12 @@ const Plans = () => {
             gap: '24px'
           }}>
             {plans.map((plan, planIndex) => {
-              // SAFETY: Ensure plan exists and has required fields
-              if (!plan || !plan.id) {
-                console.warn('[Plans] Invalid plan at index', planIndex, plan);
-                return null;
-              }
-              
               const countdown = formatCountdown(plan.countdownEndDate);
               const mediaArray = Array.isArray(plan.planMedia) ? plan.planMedia : [];
               const currentMediaIdx = activeMediaIndex[plan.id] || 0;
-              const coverMedia = mediaArray[currentMediaIdx] || mediaArray[0] || null;
+              const coverMedia = mediaArray[currentMediaIdx] || mediaArray[0];
               const isVideo = coverMedia?.type === 'video';
-              // SAFETY: Use safe fallbacks for displayUrl
+              // Use thumbnail for videos, direct URL for images
               const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
               const hasDiscount = plan.offerPrice && plan.originalPrice && plan.offerPrice < plan.originalPrice;
               const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.originalPrice) * 100) : 0;
@@ -670,7 +623,7 @@ const Plans = () => {
                     )}
                     
                     {/* Category Badge - Premium */}
-                    {plan.categoryName && displayUrl && (
+                    {plan.categoryName && coverUrl && (
                       <div style={{
                         position: 'absolute', bottom: '12px', right: '12px',
                         backgroundColor: 'rgba(255,255,255,0.95)', color: categoryColor,
