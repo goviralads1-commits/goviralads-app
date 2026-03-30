@@ -75,22 +75,37 @@ const Plans = () => {
   }, [urlCategory]);
 
   const fetchData = useCallback(async () => {
+    console.log('[Plans] ========== FETCHING DATA ==========');
     try {
       const params = { 
         categoryId: selectedCategory !== 'ALL' ? selectedCategory : undefined,
         search: debouncedSearch || undefined
       };
       
+      console.log('[Plans] API params:', params);
+      
       const [plansRes, categoriesRes] = await Promise.all([
         api.get('/client/plans', { params }),
         api.get('/client/categories').catch(() => ({ data: { categories: [] } }))
       ]);
       
-      setPlans(plansRes.data.plans || []);
-      setCategories(categoriesRes.data.categories || []);
+      console.log('[Plans] Plans API response:', plansRes.data);
+      console.log('[Plans] Plans count:', plansRes.data?.plans?.length || 0);
+      
+      const safePlans = Array.isArray(plansRes.data?.plans) ? plansRes.data.plans : [];
+      const safeCategories = Array.isArray(categoriesRes.data?.categories) ? categoriesRes.data.categories : [];
+      
+      setPlans(safePlans);
+      setCategories(safeCategories);
       setError(null);
+      
+      console.log('[Plans] State updated - plans:', safePlans.length, 'categories:', safeCategories.length);
+      console.log('[Plans] =====================================');
     } catch (err) {
+      console.error('[Plans] FETCH ERROR:', err);
+      console.error('[Plans] Error response:', err.response?.data);
       setError(err.response?.data?.error || 'Failed to load marketplace');
+      setPlans([]);
     } finally {
       setLoading(false);
     }
@@ -447,12 +462,18 @@ const Plans = () => {
             gap: '24px'
           }}>
             {plans.map((plan, planIndex) => {
+              // SAFETY: Ensure plan exists and has required fields
+              if (!plan || !plan.id) {
+                console.warn('[Plans] Invalid plan at index', planIndex, plan);
+                return null;
+              }
+              
               const countdown = formatCountdown(plan.countdownEndDate);
               const mediaArray = Array.isArray(plan.planMedia) ? plan.planMedia : [];
               const currentMediaIdx = activeMediaIndex[plan.id] || 0;
-              const coverMedia = mediaArray[currentMediaIdx] || mediaArray[0];
+              const coverMedia = mediaArray[currentMediaIdx] || mediaArray[0] || null;
               const isVideo = coverMedia?.type === 'video';
-              // Use thumbnail for videos, direct URL for images
+              // SAFETY: Use safe fallbacks for displayUrl
               const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
               const hasDiscount = plan.offerPrice && plan.originalPrice && plan.offerPrice < plan.originalPrice;
               const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.originalPrice) * 100) : 0;
