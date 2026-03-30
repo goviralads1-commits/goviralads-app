@@ -450,14 +450,19 @@ const TaskDetail = () => {
                     return (
                       <button
                         key={optIdx}
-                        onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
+                        onTouchStart={() => console.log('[APPROVAL] TOUCH START:', opt)}
+                        onClick={() => {
+                          console.log('[APPROVAL] CLICK DETECTED:', opt);
+                          alert('CLICK WORKING: ' + opt);
+                        }}
                         disabled={isLocked}
                         style={{
                           width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: isFullScreen ? '13px' : '14px', marginBottom: '8px',
                           backgroundColor: isSel ? '#dcfce7' : '#fff',
                           border: isSel ? '2px solid #22c55e' : '2px solid #e5e7eb',
                           textAlign: 'left', cursor: isLocked ? 'not-allowed' : 'pointer',
-                          opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px'
+                          opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px',
+                          position: 'relative', zIndex: 9999
                         }}
                       >
                         <span style={{ fontSize: '16px' }}>
