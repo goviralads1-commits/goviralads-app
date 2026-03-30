@@ -3194,12 +3194,31 @@ router.post('/purchase-cart', async (req, res) => {
       return res.status(404).json({ error: 'Wallet not found' });
     }
 
-    console.log('Wallet balance before:', wallet.balance);
+    // 7. HYBRID CREDIT CHECK (subscriptionCredits first, then walletCredits)
+    const now = new Date();
+    const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
+    const availableSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
+    const availableWalletCredits = wallet.walletCredits || 0;
+    const totalAvailable = availableSubCredits + availableWalletCredits;
 
-    // 7. Check balance (outside transaction for fast rejection)
-    if (wallet.balance < totalPrice) {
-      return res.status(400).json({ error: 'Insufficient balance' });
+    console.log('Wallet credits before:', { walletCredits: availableWalletCredits, subscriptionCredits: availableSubCredits, totalAvailable });
+
+    if (totalAvailable < totalPrice) {
+      return res.status(400).json({ error: 'Insufficient credits' });
     }
+
+    // Calculate deduction: subscriptionCredits FIRST, then walletCredits
+    const subDeduct = Math.min(availableSubCredits, totalPrice);
+    const remaining = totalPrice - subDeduct;
+    const walletDeduct = Math.min(availableWalletCredits, remaining);
+
+    console.log('[ORDER DEDUCTION]', {
+      totalPrice,
+      subDeduct,
+      walletDeduct,
+      walletCredits: availableWalletCredits,
+      subscriptionCredits: availableSubCredits
+    });
 
     // ============================================================
     // START ATOMIC TRANSACTION
@@ -3212,10 +3231,14 @@ router.post('/purchase-cart', async (req, res) => {
     let transaction;
 
     try {
-      // 8. Deduct wallet balance (INSIDE TRANSACTION)
+      // 8. Deduct credits (INSIDE TRANSACTION) - subscriptionCredits first, then walletCredits
+      const incUpdate = {};
+      if (subDeduct > 0) incUpdate.subscriptionCredits = -subDeduct;
+      if (walletDeduct > 0) incUpdate.walletCredits = -walletDeduct;
+
       const walletUpdate = await Wallet.findOneAndUpdate(
         { _id: wallet._id },
-        { $inc: { balance: -totalPrice } },
+        { $inc: incUpdate },
         { new: true, session }
       );
 
@@ -3223,7 +3246,7 @@ router.post('/purchase-cart', async (req, res) => {
         throw new Error('Failed to update wallet');
       }
 
-      console.log('Wallet balance after deduction:', walletUpdate.balance);
+      console.log('Wallet credits after deduction:', { walletCredits: walletUpdate.walletCredits, subscriptionCredits: walletUpdate.subscriptionCredits });
 
       // 9. Create Order with PENDING_APPROVAL status (INSIDE TRANSACTION)
       const orderDocs = await Order.create([{
