@@ -39,6 +39,8 @@ const getMediaDisplayUrl = (media) => {
 };
 
 const Plans = () => {
+  console.log('[Plans] ========== COMPONENT MOUNTED ==========');
+  
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlCategory = searchParams.get('category');
@@ -48,6 +50,7 @@ const Plans = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [renderError, setRenderError] = useState(null);
   const [toast, setToast] = useState(null);
   
   // Filters & View
@@ -220,8 +223,9 @@ const Plans = () => {
     );
   }
 
-  // Error State
+  // Error State - for fetch errors
   if (error && plans.length === 0) {
+    console.log('[Plans] Showing error state:', error);
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
         <Header />
@@ -238,6 +242,28 @@ const Plans = () => {
       </div>
     );
   }
+
+  // Render error state - for any unexpected crashes
+  if (renderError) {
+    console.error('[Plans] Render error:', renderError);
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+        <Header />
+        <div style={{ maxWidth: '400px', margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#fff5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <span style={{ fontSize: '36px' }}>⚠️</span>
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a1a2e', marginBottom: '12px' }}>Page Error</h2>
+          <p style={{ fontSize: '15px', color: '#6c757d', marginBottom: '28px' }}>An unexpected error occurred. Please try again.</p>
+          <button onClick={() => { setRenderError(null); setLoading(true); fetchData(); }} style={{ padding: '14px 32px', backgroundColor: '#28a745', color: '#fff', fontSize: '15px', fontWeight: '600', borderRadius: '14px', border: 'none', cursor: 'pointer' }}>
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('[Plans] Rendering main view. Plans count:', plans.length, 'Categories count:', categories.length);
 
   return (
     <div style={{ 
