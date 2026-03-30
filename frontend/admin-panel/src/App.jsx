@@ -115,8 +115,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (!isLoggedIn) {
     const intendedUrl = location.pathname + location.search;
-    console.log('[ProtectedRoute] Not logged in, storing intended URL:', intendedUrl);
+    console.log('[ProtectedRoute] ========== NOT LOGGED IN ==========');
+    console.log('[ProtectedRoute] Current URL:', intendedUrl);
+    console.log('[ProtectedRoute] Storing in sessionStorage as intendedUrl');
     sessionStorage.setItem('intendedUrl', intendedUrl);
+    console.log('[ProtectedRoute] Redirecting to /login');
+    console.log('[ProtectedRoute] =====================================');
     return <Navigate to="/login" replace />;
   }
 
@@ -128,31 +132,51 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// Notification Click Handler
+// Notification Click Handler - ALWAYS store URL first, then navigate
 const NotificationClickHandler = () => {
   const navigate = useNavigate();
-  const { isLoggedIn } = useAuth();
 
   useEffect(() => {
-    const handleMessage = (event) => {
+    // Handler for service worker messages
+    const handleServiceWorkerMessage = (event) => {
       if (event.data?.type === 'NOTIFICATION_CLICK') {
-        // Use url if provided, otherwise construct from taskId
         const url = event.data?.url || (event.data?.taskId ? `/support?taskId=${event.data.taskId}` : '/support');
-        console.log('[Push] Notification clicked, navigating to:', url);
         
-        if (isLoggedIn) {
+        console.log('[Push] ========== NOTIFICATION CLICK ==========');
+        console.log('[Push] URL from notification:', url);
+        
+        // ALWAYS store the redirect URL first (never lose it)
+        sessionStorage.setItem('intendedUrl', url);
+        console.log('[Push] Stored intendedUrl in sessionStorage');
+        
+        // Check auth directly from localStorage (not context - context can be stale)
+        const token = localStorage.getItem('token');
+        console.log('[Push] Token in localStorage:', token ? 'YES' : 'NO');
+        
+        if (token) {
+          console.log('[Push] Logged in - navigating directly to:', url);
+          sessionStorage.removeItem('intendedUrl'); // Clear since we're navigating directly
           navigate(url);
         } else {
-          console.log('[Push] Not logged in, saving intended URL');
-          sessionStorage.setItem('intendedUrl', url);
+          console.log('[Push] Not logged in - redirecting to login');
           navigate('/login');
         }
+        
+        console.log('[Push] ========================================');
       }
     };
 
-    navigator.serviceWorker?.addEventListener('message', handleMessage);
-    return () => navigator.serviceWorker?.removeEventListener('message', handleMessage);
-  }, [navigate, isLoggedIn]);
+    // Listen for messages from service worker
+    navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
+    
+    // Also listen on window for cases where postMessage goes to window
+    window.addEventListener('message', handleServiceWorkerMessage);
+    
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
+      window.removeEventListener('message', handleServiceWorkerMessage);
+    };
+  }, [navigate]);
 
   return null;
 };

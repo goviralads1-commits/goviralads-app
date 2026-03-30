@@ -81,8 +81,9 @@ const LoginForm = () => {
         console.log('[ADMIN LOGIN] Permissions fetch failed (non-fatal):', permErr.message);
       }
 
-      // Check for intended URL (from email link redirect)
+      // Check for intended URL (from email link redirect or push notification)
       const intendedUrl = sessionStorage.getItem('intendedUrl');
+      console.log('[ADMIN LOGIN] Checking intendedUrl from sessionStorage:', intendedUrl || 'NONE');
       sessionStorage.removeItem('intendedUrl');
       
       // IMPORTANT: Add delay before redirect for mobile devices
@@ -91,7 +92,11 @@ const LoginForm = () => {
         ? intendedUrl 
         : '/dashboard';
       
-      console.log('[ADMIN LOGIN] Will redirect to:', targetUrl, 'in 300ms');
+      console.log('[ADMIN LOGIN] ========== REDIRECT ==========');
+      console.log('[ADMIN LOGIN] intendedUrl was:', intendedUrl || 'NONE');
+      console.log('[ADMIN LOGIN] Final redirect target:', targetUrl);
+      console.log('[ADMIN LOGIN] Will redirect in 300ms...');
+      console.log('[ADMIN LOGIN] ================================');
       
       // Delay redirect for mobile localStorage sync
       setTimeout(() => {
