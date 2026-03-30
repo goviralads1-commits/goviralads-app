@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
 
 const Support = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   
   // Chat state
   const [messageText, setMessageText] = useState('');
@@ -16,14 +20,47 @@ const Support = () => {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Handle deep link on mount
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       setLoading(false);
       return;
     }
-    fetchTasksWithMessages();
+    
+    // Check for taskId in URL query params
+    const params = new URLSearchParams(location.search);
+    const taskIdFromUrl = params.get('taskId');
+    
+    if (taskIdFromUrl) {
+      console.log('[Support] Deep link detected taskId:', taskIdFromUrl);
+      // Open chat directly from deep link
+      openChatByTaskId(taskIdFromUrl);
+      // Clear taskId from URL to prevent re-triggering
+      navigate('/support', { replace: true });
+    } else {
+      fetchTasksWithMessages();
+    }
   }, []);
+  
+  // Open chat directly by taskId (for deep links)
+  const openChatByTaskId = async (taskId) => {
+    setDeepLinkHandled(true);
+    setChatLoading(true);
+    try {
+      console.log('[Support] Opening chat for deep-linked taskId:', taskId);
+      const res = await api.get(`/client/tasks/${taskId}`);
+      setSelectedTask(res.data.task);
+      // Also fetch tasks list in background
+      fetchTasksWithMessages();
+    } catch (err) {
+      console.error('[Support] Deep link chat load failed:', err);
+      // Fall back to task list
+      fetchTasksWithMessages();
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const getLastActivity = (task) => {
     const msgTime = task.lastMessageAt ? new Date(task.lastMessageAt).getTime() : 0;
