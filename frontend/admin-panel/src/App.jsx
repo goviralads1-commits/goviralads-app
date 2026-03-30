@@ -135,12 +135,17 @@ const NotificationClickHandler = () => {
 
   useEffect(() => {
     const handleMessage = (event) => {
-      if (event.data?.type === 'NOTIFICATION_CLICK' && event.data?.taskId) {
-        console.log('[Notification] Click received, taskId:', event.data.taskId);
+      if (event.data?.type === 'NOTIFICATION_CLICK') {
+        // Use url if provided, otherwise construct from taskId
+        const url = event.data?.url || (event.data?.taskId ? `/support?taskId=${event.data.taskId}` : '/support');
+        console.log('[Push] Notification clicked, navigating to:', url);
+        
         if (isLoggedIn) {
-          navigate(`/support?taskId=${event.data.taskId}`);
+          navigate(url);
         } else {
-          sessionStorage.setItem('intendedUrl', `/support?taskId=${event.data.taskId}`);
+          console.log('[Push] Not logged in, saving intended URL');
+          sessionStorage.setItem('intendedUrl', url);
+          navigate('/login');
         }
       }
     };

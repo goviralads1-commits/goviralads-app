@@ -6,7 +6,6 @@ importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
 // Firebase config will be set by the main app when registering the service worker
-// Using self.__FIREBASE_CONFIG__ which is set by the SDK
 let firebaseInitialized = false;
 
 // Listen for config message from main app
@@ -22,7 +21,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// For push messages, we can show notifications without Firebase SDK
+// Handle push messages - ALWAYS show our custom notification
 self.addEventListener('push', (event) => {
   console.log('[SW] Push event received');
   
@@ -30,53 +29,70 @@ self.addEventListener('push', (event) => {
   let payload = {};
   try {
     payload = event.data ? event.data.json() : {};
+    console.log('[SW] Push payload:', JSON.stringify(payload));
   } catch (e) {
-    console.warn('[SW] Failed to parse push data');
+    console.warn('[SW] Failed to parse push data:', e);
+    return;
   }
   
-  const notificationTitle = payload.notification?.title || 'New Message';
+  // Get data from either notification or data field
+  const title = payload.notification?.title || payload.data?.title || 'New Message - Go Viral Ads';
+  const body = payload.notification?.body || payload.data?.body || 'You have a new message';
+  const taskId = payload.data?.taskId || '';
+  const url = payload.data?.url || (taskId ? `/support?taskId=${taskId}` : '/support');
+  
+  console.log('[SW] Showing notification:', { title, body, url });
+  
   const notificationOptions = {
-    body: payload.notification?.body || 'You have a new message',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: 'message-notification',
-    data: payload.data || {},
-    requireInteraction: true
+    body: body,
+    icon: 'https://admin.goviralads.com/gva-icon-192.png',
+    badge: 'https://admin.goviralads.com/gva-icon-192.png',
+    tag: 'gva-message-' + (taskId || Date.now()),
+    renotify: true,
+    requireInteraction: false,
+    data: {
+      taskId: taskId,
+      url: url
+    }
+    // NO actions array - keeps it clean without Unsubscribe button
   };
 
   event.waitUntil(
-    self.registration.showNotification(notificationTitle, notificationOptions)
+    self.registration.showNotification(title, notificationOptions)
   );
 });
 
-// Handle notification click
+// Handle notification click - open the chat directly
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification clicked:', event);
+  console.log('[SW] Notification clicked');
   event.notification.close();
 
   const data = event.notification.data || {};
   const taskId = data.taskId;
+  const urlToOpen = data.url || (taskId ? `/support?taskId=${taskId}` : '/support');
   
-  // Build the URL to open
-  let urlToOpen = '/support';
-  if (taskId) {
-    urlToOpen = `/support?taskId=${taskId}`;
-  }
+  console.log('[SW] Opening URL:', urlToOpen);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      console.log('[SW] Found', clientList.length, 'client(s)');
+      
       // Check if there's already an open window
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          // Navigate existing window to the chat
+          console.log('[SW] Found existing window, posting message and focusing');
+          // Post message to navigate
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
+            url: urlToOpen,
             taskId: taskId
           });
           return client.focus();
         }
       }
+      
       // No existing window, open new one
+      console.log('[SW] No existing window, opening new one');
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }

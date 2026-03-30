@@ -74,20 +74,24 @@ const sendToUser = async (userId, notification, data = {}) => {
       stringifiedData[key] = String(value);
     }
     
-    // Build FCM message
+    // Build FCM message - DATA ONLY for web push (service worker displays notification)
+    // This prevents the browser from showing generic "site updated" message
     const message = {
-      notification: {
+      // NO top-level notification field - let service worker handle display
+      data: {
+        ...stringifiedData,
+        // Include notification data in data field for service worker
         title: notification.title,
         body: notification.body
       },
-      data: stringifiedData,
       webpush: {
-        notification: {
+        headers: {
+          Urgency: 'high'
+        },
+        data: {
+          ...stringifiedData,
           title: notification.title,
-          body: notification.body,
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          requireInteraction: true
+          body: notification.body
         },
         fcm_options: {
           link: stringifiedData.url || '/support'
@@ -218,20 +222,24 @@ const sendToRole = async (role, notification, data = {}) => {
       stringifiedData[key] = String(value);
     }
     
-    // Build FCM message
+    // Build FCM message - DATA ONLY for web push (service worker displays notification)
+    // This prevents the browser from showing generic "site updated" message
     const message = {
-      notification: {
+      // NO top-level notification field - let service worker handle display
+      data: {
+        ...stringifiedData,
+        // Include notification data in data field for service worker
         title: notification.title,
         body: notification.body
       },
-      data: stringifiedData,
       webpush: {
-        notification: {
+        headers: {
+          Urgency: 'high'
+        },
+        data: {
+          ...stringifiedData,
           title: notification.title,
-          body: notification.body,
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          requireInteraction: true
+          body: notification.body
         },
         fcm_options: {
           link: stringifiedData.url || '/support'
