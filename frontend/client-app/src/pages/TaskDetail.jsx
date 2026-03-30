@@ -457,7 +457,8 @@ const TaskDetail = () => {
                           backgroundColor: isSel ? '#dcfce7' : '#fff',
                           border: isSel ? '2px solid #22c55e' : '2px solid #e5e7eb',
                           textAlign: 'left', cursor: isLocked ? 'not-allowed' : 'pointer',
-                          opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px'
+                          opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px',
+                          userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none'
                         }}
                       >
                         <span style={{ fontSize: '16px' }}>
@@ -578,7 +579,8 @@ const TaskDetail = () => {
                       color: isSelected ? '#15803d' : '#374151',
                       cursor: isLocked ? 'not-allowed' : 'pointer',
                       textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px',
-                      opacity: isLocked ? 0.7 : 1
+                      opacity: isLocked ? 0.7 : 1,
+                      userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none'
                     }}
                   >
                     <span style={{ fontSize: '16px' }}>

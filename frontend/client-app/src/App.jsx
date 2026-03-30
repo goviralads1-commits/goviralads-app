@@ -92,7 +92,17 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   
   // CRITICAL: Double-check localStorage directly as backup for BOTH token AND role
   const tokenExists = !!localStorage.getItem('token');
-  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  
+  // SAFE JSON parse with try-catch to prevent crashes
+  let storedUser = {};
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      storedUser = JSON.parse(userStr);
+    }
+  } catch (e) {
+    console.error('[ProtectedRoute] Failed to parse user from localStorage:', e);
+  }
   const directRole = storedUser?.role;
   
   // Use context role OR direct localStorage role as backup
