@@ -64,14 +64,18 @@ self.addEventListener('push', (event) => {
 
 // Handle notification click - open the chat directly
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification clicked');
+  console.log('[SW] ========== NOTIFICATION CLICK ==========');
   event.notification.close();
 
   const data = event.notification.data || {};
   const taskId = data.taskId;
-  const urlToOpen = data.url || (taskId ? `/support?taskId=${taskId}` : '/support');
+  const relativePath = data.url || (taskId ? `/support?taskId=${taskId}` : '/support');
   
-  console.log('[SW] Opening URL:', urlToOpen);
+  // Build full URL with origin for reliable navigation
+  const fullUrl = new URL(relativePath, self.location.origin).href;
+  console.log('[SW] TaskId:', taskId);
+  console.log('[SW] Relative path:', relativePath);
+  console.log('[SW] Full URL to open:', fullUrl);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -79,23 +83,25 @@ self.addEventListener('notificationclick', (event) => {
       
       // Check if there's already an open window
       for (const client of clientList) {
+        console.log('[SW] Client URL:', client.url);
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           console.log('[SW] Found existing window, posting message and focusing');
           // Post message to navigate
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
-            url: urlToOpen,
+            url: relativePath,
             taskId: taskId
           });
           return client.focus();
         }
       }
       
-      // No existing window, open new one
-      console.log('[SW] No existing window, opening new one');
+      // No existing window, open new one with FULL URL
+      console.log('[SW] No existing window, opening new tab with full URL');
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(fullUrl);
       }
     })
   );
+  console.log('[SW] =====================================');
 });

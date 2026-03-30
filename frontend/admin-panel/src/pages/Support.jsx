@@ -12,7 +12,7 @@ const Support = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
-  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState(null); // Store taskId to open after load
   
   // Chat state
   const [messageText, setMessageText] = useState('');
@@ -35,45 +35,83 @@ const Support = () => {
   const [toast, setToast] = useState(null);
   const fullscreenInputRef = useRef(null);
 
-  // Handle deep link on mount
+  // Extract taskId from URL or sessionStorage on mount
   useEffect(() => {
+    console.log('[Support] ========== PAGE MOUNT ==========');
+    console.log('[Support] Auth token:', localStorage.getItem('token') ? 'YES' : 'NO');
+    
     const token = localStorage.getItem('token');
     if (!token) {
+      console.log('[Support] No token, stopping load');
       setLoading(false);
       return;
     }
     
-    // Check for taskId in URL query params
+    // Check URL params first
     const params = new URLSearchParams(location.search);
-    const taskIdFromUrl = params.get('taskId');
+    let taskIdFromUrl = params.get('taskId');
+    
+    // Also check sessionStorage intendedUrl (from ProtectedRoute redirect)
+    if (!taskIdFromUrl) {
+      const intendedUrl = sessionStorage.getItem('intendedUrl');
+      if (intendedUrl && intendedUrl.includes('taskId=')) {
+        const match = intendedUrl.match(/taskId=([^&]+)/);
+        if (match) {
+          taskIdFromUrl = match[1];
+          console.log('[Support] Found taskId in sessionStorage intendedUrl:', taskIdFromUrl);
+          sessionStorage.removeItem('intendedUrl');
+        }
+      }
+    }
     
     if (taskIdFromUrl) {
-      console.log('[Support] Deep link detected taskId:', taskIdFromUrl);
-      // Open chat directly from deep link
-      openChatByTaskId(taskIdFromUrl);
-      // Clear taskId from URL to prevent re-triggering
-      navigate('/support', { replace: true });
-    } else {
-      fetchTasksWithMessages();
+      console.log('[Support] Deep link taskId detected:', taskIdFromUrl);
+      setPendingTaskId(taskIdFromUrl);
+      // Clear URL params but keep the taskId pending
+      if (location.search) {
+        navigate('/support', { replace: true });
+      }
     }
+    
+    // Always fetch tasks
+    fetchTasksWithMessages();
+    console.log('[Support] =====================================');
   }, []);
   
-  // Open chat directly by taskId (for deep links)
-  const openChatByTaskId = async (taskId) => {
-    setDeepLinkHandled(true);
+  // Handle pending deep link after tasks are loaded
+  useEffect(() => {
+    if (!loading && pendingTaskId && !selectedTask) {
+      console.log('[Support] Tasks loaded, opening pending chat:', pendingTaskId);
+      openChatByTaskId(pendingTaskId);
+      setPendingTaskId(null);
+    }
+  }, [loading, pendingTaskId, selectedTask]);
+  
+  // Open chat directly by taskId (for deep links) with retry
+  const openChatByTaskId = async (taskId, retryCount = 0) => {
     setChatLoading(true);
     try {
-      console.log('[Support] Opening chat for deep-linked taskId:', taskId);
+      console.log('[Support] Opening chat for taskId:', taskId, retryCount > 0 ? `(retry ${retryCount})` : '');
       const res = await api.get(`/admin/tasks/${taskId}`);
-      setSelectedTask(res.data.task);
-      // Also fetch tasks list in background
-      fetchTasksWithMessages();
+      if (res.data?.task) {
+        console.log('[Support] Chat loaded successfully:', res.data.task.title);
+        setSelectedTask(res.data.task);
+      } else {
+        throw new Error('No task in response');
+      }
     } catch (err) {
-      console.error('[Support] Deep link chat load failed:', err);
-      // Fall back to task list
-      fetchTasksWithMessages();
+      console.error('[Support] Chat load failed:', err.response?.status || err.message);
+      // Retry once after 500ms
+      if (retryCount < 1) {
+        console.log('[Support] Retrying in 500ms...');
+        setTimeout(() => openChatByTaskId(taskId, retryCount + 1), 500);
+        return; // Don't clear loading state yet
+      }
+      console.error('[Support] All retries failed, showing task list');
     } finally {
-      setChatLoading(false);
+      if (retryCount >= 1 || !pendingTaskId) {
+        setChatLoading(false);
+      }
     }
   };
 
