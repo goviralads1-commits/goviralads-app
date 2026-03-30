@@ -670,7 +670,7 @@ const Plans = () => {
                     )}
                     
                     {/* Category Badge - Premium */}
-                    {plan.categoryName && coverUrl && (
+                    {plan.categoryName && displayUrl && (
                       <div style={{
                         position: 'absolute', bottom: '12px', right: '12px',
                         backgroundColor: 'rgba(255,255,255,0.95)', color: categoryColor,
