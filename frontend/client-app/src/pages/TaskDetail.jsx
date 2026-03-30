@@ -450,7 +450,13 @@ const TaskDetail = () => {
                     return (
                       <button
                         key={optIdx}
-                        onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
+                        onClick={() => {
+                          console.log('[APPROVAL CLICK] Button clicked!', { opt, isLocked, approvalId: approval.id });
+                          alert('CLICK WORKING: ' + opt);
+                          if (!isLocked) {
+                            handleApprovalOptionToggle(approval.id, opt, approval.type);
+                          }
+                        }}
                         disabled={isLocked}
                         style={{
                           width: '100%', padding: '10px 14px', borderRadius: '10px', fontSize: isFullScreen ? '13px' : '14px', marginBottom: '8px',
@@ -570,7 +576,13 @@ const TaskDetail = () => {
                 return (
                   <button
                     key={optIdx}
-                    onClick={() => !isLocked && handleApprovalOptionToggle(approval.id, opt, approval.type)}
+                    onClick={() => {
+                      console.log('[APPROVAL CLICK 2] Button clicked!', { opt, isLocked, approvalId: approval.id });
+                      alert('CLICK WORKING: ' + opt);
+                      if (!isLocked) {
+                        handleApprovalOptionToggle(approval.id, opt, approval.type);
+                      }
+                    }}
                     disabled={isLocked}
                     style={{
                       padding: '10px 14px', borderRadius: '10px', fontSize: isFullScreen ? '13px' : '14px',
