@@ -50,6 +50,12 @@ const TaskDetail = () => {
   const [showOnlyApprovals, setShowOnlyApprovals] = useState(false); // Approval filter toggle
   const [historyModalApproval, setHistoryModalApproval] = useState(null); // Approval history modal
   const [copyToast, setCopyToast] = useState(null); // Export proof toast
+  
+  // Chat pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+  const [allMessages, setAllMessages] = useState([]); // Combined messages from pagination
+  
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -134,6 +140,10 @@ const TaskDetail = () => {
       
       // Initialize client upload folder state (Phase 4B)
       setClientUploadFolderLink(taskData.clientUploadFolderLink || '');
+      
+      // Initialize messages from task (latest 30)
+      setAllMessages(taskData.messages || []);
+      setCurrentPage(0); // Reset page on fresh fetch
     } catch (err) {
       console.error('Task fetch error:', err);
       // Better error message for access/not found errors
@@ -151,6 +161,27 @@ const TaskDetail = () => {
   useEffect(() => {
     fetchTask();
   }, [fetchTask]);
+
+  // Load more (older) messages for pagination
+  const loadMoreMessages = async () => {
+    if (loadingMoreMessages || !task?.hasMoreMessages) return;
+    setLoadingMoreMessages(true);
+    try {
+      const nextPage = currentPage + 1;
+      const res = await api.get(`/admin/tasks/${taskId}/messages?page=${nextPage}&limit=30`);
+      if (res.data.messages && res.data.messages.length > 0) {
+        // Prepend older messages to the beginning
+        setAllMessages(prev => [...res.data.messages, ...prev]);
+        setCurrentPage(nextPage);
+        // Update hasMoreMessages flag
+        setTask(prev => ({ ...prev, hasMoreMessages: res.data.hasMore }));
+      }
+    } catch (err) {
+      console.error('Failed to load more messages:', err);
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  };
 
   // Check for changes
   useEffect(() => {
@@ -716,7 +747,7 @@ const TaskDetail = () => {
     }
 
     // Merge messages and approvals into single timeline, sorted by timestamp
-    const messages = task.messages || [];
+    const messages = allMessages;
     const approvals = task.approvalRequests || [];
     const approvalItems = approvals.map(a => ({ ...a, _type: 'approval', _timestamp: new Date(a.createdAt || 0).getTime() }));
     const messageItems = messages.map(m => ({ ...m, _type: 'message', _timestamp: new Date(m.createdAt || 0).getTime() }));
@@ -892,6 +923,33 @@ const TaskDetail = () => {
 
     return (
       <>
+        {/* Load More button at top for older messages */}
+        {task?.hasMoreMessages && (
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <button
+              onClick={loadMoreMessages}
+              disabled={loadingMoreMessages}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '20px',
+                border: '1px solid #e2e8f0',
+                backgroundColor: loadingMoreMessages ? '#f1f5f9' : '#fff',
+                color: '#64748b',
+                fontSize: '13px',
+                cursor: loadingMoreMessages ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              {loadingMoreMessages ? (
+                <>Loading...</>
+              ) : (
+                <>Load older messages ({task.totalMessages - allMessages.length} more)</>
+              )}
+            </button>
+          </div>
+        )}
         {timeline.map((item, idx) => 
           item._type === 'approval' ? renderApprovalCard(item, idx) : renderMessage(item, idx)
         )}

@@ -978,13 +978,17 @@ router.get('/tasks/:taskId', async (req, res) => {
         finalDeliveryLink: task.finalDeliveryLink || '',
         finalDeliveryText: task.finalDeliveryText || '',
         finalDeliveredAt: task.finalDeliveredAt || null,
-        // TASK DISCUSSION (Phase 6)
-        messages: (task.messages || []).map(m => ({
+        // TASK DISCUSSION (Phase 6) - Return only LATEST 30 messages for performance
+        // Use GET /admin/tasks/:taskId/messages?page=X for older messages
+        messages: (task.messages || []).slice(-30).map(m => ({
           sender: m.sender,
           text: m.text,
           attachments: m.attachments || [],
           createdAt: m.createdAt,
         })),
+        // Total count for pagination UI
+        totalMessages: (task.messages || []).length,
+        hasMoreMessages: (task.messages || []).length > 30,
         // APPROVAL REQUESTS (Phase 7)
         approvalRequests: (task.approvalRequests || []).map(a => {
           const hasHistory = (a.selectionsHistory || []).length > 0;
@@ -1021,6 +1025,61 @@ router.get('/tasks/:taskId', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: `FETCH ERROR: ${err.message}` });
+  }
+});
+
+// GET /admin/tasks/:taskId/messages - Paginated messages (for load more)
+router.get('/tasks/:taskId/messages', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const page = parseInt(req.query.page) || 0; // 0 = latest, 1 = older, etc.
+    const limit = parseInt(req.query.limit) || 30;
+    
+    const task = await Task.findById(taskId).select('messages clientId assignedTo').exec();
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const allMessages = task.messages || [];
+    const totalMessages = allMessages.length;
+    
+    // Calculate slice indices (messages are oldest first in DB, we want newest first for pagination)
+    // Page 0: last 30 messages
+    // Page 1: messages 30-60 from end
+    // etc.
+    const endIndex = totalMessages - (page * limit);
+    const startIndex = Math.max(0, endIndex - limit);
+    
+    if (endIndex <= 0) {
+      return res.status(200).json({
+        messages: [],
+        page,
+        limit,
+        totalMessages,
+        hasMore: false
+      });
+    }
+    
+    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => ({
+      sender: m.sender,
+      text: m.text,
+      attachments: m.attachments || [],
+      createdAt: m.createdAt,
+    }));
+    
+    console.log(`[Chat Pagination] Task ${taskId}: page=${page}, returned ${paginatedMessages.length}/${totalMessages} messages`);
+    
+    return res.status(200).json({
+      messages: paginatedMessages,
+      page,
+      limit,
+      totalMessages,
+      hasMore: startIndex > 0
+    });
+  } catch (err) {
+    console.error('[Chat Pagination] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
 

@@ -61,6 +61,11 @@ const TaskDetail = () => {
   const [approvalSelections, setApprovalSelections] = useState({}); // { approvalId: [selectedOptions] }
   const [submittingApproval, setSubmittingApproval] = useState(null); // approvalId being submitted
   
+  // Chat pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+  const [allMessages, setAllMessages] = useState([]); // Combined messages from pagination
+  
   // Auto-resize textarea
   const handleTextareaChange = (e) => {
     setMessageText(e.target.value);
@@ -80,6 +85,9 @@ const TaskDetail = () => {
       ]);
       setTask(taskResponse.data.task);
       setReceipt(receiptResponse.data.receipt);
+      // Initialize messages from task (latest 30)
+      setAllMessages(taskResponse.data.task.messages || []);
+      setCurrentPage(0); // Reset page on fresh fetch
       setError('');
     } catch (err) {
       console.error('Task detail error:', err.response?.data || err.message);
@@ -94,6 +102,29 @@ const TaskDetail = () => {
       setLoading(false);
     }
   }, [taskId]);
+
+  // Load more (older) messages
+  const loadMoreMessages = async () => {
+    if (loadingMoreMessages || !task?.hasMoreMessages) return;
+    setLoadingMoreMessages(true);
+    try {
+      const nextPage = currentPage + 1;
+      const res = await api.get(`/client/tasks/${taskId}/messages?page=${nextPage}&limit=30`);
+      if (res.data.messages && res.data.messages.length > 0) {
+        // Prepend older messages to the beginning
+        setAllMessages(prev => [...res.data.messages, ...prev]);
+        setCurrentPage(nextPage);
+        // Update task's hasMoreMessages
+        setTask(prev => ({ ...prev, hasMoreMessages: res.data.hasMore }));
+      } else {
+        setTask(prev => ({ ...prev, hasMoreMessages: false }));
+      }
+    } catch (err) {
+      console.error('Load more messages error:', err);
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  };
 
   const handleDownloadReceipt = async () => {
     if (!receipt) return;
@@ -494,7 +525,8 @@ const TaskDetail = () => {
     }
 
     // Merge messages and approvals into single timeline, sorted by timestamp
-    const messages = task.messages || [];
+    // Use allMessages (paginated) instead of task.messages
+    const messages = allMessages;
     const approvalItems = visibleApprovals.map(a => ({ ...a, _type: 'approval', _timestamp: new Date(a.createdAt || 0).getTime() }));
     const messageItems = messages.map(m => ({ ...m, _type: 'message', _timestamp: new Date(m.createdAt || 0).getTime() }));
     const timeline = [...messageItems, ...approvalItems].sort((a, b) => a._timestamp - b._timestamp);
@@ -672,6 +704,28 @@ const TaskDetail = () => {
 
     return (
       <>
+        {/* Load More button - shown when there are older messages */}
+        {task?.hasMoreMessages && (
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <button
+              onClick={loadMoreMessages}
+              disabled={loadingMoreMessages}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: '500',
+                color: '#6366f1',
+                backgroundColor: '#f0f9ff',
+                border: '1px solid #e0e7ff',
+                borderRadius: '8px',
+                cursor: loadingMoreMessages ? 'not-allowed' : 'pointer',
+                opacity: loadingMoreMessages ? 0.7 : 1
+              }}
+            >
+              {loadingMoreMessages ? 'Loading...' : `Load older messages (${task.totalMessages - allMessages.length} more)`}
+            </button>
+          </div>
+        )}
         {timeline.map((item, idx) => 
           item._type === 'approval' ? renderApprovalCard(item, idx) : renderMessage(item, idx)
         )}
