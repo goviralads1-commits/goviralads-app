@@ -19,6 +19,10 @@ const Support = () => {
   const [lightboxImage, setLightboxImage] = useState(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  
+  // Approval state (copied from TaskDetail.jsx)
+  const [approvalSelections, setApprovalSelections] = useState({});
+  const [submittingApproval, setSubmittingApproval] = useState(null);
 
   // Extract taskId from URL or sessionStorage on mount
   useEffect(() => {
@@ -222,6 +226,42 @@ const Support = () => {
     setMessageAttachments(prev => [...prev, ...files].slice(0, 5));
   };
 
+  // Approval handlers (copied from TaskDetail.jsx)
+  const handleApprovalOptionToggle = (approvalId, option, type) => {
+    setApprovalSelections(prev => {
+      const current = prev[approvalId] || [];
+      if (type === 'single') {
+        return { ...prev, [approvalId]: [option] };
+      } else {
+        if (current.includes(option)) {
+          return { ...prev, [approvalId]: current.filter(o => o !== option) };
+        } else {
+          return { ...prev, [approvalId]: [...current, option] };
+        }
+      }
+    });
+  };
+
+  const handleSubmitApproval = async (approvalId) => {
+    const selected = approvalSelections[approvalId];
+    if (!selected || selected.length === 0) return;
+    setSubmittingApproval(approvalId);
+    try {
+      const taskId = selectedTask._id || selectedTask.id;
+      await api.post(`/client/tasks/${taskId}/approvals/${approvalId}/select`, {
+        selectedOptions: selected
+      });
+      // Refresh task data
+      const res = await api.get(`/client/tasks/${taskId}`);
+      setSelectedTask(res.data.task);
+      setApprovalSelections(prev => ({ ...prev, [approvalId]: [] }));
+    } catch (err) {
+      console.error('[Support] Approval submit error:', err);
+    } finally {
+      setSubmittingApproval(null);
+    }
+  };
+
   const formatTime = (dateStr) => {
     if (!dateStr) return '';
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -260,20 +300,55 @@ const Support = () => {
           )}
           {timeline.map((item, idx) => {
             if (item._type === 'approval') {
+              const latestSel = item.selectionsHistory?.[item.selectionsHistory.length - 1];
+              const savedOpts = latestSel?.selectedOptions || [];
+              const localSel = approvalSelections[item.id] || [];
+              const currentSel = localSel.length > 0 ? localSel : savedOpts;
+              const hasHistory = (item.selectionsHistory || []).length > 0;
+              const isLocked = item.isLocked;
+              
               return (
                 <div key={`a-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginBottom: '12px' }}>
                   <span style={{ fontSize: '11px', fontWeight: '600', color: '#f59e0b', marginBottom: '4px' }}>Approval Request</span>
                   <div style={{ maxWidth: '85%', padding: '12px', borderRadius: '12px', backgroundColor: '#fef3c7', border: '1px solid #fbbf24' }}>
                     <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: '0 0 8px 0' }}>{item.title}</p>
                     {item.options?.map((opt, i) => {
-                      const sel = item.selectionsHistory?.[item.selectionsHistory.length - 1]?.selectedOptions || [];
-                      const isSelected = sel.includes(opt);
+                      const isSelected = currentSel.includes(opt);
                       return (
-                        <div key={i} style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '13px', marginBottom: '4px', backgroundColor: isSelected ? '#dcfce7' : '#fff', border: isSelected ? '1px solid #22c55e' : '1px solid #e5e7eb' }}>
-                          {opt} {isSelected && '✓'}
-                        </div>
+                        <button
+                          key={i}
+                          onClick={() => !isLocked && handleApprovalOptionToggle(item.id, opt, item.type)}
+                          disabled={isLocked}
+                          style={{
+                            width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', marginBottom: '6px',
+                            backgroundColor: isSelected ? '#dcfce7' : '#fff',
+                            border: isSelected ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                            textAlign: 'left', cursor: isLocked ? 'not-allowed' : 'pointer',
+                            opacity: isLocked ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px'
+                          }}
+                        >
+                          <span style={{ fontSize: '14px' }}>
+                            {item.type === 'single' ? (isSelected ? '◉' : '○') : (isSelected ? '☑' : '☐')}
+                          </span>
+                          {opt}
+                        </button>
                       );
                     })}
+                    {!isLocked && (
+                      <button
+                        onClick={() => handleSubmitApproval(item.id)}
+                        disabled={submittingApproval === item.id || localSel.length === 0}
+                        style={{
+                          width: '100%', padding: '10px', fontSize: '13px', fontWeight: '600',
+                          backgroundColor: (submittingApproval === item.id || localSel.length === 0) ? '#e2e8f0' : '#22c55e',
+                          color: (submittingApproval === item.id || localSel.length === 0) ? '#94a3b8' : '#fff',
+                          border: 'none', borderRadius: '8px', marginTop: '8px',
+                          cursor: (submittingApproval === item.id || localSel.length === 0) ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {submittingApproval === item.id ? 'Submitting...' : 'Submit Selection'}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
