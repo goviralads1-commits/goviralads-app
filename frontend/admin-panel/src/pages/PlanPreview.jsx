@@ -3,6 +3,41 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 
+// Helper to convert YouTube/Vimeo URLs to embed URLs
+const getVideoEmbedUrl = (url) => {
+  if (!url) return null;
+  // YouTube
+  const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  // Vimeo
+  const vimeoMatch = url.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/(?:[^\/]*)\/videos\/|album\/(?:\d+)\/video\/|video\/|)(\d+)(?:$|\/|\?)/);
+  if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  return url;
+};
+
+// Check if URL is YouTube or Vimeo (needs iframe)
+const isEmbedVideo = (url) => {
+  if (!url) return false;
+  return url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com');
+};
+
+// Render video with proper player (iframe for YouTube/Vimeo, video tag for direct URLs)
+const renderVideo = (url, style = {}) => {
+  if (!url) return null;
+  if (isEmbedVideo(url)) {
+    const embedUrl = getVideoEmbedUrl(url);
+    return (
+      <iframe 
+        src={embedUrl} 
+        style={{ border: 'none', ...style }} 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowFullScreen 
+      />
+    );
+  }
+  return <video src={url} controls style={style} />;
+};
+
 const PlanPreview = () => {
   const { planId } = useParams();
   const navigate = useNavigate();
@@ -98,11 +133,7 @@ const PlanPreview = () => {
           {coverMedia && (
             <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', backgroundColor: '#f1f5f9' }}>
               {coverMedia.type === 'video' ? (
-                <video
-                  src={coverMedia.url}
-                  controls
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+                renderVideo(coverMedia.url, { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' })
               ) : (
                 <img
                   src={coverMedia.url}
@@ -202,11 +233,7 @@ const PlanPreview = () => {
             {mediaArray.map((media, idx) => (
               <div key={idx} style={{ position: 'relative', paddingBottom: '100%', backgroundColor: '#f1f5f9', borderRadius: '12px', overflow: 'hidden' }}>
                 {media.type === 'video' ? (
-                  <video
-                    src={media.url}
-                    controls
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
+                  renderVideo(media.url, { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' })
                 ) : (
                   <img
                     src={media.url}
