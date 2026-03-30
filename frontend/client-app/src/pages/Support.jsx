@@ -63,14 +63,31 @@ const Support = () => {
     console.log('[Support] =====================================');
   }, []);
   
-  // Handle pending deep link after tasks are loaded
+  // Handle pending deep link after tasks are loaded - with FORCE retry
   useEffect(() => {
     if (!loading && pendingTaskId && !selectedTask) {
-      console.log('[Support] Tasks loaded, opening pending chat:', pendingTaskId);
-      openChatByTaskId(pendingTaskId);
-      setPendingTaskId(null);
+      console.log('[Support] Tasks loaded, scheduling chat open for:', pendingTaskId);
+      
+      // First attempt after 300ms delay
+      const timer1 = setTimeout(() => {
+        console.log('[Support] First attempt to open chat:', pendingTaskId);
+        openChatByTaskId(pendingTaskId);
+        
+        // Force retry after 700ms if still no selectedTask
+        const timer2 = setTimeout(() => {
+          if (!selectedTask) {
+            console.log('[Support] Force retry - chat still not open');
+            openChatByTaskId(pendingTaskId);
+          }
+        }, 700);
+        
+        return () => clearTimeout(timer2);
+      }, 300);
+      
+      setPendingTaskId(null); // Clear to prevent re-triggering
+      return () => clearTimeout(timer1);
     }
-  }, [loading, pendingTaskId, selectedTask]);
+  }, [loading, pendingTaskId]);
   
   // Open chat directly by taskId (for deep links) with retry
   const openChatByTaskId = async (taskId, retryCount = 0) => {

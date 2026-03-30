@@ -47,7 +47,11 @@ const AuthProvider = ({ children }) => {
       const loggedIn = !!token;
       const role = getUserRole();
       
-      console.log('[Auth] Initializing auth state:', { hasToken: loggedIn, role });
+      console.log('[Auth] ========== INIT AUTH ==========');
+      console.log('[Auth] Token in localStorage:', token ? `YES (${token.length} chars)` : 'NO');
+      console.log('[Auth] isLoggedIn:', loggedIn);
+      console.log('[Auth] Role:', role);
+      console.log('[Auth] ================================');
       
       setAuthState({
         isReady: true,
@@ -56,8 +60,8 @@ const AuthProvider = ({ children }) => {
       });
     };
 
-    // Check immediately
-    initAuth();
+    // Add small delay for localStorage hydration on new tabs
+    const timer = setTimeout(initAuth, 50);
     
     // Also listen for storage changes (when another tab logs in/out)
     const handleStorageChange = (e) => {
@@ -68,7 +72,10 @@ const AuthProvider = ({ children }) => {
     };
     
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   return (
@@ -82,10 +89,14 @@ const AuthProvider = ({ children }) => {
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isReady, isLoggedIn, userRole } = useAuth();
   const location = useLocation();
+  
+  // CRITICAL: Double-check localStorage directly as backup
+  const tokenExists = !!localStorage.getItem('token');
 
   // Show loading while auth is initializing
   if (!isReady) {
     console.log('[ProtectedRoute] Waiting for auth initialization...');
+    console.log('[ProtectedRoute] Direct localStorage check - token:', tokenExists ? 'YES' : 'NO');
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -111,10 +122,15 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  if (!isLoggedIn) {
+  // Use context isLoggedIn OR direct localStorage check as backup
+  const actuallyLoggedIn = isLoggedIn || tokenExists;
+  
+  if (!actuallyLoggedIn) {
     // Store intended URL for redirect after login
     const intendedUrl = location.pathname + location.search;
     console.log('[ProtectedRoute] ========== NOT LOGGED IN ==========');
+    console.log('[ProtectedRoute] Context isLoggedIn:', isLoggedIn);
+    console.log('[ProtectedRoute] Direct localStorage token:', tokenExists ? 'YES' : 'NO');
     console.log('[ProtectedRoute] Current URL:', intendedUrl);
     console.log('[ProtectedRoute] Storing in sessionStorage as intendedUrl');
     sessionStorage.setItem('intendedUrl', intendedUrl);
