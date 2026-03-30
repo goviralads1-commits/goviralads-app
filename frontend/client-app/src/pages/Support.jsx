@@ -18,6 +18,7 @@ const Support = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messageAttachments, setMessageAttachments] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [historyModalApproval, setHistoryModalApproval] = useState(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -279,6 +280,7 @@ const Support = () => {
                   approval={item}
                   taskId={taskId}
                   onSubmitSuccess={refreshTaskData}
+                  onViewHistory={(a) => setHistoryModalApproval(a)}
                   compact={true}
                 />
               );
@@ -334,6 +336,105 @@ const Support = () => {
         {lightboxImage && (
           <div onClick={() => setLightboxImage(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <img src={lightboxImage} alt="" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
+          </div>
+        )}
+
+        {/* History Modal */}
+        {historyModalApproval && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setHistoryModalApproval(null)}
+          >
+            <div style={{
+              backgroundColor: '#fff', borderRadius: '20px', width: '100%', maxWidth: '420px',
+              maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.25)'
+            }}
+            onClick={e => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div style={{
+                padding: '20px', borderBottom: '1px solid #e2e8f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+              }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Selection History</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>{historyModalApproval.title}</p>
+                </div>
+                <button
+                  onClick={() => setHistoryModalApproval(null)}
+                  style={{
+                    width: '36px', height: '36px', borderRadius: '10px',
+                    backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                {(historyModalApproval.selectionsHistory || []).length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '14px', padding: '30px 0' }}>
+                    No selections yet
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {historyModalApproval.selectionsHistory.map((h, hIdx) => {
+                      const isLatest = hIdx === historyModalApproval.selectionsHistory.length - 1;
+                      return (
+                        <div key={hIdx} style={{
+                          padding: '14px', borderRadius: '12px',
+                          backgroundColor: isLatest ? '#f0fdf4' : '#f8fafc',
+                          border: isLatest ? '2px solid #22c55e' : '1px solid #e2e8f0'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{
+                              fontSize: '11px', fontWeight: '700',
+                              color: isLatest ? '#16a34a' : '#64748b',
+                              textTransform: 'uppercase'
+                            }}>
+                              {isLatest ? 'Current (Final)' : `v${hIdx + 1}`}
+                            </span>
+                            <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                              {new Date(h.timestamp).toLocaleString('en-US', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}
+                            </span>
+                          </div>
+                          <p style={{
+                            fontSize: '14px', fontWeight: '600', margin: 0,
+                            color: isLatest ? '#166534' : '#334155'
+                          }}>
+                            {h.selectedOptions?.join(', ') || 'No selection'}
+                            {isLatest && ' ✓'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0' }}>
+                <button
+                  onClick={() => setHistoryModalApproval(null)}
+                  style={{
+                    width: '100%', padding: '12px', fontSize: '14px', fontWeight: '600',
+                    backgroundColor: '#f1f5f9', color: '#334155',
+                    border: 'none', borderRadius: '12px', cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
