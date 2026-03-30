@@ -677,7 +677,7 @@ const Plans = () => {
                       </div>
                       
                       {/* Category Badge */}
-                      {category && mediaUrl && (
+                      {category && displayUrl && (
                         <div style={{ 
                           position: 'absolute', bottom: '12px', left: '12px', 
                           backgroundColor: 'rgba(255,255,255,0.95)', color: categoryColor, 
