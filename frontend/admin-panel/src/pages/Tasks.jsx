@@ -2648,9 +2648,19 @@ const Tasks = () => {
         input[type="range"] {
           -webkit-appearance: none;
           appearance: none;
+          width: 100%;
+          height: 8px;
           background: #e2e8f0;
           border-radius: 10px;
           outline: none;
+          margin: 0;
+          padding: 0;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+          width: 100%;
+          height: 8px;
+          border-radius: 10px;
+          cursor: pointer;
         }
         input[type="range"]::-webkit-slider-thumb {
           -webkit-appearance: none;
@@ -2661,6 +2671,22 @@ const Tasks = () => {
           background: linear-gradient(135deg, #6366f1, #4f46e5);
           cursor: pointer;
           box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+          margin-top: -7px;
+        }
+        input[type="range"]::-moz-range-track {
+          width: 100%;
+          height: 8px;
+          border-radius: 10px;
+          cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #6366f1, #4f46e5);
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+          border: none;
         }
         /* RESPONSIVE: Mobile-first form styles */
         @media (max-width: 640px) {
