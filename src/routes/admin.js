@@ -3754,6 +3754,7 @@ router.get('/users/:userId', async (req, res) => {
           language: user.profile?.language || 'en',
         },
         preferences: user.preferences || {},
+        defaultUploadFolder: user.defaultUploadFolder || '',
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
         lastActivityAt: user.lastActivityAt,
@@ -3778,7 +3779,7 @@ router.get('/users/:userId', async (req, res) => {
 router.patch('/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { identifier, status, name, phone, photoUrl, company, timezone, language, preferences } = req.body || {};
+    const { identifier, status, name, phone, photoUrl, company, timezone, language, preferences, defaultUploadFolder } = req.body || {};
 
     const user = await User.findById(userId).exec();
     if (!user) {
@@ -3803,6 +3804,11 @@ router.patch('/users/:userId', async (req, res) => {
       if (preferences.marketingEmails !== undefined) user.preferences.marketingEmails = preferences.marketingEmails;
     }
 
+    // Default upload folder (Phase 4B+)
+    if (defaultUploadFolder !== undefined) {
+      user.defaultUploadFolder = defaultUploadFolder.trim();
+    }
+
     await user.save();
 
     return res.status(200).json({
@@ -3814,6 +3820,7 @@ router.patch('/users/:userId', async (req, res) => {
         status: user.status,
         profile: user.profile,
         preferences: user.preferences,
+        defaultUploadFolder: user.defaultUploadFolder || '',
       },
     });
   } catch (err) {

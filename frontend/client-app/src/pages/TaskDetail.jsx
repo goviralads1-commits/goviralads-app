@@ -42,6 +42,7 @@ const TaskDetail = () => {
   
   // User default folder (Phase 4A+)
   const [userDefaultFolder, setUserDefaultFolder] = useState('');
+  const [userDefaultUploadFolder, setUserDefaultUploadFolder] = useState('');
   
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
@@ -535,7 +536,9 @@ const TaskDetail = () => {
       try {
         const res = await api.get('/client/profile');
         const defaultFolder = res.data.profile?.defaultContentFolder || '';
+        const defaultUpload = res.data.profile?.defaultUploadFolder || '';
         setUserDefaultFolder(defaultFolder);
+        setUserDefaultUploadFolder(defaultUpload);
       } catch (err) {
         // Silent fail - user can still enter manually
       }
@@ -1102,41 +1105,46 @@ const TaskDetail = () => {
         })()}
 
         {/* CLIENT UPLOAD FOLDER - Upload Your Files (Phase 4B) */}
-        {task.clientUploadFolderLink && (
-          <div style={{ 
-            backgroundColor: '#eff6ff', borderRadius: '28px', padding: '28px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #3b82f6'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+        {/* Fallback: task.clientUploadFolderLink OR user.defaultUploadFolder */}
+        {(() => {
+          const uploadFolderLink = task.clientUploadFolderLink || userDefaultUploadFolder;
+          if (!uploadFolderLink) return null;
+          return (
+            <div style={{ 
+              backgroundColor: '#eff6ff', borderRadius: '28px', padding: '28px', marginBottom: '20px',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #3b82f6'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e40af', margin: 0 }}>Upload Your Files</h3>
+                  <p style={{ fontSize: '13px', color: '#3b82f6', margin: '2px 0 0' }}>Click to open the upload folder</p>
+                </div>
               </div>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e40af', margin: 0 }}>Upload Your Files</h3>
-                <p style={{ fontSize: '13px', color: '#3b82f6', margin: '2px 0 0' }}>Click to open the upload folder</p>
-              </div>
+              <a
+                href={uploadFolderLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block', width: '100%', padding: '16px 24px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#fff', fontSize: '15px', fontWeight: '600',
+                  borderRadius: '14px', textAlign: 'center', textDecoration: 'none',
+                  boxSizing: 'border-box', marginBottom: '12px'
+                }}
+              >
+                Upload Content →
+              </a>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: 0, textAlign: 'center' }}>
+                Upload your files directly in this Google Drive folder
+              </p>
             </div>
-            <a
-              href={task.clientUploadFolderLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'block', width: '100%', padding: '16px 24px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                color: '#fff', fontSize: '15px', fontWeight: '600',
-                borderRadius: '14px', textAlign: 'center', textDecoration: 'none',
-                boxSizing: 'border-box', marginBottom: '12px'
-              }}
-            >
-              Upload Content →
-            </a>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: 0, textAlign: 'center' }}>
-              Upload your files directly in this Google Drive folder
-            </p>
-          </div>
-        )}
+          );
+        })()}
 
         {/* CLIENT CONTENT SUBMISSION (Phase 2) */}
         {/* Show if content not yet submitted - regardless of status */}

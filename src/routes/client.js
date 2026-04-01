@@ -2384,6 +2384,8 @@ router.get('/profile', async (req, res) => {
         lastLoginAt: user.lastLoginAt,
         // Phase 4A+ - Default content folder
         defaultContentFolder: user.defaultContentFolder || '',
+        // Phase 4B+ - Default upload folder
+        defaultUploadFolder: user.defaultUploadFolder || '',
       },
       billing: {
         name: user.billing?.name || '',

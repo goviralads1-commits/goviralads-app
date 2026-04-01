@@ -101,6 +101,13 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    // Client upload folder default (Phase 4B+)
+    // Fallback when task.clientUploadFolderLink is empty
+    defaultUploadFolder: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     // Metadata
     lastLoginAt: { type: Date, default: null },
     lastActivityAt: { type: Date, default: null },
