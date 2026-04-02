@@ -41,6 +41,7 @@ const Profile = () => {
   const [pushLoading, setPushLoading] = useState(false);
 
   useEffect(() => {
+    console.log('[SETTINGS TAB] Component mounted');
     fetchProfile();
     // Check push notification status
     setPushEnabled(isPushEnabled());
@@ -56,8 +57,10 @@ const Profile = () => {
 
   const fetchProfile = async () => {
     try {
+      console.log('[PROFILE] Fetching profile...');
       setLoading(true);
       const res = await api.get('/client/profile');
+      console.log('[PROFILE] Response:', res.data);
       setProfile(res.data.profile);
       setStats(res.data.stats);
       setFormData({
@@ -72,7 +75,9 @@ const Profile = () => {
       });
       // Set billing data
       setBillingData(res.data.billing || {});
+      console.log('[PROFILE] Profile loaded successfully');
     } catch (err) {
+      console.error('[PROFILE] FAILED:', err);
       // Silent fail - show empty state
     } finally {
       setLoading(false);

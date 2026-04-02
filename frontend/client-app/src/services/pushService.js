@@ -117,12 +117,14 @@ export const generateToken = async () => {
     }
 
     // Check permission
+    console.log('[Push] Notification permission:', Notification.permission);
     if (Notification.permission !== 'granted') {
       throw new Error(`Permission not granted (current: ${Notification.permission})`);
     }
 
     // Initialize Firebase
     const { messaging: msg } = initFirebase();
+    console.log('[Push] Messaging instance:', !!msg);
     if (!msg) {
       throw new Error('Firebase messaging not available');
     }
@@ -140,7 +142,7 @@ export const generateToken = async () => {
       }
     }
 
-    // Get FCM token
+    // Get FCM-token
     console.log('[Push] Requesting FCM token from Firebase...');
     const tokenOptions = { vapidKey };
     if (swRegistration) {
@@ -148,6 +150,7 @@ export const generateToken = async () => {
     }
 
     const fcmToken = await getToken(msg, tokenOptions);
+    console.log('[Push] Firebase returned token:', !!fcmToken);
     
     if (fcmToken) {
       console.log('[Push] ✅ FCM Token generated:', fcmToken.substring(0, 30) + '...');
@@ -157,6 +160,7 @@ export const generateToken = async () => {
       
       // Send to backend
       const backendResult = await sendTokenToBackend(fcmToken);
+      console.log('[Push] Backend saved token:', backendResult);
       if (!backendResult) {
         throw new Error('Failed to save token to backend');
       }
@@ -167,6 +171,7 @@ export const generateToken = async () => {
     }
   } catch (error) {
     console.error('[Push] Token generation FAILED:', error.message);
+    console.error('[Push] Stack:', error.stack);
     throw error; // Re-throw so caller knows exactly what failed
   }
 };
@@ -248,6 +253,7 @@ export const enablePushNotifications = async () => {
     // Step 2: Generate token and save to backend
     console.log('[Push] Step 2: Generating token...');
     const token = await generateToken();
+    console.log('[Push] Token generated:', !!token);
     
     if (!token) {
       throw new Error('Token generation returned null');
@@ -258,6 +264,7 @@ export const enablePushNotifications = async () => {
   } catch (error) {
     console.error('[Push] ========== ENABLE PUSH FAILED ==========');
     console.error('[Push] Error:', error.message);
+    console.error('[Push] Stack:', error.stack);
     throw error; // Re-throw so UI can show specific error
   }
 };

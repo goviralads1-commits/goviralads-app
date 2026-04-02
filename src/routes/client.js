@@ -3494,9 +3494,14 @@ router.post('/device-token', async (req, res) => {
     const { token, platform } = req.body || {};
 
     if (!token || typeof token !== 'string') {
+      console.error('[PUSH] Invalid token provided');
       return res.status(400).json({ error: 'Token is required' });
     }
 
+    console.log(`[PUSH] ========== DEVICE TOKEN SAVE START ==========`);
+    console.log('[PUSH] Client ID:', clientId);
+    console.log('[PUSH] Token exists:', !!token);
+    console.log('[PUSH] Platform:', platform || 'web');
     console.log(`[PUSH] Saving device token for client ${clientId}`);
     console.log(`[PUSH] Token: ${token.substring(0, 30)}...`);
 
@@ -3517,10 +3522,12 @@ router.post('/device-token', async (req, res) => {
 
     console.log(`[PUSH] ✅ Device token saved for client ${clientId} with role=client`);
     console.log(`[PUSH] Token document:`, { id: result._id, userId: result.userId, role: result.role, isActive: result.isActive });
+    console.log(`[PUSH] ========== DEVICE TOKEN SAVE SUCCESS ==========\n`);
     
     return res.json({ success: true });
   } catch (err) {
     console.error('[PUSH] Save device token error:', err.message);
+    console.error('[PUSH] Stack:', err.stack);
     return res.status(500).json({ error: 'Failed to save device token' });
   }
 });
