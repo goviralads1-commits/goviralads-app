@@ -124,6 +124,8 @@ router.post('/wallet/recharge', async (req, res) => {
       status: RECHARGE_STATUS.PENDING,
     }).exec();
 
+    console.log('[RECHARGE_DEBUG] Pending recharge count:', pendingCount);
+
     if (pendingCount >= 3) {
       return res.status(400).json({ error: 'Maximum 3 pending recharge requests allowed' });
     }
@@ -134,6 +136,8 @@ router.post('/wallet/recharge', async (req, res) => {
       paymentReference: paymentReference.trim(),
       status: RECHARGE_STATUS.PENDING,
     });
+
+    console.log(`[RECHARGE_DEBUG] Created recharge request ${rechargeRequest._id} with status: "${rechargeRequest.status}"`);
 
     // --- Notification Hook (Phase 5) ---
     try {
@@ -211,61 +215,35 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
   try {
     const { id } = req.params;
     const clientId = req.user.id;
-    const { couponCode } = req.body || {};
+    const { couponCode, transactionId } = req.body || {};
 
+    console.log("SUBSCRIPTION API HIT");
     console.log('=== SUBSCRIPTION REQUEST SUBMIT ===');
     console.log('Client:', clientId, '| Plan:', id, '| Coupon:', couponCode || 'none');
 
     // 1. Load plan first
+    console.log('[DIAGNOSTIC] Step 1: Loading plan...');
     const plan = await CreditPlan.findById(id).exec();
     if (!plan || !plan.isActive) {
+      console.log('[DIAGNOSTIC] FAILED: Plan not found or inactive');
       return res.status(404).json({ error: 'Subscription plan not found or inactive' });
     }
+    console.log('[DIAGNOSTIC] Step 1: SUCCESS - Plan loaded:', plan.name);
 
-    // 2. Check for existing pending request FOR SAME PLAN
+    // 2. Check for existing pending request FOR SAME PLAN (duplicate prevention)
+    console.log('[DIAGNOSTIC] Step 2: Checking for duplicate pending request...');
     const existingPendingSamePlan = await SubscriptionRequest.findOne({
       clientId,
       planId: plan._id,
       status: SUBSCRIPTION_REQUEST_STATUS.PENDING
     }).exec();
     if (existingPendingSamePlan) {
+      console.log('[DIAGNOSTIC] FAILED: Duplicate request blocked');
       return res.status(400).json({ error: 'Request already pending for this plan' });
     }
+    console.log('[DIAGNOSTIC] Step 2: SUCCESS - No duplicate found');
 
-    // 3. Get wallet to check active subscription
-    const now = new Date();
-    const wallet = await Wallet.findOne({ clientId }).exec();
-    
-    // 4. SINGLE-ACTIVE SUBSCRIPTION RULE
-    if (wallet) {
-      const hasActiveSubscription = 
-        wallet.subscriptionExpiresAt && 
-        new Date(wallet.subscriptionExpiresAt) > now && 
-        (wallet.subscriptionCredits || 0) > 0;
-      
-      if (hasActiveSubscription) {
-        const currentPlanPrice = wallet.currentPlanPrice || 0;
-        const newPlanPrice = plan.price || 0;
-        
-        // Check if same plan (by ID or price)
-        if (wallet.currentPlanId && wallet.currentPlanId.toString() === plan._id.toString()) {
-          return res.status(400).json({ error: 'You already have this plan active' });
-        }
-        
-        // Check if lower/same price plan (downgrade blocked)
-        if (newPlanPrice <= currentPlanPrice) {
-          return res.status(400).json({ error: 'Cannot downgrade to a lower plan. Use remaining credits first.' });
-        }
-        
-        // Higher price = upgrade allowed
-        console.log(`[SUB_REQ] Upgrade detected: ₹${currentPlanPrice} → ₹${newPlanPrice}`);
-      }
-    }
-
-    // DEBUG: Log full plan object
-    console.log('[SUB_REQ] FULL PLAN OBJECT:', JSON.stringify(plan, null, 2));
-    
-    // Calculate credits: plan.credits + plan.bonusCredits
+    // 3. Calculate credits: plan.credits + plan.bonusCredits
     const planCredits = Number(plan.credits) || 0;
     const planBonusCredits = Number(plan.bonusCredits) || 0;
     
@@ -296,6 +274,8 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
     }
 
     // 4. Create subscription request - use calculated plan values
+    console.log("Creating subscription request...");
+    console.log('[DIAGNOSTIC] Step 4: Attempting to create request in database...');
     console.log('[SUB_REQ] Saving to request:', { planCredits, planBonusCredits, totalCredits });
     
     const subRequest = await SubscriptionRequest.create({
@@ -310,9 +290,13 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       couponDiscount,
       finalPrice,
       totalCredits,
+      transactionId: transactionId || null,
       status: SUBSCRIPTION_REQUEST_STATUS.PENDING,
     });
 
+    console.log("Request created successfully");
+    console.log('[DIAGNOSTIC] Step 4: SUCCESS - Request created in database');
+    console.log(`[SUB_REQ_DEBUG] Created request ${subRequest._id} with status: "${subRequest.status}"`);
     console.log(`[SUB_REQ] Created request ${subRequest._id} for plan ${plan.name}`);
     console.log('=== SUBSCRIPTION REQUEST SUBMIT COMPLETE ===');
 
@@ -358,7 +342,9 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
       },
     });
   } catch (err) {
+    console.log('[DIAGNOSTIC] ERROR CAUGHT IN SUBSCRIPTION API');
     console.error('[SUB_REQ] Submit error:', err.message);
+    console.error('[DIAGNOSTIC] Full error:', err);
     return res.status(500).json({ error: 'Failed to submit subscription request' });
   }
 });

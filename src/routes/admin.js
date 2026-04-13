@@ -348,26 +348,44 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
     console.log('Request ID:', id);
     console.log('Admin ID:', adminId);
 
-    const request = await RechargeRequest.findById(id).exec();
-    console.log('Step 1: Found request:', request ? request._id.toString() : 'NOT FOUND');
+    // ATOMIC STATUS UPDATE - Status acts as lock to prevent double approval
+    console.log('[RECHARGE_APPROVE_DEBUG] Attempting atomic update for request:', id, 'with status PENDING');
+    const updatedRequest = await RechargeRequest.findOneAndUpdate(
+      { _id: id, status: RECHARGE_STATUS.PENDING },
+      {
+        $set: {
+          status: RECHARGE_STATUS.APPROVED,
+          reviewedBy: adminId,
+          reviewedAt: new Date()
+        }
+      },
+      { new: true }
+    ).exec();
 
-    if (!request) {
-      return res.status(404).json({ error: 'Recharge request not found' });
+    console.log('[RECHARGE_APPROVE_DEBUG] Atomic update result:', updatedRequest ? 'SUCCESS - Document updated' : 'FAILED - No document matched');
+    
+    if (!updatedRequest) {
+      console.log('[RECHARGE_APPROVE_DEBUG] Request not found or already processed. Checking request...');
+      const checkRequest = await RechargeRequest.findById(id).exec();
+      if (checkRequest) {
+        console.log('[RECHARGE_APPROVE_DEBUG] Request exists with status:', checkRequest.status);
+      } else {
+        console.log('[RECHARGE_APPROVE_DEBUG] Request does not exist in database');
+      }
+      return res.status(400).json({ error: 'Request already processed' });
     }
 
-    if (request.status !== RECHARGE_STATUS.PENDING) {
-      return res.status(400).json({ error: 'Only PENDING requests can be approved' });
-    }
-    console.log('Step 2: Request status is PENDING');
+    console.log('Step 2: Request approved atomically, ID:', updatedRequest._id.toString());
+    console.log('[RECHARGE_APPROVE_DEBUG] Updated request status:', updatedRequest.status);
 
-    const wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
+    const wallet = await Wallet.findOne({ clientId: updatedRequest.clientId }).exec();
     console.log('Step 3: Found wallet:', wallet ? wallet._id.toString() : 'NOT FOUND');
 
     if (!wallet) {
       return res.status(404).json({ error: 'Wallet not found for this client' });
     }
 
-    wallet.walletCredits = (wallet.walletCredits || 0) + request.amount;
+    wallet.walletCredits = (wallet.walletCredits || 0) + updatedRequest.amount;
     // DO NOT update balance - walletCredits is the single source of truth
     await wallet.save();
     console.log('Step 4: Wallet saved, walletCredits:', wallet.walletCredits);
@@ -375,24 +393,18 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
     const transaction = await WalletTransaction.create({
       walletId: wallet._id,
       type: TRANSACTION_TYPES.RECHARGE_APPROVED,
-      amount: request.amount,
-      description: request.paymentReference ? `Recharge approved (Ref: ${request.paymentReference})` : 'Recharge approved',
-      referenceId: request._id,
+      amount: updatedRequest.amount,
+      description: updatedRequest.paymentReference ? `Recharge approved (Ref: ${updatedRequest.paymentReference})` : 'Recharge approved',
+      referenceId: updatedRequest._id,
     });
     console.log('Step 5: Transaction created:', transaction._id.toString());
 
-    // Use findByIdAndUpdate to avoid full document validation
-    const updatedRequest = await RechargeRequest.findByIdAndUpdate(
-      id,
-      { status: RECHARGE_STATUS.APPROVED, reviewedBy: adminId },
-      { new: true }
-    );
-    console.log('Step 6: Request status updated to APPROVED');
+    console.log('=== APPROVE COMPLETE ===');
 
     // --- Billing Hook - Create Invoice for Recharge ---
     let invoice = null;
     try {
-      invoice = await billingService.createInvoiceForRecharge(request, transaction, adminId);
+      invoice = await billingService.createInvoiceForRecharge(updatedRequest, transaction, adminId);
       if (invoice) {
         console.log('[BILLING] Invoice created:', invoice.invoiceNumber);
       }
@@ -435,7 +447,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
       } else {
         const emailResult = await emailService.sendWalletUpdate(recipientEmail, {
           amount: updatedRequest.amount,
-          description: `Recharge approved${request.paymentReference ? ` (Ref: ${request.paymentReference})` : ''}`,
+          description: `Recharge approved${updatedRequest.paymentReference ? ` (Ref: ${updatedRequest.paymentReference})` : ''}`,
           newBalance: wallet.balance
         });
         
@@ -585,6 +597,7 @@ router.get('/subscription-requests', async (req, res) => {
         totalCredits: r.totalCredits,
         couponCode: r.couponCode,
         couponDiscount: r.couponDiscount,
+        transactionId: r.transactionId || null,
         status: r.status,
         reviewedBy: r.reviewedBy ? r.reviewedBy._id.toString() : null,
         reviewedByIdentifier: r.reviewedBy ? r.reviewedBy.identifier : null,
@@ -617,21 +630,43 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     console.log('=== SUBSCRIPTION APPROVE START ===');
     console.log('Request ID:', id);
 
-    const request = await SubscriptionRequest.findById(id).exec();
-    if (!request) {
-      return res.status(404).json({ error: 'Subscription request not found' });
-    }
-    if (request.status !== SUBSCRIPTION_REQUEST_STATUS.PENDING) {
-      return res.status(400).json({ error: 'Only PENDING requests can be approved' });
+    // ATOMIC STATUS UPDATE - Status acts as lock to prevent double approval
+    console.log('[SUB_APPROVE_DEBUG] Attempting atomic update for request:', id, 'with status PENDING');
+    const updatedRequest = await SubscriptionRequest.findOneAndUpdate(
+      { _id: id, status: SUBSCRIPTION_REQUEST_STATUS.PENDING },
+      {
+        $set: {
+          status: SUBSCRIPTION_REQUEST_STATUS.APPROVED,
+          reviewedBy: adminId,
+          reviewedAt: new Date()
+        }
+      },
+      { new: true }
+    ).exec();
+
+    console.log('[SUB_APPROVE_DEBUG] Atomic update result:', updatedRequest ? 'SUCCESS - Document updated' : 'FAILED - No document matched');
+
+    if (!updatedRequest) {
+      console.log('[SUB_APPROVE_DEBUG] Request not found or already processed. Checking request...');
+      const checkRequest = await SubscriptionRequest.findById(id).exec();
+      if (checkRequest) {
+        console.log('[SUB_APPROVE_DEBUG] Request exists with status:', checkRequest.status);
+      } else {
+        console.log('[SUB_APPROVE_DEBUG] Request does not exist in database');
+      }
+      return res.status(400).json({ error: 'Request already processed' });
     }
 
+    console.log('[SUB_APPROVE_DEBUG] Request approved atomically, ID:', updatedRequest._id.toString());
+    console.log('[SUB_APPROVE_DEBUG] Updated request status:', updatedRequest.status);
+
     // Validate clientId
-    if (!request.clientId) {
+    if (!updatedRequest.clientId) {
       return res.status(400).json({ error: 'Invalid clientId in request' });
     }
 
     // Fetch plan (source of truth)
-    const plan = await CreditPlan.findById(request.planId).exec();
+    const plan = await CreditPlan.findById(updatedRequest.planId).exec();
     if (!plan) {
       return res.status(404).json({ error: 'Plan not found' });
     }
@@ -654,12 +689,12 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
 
     // 1. Get or create wallet (safe initialization)
     const now = new Date();
-    let wallet = await Wallet.findOne({ clientId: request.clientId }).exec();
+    let wallet = await Wallet.findOne({ clientId: updatedRequest.clientId }).exec();
     
     // Create wallet if not exists (with 0 credits)
     if (!wallet) {
       wallet = await Wallet.create({
-        clientId: request.clientId,
+        clientId: updatedRequest.clientId,
         balance: 0,
         walletCredits: 0,
         subscriptionCredits: 0
@@ -698,27 +733,20 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       amount: -planPrice,
       credits: creditsToAdd,
       description: `Subscription Plan: ${plan.name}`,
-      referenceId: request._id,
+      referenceId: updatedRequest._id,
     });
 
-    // 4. Update request status
-    const updatedRequest = await SubscriptionRequest.findByIdAndUpdate(
-      id,
-      { status: SUBSCRIPTION_REQUEST_STATUS.APPROVED, reviewedBy: adminId, reviewedAt: new Date() },
-      { new: true }
-    );
-
-    console.log(`[SUB_REQ] Approved: ${request.planName}, Credits: ${creditsToAdd}, Expires: ${newExpiry}`);
+    console.log(`[SUB_REQ] Approved: ${updatedRequest.planName}, Credits: ${creditsToAdd}, Expires: ${newExpiry}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
     // 7. Notify client
     try {
       await createNotification({
-        recipientId: request.clientId,
+        recipientId: updatedRequest.clientId,
         type: 'SUBSCRIPTION_REQUEST_APPROVED',
         title: 'Subscription Approved',
-        message: `Your subscription request for ${request.planName} has been approved. ${creditsToAdd} credits added!`,
-        relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: request._id },
+        message: `Your subscription request for ${updatedRequest.planName} has been approved. ${creditsToAdd} credits added!`,
+        relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: updatedRequest._id },
         notifyByEmail: true,
       });
     } catch (notifErr) {

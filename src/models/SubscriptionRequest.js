@@ -82,6 +82,10 @@ const subscriptionRequestSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    transactionId: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
