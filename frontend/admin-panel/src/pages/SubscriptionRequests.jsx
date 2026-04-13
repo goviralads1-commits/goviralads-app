@@ -13,6 +13,7 @@ const SubscriptionRequests = () => {
   const [actionType, setActionType] = useState(''); // 'approve' or 'reject'
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [selectedRequests, setSelectedRequests] = useState([]);
 
   useEffect(() => {
     fetchRequests();
@@ -181,6 +182,33 @@ const SubscriptionRequests = () => {
             </div>
           )}
 
+          {/* Bulk Action Bar - only visible when requests are selected */}
+          {selectedRequests.length > 0 && (
+            <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <span className="text-sm font-medium text-indigo-700">
+                {selectedRequests.length} selected
+              </span>
+              <button
+                onClick={() => {}}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
+              >
+                Reject Selected
+              </button>
+              <button
+                onClick={() => {}}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-gray-700 bg-gray-200 hover:bg-gray-300"
+              >
+                Delete Selected
+              </button>
+              <button
+                onClick={() => setSelectedRequests([])}
+                className="ml-auto text-xs text-indigo-500 hover:text-indigo-700 font-medium"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
           {/* Pending Requests Table */}
           <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
             <div className="px-4 py-5 sm:px-6">
@@ -196,6 +224,8 @@ const SubscriptionRequests = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th scope="col" className="px-4 py-3">
+                      </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Client
                       </th>
@@ -218,7 +248,21 @@ const SubscriptionRequests = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {pendingRequests.map((request) => (
-                      <tr key={request.id}>
+                      <tr key={request.id} className={selectedRequests.includes(request.id) ? 'bg-indigo-50' : ''}>
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedRequests.includes(request.id)}
+                            onChange={() => {
+                              setSelectedRequests(prev =>
+                                prev.includes(request.id)
+                                  ? prev.filter(id => id !== request.id)
+                                  : [...prev, request.id]
+                              );
+                            }}
+                            className="h-4 w-4 text-indigo-600 border-gray-300 rounded cursor-pointer"
+                          />
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {request.clientIdentifier || 'N/A'}
                         </td>
