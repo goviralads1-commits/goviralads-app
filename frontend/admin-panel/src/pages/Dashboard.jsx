@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
-import { initPushNotifications } from '../services/pushService';
+import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -90,6 +90,9 @@ const Dashboard = () => {
   // Initialize push notifications after login
   useEffect(() => {
     initPushNotifications();
+    // Register foreground message handler so notifications show when tab is open
+    const unsubscribe = setupForegroundHandler(null);
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
   }, []);
 
   // Auto-rotate banners

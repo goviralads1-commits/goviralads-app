@@ -298,10 +298,11 @@ export const setupForegroundHandler = (onMessageCallback) => {
   return onMessage(msg, (payload) => {
     console.log('[Push] Foreground message received:', payload);
     
+    // Backend sends data-only messages — read from payload.data
     // Show browser notification if page is not focused
     if (document.hidden && Notification.permission === 'granted') {
-      const title = payload.notification?.title || 'New Message - Go Viral Ads';
-      const body = payload.notification?.body || 'You have a new message';
+      const title = payload.data?.title || 'New Message - Go Viral Ads';
+      const body = payload.data?.body || 'You have a new message';
       
       new Notification(title, {
         body,
