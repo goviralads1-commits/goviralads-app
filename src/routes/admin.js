@@ -724,7 +724,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       await Wallet.findByIdAndUpdate(wallet._id, { $set: { subscriptionCredits: 0 } });
     }
 
-    const expiresAt = finalExpiry;
+    const expiresAt = newExpiry;
 
     // 3. Record wallet transaction
     await WalletTransaction.create({
