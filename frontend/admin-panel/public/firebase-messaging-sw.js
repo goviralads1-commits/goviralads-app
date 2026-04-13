@@ -73,9 +73,9 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const taskId = data.taskId;
 
-  // Navigate directly to task page if taskId is available
+  // Navigate directly to task page with scrollToChat=true so TaskDetail auto-scrolls to chat
   // Falls back to stored url, then /support
-  const relativePath = taskId ? `/tasks/${taskId}` : (data.url || '/support');
+  const relativePath = taskId ? `/tasks/${taskId}?scrollToChat=true` : (data.url || '/support');
   
   // Build full URL with origin for reliable navigation
   const fullUrl = new URL(relativePath, self.location.origin).href;

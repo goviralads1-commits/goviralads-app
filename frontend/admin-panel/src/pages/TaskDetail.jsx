@@ -210,10 +210,12 @@ const TaskDetail = () => {
     }
   }, [loading, task, searchParams]);
 
-  // Auto-scroll to latest message when messages update
+  // Auto-scroll to latest message when messages update (delayed to ensure DOM is ready)
   useEffect(() => {
-    if (task?.messages?.length > 0 && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (task?.messages?.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 200);
     }
   }, [task?.messages?.length]);
 

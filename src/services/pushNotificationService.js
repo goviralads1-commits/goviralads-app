@@ -317,6 +317,7 @@ const sendToRole = async (role, notification, data = {}) => {
  * @param {string} messagePreview - Message preview
  */
 const sendMessageToAllAdmins = async (senderName, taskTitle, taskId, messagePreview) => {
+  console.log('[Push] ===== SENDING PUSH TO ADMIN =====');
   console.log('[Push] sendMessageToAllAdmins called:', { senderName, taskTitle, taskId });
   
   const safePreview = (messagePreview || '[Attachment]').substring(0, 80);
