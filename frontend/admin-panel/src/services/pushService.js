@@ -180,6 +180,17 @@ const sendTokenToBackend = async (fcmToken) => {
       throw new Error('No auth token - user not logged in');
     }
 
+    // IMPORTANT: Save preference to DB BEFORE registering token.
+    // The POST /device-token guard checks preferences.pushNotifications.
+    // If user previously disabled push (sets preference=false), we must set
+    // preference=true FIRST, otherwise the guard skips token registration.
+    try {
+      await api.patch('/admin/push-preference', { pushEnabled: true });
+      console.log('[Push] Push preference saved to DB: enabled (before token registration)');
+    } catch (e) {
+      console.warn('[Push] Failed to save push preference to DB (non-fatal):', e.message);
+    }
+
     console.log('[Push] Sending token to backend: POST /admin/device-token');
     const response = await api.post('/admin/device-token', {
       token: fcmToken,
@@ -188,14 +199,6 @@ const sendTokenToBackend = async (fcmToken) => {
     
     console.log('[Push] ✅ Backend response:', response.status, response.data);
     localStorage.setItem('pushNotificationsEnabled', 'true');
-
-    // Save push preference to DB (enabled)
-    try {
-      await api.patch('/admin/push-preference', { pushEnabled: true });
-      console.log('[Push] Push preference saved to DB: enabled');
-    } catch (e) {
-      console.warn('[Push] Failed to save push preference to DB:', e.message);
-    }
 
     return true;
   } catch (error) {

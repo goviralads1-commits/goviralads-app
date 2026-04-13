@@ -221,7 +221,11 @@ const sendToRole = async (role, notification, data = {}) => {
 
     const tokenStrings = tokens.map(t => t.token);
     console.log(`[Push] ${role.toUpperCase()} tokens found: ${tokenStrings.length}`);
-    console.log('[Push] Token preview:', tokenStrings.map(t => t.substring(0, 20) + '...'));
+    console.log('[Push] Token details:', tokens.map((t, i) => ({
+      index: i,
+      userId: t.userId?.toString(),
+      tokenPreview: t.token ? t.token.substring(0, 20) + '...' : 'null'
+    })));
     console.log(`[Push] Sending to all ${role}s...`);
     
     // Ensure ALL data values are strings
