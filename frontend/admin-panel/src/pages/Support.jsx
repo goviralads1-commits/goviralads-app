@@ -34,6 +34,38 @@ const Support = () => {
   const [copyToast, setCopyToast] = useState(null);
   const [toast, setToast] = useState(null);
   const fullscreenInputRef = useRef(null);
+  const pollingRef = useRef(null);
+  const selectedTaskRef = useRef(null);
+  const prevMessageCountRef = useRef(0);
+  const [activeTaskId, setActiveTaskId] = useState(null);
+
+  // Keep ref in sync with selectedTask so the polling closure always reads fresh state
+  useEffect(() => {
+    selectedTaskRef.current = selectedTask;
+  }, [selectedTask]);
+
+  // Polling: fetch only messages every 4s when a chat is open
+  useEffect(() => {
+    if (!activeTaskId) {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      return;
+    }
+    const poll = async () => {
+      try {
+        const res = await api.get(`/admin/tasks/${activeTaskId}/messages?page=0&limit=50`);
+        const fetched = res.data?.messages || [];
+        const current = selectedTaskRef.current;
+        if (!current) return;
+        // Only update if the server has more confirmed messages than we have locally
+        const currentReal = (current.messages || []).filter(m => !m._optimistic).length;
+        if (fetched.length > currentReal) {
+          setSelectedTask(prev => prev ? { ...prev, messages: fetched } : prev);
+        }
+      } catch (_) { /* silent poll failure */ }
+    };
+    pollingRef.current = setInterval(poll, 4000);
+    return () => { clearInterval(pollingRef.current); pollingRef.current = null; };
+  }, [activeTaskId]);
 
   // Extract taskId from URL or sessionStorage on mount
   useEffect(() => {
@@ -113,6 +145,7 @@ const Support = () => {
       if (res.data?.task) {
         console.log('[Support] Chat loaded successfully:', res.data.task.title);
         setSelectedTask(res.data.task);
+        setActiveTaskId(taskId);
       } else {
         throw new Error('No task in response');
       }
@@ -179,6 +212,7 @@ const Support = () => {
     try {
       const res = await api.get(`/admin/tasks/${taskId}`);
       setSelectedTask(res.data.task);
+      setActiveTaskId(taskId);
     } catch (err) {
       console.error('[Support] Failed to load chat:', err);
     } finally {
@@ -192,34 +226,61 @@ const Support = () => {
     }, 100);
   }, []);
 
+  // Scroll to bottom only when message count increases (prevents auto-scroll on every poll)
   useEffect(() => {
-    if (selectedTask) scrollToBottom();
+    if (!selectedTask) {
+      prevMessageCountRef.current = 0;
+      return;
+    }
+    const count = (selectedTask.messages || []).length;
+    if (count !== prevMessageCountRef.current) {
+      prevMessageCountRef.current = count;
+      scrollToBottom();
+    }
   }, [selectedTask, scrollToBottom]);
 
   const handleSendMessage = async () => {
     if ((!messageText.trim() && messageAttachments.length === 0) || sendingMessage) return;
+
+    const taskId = selectedTask._id || selectedTask.id;
+    const capturedText = messageText.trim();
+    const hasImages = messageAttachments.length > 0;
+
+    // Optimistic update for text-only messages — show immediately, don't wait for API
+    if (!hasImages && capturedText) {
+      const optimisticMsg = {
+        sender: 'ADMIN',
+        text: capturedText,
+        attachments: [],
+        createdAt: new Date().toISOString(),
+        _optimistic: true
+      };
+      setSelectedTask(prev => prev ? { ...prev, messages: [...(prev.messages || []), optimisticMsg] } : prev);
+      setMessageText('');
+      scrollToBottom();
+    }
+
     setSendingMessage(true);
     try {
-      const taskId = selectedTask._id || selectedTask.id;
       let attachmentUrls = [];
-      
+
       // STEP 1: Upload images first if any (MUST match TaskDetail exactly)
-      if (messageAttachments.length > 0) {
+      if (hasImages) {
         try {
           console.log('[Support Upload] Starting upload...');
           console.log('[Support Upload] Files to upload:', messageAttachments.length);
-          
+
           const formData = new FormData();
           messageAttachments.forEach((att, idx) => {
             console.log(`[Support Upload] File ${idx}:`, att.file.name, att.file.type, att.file.size, 'bytes');
             formData.append('images', att.file); // MUST be 'images' (plural) to match backend
           });
-          
+
           // Note: Don't set Content-Type manually - browser sets it with correct boundary for FormData
           const uploadRes = await api.post('/upload/chat', formData);
           console.log('[Support Upload] Response:', uploadRes.status, uploadRes.data);
           attachmentUrls = uploadRes.data?.urls || [];
-          
+
           // If upload returned no URLs, fail
           if (messageAttachments.length > 0 && attachmentUrls.length === 0) {
             throw new Error('Image upload failed - no URLs returned');
@@ -234,26 +295,41 @@ const Support = () => {
           return; // DO NOT send message
         }
       }
-      
-      // STEP 2: Only send message after successful upload
+
+      // STEP 2: Send message
       await api.post(`/admin/tasks/${taskId}/message`, {
-        text: messageText.trim() || (attachmentUrls.length > 0 ? '[Image]' : ''),
+        text: capturedText || (attachmentUrls.length > 0 ? '[Image]' : ''),
         attachments: attachmentUrls
       });
-      
-      // Cleanup preview URLs
-      messageAttachments.forEach(att => URL.revokeObjectURL(att.previewUrl));
-      setMessageText('');
-      setMessageAttachments([]);
-      
-      // Refresh task to get new message
-      const res = await api.get(`/admin/tasks/${taskId}`);
-      setSelectedTask(res.data.task);
+
+      // Cleanup preview URLs for images
+      if (hasImages) {
+        messageAttachments.forEach(att => URL.revokeObjectURL(att.previewUrl));
+      }
+
+      // STEP 3: Lightweight messages refresh (replaces full task reload)
+      const res = await api.get(`/admin/tasks/${taskId}/messages?page=0&limit=50`);
+      const fetched = res.data?.messages || [];
+      if (fetched.length > 0) {
+        setSelectedTask(prev => prev ? { ...prev, messages: fetched } : prev);
+      }
+
+      if (hasImages) {
+        setMessageText('');
+        setMessageAttachments([]);
+      } else {
+        setMessageAttachments([]);
+      }
       scrollToBottom();
     } catch (err) {
       console.error('Send error:', err);
       setToast({ type: 'error', message: err.response?.data?.error || 'Failed to send message' });
       setTimeout(() => setToast(null), 3000);
+      // Revert optimistic message on error and restore input text
+      if (!hasImages && capturedText) {
+        setSelectedTask(prev => prev ? { ...prev, messages: (prev.messages || []).filter(m => !m._optimistic) } : prev);
+        setMessageText(capturedText);
+      }
     } finally {
       setSendingMessage(false);
     }
@@ -526,7 +602,7 @@ Status: ${status}
 
         {/* Header */}
         <div style={{ backgroundColor: '#fff', padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <button onClick={() => { setSelectedTask(null); setShowOnlyApprovals(false); }} style={{ padding: '8px', borderRadius: '8px', border: 'none', backgroundColor: '#f1f5f9', cursor: 'pointer' }}>
+          <button onClick={() => { setSelectedTask(null); setShowOnlyApprovals(false); setActiveTaskId(null); }} style={{ padding: '8px', borderRadius: '8px', border: 'none', backgroundColor: '#f1f5f9', cursor: 'pointer' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2"><path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <div style={{ flex: 1, minWidth: '150px' }}>
