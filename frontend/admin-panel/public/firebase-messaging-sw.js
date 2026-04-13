@@ -35,13 +35,16 @@ self.addEventListener('push', (event) => {
     return;
   }
   
-  // Get data from either notification or data field
+  // Get notification text from data field (backend sends data-only messages)
   const title = payload.notification?.title || payload.data?.title || 'New Message - Go Viral Ads';
   const body = payload.notification?.body || payload.data?.body || 'You have a new message';
   const taskId = payload.data?.taskId || '';
-  const url = payload.data?.url || (taskId ? `/support?taskId=${taskId}` : '/support');
-  
-  console.log('[SW] Showing notification:', { title, body, url });
+
+  // Deep link URL: navigate directly to the task page for one-click chat open
+  // /tasks/:taskId mounts TaskDetail directly — no two-step Support page loading
+  const deepLinkUrl = taskId ? `/tasks/${taskId}` : (payload.data?.url || '/support');
+
+  console.log('[SW] Showing notification:', { title, body, deepLinkUrl, taskId });
   
   const notificationOptions = {
     body: body,
@@ -52,7 +55,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: false,
     data: {
       taskId: taskId,
-      url: url
+      url: deepLinkUrl   // stored as deepLinkUrl so notificationclick uses /tasks/:taskId
     }
     // NO actions array - keeps it clean without Unsubscribe button
   };
@@ -69,7 +72,10 @@ self.addEventListener('notificationclick', (event) => {
 
   const data = event.notification.data || {};
   const taskId = data.taskId;
-  const relativePath = data.url || (taskId ? `/support?taskId=${taskId}` : '/support');
+
+  // Navigate directly to task page if taskId is available
+  // Falls back to stored url, then /support
+  const relativePath = taskId ? `/tasks/${taskId}` : (data.url || '/support');
   
   // Build full URL with origin for reliable navigation
   const fullUrl = new URL(relativePath, self.location.origin).href;
@@ -86,7 +92,7 @@ self.addEventListener('notificationclick', (event) => {
         console.log('[SW] Client URL:', client.url);
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           console.log('[SW] Found existing window, posting message and focusing');
-          // Post message to navigate
+          // Post message to navigate — NotificationClickHandler in App.jsx receives this
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
             url: relativePath,
@@ -97,6 +103,7 @@ self.addEventListener('notificationclick', (event) => {
       }
       
       // No existing window, open new one with FULL URL
+      // ProtectedRoute + LoginForm handle the intendedUrl redirect if not logged in
       console.log('[SW] No existing window, opening new tab with full URL');
       if (clients.openWindow) {
         return clients.openWindow(fullUrl);

@@ -157,7 +157,10 @@ const NotificationClickHandler = () => {
     // Handler for service worker messages
     const handleServiceWorkerMessage = (event) => {
       if (event.data?.type === 'NOTIFICATION_CLICK') {
-        const url = event.data?.url || (event.data?.taskId ? `/support?taskId=${event.data.taskId}` : '/support');
+        // Navigate directly to task page — matches /tasks/:taskId route in both apps
+        const url = event.data?.taskId
+          ? `/tasks/${event.data.taskId}`
+          : (event.data?.url || '/support');
         
         console.log('[Push] ========== NOTIFICATION CLICK ==========');
         console.log('[Push] URL from notification:', url);
