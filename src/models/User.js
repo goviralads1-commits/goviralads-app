@@ -79,6 +79,7 @@ const userSchema = new mongoose.Schema(
     preferences: {
       emailNotifications: { type: Boolean, default: true },
       inAppNotifications: { type: Boolean, default: true },
+      pushNotifications: { type: Boolean, default: true },
       marketingEmails: { type: Boolean, default: false },
       defaultDeductionMode: { 
         type: String, 

@@ -193,6 +193,15 @@ const sendTokenToBackend = async (fcmToken) => {
     
     console.log('[Push] ✅ Backend response:', response.status, response.data);
     localStorage.setItem('pushNotificationsEnabled', 'true');
+
+    // Save push preference to DB (enabled)
+    try {
+      await api.patch('/client/push-preference', { pushEnabled: true });
+      console.log('[Push] Push preference saved to DB: enabled');
+    } catch (e) {
+      console.warn('[Push] Failed to save push preference to DB:', e.message);
+    }
+
     return true;
   } catch (error) {
     console.error('[Push] Backend save FAILED:', {
@@ -209,7 +218,15 @@ export const disablePushNotifications = async () => {
   try {
     const fcmToken = localStorage.getItem('fcmToken');
     console.log('[Push] Disabling notifications, token exists:', !!fcmToken);
-    
+
+    // Save preference to backend DB FIRST (non-blocking if it fails)
+    try {
+      await api.patch('/client/push-preference', { pushEnabled: false });
+      console.log('[Push] Push preference saved to DB: disabled');
+    } catch (e) {
+      console.warn('[Push] Failed to save push preference to DB:', e.message);
+    }
+
     if (fcmToken) {
       console.log('[Push] Sending DELETE /client/device-token');
       const response = await api.delete('/client/device-token', { data: { token: fcmToken } });

@@ -2,6 +2,7 @@
 // Firebase Admin is initialized in server.js - we just use it here
 const admin = require('firebase-admin');
 const DeviceToken = require('../models/DeviceToken');
+const User = require('../models/User');
 
 // Check if Firebase Admin is initialized (done in server.js)
 const isFirebaseReady = () => {
@@ -49,6 +50,13 @@ const sendToUser = async (userId, notification, data = {}) => {
   }
 
   try {
+    // Check if user has push notifications enabled in DB
+    const userDoc = await User.findById(userId).select('preferences').lean();
+    if (userDoc && userDoc.preferences?.pushNotifications === false) {
+      console.log(`[Push] Push notifications disabled by user ${userId} - skipping`);
+      return { success: false, reason: 'push_disabled_by_user' };
+    }
+
     // Get all active device tokens for user
     console.log('[Push] Querying tokens for userId:', userId);
     const tokens = await DeviceToken.getActiveTokensForUser(userId);

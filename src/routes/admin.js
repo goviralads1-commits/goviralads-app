@@ -6607,6 +6607,13 @@ router.post('/device-token', async (req, res) => {
     console.log(`[PUSH] Saving device token for admin ${adminId}`);
     console.log(`[PUSH] Token: ${token.substring(0, 30)}...`);
 
+    // Guard: skip registration if user has disabled push notifications in DB
+    const userForPush = await User.findById(adminId).select('preferences').lean();
+    if (userForPush?.preferences?.pushNotifications === false) {
+      console.log(`[PUSH] Push notifications disabled in DB for admin ${adminId} - skipping token registration`);
+      return res.json({ success: true, skipped: true });
+    }
+
     // Upsert token (update if exists, create if new)
     const result = await DeviceToken.findOneAndUpdate(
       { token },
@@ -6686,6 +6693,28 @@ router.delete('/device-token', async (req, res) => {
   } catch (err) {
     console.error('[PUSH] Remove device token error:', err.message);
     return res.status(500).json({ error: 'Failed to remove device token' });
+  }
+});
+
+// PATCH /admin/push-preference - Save push notification preference to database
+router.patch('/push-preference', async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { pushEnabled } = req.body || {};
+
+    if (typeof pushEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'pushEnabled must be a boolean' });
+    }
+
+    await User.findByIdAndUpdate(adminId, {
+      $set: { 'preferences.pushNotifications': pushEnabled }
+    });
+
+    console.log(`[PUSH] Push preference saved for admin ${adminId}: ${pushEnabled}`);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUSH] Save push preference error:', err.message);
+    return res.status(500).json({ error: 'Failed to save push preference' });
   }
 });
 
