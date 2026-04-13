@@ -26,6 +26,10 @@ const Wallet = () => {
   const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
   const [activeSection, setActiveSection] = useState(null); // null | 'recharge' | 'subscription'
   const [showAddMoneyModal, setShowAddMoneyModal] = useState(false);
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [subModalPlan, setSubModalPlan] = useState(null);
+  const [subTransactionId, setSubTransactionId] = useState('');
+  const [subTransactionError, setSubTransactionError] = useState('');
   const subscriptionRef = useRef(null);
   const addCreditRef = useRef(null);
 
@@ -116,23 +120,30 @@ const Wallet = () => {
     return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   };
 
-  const handleSubscriptionPurchase = async (planId, plan) => {
-    // ISSUE 2 FIX: Confirmation popup before purchase
-    const confirmMsg = plan 
-      ? `Buy "${plan.name}" for ₹${plan.price?.toLocaleString()}?\n\nYou will get ${plan.credits?.toLocaleString()} credits${plan.bonusCredits > 0 ? ` + ${plan.bonusCredits} bonus` : ''}.`
-      : 'Confirm this purchase?';
-    
-    if (!window.confirm(confirmMsg)) return;
-    
+  const handleSubscriptionPurchase = (planId, plan) => {
+    setSubModalPlan({ planId, plan });
+    setSubTransactionId('');
+    setSubTransactionError('');
+    setShowSubModal(true);
+  };
+
+  const handleSubModalSubmit = async () => {
+    if (!subTransactionId.trim()) {
+      setSubTransactionError('Transaction ID is required');
+      return;
+    }
+    const { planId, plan } = subModalPlan;
+    setSubTransactionError('');
+    setShowSubModal(false);
     setPurchasingPlan(planId);
     try {
       const res = await api.post(`/client/credit-plans/${planId}/purchase`, {
-        couponCode: couponCode.trim() || undefined
+        couponCode: couponCode.trim() || undefined,
+        transactionId: subTransactionId.trim()
       });
       setToast('Request submitted. Waiting for admin approval.');
       setTimeout(() => setToast(null), 4000);
       setCouponCode('');
-      // Add to pending requests
       if (res.data.request) {
         setPendingSubscriptionRequests(prev => [...prev, res.data.request]);
       }
@@ -486,34 +497,24 @@ const Wallet = () => {
                 const isPendingApproval = pendingSubscriptionRequests.some(r => r.planId === planId);
                 const isBestValue = index === 0 && !isCurrentPlan && !isPendingApproval;
                 
-                // Upgrade logic - check if user has active subscription
-                const hasActiveSubscription = walletData?.subscriptionCredits > 0 && 
-                  walletData?.subscriptionExpiresAt && 
-                  new Date(walletData.subscriptionExpiresAt) > new Date();
-                const currentPlanPrice = Number(walletData?.currentPlanPrice) || 0;
-                const canUpgrade = !hasActiveSubscription || (plan.price > currentPlanPrice);
-                const isLowerPlan = hasActiveSubscription && plan.price <= currentPlanPrice && !isCurrentPlan;
-                
                 return (
                   <button
                     key={planId}
-                    onClick={() => !isPendingApproval && canUpgrade && handleSubscriptionPurchase(planId, plan)}
-                    disabled={isBuying || isPendingApproval || isLowerPlan}
+                    onClick={() => !isPendingApproval && handleSubscriptionPurchase(planId, plan)}
+                    disabled={isBuying || isPendingApproval}
                     style={{
                       padding: '24px 16px',
                       borderRadius: '20px',
-                      border: isPendingApproval ? '2px solid #f59e0b' : isCurrentPlan ? '2px solid #16a34a' : isLowerPlan ? '1px solid #e2e8f0' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                      border: isPendingApproval ? '2px solid #f59e0b' : isCurrentPlan ? '2px solid #16a34a' : isBestValue ? '2px solid #6366f1' : '1px solid #e2e8f0',
                       background: isPendingApproval
                         ? 'linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%)'
                         : isCurrentPlan
                         ? 'linear-gradient(145deg, #f0fdf4 0%, #dcfce7 100%)'
-                        : isLowerPlan
-                        ? 'linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)'
                         : isBestValue
                         ? 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'
                         : 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
-                      cursor: isBuying || isPendingApproval || isLowerPlan ? 'not-allowed' : 'pointer',
-                      opacity: isBuying ? 0.7 : isLowerPlan ? 0.6 : 1,
+                      cursor: isBuying || isPendingApproval ? 'not-allowed' : 'pointer',
+                      opacity: isBuying ? 0.7 : 1,
                       textAlign: 'center',
                       position: 'relative',
                       transition: 'all 0.25s ease',
@@ -547,23 +548,6 @@ const Wallet = () => {
                         fontSize: '9px', fontWeight: '700',
                         padding: '4px 12px', borderRadius: '20px'
                       }}>ACTIVE</span>
-                    )}
-                    {!isPendingApproval && !isCurrentPlan && isLowerPlan && (
-                      <span style={{
-                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
-                        backgroundColor: '#94a3b8', color: '#fff',
-                        fontSize: '9px', fontWeight: '700',
-                        padding: '4px 12px', borderRadius: '20px'
-                      }}>NOT AVAILABLE</span>
-                    )}
-                    {!isPendingApproval && !isCurrentPlan && !isLowerPlan && canUpgrade && hasActiveSubscription && (
-                      <span style={{
-                        position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)',
-                        background: 'linear-gradient(90deg, #10b981, #059669)',
-                        color: '#fff', fontSize: '9px', fontWeight: '700',
-                        padding: '4px 12px', borderRadius: '20px', letterSpacing: '0.5px',
-                        boxShadow: '0 2px 8px rgba(16,185,129,0.4)'
-                      }}>UPGRADE</span>
                     )}
 
                     {/* Price */}
@@ -1339,6 +1323,81 @@ const Wallet = () => {
             </div>
           </div>
         </>
+      )}
+
+      {/* Subscription Purchase Modal */}
+      {showSubModal && subModalPlan && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, padding: '16px'
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '20px', padding: '32px',
+            width: '100%', maxWidth: '420px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
+              Confirm Subscription Purchase
+            </h3>
+
+            <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+              <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                {subModalPlan.plan?.name}
+              </p>
+              <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#475569' }}>
+                Price: <strong>₹{subModalPlan.plan?.price?.toLocaleString()}</strong>
+              </p>
+              <p style={{ margin: '0', fontSize: '14px', color: '#475569' }}>
+                Credits: <strong>{subModalPlan.plan?.credits?.toLocaleString()}{subModalPlan.plan?.bonusCredits > 0 ? ` + ${subModalPlan.plan.bonusCredits} bonus` : ''}</strong>
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>
+                Transaction ID / UTR <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={subTransactionId}
+                onChange={(e) => { setSubTransactionId(e.target.value); setSubTransactionError(''); }}
+                placeholder="Enter your payment UTR / Transaction ID"
+                style={{
+                  width: '100%', padding: '12px 14px', fontSize: '14px',
+                  border: subTransactionError ? '2px solid #ef4444' : '2px solid #e2e8f0',
+                  borderRadius: '10px', outline: 'none', boxSizing: 'border-box'
+                }}
+              />
+              {subTransactionError && (
+                <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#ef4444', fontWeight: '500' }}>
+                  {subTransactionError}
+                </p>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowSubModal(false)}
+                style={{
+                  padding: '11px 22px', fontSize: '14px', fontWeight: '600',
+                  background: '#f1f5f9', color: '#475569',
+                  border: 'none', borderRadius: '10px', cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubModalSubmit}
+                style={{
+                  padding: '11px 22px', fontSize: '14px', fontWeight: '700',
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer'
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
