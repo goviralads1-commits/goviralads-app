@@ -91,6 +91,11 @@ const Wallet = () => {
     fetchData();
   }, []);
 
+  // Safety: always clear coupon field on mount — never pre-filled
+  useEffect(() => {
+    setCouponCode('');
+  }, []);
+
   // Helper: days until expiry (0 = today, negative = past)
   const getDaysUntilExpiry = (expiresAt) => {
     const diffMs = new Date(expiresAt) - new Date();
