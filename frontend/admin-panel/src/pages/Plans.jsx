@@ -291,7 +291,7 @@ const Plans = () => {
         
         {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position */}
         <div className="category-rail" style={{ 
-          width: '100px', minWidth: '100px', maxWidth: '100px',
+          width: '90px', minWidth: '90px', maxWidth: '90px',
           backgroundColor: '#ffffff', 
           borderRight: '1px solid #eef2f6',
           position: 'sticky', 
