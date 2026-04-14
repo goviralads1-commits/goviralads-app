@@ -336,12 +336,12 @@ const Wallet = () => {
                 <p style={{fontSize: '13px', fontWeight: '600', color: '#86efac', margin: 0}}>Wallet Balance</p>
                 <p style={{fontSize: '11px', color: '#bbf7d0', margin: '2px 0 0 0'}}>No expiry</p>
               </div>
-              <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>₹{(walletData?.walletCredits || walletData?.balance || 0).toFixed(2)}</span>
+              <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>₹{(walletData?.walletCredits || 0).toFixed(2)}</span>
             </div>
           </div>
 
           {/* Empty State Helper */}
-          {(walletData?.walletCredits || walletData?.balance || 0) === 0 && (walletData?.subscriptionCredits || 0) === 0 && (
+          {(walletData?.walletCredits || 0) === 0 && (walletData?.subscriptionCredits || 0) === 0 && (
             <p style={{fontSize: '13px', color: 'rgba(255,255,255,0.7)', marginTop: '12px', textAlign: 'center'}}>
               Add money to your wallet or buy a plan to start
             </p>
