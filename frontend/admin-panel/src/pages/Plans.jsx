@@ -555,7 +555,7 @@ const Plans = () => {
             /* Plans Grid - Premium Style (matches Client) */
             <div style={{ 
               display: viewMode === 'grid' ? 'grid' : 'flex', 
-              gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(260px, 1fr))' : undefined, 
+              gridTemplateColumns: viewMode === 'grid' ? 'repeat(2, 1fr)' : undefined, 
               flexDirection: viewMode === 'list' ? 'column' : undefined, 
               gap: '20px' 
             }}>
