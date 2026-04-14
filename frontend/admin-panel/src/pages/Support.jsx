@@ -63,7 +63,7 @@ const Support = () => {
         }
       } catch (_) { /* silent poll failure */ }
     };
-    pollingRef.current = setInterval(poll, 4000);
+    pollingRef.current = setInterval(poll, 3000);
     return () => { clearInterval(pollingRef.current); pollingRef.current = null; };
   }, [activeTaskId]);
 
@@ -220,9 +220,9 @@ const Support = () => {
     }
   };
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((instant = false) => {
     setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth' });
     }, 100);
   }, []);
 
@@ -257,7 +257,7 @@ const Support = () => {
       };
       setSelectedTask(prev => prev ? { ...prev, messages: [...(prev.messages || []), optimisticMsg] } : prev);
       setMessageText('');
-      scrollToBottom();
+      scrollToBottom(true);
     }
 
     setSendingMessage(true);
@@ -302,20 +302,26 @@ const Support = () => {
         attachments: attachmentUrls
       });
 
-      // Cleanup preview URLs for images
-      if (hasImages) {
+      // STEP 3: Confirm optimistic (text) or refresh messages (image)
+      if (!hasImages) {
+        // FIX 1: Mark optimistic as confirmed — skip extra GET, polling syncs within 3s
+        setSelectedTask(prev => prev ? {
+          ...prev,
+          messages: (prev.messages || []).map(m => m._optimistic ? { ...m, _optimistic: false } : m)
+        } : prev);
+      } else {
+        // Cleanup preview URLs for images
         messageAttachments.forEach(att => URL.revokeObjectURL(att.previewUrl));
-      }
-
-      // STEP 3: Lightweight messages refresh (replaces full task reload)
-      const res = await api.get(`/admin/tasks/${taskId}/messages?page=0&limit=50`);
-      const fetched = res.data?.messages || [];
-      if (fetched.length > 0) {
-        setSelectedTask(prev => prev ? { ...prev, messages: fetched } : prev);
+        const res = await api.get(`/admin/tasks/${taskId}/messages?page=0&limit=50`);
+        const fetched = res.data?.messages || [];
+        if (fetched.length > 0) {
+          setSelectedTask(prev => prev ? { ...prev, messages: fetched } : prev);
+        }
       }
 
       if (hasImages) {
-        setMessageText('');
+        // FIX 3: Only clear messageText if user hasn't typed new content during upload
+        setMessageText(prev => prev.trim() === capturedText ? '' : prev);
         setMessageAttachments([]);
       } else {
         setMessageAttachments([]);
