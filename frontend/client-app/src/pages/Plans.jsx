@@ -298,7 +298,7 @@ const Plans = () => {
               color: selectedCategory === 'ALL' ? '#3b82f6' : '#94a3b8',
               backgroundColor: selectedCategory === 'ALL' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(0,0,0,0.04)',
               padding: '2px 8px', borderRadius: '10px'
-            }}>{plans.length}</span>
+            }}>{categories.find(c => c.id === 'ALL')?.planCount ?? plans.length}</span>
           </div>
           
           {/* Dynamic Category Tabs - Filter out duplicate "All" */}
@@ -306,7 +306,7 @@ const Plans = () => {
             .filter(cat => cat.name && cat.name.toLowerCase() !== 'all')
             .map(cat => {
             const catId = cat.id || cat._id;
-            const count = plans.filter(p => p.categoryId === catId).length;
+            const count = cat.planCount || 0;
             const isSelected = selectedCategory === catId;
             const themeColor = cat.color || '#6366f1';
             
