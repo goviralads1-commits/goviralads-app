@@ -48,8 +48,8 @@ self.addEventListener('push', (event) => {
   
   const notificationOptions = {
     body: body,
-    icon: 'https://www.goviralads.com/gva-icon-192.png',
-    badge: 'https://www.goviralads.com/gva-icon-192.png',
+    icon: 'https://raw.githubusercontent.com/goviralads1-commits/goviralads-assets/main/logo.png',
+    badge: 'https://raw.githubusercontent.com/goviralads1-commits/goviralads-assets/main/logo.png',
     tag: 'gva-message-' + (taskId || Date.now()),
     renotify: true,
     requireInteraction: false,
