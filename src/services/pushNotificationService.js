@@ -29,6 +29,28 @@ const getTokenCounts = async () => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Agency logo cache — fetched from DB once per 5 minutes, used in FCM payloads
+// ---------------------------------------------------------------------------
+let _cachedLogoUrl = null;
+let _cacheExpiry = 0;
+
+const getAgencyLogoUrl = async () => {
+  const now = Date.now();
+  if (_cachedLogoUrl !== null && now < _cacheExpiry) return _cachedLogoUrl;
+  try {
+    const adminUser = await User.findOne({ role: 'ADMIN', isDeleted: false })
+      .select('branding.logoUrl').lean();
+    _cachedLogoUrl = adminUser?.branding?.logoUrl || '';
+    _cacheExpiry = now + 5 * 60 * 1000; // refresh every 5 minutes
+    console.log('[Push] Agency logo URL cached:', _cachedLogoUrl ? _cachedLogoUrl.substring(0, 50) + '...' : '(none)');
+    return _cachedLogoUrl;
+  } catch (err) {
+    console.warn('[Push] Could not fetch agency logo:', err.message);
+    return '';
+  }
+};
+
 /**
  * Send push notification to a specific user
  * @param {string} userId - User ID to send notification to
@@ -174,11 +196,13 @@ const sendMessageNotification = async (recipientUserId, senderName, taskTitle, t
     body: `${senderName}: ${safePreview.length >= 80 ? safePreview.substring(0, 77) + '...' : safePreview}`
   };
   
+  const logoUrl = await getAgencyLogoUrl();
   const data = {
     type: 'chat',
     taskId: String(taskId),
     taskTitle: String(taskTitle),
-    url: `/support?taskId=${taskId}`
+    url: `/support?taskId=${taskId}`,
+    icon: logoUrl
   };
 
   return sendToUser(recipientUserId, notification, data);
@@ -326,11 +350,13 @@ const sendMessageToAllAdmins = async (senderName, taskTitle, taskId, messagePrev
     body: `${senderName}: ${safePreview.length >= 80 ? safePreview.substring(0, 77) + '...' : safePreview}`
   };
   
+  const logoUrl = await getAgencyLogoUrl();
   const data = {
     type: 'chat',
     taskId: String(taskId),
     taskTitle: String(taskTitle),
-    url: `/support?taskId=${taskId}`
+    url: `/support?taskId=${taskId}`,
+    icon: logoUrl
   };
 
   return sendToRole('admin', notification, data);
@@ -351,11 +377,13 @@ const sendApprovalNotification = async (recipientUserId, taskTitle, taskId, appr
     body: `${taskTitle}: ${approvalTitle}`
   };
   
+  const logoUrl = await getAgencyLogoUrl();
   const data = {
     type: 'approval_request',
     taskId: String(taskId),
     taskTitle: String(taskTitle),
-    url: `/support?taskId=${taskId}`
+    url: `/support?taskId=${taskId}`,
+    icon: logoUrl
   };
 
   return sendToUser(recipientUserId, notification, data);

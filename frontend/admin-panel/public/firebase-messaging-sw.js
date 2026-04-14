@@ -46,10 +46,16 @@ self.addEventListener('push', (event) => {
 
   console.log('[SW] Showing notification:', { title, body, deepLinkUrl, taskId });
   
+  // Use logo from payload (injected by backend) with a reliable fallback
+  const FALLBACK_ICON = 'https://raw.githubusercontent.com/goviralads1-commits/goviralads-assets/main/logo.png';
+  const iconUrl = (payload.data?.icon && payload.data.icon.startsWith('https://'))
+    ? payload.data.icon
+    : FALLBACK_ICON;
+
   const notificationOptions = {
     body: body,
-    icon: 'https://raw.githubusercontent.com/goviralads1-commits/goviralads-assets/main/logo.png',
-    badge: 'https://raw.githubusercontent.com/goviralads1-commits/goviralads-assets/main/logo.png',
+    icon: iconUrl,
+    badge: iconUrl,
     tag: 'gva-message-' + (taskId || Date.now()),
     renotify: true,
     requireInteraction: false,
