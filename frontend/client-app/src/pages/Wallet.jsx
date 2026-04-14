@@ -21,7 +21,6 @@ const Wallet = () => {
   const [subscription, setSubscription] = useState(null);
   const [expiredSubscription, setExpiredSubscription] = useState(null);
   const [couponCode, setCouponCode] = useState('');
-  const [availableCoupons, setAvailableCoupons] = useState([]);
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
   const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
   const [activeSection, setActiveSection] = useState(null); // null | 'recharge' | 'subscription'
@@ -70,14 +69,6 @@ const Wallet = () => {
           console.log('[Wallet] Subscription endpoint not available');
         }
 
-        // Optional: available coupons
-        try {
-          const couponsResponse = await api.get('/client/coupons');
-          setAvailableCoupons(couponsResponse.data.coupons || []);
-        } catch (couponErr) {
-          console.log('[Wallet] Coupons endpoint not available');
-        }
-
         // Optional: pending subscription requests
         try {
           const pendingRes = await api.get('/client/subscription-requests');
@@ -99,20 +90,6 @@ const Wallet = () => {
 
     fetchData();
   }, []);
-
-  // Auto-apply best coupon silently on load
-  useEffect(() => {
-    if (availableCoupons.length > 0 && !couponCode) {
-      const discountCoupons = availableCoupons.filter(c => c.type === 'discount');
-      const best = discountCoupons.length > 0
-        ? discountCoupons.reduce((a, b) => b.value > a.value ? b : a)
-        : availableCoupons.reduce((a, b) => b.value > a.value ? b : a);
-      setCouponCode(best.code);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableCoupons]);
-
-
 
   // Helper: days until expiry (0 = today, negative = past)
   const getDaysUntilExpiry = (expiresAt) => {
