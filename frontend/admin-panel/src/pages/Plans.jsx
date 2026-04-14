@@ -592,8 +592,7 @@ const Plans = () => {
                     {/* Media Section - 1:1 Aspect Ratio */}
                     <div style={{ 
                       width: viewMode === 'list' ? '180px' : '100%', 
-                      aspectRatio: viewMode === 'list' ? undefined : '1/1',
-                      height: viewMode === 'list' ? '180px' : undefined,
+                      height: viewMode === 'list' ? '180px' : '120px',
                       background: displayUrl ? '#f1f5f9' : fallbackGradient,
                       overflow: 'hidden', position: 'relative', flexShrink: 0 
                     }}>
@@ -692,8 +691,8 @@ const Plans = () => {
                     </div>
 
                     {/* Content Section */}
-                    <div style={{ padding: '18px', flex: 1 }}>
-                      <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px', lineHeight: 1.35, letterSpacing: '-0.01em' }}>{plan.title}</h3>
+                    <div style={{ padding: '14px', flex: 1 }}>
+                      <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px', lineHeight: 1.35, letterSpacing: '-0.01em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{plan.title}</h3>
                       
                       {/* Section Badges */}
                       {(plan.isFeatured || plan.isPopular || plan.isNew) && (
