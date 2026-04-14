@@ -3134,9 +3134,8 @@ router.post('/orders/:orderId/reject', async (req, res) => {
       referenceModel: 'Order',
     }], { session });
     
-    // Update wallet balance
-    wallet.balance += order.totalAmount;
-    await wallet.save({ session });
+    // Update wallet balance — use walletCredits (new system), never legacy balance
+    await Wallet.findByIdAndUpdate(wallet._id, { $inc: { walletCredits: order.totalAmount } }, { session });
     
     // Update order status
     order.orderStatus = ORDER_STATUS.REJECTED;
