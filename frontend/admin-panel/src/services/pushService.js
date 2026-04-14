@@ -342,12 +342,15 @@ export const initPushNotifications = async () => {
     // Check if already have a valid token
     const existingToken = localStorage.getItem('fcmToken');
     if (existingToken && Notification.permission === 'granted') {
-      console.log('[Push] Already have token, re-registering with backend...');
+      // Always call generateToken() (Firebase SDK getToken()) instead of re-sending the
+      // cached localStorage token. FCM tokens can rotate silently; Firebase SDK returns
+      // the current valid token (same or new) and we save it fresh to the backend.
+      console.log('[Push] Existing token found — refreshing via Firebase SDK (getToken)...');
       try {
-        await sendTokenToBackend(existingToken);
-        console.log('[Push] ✅ Token re-registered');
+        await generateToken();
+        console.log('[Push] ✅ Token refreshed and re-registered');
       } catch (e) {
-        console.warn('[Push] Re-register failed, will try fresh token');
+        console.warn('[Push] Token refresh failed:', e.message);
       }
       return;
     }

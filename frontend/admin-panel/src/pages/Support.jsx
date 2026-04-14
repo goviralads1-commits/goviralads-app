@@ -222,8 +222,8 @@ const Support = () => {
 
   const scrollToBottom = useCallback((instant = false) => {
     setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth' });
-    }, 100);
+      messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'instant' : 'auto', block: 'end' });
+    }, 350);
   }, []);
 
   // Scroll to bottom only when message count increases (prevents auto-scroll on every poll)

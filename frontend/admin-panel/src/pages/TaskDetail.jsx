@@ -214,8 +214,8 @@ const TaskDetail = () => {
   useEffect(() => {
     if (task?.messages?.length > 0) {
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 200);
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      }, 350);
     }
   }, [task?.messages?.length]);
 
