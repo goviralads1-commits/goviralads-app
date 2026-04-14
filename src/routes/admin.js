@@ -2191,9 +2191,8 @@ router.post('/tasks/:taskId/reject', async (req, res) => {
       
       const wallet = await Wallet.findOne({ clientId: task.clientId }).exec();
       if (wallet) {
-        // Credit refund
-        wallet.balance += refundAmount;
-        await wallet.save();
+        // Credit refund — use walletCredits (new system), never legacy balance
+        await Wallet.findByIdAndUpdate(wallet._id, { $inc: { walletCredits: refundAmount } });
 
         // Log transaction (using only valid schema fields)
         await WalletTransaction.create({
