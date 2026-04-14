@@ -113,8 +113,9 @@ const PlanDetail = () => {
 
   const mediaArray = Array.isArray(plan.planMedia) ? plan.planMedia : [];
   const countdown = formatCountdown(plan.countdownEndDate);
-  const hasDiscount = plan.offerPrice && plan.originalPrice && plan.offerPrice < plan.originalPrice;
-  const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.originalPrice) * 100) : 0;
+  const hasDiscount = plan.offerPrice && plan.creditCost && plan.offerPrice < plan.creditCost;
+  const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.creditCost) * 100) : 0;
+  const saveAmount = hasDiscount ? (plan.creditCost - plan.offerPrice) : 0;
   const displayPrice = plan.offerPrice || plan.creditCost || 0;
 
   return (
@@ -304,21 +305,28 @@ const PlanDetail = () => {
               Price
             </div>
             {plan.offerPrice ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                {plan.originalPrice && (
-                  <span style={{ fontSize: '22px', color: '#adb5bd', textDecoration: 'line-through', fontWeight: '500' }}>
-                    ₹{plan.originalPrice}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                  {plan.creditCost && plan.offerPrice < plan.creditCost && (
+                    <span style={{ fontSize: '22px', color: '#adb5bd', textDecoration: 'line-through', fontWeight: '500' }}>
+                      ₹{plan.creditCost}
+                    </span>
+                  )}
+                  <span style={{ fontSize: '40px', fontWeight: '800', color: '#28a745' }}>
+                    ₹{plan.offerPrice}
                   </span>
-                )}
-                <span style={{ fontSize: '40px', fontWeight: '800', color: '#28a745' }}>
-                  ₹{plan.offerPrice}
-                </span>
-                {hasDiscount && (
-                  <span style={{ 
-                    padding: '6px 14px', backgroundColor: '#dc3545', color: '#fff', 
-                    borderRadius: '10px', fontSize: '14px', fontWeight: '800' 
-                  }}>
-                    {discountPercent}% OFF
+                  {hasDiscount && (
+                    <span style={{ 
+                      padding: '6px 14px', backgroundColor: '#dc3545', color: '#fff', 
+                      borderRadius: '10px', fontSize: '14px', fontWeight: '800' 
+                    }}>
+                      {discountPercent}% OFF
+                    </span>
+                  )}
+                </div>
+                {saveAmount > 0 && (
+                  <span style={{ fontSize: '14px', color: '#16a34a', fontWeight: '600' }}>
+                    You save ₹{saveAmount}
                   </span>
                 )}
               </div>

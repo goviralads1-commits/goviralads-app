@@ -454,8 +454,9 @@ const Plans = () => {
               const isVideo = coverMedia?.type === 'video';
               // Use thumbnail for videos, direct URL for images
               const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
-              const hasDiscount = plan.offerPrice && plan.originalPrice && plan.offerPrice < plan.originalPrice;
-              const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.originalPrice) * 100) : 0;
+              const hasDiscount = plan.offerPrice && plan.creditCost && plan.offerPrice < plan.creditCost;
+              const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.creditCost) * 100) : 0;
+              const saveAmount = hasDiscount ? (plan.creditCost - plan.offerPrice) : 0;
               
               // Premium gradient backgrounds for no-image fallback
               const premiumGradients = [
@@ -670,13 +671,20 @@ const Plans = () => {
                     {/* Pricing - Premium Style */}
                     <div style={{ marginBottom: '14px' }}>
                       {plan.offerPrice ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>
-                            ₹{plan.offerPrice}
-                          </span>
-                          {plan.originalPrice && (
-                            <span style={{ fontSize: '14px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>
-                              ₹{plan.originalPrice}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>
+                              ₹{plan.offerPrice}
+                            </span>
+                            {plan.creditCost && plan.offerPrice < plan.creditCost && (
+                              <span style={{ fontSize: '14px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>
+                                ₹{plan.creditCost}
+                              </span>
+                            )}
+                          </div>
+                          {saveAmount > 0 && (
+                            <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>
+                              Save ₹{saveAmount}
                             </span>
                           )}
                         </div>
