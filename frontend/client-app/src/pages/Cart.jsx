@@ -67,7 +67,10 @@ const Cart = () => {
       });
       setItemInputs(inputs);
       
-      setShowConfirmModal(true);
+      // Open modal AFTER state is ready
+      setTimeout(() => {
+        setShowConfirmModal(true);
+      }, 0);
     } catch (err) {
       console.error('Failed to fetch plan config:', err);
       // Fallback: open modal anyway with existing cart items
