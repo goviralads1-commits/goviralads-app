@@ -84,6 +84,7 @@ const orderItemSchema = new mongoose.Schema({
     progressTarget: { type: Number, default: 100 },
     milestones: { type: Array, default: [] },
     autoCompletionCap: { type: Number, default: 100 },
+    customInputLabel: { type: String, default: '' },
   },
   inputs: [
     {

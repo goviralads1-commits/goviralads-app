@@ -411,17 +411,22 @@ const Cart = () => {
                       )}
                       
                       {item.requireCustomInput && (
-                        <input
-                          type="text"
-                          placeholder={item.customInputPlaceholder || 'Enter required info'}
-                          value={planInputs[unitIndex]?.customInput || ''}
-                          onChange={(e) => {
-                            const newInputs = [...planInputs];
-                            newInputs[unitIndex] = { ...newInputs[unitIndex], customInput: e.target.value };
-                            setItemInputs(prev => ({ ...prev, [item.id]: newInputs }));
-                          }}
-                          style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
-                        />
+                        <div style={{ marginTop: '8px' }}>
+                          <label style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', display: 'block', marginBottom: '4px' }}>
+                            {item.customInputLabel || 'Comment'}
+                          </label>
+                          <textarea
+                            placeholder={item.customInputPlaceholder || 'Write your comment here...'}
+                            value={planInputs[unitIndex]?.customInput || ''}
+                            onChange={(e) => {
+                              const newInputs = [...planInputs];
+                              newInputs[unitIndex] = { ...newInputs[unitIndex], customInput: e.target.value };
+                              setItemInputs(prev => ({ ...prev, [item.id]: newInputs }));
+                            }}
+                            rows={4}
+                            style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}
+                          />
+                        </div>
                       )}
                     </div>
                   ))}

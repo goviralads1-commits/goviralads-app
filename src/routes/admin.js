@@ -1049,6 +1049,9 @@ router.get('/tasks/:taskId', async (req, res) => {
         commissionType: task.commissionType,
         commissionValue: task.commissionValue,
         commissionEarned: task.commissionEarned,
+        // CLIENT INPUTS FROM ORDER
+        clientInputs: task.clientInputs || [],
+        customInputLabel: task.customInputLabel || '',
       }
     });
   } catch (err) {

@@ -687,6 +687,9 @@ router.get('/tasks/:taskId', async (req, res) => {
           }
           return icon;
         })(),
+        // CLIENT INPUTS FROM ORDER
+        clientInputs: task.clientInputs || [],
+        customInputLabel: task.customInputLabel || '',
       },
     });
   } catch (err) {
