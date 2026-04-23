@@ -85,10 +85,12 @@ const Cart = () => {
     setPurchasing(true);
 
     try {
-      // Send items with quantities for the new Order system
-      const items = cartItems.map(item => ({
+      // Send items with quantities AND inputs for the new Order system
+      const modalItems = window.__cartItemsWithPlanConfig || cartItems;
+      const items = modalItems.map(item => ({
         planId: item.id,
-        quantity: item.quantity || 1
+        quantity: item.quantity || 1,
+        inputs: itemInputs[item.id] || []
       }));
       const response = await api.post('/client/purchase-cart', { items });
 
@@ -373,6 +375,11 @@ const Cart = () => {
             {/* Per-Quantity Required Inputs */}
             {(window.__cartItemsWithPlanConfig || cartItems).map(item => {
               console.log("CART ITEM DEBUG:", item);
+              console.log("RENDER CHECK:", {
+                requireLink: item.requireLink,
+                requireCustomInput: item.requireCustomInput,
+                hasRequirements: item.requireLink || item.requireCustomInput
+              });
               const hasRequirements = item.requireLink || item.requireCustomInput;
               if (!hasRequirements) return null;
               
