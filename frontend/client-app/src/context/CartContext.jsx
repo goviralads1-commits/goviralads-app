@@ -19,7 +19,16 @@ export const CartProvider = ({ children }) => {
     try {
       const saved = localStorage.getItem('cart');
       if (saved) {
-        setCartItems(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Migrate old cart items to include new fields
+        const migrated = parsed.map(item => ({
+          ...item,
+          requireLink: item.requireLink || false,
+          requireCustomInput: item.requireCustomInput || false,
+          customInputLabel: item.customInputLabel || '',
+          customInputPlaceholder: item.customInputPlaceholder || ''
+        }));
+        setCartItems(migrated);
       }
     } catch (err) {
       console.error('Failed to load cart:', err);
