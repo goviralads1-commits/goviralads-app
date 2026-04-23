@@ -330,24 +330,61 @@ const Orders = () => {
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {(selectedOrder.items || []).map((item, idx) => (
-                    <div key={idx} style={{
-                      backgroundColor: '#f8fafc', borderRadius: '12px', padding: '16px',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '24px' }}>{item.planIcon || '📦'}</span>
-                        <div>
-                          <p style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                            {item.planTitle}
-                          </p>
-                          <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-                            {formatCurrency(item.unitPrice)} × {item.quantity}
-                          </p>
+                    <div key={idx} style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '16px' }}>
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '24px' }}>{item.planIcon || '📦'}</span>
+                          <div>
+                            <p style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
+                              {item.planTitle}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                              {formatCurrency(item.unitPrice)} × {item.quantity}
+                            </p>
+                          </div>
                         </div>
+                        <span style={{ fontSize: '16px', fontWeight: '700', color: '#16a34a' }}>
+                          {formatCurrency(item.totalPrice)}
+                        </span>
                       </div>
-                      <span style={{ fontSize: '16px', fontWeight: '700', color: '#16a34a' }}>
-                        {formatCurrency(item.totalPrice)}
-                      </span>
+
+                      {/* Client Inputs */}
+                      {item.inputs && item.inputs.length > 0 && (
+                        <div style={{ marginTop: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+                          <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: '600', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Client Inputs
+                          </p>
+                          {item.inputs.map((input, inputIdx) => (
+                            <div key={inputIdx} style={{
+                              backgroundColor: '#fff', borderRadius: '8px', padding: '10px 12px',
+                              marginBottom: inputIdx < item.inputs.length - 1 ? '6px' : 0,
+                              border: '1px solid #e2e8f0'
+                            }}>
+                              {item.inputs.length > 1 && (
+                                <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase' }}>
+                                  Item {inputIdx + 1}
+                                </p>
+                              )}
+                              {input.link && (
+                                <p style={{ margin: '0 0 4px', fontSize: '13px', color: '#0f172a' }}>
+                                  <strong style={{ color: '#64748b' }}>Link:</strong>{' '}
+                                  <a href={input.link} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'underline', wordBreak: 'break-all' }}>
+                                    {input.link}
+                                  </a>
+                                </p>
+                              )}
+                              {input.customInput && (
+                                <p style={{ margin: 0, fontSize: '13px', color: '#0f172a' }}>
+                                  <strong style={{ color: '#64748b' }}>{item.planSnapshot?.customInputLabel || 'Comment'}:</strong>{' '}
+                                  {input.customInput}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

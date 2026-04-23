@@ -2961,13 +2961,18 @@ router.get('/orders', async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
     
+    console.log('[ADMIN/ORDERS] ORDER ITEMS DEBUG:', JSON.stringify(orders.map(o => ({ orderId: o.orderId, items: (o.items || []).map(i => ({ planTitle: i.planTitle, inputs: i.inputs })) })), null, 2));
+
     return res.status(200).json({
       orders: orders.map(order => ({
         id: order._id.toString(),
         orderId: order.orderId,
         clientId: order.clientId?._id?.toString(),
         clientEmail: order.clientId?.identifier || order.clientId?.email,
-        items: order.items,
+        items: (order.items || []).map(item => ({
+          ...item,
+          inputs: item.inputs || [],
+        })),
         subtotal: order.subtotal,
         discount: order.discount,
         totalAmount: order.totalAmount,
