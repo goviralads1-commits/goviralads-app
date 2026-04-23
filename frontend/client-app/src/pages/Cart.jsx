@@ -12,6 +12,7 @@ const Cart = () => {
   const [toast, setToast] = useState(null);
   const [walletBalance, setWalletBalance] = useState(null);
   const [itemInputs, setItemInputs] = useState({});
+  const [modalItems, setModalItems] = useState([]);
 
   // Fetch wallet balance on mount
   React.useEffect(() => {
@@ -36,9 +37,11 @@ const Cart = () => {
     // Fetch latest plan data for each cart item
     try {
       const response = await api.get('/client/plans');
+      const plans = response.data.plans || [];
+      
       const plansMap = {};
-      response.data.plans.forEach(plan => {
-        plansMap[plan.id] = plan;
+      plans.forEach(p => {
+        plansMap[p.id] = p;
       });
 
       // Merge real plan config into cart items
@@ -54,6 +57,8 @@ const Cart = () => {
         };
       });
 
+      setModalItems(mergedItems);
+
       // Initialize per-quantity inputs with merged data
       const inputs = {};
       mergedItems.forEach(item => {
@@ -62,12 +67,7 @@ const Cart = () => {
       });
       setItemInputs(inputs);
       
-      // Temporarily replace cartItems with merged version for modal rendering
-      // (We'll use mergedItems directly in the modal render)
       setShowConfirmModal(true);
-      
-      // Store merged items in a ref or state for modal use
-      window.__cartItemsWithPlanConfig = mergedItems;
     } catch (err) {
       console.error('Failed to fetch plan config:', err);
       // Fallback: open modal anyway with existing cart items
@@ -86,7 +86,6 @@ const Cart = () => {
 
     try {
       // Send items with quantities AND inputs for the new Order system
-      const modalItems = window.__cartItemsWithPlanConfig || cartItems;
       const items = modalItems.map(item => ({
         planId: item.id,
         quantity: item.quantity || 1,
@@ -96,7 +95,7 @@ const Cart = () => {
 
       setShowConfirmModal(false);
       setItemInputs({});
-      delete window.__cartItemsWithPlanConfig;
+      setModalItems([]);
       setPurchasing(false);
       clearCart();
 
@@ -120,7 +119,7 @@ const Cart = () => {
     } catch (err) {
       setShowConfirmModal(false);
       setItemInputs({});
-      delete window.__cartItemsWithPlanConfig;
+      setModalItems([]);
       setPurchasing(false);
 
       setToast({ 
@@ -134,7 +133,6 @@ const Cart = () => {
   const insufficientBalance = walletBalance !== null && walletBalance < cartTotal;
 
   // Validation: all required per-quantity inputs must be filled
-  const modalItems = window.__cartItemsWithPlanConfig || cartItems;
   const isFormValid = modalItems.every(item => {
     if (!item.requireLink && !item.requireCustomInput) return true;
     const qty = item.quantity || 1;
@@ -356,7 +354,7 @@ const Cart = () => {
 
             {/* Items List */}
             <div style={{ backgroundColor: '#f8f9fa', borderRadius: '16px', padding: '16px', marginBottom: '20px' }}>
-              {(window.__cartItemsWithPlanConfig || cartItems).map(item => (
+              {modalItems.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e9ecef' }}>
                   <span style={{ fontSize: '14px', color: '#1a1a2e', fontWeight: '500' }}>{item.title}</span>
                   <span style={{ fontSize: '14px', color: '#28a745', fontWeight: '600' }}>₹{item.price}</span>
@@ -373,7 +371,7 @@ const Cart = () => {
             </p>
 
             {/* Per-Quantity Required Inputs */}
-            {(window.__cartItemsWithPlanConfig || cartItems).map(item => {
+            {modalItems.map(item => {
               console.log("CART ITEM DEBUG:", item);
               console.log("RENDER CHECK:", {
                 requireLink: item.requireLink,
@@ -433,7 +431,7 @@ const Cart = () => {
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button 
-                onClick={() => { setShowConfirmModal(false); setItemInputs({}); delete window.__cartItemsWithPlanConfig; }}
+                onClick={() => { setShowConfirmModal(false); setItemInputs({}); setModalItems([]); }}
                 disabled={purchasing}
                 style={{ 
                   flex: 1, padding: '14px', backgroundColor: '#f1f3f5', color: '#495057', 
