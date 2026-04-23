@@ -3110,6 +3110,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
       });
 
       // PUSH NOTIFICATION to client
+      console.log('[PUSH TRIGGER] ORDER_APPROVED - order._id:', order._id, 'clientId:', order.clientId);
       await pushNotificationService.sendToUser(order.clientId, {
         title: 'Order Approved!',
         body: `Your order ${order.orderId} has been approved. Tasks are now in progress.`
@@ -3210,6 +3211,7 @@ router.post('/orders/:orderId/reject', async (req, res) => {
       });
 
       // PUSH NOTIFICATION to client
+      console.log('[PUSH TRIGGER] ORDER_REJECTED - order._id:', order._id, 'clientId:', order.clientId);
       await pushNotificationService.sendToUser(order.clientId, {
         title: 'Order Rejected',
         body: `Your order ${order.orderId} was rejected. ₹${order.totalAmount} refunded.${reason ? ' Reason: ' + reason : ''}`

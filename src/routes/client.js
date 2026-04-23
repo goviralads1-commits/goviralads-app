@@ -3361,6 +3361,7 @@ router.post('/purchase-cart', async (req, res) => {
       }
 
       // PUSH NOTIFICATION to all admins
+      console.log('[PUSH TRIGGER] NEW_ORDER - order._id:', order._id);
       await pushNotificationService.sendToRole('admin', {
         title: 'New Order Received',
         body: `New order ${order.orderId} (${orderItems.length} item(s), ₹${totalPrice})`

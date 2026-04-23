@@ -39,6 +39,7 @@ const Orders = () => {
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (fromDate) params.fromDate = fromDate;
       if (toDate) params.toDate = toDate;
+      console.log('[Orders] Fetching with params:', params);
       const res = await api.get('/admin/orders', { params });
       setOrders(res.data.orders || []);
       setError(null);
