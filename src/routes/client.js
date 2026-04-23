@@ -3112,6 +3112,37 @@ router.post('/purchase-cart', async (req, res) => {
       }
     }
 
+    // 3b. Validate required client inputs (per-quantity)
+    for (const item of items) {
+      const plan = planMap[item.planId];
+      if (!plan.requireLink && !plan.requireCustomInput) continue;
+
+      const quantity = Math.max(1, parseInt(item.quantity) || 1);
+      const itemInputs = item.inputs || [];
+
+      // Check array length matches quantity
+      if (itemInputs.length !== quantity) {
+        return res.status(400).json({ 
+          error: `Input count mismatch for ${plan.title}: expected ${quantity}, got ${itemInputs.length}` 
+        });
+      }
+
+      // Validate each unit's inputs
+      for (let i = 0; i < itemInputs.length; i++) {
+        const input = itemInputs[i];
+        if (plan.requireLink && (!input.link || !input.link.trim())) {
+          return res.status(400).json({ 
+            error: `Link is required for "${plan.title}" — Item ${i + 1}` 
+          });
+        }
+        if (plan.requireCustomInput && (!input.customInput || !input.customInput.trim())) {
+          return res.status(400).json({ 
+            error: `${plan.customInputLabel || 'Custom input'} is required for "${plan.title}" — Item ${i + 1}` 
+          });
+        }
+      }
+    }
+
     // 4. Build order items and calculate total price
     const orderItems = [];
     let totalPrice = 0;
@@ -3150,7 +3181,9 @@ router.post('/purchase-cart', async (req, res) => {
           priority: plan.priority || 'Medium',
           showQuantityToClient: plan.showQuantityToClient !== false,
           showCreditsToClient: plan.showCreditsToClient !== false,
+          customInputLabel: plan.customInputLabel || '',
         },
+        inputs: item.inputs || [],
       });
     }
 

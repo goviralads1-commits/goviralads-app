@@ -87,7 +87,11 @@ const Plans = () => {
     isNew: false,
     visibility: 'PUBLIC',
     allowedClients: [],
-    requireClientContent: false
+    requireClientContent: false,
+    requireLink: false,
+    requireCustomInput: false,
+    customInputLabel: '',
+    customInputPlaceholder: ''
   });
 
   // Premium gradient backgrounds for fallback cards
@@ -155,7 +159,11 @@ const Plans = () => {
       categoryId: '', progressTarget: 100, quantity: '', showQuantityToClient: true,
       showCreditsToClient: true, isActivePlan: true, publicNotes: '', planMedia: [],
       isFeatured: false, isPopular: false, isNew: false, visibility: 'PUBLIC', allowedClients: [],
-      requireClientContent: false
+      requireClientContent: false,
+      requireLink: false,
+      requireCustomInput: false,
+      customInputLabel: '',
+      customInputPlaceholder: ''
     });
   };
 
@@ -193,7 +201,11 @@ const Plans = () => {
         isNew: formData.isNew,
         visibility: formData.visibility,
         allowedClients: formData.visibility === 'SELECTED' ? formData.allowedClients : [],
-        requireClientContent: formData.requireClientContent
+        requireClientContent: formData.requireClientContent,
+        requireLink: formData.requireLink,
+        requireCustomInput: formData.requireCustomInput,
+        customInputLabel: formData.customInputLabel,
+        customInputPlaceholder: formData.customInputPlaceholder
       };
       
       if (formData.offerPrice) payload.offerPrice = Number(formData.offerPrice);
@@ -968,6 +980,54 @@ const Plans = () => {
                     </span>
                   </div>
                 </label>
+              </div>
+
+              {/* Client Input Requirements (Per-Quantity) */}
+              <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: (formData.requireLink || formData.requireCustomInput) ? '#eff6ff' : '#f8fafc', borderRadius: '14px', border: (formData.requireLink || formData.requireCustomInput) ? '2px solid #3b82f6' : '2px solid #e2e8f0', transition: 'all 0.2s' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', marginBottom: '12px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formData.requireLink} 
+                    onChange={(e) => handleInputChange('requireLink', e.target.checked)} 
+                    style={{ width: '20px', height: '20px', accentColor: '#3b82f6', marginTop: '2px', flexShrink: 0 }} 
+                  />
+                  <div>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: formData.requireLink ? '#1e40af' : '#0f172a' }}>
+                      Require Link from Client
+                    </span>
+                    <span style={{ display: 'block', fontSize: '12px', color: formData.requireLink ? '#2563eb' : '#64748b', marginTop: '4px', lineHeight: 1.4 }}>
+                      Client must enter a link for each quantity unit before placing order.
+                    </span>
+                  </div>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formData.requireCustomInput} 
+                    onChange={(e) => handleInputChange('requireCustomInput', e.target.checked)} 
+                    style={{ width: '20px', height: '20px', accentColor: '#3b82f6', marginTop: '2px', flexShrink: 0 }} 
+                  />
+                  <div>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: formData.requireCustomInput ? '#1e40af' : '#0f172a' }}>
+                      Require Custom Input
+                    </span>
+                    <span style={{ display: 'block', fontSize: '12px', color: formData.requireCustomInput ? '#2563eb' : '#64748b', marginTop: '4px', lineHeight: 1.4 }}>
+                      Client must fill a custom field for each quantity unit.
+                    </span>
+                  </div>
+                </label>
+                {formData.requireCustomInput && (
+                  <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '4px', display: 'block' }}>Custom Input Label</label>
+                      <input type="text" value={formData.customInputLabel} onChange={(e) => handleInputChange('customInputLabel', e.target.value)} placeholder="Enter label (e.g. Instagram Username)" style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '4px', display: 'block' }}>Custom Input Placeholder</label>
+                      <input type="text" value={formData.customInputPlaceholder} onChange={(e) => handleInputChange('customInputPlaceholder', e.target.value)} placeholder="Enter placeholder text" style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Preview */}

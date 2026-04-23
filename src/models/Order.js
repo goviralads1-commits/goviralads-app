@@ -85,6 +85,12 @@ const orderItemSchema = new mongoose.Schema({
     milestones: { type: Array, default: [] },
     autoCompletionCap: { type: Number, default: 100 },
   },
+  inputs: [
+    {
+      link: { type: String, default: '' },
+      customInput: { type: String, default: '' },
+    },
+  ],
 }, { _id: false });
 
 const orderSchema = new mongoose.Schema(

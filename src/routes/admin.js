@@ -3033,6 +3033,8 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           isPurchased: true,
           orderId: order._id,
           categoryId: item.categoryId,
+          customInputLabel: item.planSnapshot?.customInputLabel || '',
+          clientInputs: item.inputs && item.inputs[i] ? [item.inputs[i]] : [],
         };
         
         const task = await Task.create([taskData], { session });

@@ -908,6 +908,47 @@ const TaskDetail = () => {
           )}
         </div>
 
+        {/* CLIENT INPUTS SUBMITTED */}
+        {task.clientInputs && task.clientInputs.length > 0 && (
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="14,2 14,8 20,8" strokeLinecap="round" strokeLinejoin="round" />
+                  <line x1="16" y1="13" x2="8" y2="13" strokeLinecap="round" strokeLinejoin="round" />
+                  <line x1="16" y1="17" x2="8" y2="17" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Your Submitted Inputs</h3>
+                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Information you provided during order</p>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {task.clientInputs.map((input, idx) => (
+                <div key={idx} style={{ padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>Item {idx + 1}</div>
+                  {input.link && (
+                    <div style={{ fontSize: '14px', color: '#0f172a', marginBottom: input.customInput ? '6px' : '0' }}>
+                      <span style={{ fontWeight: '600' }}>Link:</span> {input.link}
+                    </div>
+                  )}
+                  {input.customInput && (
+                    <div style={{ fontSize: '14px', color: '#0f172a' }}>
+                      <span style={{ fontWeight: '600' }}>{task.customInputLabel || 'Input'}:</span> {input.customInput}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* TASK DISCUSSION (Phase 6) - MOVED TO TOP */}
         <div ref={discussionRef} style={{
           backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',

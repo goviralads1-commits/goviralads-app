@@ -56,7 +56,11 @@ export const CartProvider = ({ children }) => {
         icon: plan.icon,
         featureImage: plan.featureImage,
         categoryName: plan.categoryName,
-        quantity: quantity
+        quantity: quantity,
+        requireLink: plan.requireLink || false,
+        requireCustomInput: plan.requireCustomInput || false,
+        customInputLabel: plan.customInputLabel || '',
+        customInputPlaceholder: plan.customInputPlaceholder || ''
       }];
     });
   };

@@ -11,6 +11,7 @@ const Cart = () => {
   const [purchasing, setPurchasing] = useState(false);
   const [toast, setToast] = useState(null);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [itemInputs, setItemInputs] = useState({});
 
   // Fetch wallet balance on mount
   React.useEffect(() => {
@@ -31,6 +32,13 @@ const Cart = () => {
       setTimeout(() => setToast(null), 3000);
       return;
     }
+    // Initialize per-quantity inputs
+    const inputs = {};
+    cartItems.forEach(item => {
+      const qty = item.quantity || 1;
+      inputs[item.id] = Array(qty).fill(null).map(() => ({ link: '', customInput: '' }));
+    });
+    setItemInputs(inputs);
     setShowConfirmModal(true);
   };
 
@@ -46,6 +54,7 @@ const Cart = () => {
       const response = await api.post('/client/purchase-cart', { items });
 
       setShowConfirmModal(false);
+      setItemInputs({});
       setPurchasing(false);
       clearCart();
 
@@ -68,6 +77,7 @@ const Cart = () => {
       }, 2000);
     } catch (err) {
       setShowConfirmModal(false);
+      setItemInputs({});
       setPurchasing(false);
 
       setToast({ 
@@ -79,6 +89,18 @@ const Cart = () => {
   };
 
   const insufficientBalance = walletBalance !== null && walletBalance < cartTotal;
+
+  // Validation: all required per-quantity inputs must be filled
+  const isFormValid = cartItems.every(item => {
+    if (!item.requireLink && !item.requireCustomInput) return true;
+    const qty = item.quantity || 1;
+    const planInputs = itemInputs[item.id] || [];
+    return planInputs.every(input => {
+      if (item.requireLink && !input.link?.trim()) return false;
+      if (item.requireCustomInput && !input.customInput?.trim()) return false;
+      return true;
+    });
+  });
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', paddingBottom: '140px' }}>
@@ -303,9 +325,62 @@ const Cart = () => {
               Credits will be deducted immediately. Order will be reviewed by admin.
             </p>
 
+            {/* Per-Quantity Required Inputs */}
+            {cartItems.map(item => {
+              const hasRequirements = item.requireLink || item.requireCustomInput;
+              if (!hasRequirements) return null;
+              
+              const qty = item.quantity || 1;
+              const planInputs = itemInputs[item.id] || [];
+              
+              return (
+                <div key={`inputs-${item.id}`} style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '10px' }}>
+                    {item.title}
+                  </div>
+                  
+                  {Array.from({ length: qty }).map((_, unitIndex) => (
+                    <div key={unitIndex} style={{ padding: '12px', marginBottom: '8px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+                        Item {unitIndex + 1} of {qty}
+                      </div>
+                      
+                      {item.requireLink && (
+                        <input
+                          type="url"
+                          placeholder="Enter link"
+                          value={planInputs[unitIndex]?.link || ''}
+                          onChange={(e) => {
+                            const newInputs = [...planInputs];
+                            newInputs[unitIndex] = { ...newInputs[unitIndex], link: e.target.value };
+                            setItemInputs(prev => ({ ...prev, [item.id]: newInputs }));
+                          }}
+                          style={{ width: '100%', padding: '8px 10px', marginBottom: item.requireCustomInput ? '6px' : '0', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
+                        />
+                      )}
+                      
+                      {item.requireCustomInput && (
+                        <input
+                          type="text"
+                          placeholder={item.customInputPlaceholder || 'Enter required info'}
+                          value={planInputs[unitIndex]?.customInput || ''}
+                          onChange={(e) => {
+                            const newInputs = [...planInputs];
+                            newInputs[unitIndex] = { ...newInputs[unitIndex], customInput: e.target.value };
+                            setItemInputs(prev => ({ ...prev, [item.id]: newInputs }));
+                          }}
+                          style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+
             <div style={{ display: 'flex', gap: '12px' }}>
               <button 
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => { setShowConfirmModal(false); setItemInputs({}); }}
                 disabled={purchasing}
                 style={{ 
                   flex: 1, padding: '14px', backgroundColor: '#f1f3f5', color: '#495057', 
@@ -316,10 +391,10 @@ const Cart = () => {
               </button>
               <button 
                 onClick={handleConfirmPurchase}
-                disabled={purchasing}
+                disabled={purchasing || !isFormValid}
                 style={{ 
                   flex: 1.5, padding: '14px', 
-                  backgroundColor: purchasing ? '#6c757d' : '#28a745', 
+                  backgroundColor: (purchasing || !isFormValid) ? '#6c757d' : '#28a745', 
                   color: '#fff', fontSize: '15px', fontWeight: '700', borderRadius: '12px', border: 'none', 
                   cursor: purchasing ? 'not-allowed' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'

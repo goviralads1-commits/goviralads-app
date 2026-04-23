@@ -310,6 +310,22 @@ const taskSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    requireLink: {
+      type: Boolean,
+      default: false,
+    },
+    requireCustomInput: {
+      type: Boolean,
+      default: false,
+    },
+    customInputLabel: {
+      type: String,
+      default: '',
+    },
+    customInputPlaceholder: {
+      type: String,
+      default: '',
+    },
     // FINAL DELIVERY SYSTEM (Phase 3)
     // Admin uploads final deliverables for client download
     // ALIAS: finalDeliveryFolder (Phase 4A - future Google Drive automation)
@@ -335,6 +351,11 @@ const taskSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    // CLIENT INPUTS FROM ORDER (Per-Quantity)
+    clientInputs: [{
+      link: { type: String, default: '' },
+      customInput: { type: String, default: '' },
+    }],
     // TASK DISCUSSION SYSTEM (Phase 6)
     // Client-Admin messaging within task context
     messages: [{
