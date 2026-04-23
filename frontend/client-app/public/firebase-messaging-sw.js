@@ -39,12 +39,14 @@ self.addEventListener('push', (event) => {
   const title = payload.notification?.title || payload.data?.title || 'New Message - Go Viral Ads';
   const body = payload.notification?.body || payload.data?.body || 'You have a new message';
   const taskId = payload.data?.taskId || '';
+  const orderId = payload.data?.orderId || '';
 
-  // Deep link URL: navigate directly to the task page for one-click chat open
-  // /tasks/:taskId mounts TaskDetail directly — no two-step Support page loading
-  const deepLinkUrl = taskId ? `/tasks/${taskId}` : (payload.data?.url || '/support');
+  // Deep link URL: taskId → task page, orderId → orders page, fallback → support
+  const deepLinkUrl = taskId
+    ? `/tasks/${taskId}`
+    : (orderId ? (payload.data?.url || `/orders?orderId=${orderId}`) : (payload.data?.url || '/support'));
 
-  console.log('[SW] Showing notification:', { title, body, deepLinkUrl, taskId });
+  console.log('[SW] Showing notification:', { title, body, deepLinkUrl, taskId, orderId });
   
   // Use logo from payload (injected by backend) with a reliable fallback
   const FALLBACK_ICON = 'https://raw.githubusercontent.com/goviralads1-commits/goviralads-assets/main/logo.png';
@@ -56,14 +58,15 @@ self.addEventListener('push', (event) => {
     body: body,
     icon: iconUrl,
     badge: iconUrl,
-    tag: 'gva-message-' + (taskId || Date.now()),
+    tag: taskId ? ('gva-message-' + taskId) : (orderId ? ('gva-order-' + orderId) : ('gva-' + Date.now())),
     renotify: true,
-    requireInteraction: false,
+    requireInteraction: true,
+    vibrate: [200, 100, 200],
     data: {
       taskId: taskId,
-      url: deepLinkUrl   // stored as deepLinkUrl so notificationclick uses /tasks/:taskId
+      orderId: orderId,
+      url: deepLinkUrl
     }
-    // NO actions array - keeps it clean without Unsubscribe button
   };
 
   event.waitUntil(
@@ -78,14 +81,16 @@ self.addEventListener('notificationclick', (event) => {
 
   const data = event.notification.data || {};
   const taskId = data.taskId;
+  const orderId = data.orderId;
 
-  // Navigate directly to task page with scrollToChat=true so TaskDetail auto-scrolls to chat
-  // Falls back to stored url, then /support
-  const relativePath = taskId ? `/tasks/${taskId}?scrollToChat=true` : (data.url || '/support');
+  // Deep link: taskId → task page, orderId → orders page, fallback → support
+  const relativePath = taskId
+    ? `/tasks/${taskId}?scrollToChat=true`
+    : (orderId ? (data.url || `/orders?orderId=${orderId}`) : (data.url || '/support'));
   
   // Build full URL with origin for reliable navigation
   const fullUrl = new URL(relativePath, self.location.origin).href;
-  console.log('[SW] TaskId:', taskId);
+  console.log('[SW] TaskId:', taskId, 'OrderId:', orderId);
   console.log('[SW] Relative path:', relativePath);
   console.log('[SW] Full URL to open:', fullUrl);
 
@@ -98,11 +103,11 @@ self.addEventListener('notificationclick', (event) => {
         console.log('[SW] Client URL:', client.url);
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           console.log('[SW] Found existing window, posting message and focusing');
-          // Post message to navigate — NotificationClickHandler in App.jsx receives this
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
             url: relativePath,
-            taskId: taskId
+            taskId: taskId,
+            orderId: orderId
           });
           return client.focus();
         }

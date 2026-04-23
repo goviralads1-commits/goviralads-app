@@ -157,10 +157,15 @@ const NotificationClickHandler = () => {
     // Handler for service worker messages
     const handleServiceWorkerMessage = (event) => {
       if (event.data?.type === 'NOTIFICATION_CLICK') {
-        // Navigate directly to task page — ?scrollToChat=true triggers auto-scroll in TaskDetail
-        const url = event.data?.taskId
-          ? `/tasks/${event.data.taskId}?scrollToChat=true`
-          : (event.data?.url || '/support');
+        // Explicit routing: taskId → task page, orderId → orders page, fallback → support
+        let url;
+        if (event.data?.taskId) {
+          url = `/tasks/${event.data.taskId}?scrollToChat=true`;
+        } else if (event.data?.orderId) {
+          url = event.data.url || `/orders?orderId=${event.data.orderId}`;
+        } else {
+          url = event.data?.url || '/support';
+        }
         
         console.log('[Push] ========== NOTIFICATION CLICK ==========');
         console.log('[Push] URL from notification:', url);

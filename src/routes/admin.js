@@ -3097,6 +3097,17 @@ router.post('/orders/:orderId/approve', async (req, res) => {
         },
         notifyByEmail: true, // Email trigger for important event
       });
+
+      // PUSH NOTIFICATION to client
+      await pushNotificationService.sendToUser(order.clientId, {
+        title: 'Order Approved!',
+        body: `Your order ${order.orderId} has been approved. Tasks are now in progress.`
+      }, {
+        type: 'order_event',
+        orderId: String(order._id),
+        url: `/orders?orderId=${order._id}`
+      });
+      console.log('[ORDER PUSH] Approval push sent to client:', order.clientId);
     } catch (notifErr) {
       console.error('[ADMIN/ORDERS] Notification error:', notifErr);
     }
@@ -3186,6 +3197,17 @@ router.post('/orders/:orderId/reject', async (req, res) => {
         },
         notifyByEmail: true, // Email trigger for important event
       });
+
+      // PUSH NOTIFICATION to client
+      await pushNotificationService.sendToUser(order.clientId, {
+        title: 'Order Rejected',
+        body: `Your order ${order.orderId} was rejected. ₹${order.totalAmount} refunded.${reason ? ' Reason: ' + reason : ''}`
+      }, {
+        type: 'order_event',
+        orderId: String(order._id),
+        url: `/orders?orderId=${order._id}`
+      });
+      console.log('[ORDER PUSH] Rejection push sent to client:', order.clientId);
     } catch (notifErr) {
       console.error('[ADMIN/ORDERS] Notification error:', notifErr);
     }

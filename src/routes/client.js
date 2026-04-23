@@ -3359,6 +3359,17 @@ router.post('/purchase-cart', async (req, res) => {
         });
         console.log(`[ORDER NOTIFICATION] Notification created for admin: ${admin._id}`);
       }
+
+      // PUSH NOTIFICATION to all admins
+      await pushNotificationService.sendToRole('admin', {
+        title: 'New Order Received',
+        body: `New order ${order.orderId} (${orderItems.length} item(s), ₹${totalPrice})`
+      }, {
+        type: 'order_event',
+        orderId: String(order._id),
+        url: `/orders?orderId=${order._id}`
+      });
+      console.log('[ORDER PUSH] Push notification sent to admins');
     } catch (notifErr) {
       console.error('Failed to send order notification:', notifErr);
       // Don't fail the order creation if notification fails

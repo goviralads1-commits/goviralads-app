@@ -58,7 +58,9 @@ const Notifications = () => {
     const entityType = notif.relatedEntity?.entityType;
     const entityId = notif.relatedEntity?.entityId;
     
-    if (entityType === 'TASK' && entityId) {
+    if (entityType === 'ORDER') {
+      navigate('/orders');
+    } else if (entityType === 'TASK' && entityId) {
       navigate(`/tasks/${entityId}?scrollToChat=true`);
     } else if (entityType === 'TICKET') {
       navigate('/tickets');
