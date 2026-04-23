@@ -2889,6 +2889,14 @@ router.post('/tickets/:ticketId/reply', async (req, res) => {
 router.get('/office-config', async (req, res) => {
   try {
     const config = await OfficeConfig.getConfig();
+    const clientObjectId = new mongoose.Types.ObjectId(req.user.id);
+    
+    const visibilityFilter = {
+      $or: [
+        { visibility: 'PUBLIC' },
+        { visibility: 'SELECTED', allowedClients: { $in: [clientObjectId] } }
+      ]
+    };
     
     // Filter active banners and sort by order
     const activeBanners = config.banners
@@ -2907,14 +2915,18 @@ router.get('/office-config', async (req, res) => {
       featuredPlans = await Task.find({
         _id: { $in: config.featuredPlansConfig.manualPlanIds },
         isListedInPlans: true,
-        isHidden: { $ne: true }
+        isActivePlan: true,
+        clientId: null,
+        ...visibilityFilter
       }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').limit(config.featuredPlansConfig.displayCount);
     } else {
       // Auto mode: fetch featured plans or most recent plans
       featuredPlans = await Task.find({
         isListedInPlans: true,
-        isHidden: { $ne: true },
-        isFeatured: true
+        isActivePlan: true,
+        clientId: null,
+        isFeatured: true,
+        ...visibilityFilter
       }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').sort({ createdAt: -1 }).limit(config.featuredPlansConfig.displayCount);
       
       // If not enough featured, fill with recent plans
@@ -2924,7 +2936,9 @@ router.get('/office-config', async (req, res) => {
         const morePlans = await Task.find({
           _id: { $nin: existingIds },
           isListedInPlans: true,
-          isHidden: { $ne: true }
+          isActivePlan: true,
+          clientId: null,
+          ...visibilityFilter
         }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').sort({ createdAt: -1 }).limit(remaining);
         featuredPlans = [...featuredPlans, ...morePlans];
       }
