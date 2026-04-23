@@ -185,9 +185,6 @@ const Cart = () => {
           </h1>
         </div>
 
-        {/* DEBUG MARKER */}
-        <div style={{ backgroundColor: '#ff0000', color: '#fff', padding: '8px', textAlign: 'center', fontWeight: 'bold', marginBottom: '16px', borderRadius: '8px' }}>DEBUG ACTIVE - BUILD v2026-04-13</div>
-
         {/* Empty Cart */}
         {cartItems.length === 0 ? (
           <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '60px 24px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
