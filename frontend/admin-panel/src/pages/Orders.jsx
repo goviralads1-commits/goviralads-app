@@ -28,14 +28,18 @@ const Orders = () => {
   const [toast, setToast] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   // Fetch orders
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/admin/orders', {
-        params: statusFilter !== 'ALL' ? { status: statusFilter } : {}
-      });
+      const params = {};
+      if (statusFilter !== 'ALL') params.status = statusFilter;
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate) params.toDate = toDate;
+      const res = await api.get('/admin/orders', { params });
       setOrders(res.data.orders || []);
       setError(null);
     } catch (err) {
@@ -44,7 +48,7 @@ const Orders = () => {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, fromDate, toDate]);
 
   useEffect(() => {
     fetchOrders();
@@ -143,32 +147,68 @@ const Orders = () => {
           </p>
         </div>
 
-        {/* Status Filter Tabs */}
+        {/* Status Filter Tabs + Date Filter */}
         <div style={{
-          display: 'flex', gap: '8px', marginBottom: '20px',
-          overflowX: 'auto', paddingBottom: '4px'
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: '20px', flexWrap: 'wrap', gap: '12px'
         }}>
-          {ORDER_STATUSES.map(status => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {ORDER_STATUSES.map(status => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  backgroundColor: statusFilter === status ? '#6366f1' : '#fff',
+                  color: statusFilter === status ? '#fff' : '#64748b',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: statusFilter === status ? '0 4px 12px rgba(99,102,241,0.3)' : '0 2px 8px rgba(0,0,0,0.04)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {status === 'ALL' ? 'All Orders' : statusColors[status]?.label || status}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
               style={{
-                padding: '10px 18px',
-                borderRadius: '10px',
-                border: 'none',
-                backgroundColor: statusFilter === status ? '#6366f1' : '#fff',
-                color: statusFilter === status ? '#fff' : '#64748b',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                boxShadow: statusFilter === status ? '0 4px 12px rgba(99,102,241,0.3)' : '0 2px 8px rgba(0,0,0,0.04)',
-                transition: 'all 0.2s'
+                padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                fontSize: '13px', color: '#0f172a', backgroundColor: '#fff'
               }}
-            >
-              {status === 'ALL' ? 'All Orders' : statusColors[status]?.label || status}
-            </button>
-          ))}
+            />
+            <span style={{ fontSize: '13px', color: '#94a3b8' }}>to</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              style={{
+                padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                fontSize: '13px', color: '#0f172a', backgroundColor: '#fff'
+              }}
+            />
+            {(fromDate || toDate) && (
+              <button
+                onClick={() => { setFromDate(''); setToDate(''); }}
+                style={{
+                  padding: '8px 12px', borderRadius: '8px', border: 'none',
+                  backgroundColor: '#fee2e2', color: '#dc2626',
+                  fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Error State */}

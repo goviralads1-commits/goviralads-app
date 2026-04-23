@@ -858,7 +858,7 @@ router.get('/tasks', async (req, res) => {
     }
 
     const tasks = await Task.find(filter)
-      .populate('clientId', 'identifier')
+      .populate('clientId', 'identifier profile.name')
       .populate('assignedBy', 'identifier')
       .populate('assignedTo', 'identifier')
       .sort({ createdAt: -1 })
@@ -2949,11 +2949,22 @@ router.get('/reports/clients/:clientId', async (req, res) => {
 // GET /admin/orders - Fetch all orders with optional status filter
 router.get('/orders', async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, fromDate, toDate } = req.query;
     const query = {};
     
     if (status && ORDER_STATUS[status]) {
       query.orderStatus = status;
+    }
+
+    // Date range filter
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
     }
     
     const orders = await Order.find(query)
