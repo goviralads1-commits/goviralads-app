@@ -1246,6 +1246,10 @@ router.get('/plans', async (req, res) => {
         categoryColor: p.categoryId ? p.categoryId.color : null,
         publicNotes: p.publicNotes,
         createdAt: p.createdAt,
+        requireLink: p.requireLink || false,
+        requireCustomInput: p.requireCustomInput || false,
+        customInputLabel: p.customInputLabel || '',
+        customInputPlaceholder: p.customInputPlaceholder || '',
       })),
     });
   } catch (err) {
@@ -1379,6 +1383,10 @@ router.get('/plans/:planId', async (req, res) => {
         categoryColor: plan.categoryId ? plan.categoryId.color : null,
         publicNotes: plan.publicNotes,
         createdAt: plan.createdAt,
+        requireLink: plan.requireLink || false,
+        requireCustomInput: plan.requireCustomInput || false,
+        customInputLabel: plan.customInputLabel || '',
+        customInputPlaceholder: plan.customInputPlaceholder || '',
       },
     });
   } catch (err) {
