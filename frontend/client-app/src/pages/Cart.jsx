@@ -67,10 +67,10 @@ const Cart = () => {
       });
       setItemInputs(inputs);
       
-      // Open modal AFTER state is ready
-      setTimeout(() => {
+      // Open only if data exists
+      if (mergedItems.length > 0) {
         setShowConfirmModal(true);
-      }, 0);
+      }
     } catch (err) {
       console.error('Failed to fetch plan config:', err);
       // Fallback: open modal anyway with existing cart items
@@ -338,7 +338,7 @@ const Cart = () => {
       )}
 
       {/* Confirmation Modal */}
-      {showConfirmModal && (
+      {showConfirmModal && modalItems && modalItems.length > 0 && (
         <div style={{ 
           position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', 
           display: 'flex', alignItems: 'center', justifyContent: 'center', 
