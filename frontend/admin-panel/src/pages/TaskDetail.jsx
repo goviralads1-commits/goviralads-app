@@ -1630,15 +1630,17 @@ const TaskDetail = () => {
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '12px' }}>
                     Progress: <span style={{ fontSize: '16px', color: '#0f172a' }}>{formData.progress}%</span>
                   </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={formData.progress}
-                    onChange={(e) => handleInputChange('progress', Number(e.target.value))}
-                    style={{ width: '100%', height: '8px', borderRadius: '4px', background: `linear-gradient(to right, #6366f1 ${formData.progress}%, #e2e8f0 ${formData.progress}%)`, appearance: 'none', cursor: 'pointer' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                  <div style={{ padding: '0 16px 0 0' }}>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={formData.progress}
+                      onChange={(e) => handleInputChange('progress', Number(e.target.value))}
+                      style={{ width: '100%', maxWidth: '95%', margin: '0 auto', height: '8px', borderRadius: '4px', background: `linear-gradient(to right, #6366f1 ${formData.progress}%, #e2e8f0 ${formData.progress}%)`, appearance: 'none', cursor: 'pointer', touchAction: 'none', paddingRight: '10px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', padding: '0 16px' }}>
                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>0%</span>
                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>100%</span>
                   </div>
