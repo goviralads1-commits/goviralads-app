@@ -26,20 +26,59 @@ const Cart = () => {
     fetchBalance();
   }, []);
 
-  const handleProceedToCheckout = () => {
+  const handleProceedToCheckout = async () => {
     if (cartItems.length === 0) {
       setToast({ type: 'error', message: 'Your cart is empty' });
       setTimeout(() => setToast(null), 3000);
       return;
     }
-    // Initialize per-quantity inputs
-    const inputs = {};
-    cartItems.forEach(item => {
-      const qty = item.quantity || 1;
-      inputs[item.id] = Array(qty).fill(null).map(() => ({ link: '', customInput: '' }));
-    });
-    setItemInputs(inputs);
-    setShowConfirmModal(true);
+
+    // Fetch latest plan data for each cart item
+    try {
+      const response = await api.get('/client/plans');
+      const plansMap = {};
+      response.data.plans.forEach(plan => {
+        plansMap[plan.id] = plan;
+      });
+
+      // Merge real plan config into cart items
+      const mergedItems = cartItems.map(item => {
+        const plan = plansMap[item.id];
+        if (!plan) return item;
+        return {
+          ...item,
+          requireLink: plan.requireLink,
+          requireCustomInput: plan.requireCustomInput,
+          customInputLabel: plan.customInputLabel,
+          customInputPlaceholder: plan.customInputPlaceholder
+        };
+      });
+
+      // Initialize per-quantity inputs with merged data
+      const inputs = {};
+      mergedItems.forEach(item => {
+        const qty = item.quantity || 1;
+        inputs[item.id] = Array(qty).fill(null).map(() => ({ link: '', customInput: '' }));
+      });
+      setItemInputs(inputs);
+      
+      // Temporarily replace cartItems with merged version for modal rendering
+      // (We'll use mergedItems directly in the modal render)
+      setShowConfirmModal(true);
+      
+      // Store merged items in a ref or state for modal use
+      window.__cartItemsWithPlanConfig = mergedItems;
+    } catch (err) {
+      console.error('Failed to fetch plan config:', err);
+      // Fallback: open modal anyway with existing cart items
+      const inputs = {};
+      cartItems.forEach(item => {
+        const qty = item.quantity || 1;
+        inputs[item.id] = Array(qty).fill(null).map(() => ({ link: '', customInput: '' }));
+      });
+      setItemInputs(inputs);
+      setShowConfirmModal(true);
+    }
   };
 
   const handleConfirmPurchase = async () => {
@@ -55,6 +94,7 @@ const Cart = () => {
 
       setShowConfirmModal(false);
       setItemInputs({});
+      delete window.__cartItemsWithPlanConfig;
       setPurchasing(false);
       clearCart();
 
@@ -78,6 +118,7 @@ const Cart = () => {
     } catch (err) {
       setShowConfirmModal(false);
       setItemInputs({});
+      delete window.__cartItemsWithPlanConfig;
       setPurchasing(false);
 
       setToast({ 
@@ -91,7 +132,8 @@ const Cart = () => {
   const insufficientBalance = walletBalance !== null && walletBalance < cartTotal;
 
   // Validation: all required per-quantity inputs must be filled
-  const isFormValid = cartItems.every(item => {
+  const modalItems = window.__cartItemsWithPlanConfig || cartItems;
+  const isFormValid = modalItems.every(item => {
     if (!item.requireLink && !item.requireCustomInput) return true;
     const qty = item.quantity || 1;
     const planInputs = itemInputs[item.id] || [];
@@ -312,7 +354,7 @@ const Cart = () => {
 
             {/* Items List */}
             <div style={{ backgroundColor: '#f8f9fa', borderRadius: '16px', padding: '16px', marginBottom: '20px' }}>
-              {cartItems.map(item => (
+              {(window.__cartItemsWithPlanConfig || cartItems).map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e9ecef' }}>
                   <span style={{ fontSize: '14px', color: '#1a1a2e', fontWeight: '500' }}>{item.title}</span>
                   <span style={{ fontSize: '14px', color: '#28a745', fontWeight: '600' }}>₹{item.price}</span>
@@ -329,7 +371,7 @@ const Cart = () => {
             </p>
 
             {/* Per-Quantity Required Inputs */}
-            {cartItems.map(item => {
+            {(window.__cartItemsWithPlanConfig || cartItems).map(item => {
               console.log("CART ITEM DEBUG:", item);
               const hasRequirements = item.requireLink || item.requireCustomInput;
               if (!hasRequirements) return null;
@@ -384,7 +426,7 @@ const Cart = () => {
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button 
-                onClick={() => { setShowConfirmModal(false); setItemInputs({}); }}
+                onClick={() => { setShowConfirmModal(false); setItemInputs({}); delete window.__cartItemsWithPlanConfig; }}
                 disabled={purchasing}
                 style={{ 
                   flex: 1, padding: '14px', backgroundColor: '#f1f3f5', color: '#495057', 
