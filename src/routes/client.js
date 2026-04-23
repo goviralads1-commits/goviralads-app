@@ -1161,6 +1161,7 @@ router.get('/plans', async (req, res) => {
   console.log('[FORENSIC] ===== GET /client/plans CALLED =====');
   try {
     const clientId = req.user.id;
+    const clientObjectId = new mongoose.Types.ObjectId(clientId);
     const { categoryId, search, sort } = req.query;
     
     console.log('[FORENSIC] Client ID:', clientId);
@@ -1175,7 +1176,7 @@ router.get('/plans', async (req, res) => {
       isActivePlan: true,
       $or: [
         { visibility: 'PUBLIC' },
-        { visibility: 'SELECTED', allowedClients: clientId },
+        { visibility: 'SELECTED', allowedClients: { $in: [clientObjectId] } },
       ]
     };
     
