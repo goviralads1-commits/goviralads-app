@@ -1763,7 +1763,14 @@ router.post('/tasks/assign', async (req, res) => {
       // TASK ASSIGNMENT SYSTEM
       assignedTo,
       commissionType,
-      commissionValue
+      commissionValue,
+      // PLAN CONFIG FEATURES
+      visibility,
+      allowedClients,
+      requireLink,
+      requireCustomInput,
+      customInputLabel,
+      customInputPlaceholder
     } = payload;
 
     // --- HARD BRANCH: PLAN (PRODUCT LISTING) ---
@@ -1811,7 +1818,14 @@ router.post('/tasks/assign', async (req, res) => {
         progressTarget: Number(progressTarget) || 100,
         milestones: milestones || [],
         autoCompletionCap: Number(autoCompletionCap) || 100,
-        categoryId: categoryId || null
+        categoryId: categoryId || null,
+        // PLAN CONFIG FEATURES
+        visibility: visibility || 'PUBLIC',
+        allowedClients: visibility === 'SELECTED' ? (allowedClients || []) : [],
+        requireLink: requireLink || false,
+        requireCustomInput: requireCustomInput || false,
+        customInputLabel: customInputLabel || '',
+        customInputPlaceholder: customInputPlaceholder || ''
       });
 
       console.log('[FORENSIC] ========== PLAN CREATED ==========');
