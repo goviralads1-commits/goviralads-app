@@ -48,6 +48,10 @@ const Tasks = () => {
   
   // Quick filter tab (Phase 7)
   const [quickFilter, setQuickFilter] = useState('ALL');
+
+  // Trash system
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashLoading, setTrashLoading] = useState(null); // taskId being trashed/restored
   
   // Status change modal
   const [statusModal, setStatusModal] = useState({ open: false, task: null });
@@ -122,6 +126,7 @@ const Tasks = () => {
         const params = {};
         if (filters.fromDate) params.fromDate = filters.fromDate;
         if (filters.toDate) params.toDate = filters.toDate;
+        if (showTrash) params.deleted = 'true';
         const [tasksResponse, walletsResponse, categoriesResponse, adminUsersResponse] = await Promise.all([
           api.get('/admin/tasks', { params }),
           api.get('/admin/wallets'),
@@ -148,12 +153,55 @@ const Tasks = () => {
       }
     };
     fetchData();
-  }, [filters.fromDate, filters.toDate]);
+  }, [filters.fromDate, filters.toDate, showTrash]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: null }));
+    }
+  };
+
+  // Trash system handlers
+  const handleTrashTask = async (taskId) => {
+    if (!window.confirm('Move this task to trash? You can restore it later.')) return;
+    setTrashLoading(taskId);
+    try {
+      await api.patch(`/admin/tasks/${taskId}/trash`);
+      setToast({ type: 'success', message: 'Task moved to trash' });
+      setTimeout(() => setToast(null), 3000);
+      // Re-fetch
+      const params = {};
+      if (filters.fromDate) params.fromDate = filters.fromDate;
+      if (filters.toDate) params.toDate = filters.toDate;
+      if (showTrash) params.deleted = 'true';
+      const res = await api.get('/admin/tasks', { params });
+      setTasks(res.data.tasks || []);
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to trash task' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setTrashLoading(null);
+    }
+  };
+
+  const handleRestoreTask = async (taskId) => {
+    setTrashLoading(taskId);
+    try {
+      await api.patch(`/admin/tasks/${taskId}/restore`);
+      setToast({ type: 'success', message: 'Task restored' });
+      setTimeout(() => setToast(null), 3000);
+      // Re-fetch trash view
+      const params = { deleted: 'true' };
+      if (filters.fromDate) params.fromDate = filters.fromDate;
+      if (filters.toDate) params.toDate = filters.toDate;
+      const res = await api.get('/admin/tasks', { params });
+      setTasks(res.data.tasks || []);
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to restore task' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setTrashLoading(null);
     }
   };
 
@@ -942,7 +990,39 @@ const Tasks = () => {
               </button>
             )}
           </div>
+
+          {/* Trash Toggle */}
+          <button
+            onClick={() => setShowTrash(prev => !prev)}
+            style={{
+              padding: '10px 16px',
+              borderRadius: '10px',
+              border: showTrash ? '2px solid #ef4444' : '2px solid #e2e8f0',
+              backgroundColor: showTrash ? '#fef2f2' : '#f8fafc',
+              color: showTrash ? '#dc2626' : '#64748b',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            🗑️ {showTrash ? 'Exit Trash' : 'Show Trash'}
+          </button>
         </div>
+
+        {/* Trash Banner */}
+        {showTrash && (
+          <div style={{
+            padding: '12px 16px', borderRadius: '10px', backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca', marginBottom: '16px', display: 'flex',
+            alignItems: 'center', gap: '8px', fontSize: '14px', color: '#dc2626', fontWeight: '500'
+          }}>
+            🗑️ You are viewing trashed tasks. Click "Restore" to recover a task.
+          </div>
+        )}
 
         {/* Results Count */}
         <div style={{marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
@@ -951,7 +1031,7 @@ const Tasks = () => {
           </p>
           {(filters.status !== 'ALL' || filters.priority !== 'ALL' || filters.clientId !== 'ALL' || filters.search) && (
             <button
-              onClick={() => setFilters({status: 'ALL', priority: 'ALL', clientId: 'ALL', search: '', sort: 'newest'})}
+              onClick={() => setFilters({status: 'ALL', priority: 'ALL', clientId: 'ALL', search: '', sort: 'newest', fromDate: '', toDate: ''})}
               style={{
                 padding: '6px 12px',
                 fontSize: '12px',
@@ -1216,6 +1296,48 @@ const Tasks = () => {
                   >
                     Status
                   </button>
+                  {/* Trash / Restore Button */}
+                  {showTrash ? (
+                    <button
+                      onClick={() => handleRestoreTask(task.id || task._id)}
+                      disabled={trashLoading === (task.id || task._id)}
+                      style={{
+                        padding: '10px 12px',
+                        backgroundColor: '#ecfdf5',
+                        color: '#059669',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        borderRadius: '10px',
+                        border: 'none',
+                        cursor: trashLoading === (task.id || task._id) ? 'wait' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: trashLoading === (task.id || task._id) ? 0.6 : 1
+                      }}
+                    >
+                      {trashLoading === (task.id || task._id) ? '...' : '↩️ Restore'}
+                    </button>
+                  ) : (
+                    !task.isPurchased && !task.isListedInPlans && (
+                      <button
+                        onClick={() => handleTrashTask(task.id || task._id)}
+                        disabled={trashLoading === (task.id || task._id)}
+                        style={{
+                          padding: '10px 12px',
+                          backgroundColor: '#fef2f2',
+                          color: '#dc2626',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          borderRadius: '10px',
+                          border: 'none',
+                          cursor: trashLoading === (task.id || task._id) ? 'wait' : 'pointer',
+                          transition: 'all 0.2s',
+                          opacity: trashLoading === (task.id || task._id) ? 0.6 : 1
+                        }}
+                      >
+                        {trashLoading === (task.id || task._id) ? '...' : '🗑️'}
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
             );

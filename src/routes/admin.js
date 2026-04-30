@@ -833,12 +833,19 @@ router.post('/subscription-requests/:id/reject', async (req, res) => {
 
 router.get('/tasks', async (req, res) => {
   try {
-    const { clientId, status, fromDate, toDate } = req.query;
+    const { clientId, status, fromDate, toDate, deleted } = req.query;
 
     // HARD FILTER: Tasks ONLY - NEVER include Plans
     let filter = {
       isListedInPlans: { $ne: true }  // Exclude Plans from Task list
     };
+
+    // TRASH SYSTEM: toggle between normal and trash view
+    if (deleted === 'true') {
+      filter.isDeleted = true;
+    } else {
+      filter.isDeleted = { $ne: true };
+    }
     
     if (clientId) {
       filter.clientId = clientId;
@@ -1987,6 +1994,50 @@ router.post('/tasks/assign', async (req, res) => {
       error: `SERVER CRASH: ${err.message}`,
       stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
+  }
+});
+
+// TRASH SYSTEM: Move task to trash (soft delete)
+router.patch('/tasks/:taskId/trash', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const task = await Task.findById(taskId).exec();
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    // Safety: block order-linked and plan tasks
+    if (task.isPurchased === true) {
+      return res.status(400).json({ error: 'Cannot trash order-linked tasks' });
+    }
+    if (task.isListedInPlans === true) {
+      return res.status(400).json({ error: 'Cannot trash plan templates. Use plan delete instead.' });
+    }
+
+    task.isDeleted = true;
+    task.deletedAt = new Date();
+    await task.save();
+
+    res.json({ success: true, message: 'Task moved to trash' });
+  } catch (err) {
+    console.error('Trash task error:', err);
+    res.status(500).json({ error: 'Failed to trash task' });
+  }
+});
+
+// TRASH SYSTEM: Restore task from trash
+router.patch('/tasks/:taskId/restore', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const task = await Task.findById(taskId).exec();
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    task.isDeleted = false;
+    task.deletedAt = null;
+    await task.save();
+
+    res.json({ success: true, message: 'Task restored' });
+  } catch (err) {
+    console.error('Restore task error:', err);
+    res.status(500).json({ error: 'Failed to restore task' });
   }
 });
 

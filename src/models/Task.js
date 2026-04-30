@@ -461,6 +461,16 @@ const taskSchema = new mongoose.Schema(
         trim: true,
       },
     },
+
+    // TRASH SYSTEM
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
