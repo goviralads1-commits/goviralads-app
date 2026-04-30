@@ -3100,6 +3100,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
   
   try {
     const { orderId } = req.params;
+    const { assignedTo } = req.body || {};
     const adminId = req.user.id;
     
     const order = await Order.findById(orderId).session(session);
@@ -3135,6 +3136,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           categoryId: item.categoryId,
           customInputLabel: item.planSnapshot?.customInputLabel || '',
           clientInputs: item.inputs && item.inputs[i] ? [item.inputs[i]] : [],
+          assignedTo: assignedTo || null,
         };
         
         const task = await Task.create([taskData], { session });

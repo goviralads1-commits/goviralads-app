@@ -37,9 +37,10 @@ const TaskDetail = () => {
   // Approval System state (Phase 7)
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalQuestion, setApprovalQuestion] = useState('');
-  const [approvalType, setApprovalType] = useState('single'); // 'single' or 'multi'
+  const [approvalType, setApprovalType] = useState('single');
   const [approvalOptions, setApprovalOptions] = useState(['', '']);
   const [sendingApproval, setSendingApproval] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
   
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
@@ -88,7 +89,8 @@ const TaskDetail = () => {
     autoCompletionCap: 100,
     icon: '',
     // Progress Bar Icon
-    progressIcon: { type: 'default', value: '' }
+    progressIcon: { type: 'default', value: '' },
+    assignedTo: ''
   });
 
   // Status transition rules
@@ -131,7 +133,8 @@ const TaskDetail = () => {
         autoCompletionCap: taskData.autoCompletionCap || 100,
         icon: taskData.icon || '',
         // Progress Bar Icon
-        progressIcon: taskData.progressIcon || { type: 'default', value: '' }
+        progressIcon: taskData.progressIcon || { type: 'default', value: '' },
+        assignedTo: taskData.assignedTo || ''
       });
       
       // Initialize delivery state (Phase 3)
@@ -161,6 +164,11 @@ const TaskDetail = () => {
   useEffect(() => {
     fetchTask();
   }, [fetchTask]);
+
+  // Fetch admin users for assign dropdown
+  useEffect(() => {
+    api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
+  }, []);
 
   // Load more (older) messages for pagination
   const loadMoreMessages = async () => {
@@ -196,7 +204,8 @@ const TaskDetail = () => {
         formData.progress !== (originalTask.progress || 0) ||
         formData.startDate !== (originalTask.startDate ? originalTask.startDate.split('T')[0] : '') ||
         formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '') ||
-        JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' });
+        JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' }) ||
+        formData.assignedTo !== (originalTask.assignedTo || '');
       setHasChanges(changed);
     }
   }, [formData, originalTask]);
@@ -301,6 +310,9 @@ const TaskDetail = () => {
     // Progress Bar Icon - Include if changed
     if (JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' })) {
       payload.progressIcon = formData.progressIcon;
+    }
+    if (formData.assignedTo !== (originalTask.assignedTo || '')) {
+      payload.assignedTo = formData.assignedTo || null;
     }
     
     // Handle status change separately (uses different endpoint)
@@ -1623,6 +1635,23 @@ const TaskDetail = () => {
                       );
                     })}
                   </div>
+                </div>
+
+                {/* Assign To */}
+                <div style={{ marginBottom: '24px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
+                    Assign To <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(Optional)</span>
+                  </label>
+                  <select
+                    value={formData.assignedTo}
+                    onChange={(e) => handleInputChange('assignedTo', e.target.value)}
+                    style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#fff', boxSizing: 'border-box', cursor: 'pointer' }}
+                  >
+                    <option value="">Not Assigned</option>
+                    {adminUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Progress Slider */}

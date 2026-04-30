@@ -1952,8 +1952,8 @@ const Tasks = () => {
                     >
                       <option value="">Not Assigned</option>
                       {adminUsers.map(user => (
-                        <option key={user._id} value={user._id}>
-                          {user.identifier} {user.customRole?.displayName ? `(${user.customRole.displayName})` : ''}
+                        <option key={user.id} value={user.id}>
+                          {user.identifier} {user.customRoleName ? `(${user.customRoleName})` : ''}
                         </option>
                       ))}
                     </select>

@@ -30,6 +30,13 @@ const Orders = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [approveAssignTo, setApproveAssignTo] = useState('');
+
+  // Fetch admin users for assign dropdown
+  useEffect(() => {
+    api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
+  }, []);
 
   // Fetch orders
   const fetchOrders = useCallback(async () => {
@@ -71,10 +78,12 @@ const Orders = () => {
     if (!selectedOrder) return;
     setActionLoading(true);
     try {
-      const res = await api.post(`/admin/orders/${selectedOrder.id || selectedOrder._id}/approve`);
+      const body = approveAssignTo ? { assignedTo: approveAssignTo } : {};
+      const res = await api.post(`/admin/orders/${selectedOrder.id || selectedOrder._id}/approve`, body);
       setToast({ type: 'success', message: res.data.message || 'Order approved successfully!' });
       setShowDetailModal(false);
       setSelectedOrder(null);
+      setApproveAssignTo('');
       fetchOrders();
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.error || 'Failed to approve order' });
@@ -478,7 +487,25 @@ const Orders = () => {
 
               {/* Action Buttons (only for PENDING_APPROVAL) */}
               {selectedOrder.orderStatus === 'PENDING_APPROVAL' && (
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <>
+                  {/* Assign To (Optional) */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                      Assign To <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(Optional)</span>
+                    </label>
+                    <select
+                      value={approveAssignTo}
+                      onChange={(e) => setApproveAssignTo(e.target.value)}
+                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc', boxSizing: 'border-box', cursor: 'pointer' }}
+                    >
+                      <option value="">Not Assigned</option>
+                      {adminUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
                   <button
                     onClick={() => setShowRejectModal(true)}
                     disabled={actionLoading}
@@ -504,7 +531,8 @@ const Orders = () => {
                   >
                     {actionLoading ? 'Processing...' : '✅ Approve Order'}
                   </button>
-                </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
