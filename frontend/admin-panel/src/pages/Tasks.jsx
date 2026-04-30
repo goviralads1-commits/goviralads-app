@@ -168,7 +168,7 @@ const Tasks = () => {
     setTrashLoading(taskId);
     try {
       await api.patch(`/admin/tasks/${taskId}/trash`);
-      setToast({ type: 'success', message: 'Task moved to trash' });
+      setToast('Task moved to trash');
       setTimeout(() => setToast(null), 3000);
       // Re-fetch
       const params = {};
@@ -178,7 +178,7 @@ const Tasks = () => {
       const res = await api.get('/admin/tasks', { params });
       setTasks(res.data.tasks || []);
     } catch (err) {
-      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to trash task' });
+      setToast(err.response?.data?.error || 'Failed to trash task');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setTrashLoading(null);
@@ -189,7 +189,7 @@ const Tasks = () => {
     setTrashLoading(taskId);
     try {
       await api.patch(`/admin/tasks/${taskId}/restore`);
-      setToast({ type: 'success', message: 'Task restored' });
+      setToast('Task restored');
       setTimeout(() => setToast(null), 3000);
       // Re-fetch trash view
       const params = { deleted: 'true' };
@@ -198,7 +198,7 @@ const Tasks = () => {
       const res = await api.get('/admin/tasks', { params });
       setTasks(res.data.tasks || []);
     } catch (err) {
-      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to restore task' });
+      setToast(err.response?.data?.error || 'Failed to restore task');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setTrashLoading(null);
