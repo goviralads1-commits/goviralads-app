@@ -1052,6 +1052,10 @@ router.get('/tasks/:taskId', async (req, res) => {
         // CLIENT INPUTS FROM ORDER
         clientInputs: task.clientInputs || [],
         customInputLabel: task.customInputLabel || '',
+        // PLAN CLIENT INPUT CONFIG
+        requireLink: task.requireLink || false,
+        requireCustomInput: task.requireCustomInput || false,
+        customInputPlaceholder: task.customInputPlaceholder || '',
       }
     });
   } catch (err) {

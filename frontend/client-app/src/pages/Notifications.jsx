@@ -90,6 +90,7 @@ const Notifications = () => {
   };
 
   const getNotificationIcon = (type) => {
+    if (type?.includes('ORDER')) return '📦';
     if (type?.includes('TASK')) return '📋';
     if (type?.includes('WALLET') || type?.includes('RECHARGE')) return '💰';
     if (type?.includes('TICKET')) return '🎫';
@@ -98,11 +99,21 @@ const Notifications = () => {
   };
 
   const getNotificationColor = (type) => {
+    if (type?.includes('ORDER')) return '#6366f1';
     if (type?.includes('TASK')) return '#3b82f6';
     if (type?.includes('WALLET') || type?.includes('RECHARGE')) return '#22c55e';
     if (type?.includes('TICKET')) return '#f59e0b';
     if (type?.includes('NOTICE')) return '#8b5cf6';
     return '#64748b';
+  };
+
+  const getTypeLabel = (type) => {
+    if (type?.includes('ORDER')) return 'ORDER';
+    if (type?.includes('TASK')) return 'TASK';
+    if (type?.includes('WALLET') || type?.includes('RECHARGE')) return 'WALLET';
+    if (type?.includes('TICKET')) return 'TICKET';
+    if (type?.includes('NOTICE')) return 'NOTICE';
+    return 'UPDATE';
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -111,7 +122,7 @@ const Notifications = () => {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
         <Header />
-        <div style={{ maxWidth: '600px', margin: '0 auto', padding: '24px 16px', paddingBottom: '100px' }}>
+        <div style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px', paddingBottom: '100px' }}>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ width: '40px', height: '40px', border: '3px solid #e2e8f0', borderTopColor: '#22c55e', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
             <p style={{ marginTop: '16px', color: '#64748b', fontSize: '14px' }}>Loading notifications...</p>
@@ -125,7 +136,7 @@ const Notifications = () => {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Header />
-      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '24px 16px', paddingBottom: '100px' }}>
+      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px', paddingBottom: '100px' }}>
         
         {/* Header */}
         <div style={{ marginBottom: '24px' }}>
@@ -178,9 +189,9 @@ const Notifications = () => {
         )}
 
         {/* Notifications List */}
-        <div style={{ backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {notifications.length === 0 ? (
-            <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <div style={{ padding: '48px 24px', textAlign: 'center', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔔</div>
               <p style={{ fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px' }}>No notifications</p>
               <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>
@@ -188,60 +199,73 @@ const Notifications = () => {
               </p>
             </div>
           ) : (
-            notifications.map((notif, idx) => (
-              <div
-                key={notif.id || idx}
-                onClick={() => handleNotificationClick(notif)}
-                style={{
-                  padding: '16px', cursor: 'pointer',
-                  borderBottom: idx < notifications.length - 1 ? '1px solid #f1f5f9' : 'none',
-                  backgroundColor: !notif.isRead ? '#f0fdf4' : 'transparent',
-                  transition: 'background 0.2s'
-                }}
-              >
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div style={{
-                    width: '44px', height: '44px', borderRadius: '12px',
-                    backgroundColor: `${getNotificationColor(notif.type)}15`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0
-                  }}>
-                    <span style={{ fontSize: '20px' }}>{getNotificationIcon(notif.type)}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                      <p style={{
-                        fontSize: '14px', fontWeight: !notif.isRead ? '600' : '500',
-                        color: '#0f172a', margin: 0,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                      }}>
-                        {notif.title}
-                      </p>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}>
-                        {formatTime(notif.createdAt)}
-                      </span>
-                    </div>
-                    <p style={{
-                      fontSize: '13px', color: '#64748b', margin: '4px 0 0',
-                      overflow: 'hidden', textOverflow: 'ellipsis',
-                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+            notifications.map((notif, idx) => {
+              const color = getNotificationColor(notif.type);
+              return (
+                <div
+                  key={notif.id || idx}
+                  onClick={() => handleNotificationClick(notif)}
+                  style={{
+                    padding: '16px', cursor: 'pointer',
+                    backgroundColor: '#fff',
+                    borderRadius: '14px',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                    borderLeft: !notif.isRead ? `4px solid ${color}` : '4px solid transparent',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{
+                      width: '44px', height: '44px', borderRadius: '12px',
+                      backgroundColor: `${color}15`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0
                     }}>
-                      {notif.message}
-                    </p>
-                    {!notif.isRead && (
-                      <span style={{
-                        display: 'inline-block', marginTop: '8px',
-                        padding: '2px 8px', backgroundColor: '#22c55e',
-                        color: '#fff', fontSize: '10px', fontWeight: '600',
-                        borderRadius: '10px'
+                      <span style={{ fontSize: '20px' }}>{getNotificationIcon(notif.type)}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <p style={{
+                          fontSize: '14px', fontWeight: !notif.isRead ? '700' : '500',
+                          color: '#0f172a', margin: 0
+                        }}>
+                          {notif.title}
+                        </p>
+                        <span style={{ fontSize: '12px', color: '#64748b', flexShrink: 0 }}>
+                          {formatTime(notif.createdAt)}
+                        </span>
+                      </div>
+                      <p style={{
+                        fontSize: '13px', color: '#64748b', margin: '6px 0 0',
+                        lineHeight: '1.5'
                       }}>
-                        NEW
-                      </span>
-                    )}
+                        {notif.message}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '2px 8px', backgroundColor: `${color}15`,
+                          color: color, fontSize: '10px', fontWeight: '700',
+                          borderRadius: '6px', letterSpacing: '0.5px'
+                        }}>
+                          {getTypeLabel(notif.type)}
+                        </span>
+                        {!notif.isRead && (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 8px', backgroundColor: '#22c55e',
+                            color: '#fff', fontSize: '10px', fontWeight: '600',
+                            borderRadius: '6px'
+                          }}>
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

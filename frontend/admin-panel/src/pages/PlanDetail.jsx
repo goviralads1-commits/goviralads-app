@@ -42,7 +42,12 @@ const PlanDetail = () => {
     isNew: false,
     // Visibility
     visibility: 'PUBLIC',
-    allowedClients: []
+    allowedClients: [],
+    // Client Input Config
+    requireLink: false,
+    requireCustomInput: false,
+    customInputLabel: '',
+    customInputPlaceholder: ''
   });
 
   const fetchData = useCallback(async () => {
@@ -92,7 +97,12 @@ const PlanDetail = () => {
         isNew: planData.isNew ?? false,
         // Visibility
         visibility: planData.visibility || 'PUBLIC',
-        allowedClients: allowedClientIds
+        allowedClients: allowedClientIds,
+        // Client Input Config
+        requireLink: planData.requireLink || false,
+        requireCustomInput: planData.requireCustomInput || false,
+        customInputLabel: planData.customInputLabel || '',
+        customInputPlaceholder: planData.customInputPlaceholder || ''
       });
       
       setError(null);
@@ -175,7 +185,12 @@ const PlanDetail = () => {
         isNew: formData.isNew,
         // Visibility
         visibility: formData.visibility,
-        allowedClients: formData.visibility === 'SELECTED' ? formData.allowedClients : []
+        allowedClients: formData.visibility === 'SELECTED' ? formData.allowedClients : [],
+        // Client Input Config
+        requireLink: formData.requireLink ?? false,
+        requireCustomInput: formData.requireCustomInput ?? false,
+        customInputLabel: formData.customInputLabel || '',
+        customInputPlaceholder: formData.customInputPlaceholder || ''
       };
       
       // Only include planMedia if it was intentionally modified
@@ -510,6 +525,49 @@ const PlanDetail = () => {
                 <input type="checkbox" checked={formData.showQuantityToClient} onChange={(e) => handleInputChange('showQuantityToClient', e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#28a745' }} />
                 <span style={{ fontSize: '14px', fontWeight: '500', color: '#475569' }}>Show Quantity</span>
               </label>
+            </div>
+          </div>
+
+          {/* Client Input Config */}
+          <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: (formData.requireLink || formData.requireCustomInput) ? '#eff6ff' : '#f8fafc', borderRadius: '14px', border: (formData.requireLink || formData.requireCustomInput) ? '2px solid #3b82f6' : '2px solid #e2e8f0', transition: 'all 0.2s' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#1a1a2e', marginBottom: '14px' }}>📝 Client Input Requirements</label>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '16px', margin: '0 0 16px' }}>Configure what inputs the client must provide per quantity when purchasing this plan</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={formData.requireLink} onChange={(e) => handleInputChange('requireLink', e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#3b82f6' }} />
+                <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>Require Link (per quantity)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={formData.requireCustomInput} onChange={(e) => handleInputChange('requireCustomInput', e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#3b82f6' }} />
+                <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>Require Custom Input (per quantity)</span>
+              </label>
+
+              {formData.requireCustomInput && (
+                <div style={{ marginTop: '8px', padding: '14px', backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Input Label</label>
+                    <input
+                      type="text"
+                      value={formData.customInputLabel}
+                      onChange={(e) => handleInputChange('customInputLabel', e.target.value)}
+                      placeholder="e.g. Comment, Description, Instructions"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>Placeholder Text</label>
+                    <input
+                      type="text"
+                      value={formData.customInputPlaceholder}
+                      onChange={(e) => handleInputChange('customInputPlaceholder', e.target.value)}
+                      placeholder="e.g. Write your comment here..."
+                      style={{ width: '100%', padding: '10px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
