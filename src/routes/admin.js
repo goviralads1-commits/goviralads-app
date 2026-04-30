@@ -974,6 +974,7 @@ router.get('/tasks/:taskId', async (req, res) => {
         updatedAt: task.updatedAt,
         // PLAN SYSTEM EXTENSIONS
         icon: task.icon,
+        categoryId: task.categoryId ? task.categoryId.toString() : '',
         milestones: task.milestones || [],
         autoCompletionCap: task.autoCompletionCap,
         quantity: task.quantity,

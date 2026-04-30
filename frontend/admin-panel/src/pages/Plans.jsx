@@ -182,6 +182,7 @@ const Plans = () => {
     setCreating(true);
     try {
       const cleanMedia = formData.planMedia.filter(m => m.url && m.url.trim());
+      console.log('[PLAN CREATE] formData.planMedia:', JSON.stringify(formData.planMedia), '| cleanMedia:', JSON.stringify(cleanMedia));
       
       const payload = {
         isListedInPlans: true,
