@@ -93,6 +93,24 @@ const TaskDetail = () => {
     assignedTo: ''
   });
 
+  // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 2)
+  const [assignedUsers, setAssignedUsers] = useState([]);
+  const [originalAssignedUsers, setOriginalAssignedUsers] = useState([]);
+  const [costBreakdown, setCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
+  const [originalCostBreakdown, setOriginalCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
+
+  const addTeamMember = () => {
+    setAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
+  };
+  const removeTeamMember = (index) => {
+    setAssignedUsers(prev => prev.filter((_, i) => i !== index));
+  };
+  const updateTeamMember = (index, field, value) => {
+    setAssignedUsers(prev => prev.map((item, i) => i === index ? { ...item, [field]: field === 'percentage' ? Number(value) || 0 : value } : item));
+  };
+  const assignedUsersTotal = assignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
+  const assignedUserIds = assignedUsers.map(u => u.userId).filter(Boolean);
+
   // Status transition rules
   const STATUS_TRANSITIONS = {
     PENDING: ['ACTIVE', 'CANCELLED'],
@@ -136,6 +154,14 @@ const TaskDetail = () => {
         progressIcon: taskData.progressIcon || { type: 'default', value: '' },
         assignedTo: taskData.assignedTo || ''
       });
+
+      // Initialize multi-assignment & cost breakdown (Phase 2)
+      const loadedUsers = (taskData.assignedUsers || []).map(u => ({ userId: u.userId || '', percentage: u.percentage || 0 }));
+      setAssignedUsers(loadedUsers);
+      setOriginalAssignedUsers(loadedUsers);
+      const loadedCost = taskData.costBreakdown || { expenses: 0, tax: 0, other: 0 };
+      setCostBreakdown(loadedCost);
+      setOriginalCostBreakdown(loadedCost);
       
       // Initialize delivery state (Phase 3)
       setDeliveryLink(taskData.finalDeliveryLink || '');
@@ -205,10 +231,12 @@ const TaskDetail = () => {
         formData.startDate !== (originalTask.startDate ? originalTask.startDate.split('T')[0] : '') ||
         formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '') ||
         JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' }) ||
-        formData.assignedTo !== (originalTask.assignedTo || '');
+        formData.assignedTo !== (originalTask.assignedTo || '') ||
+        JSON.stringify(assignedUsers) !== JSON.stringify(originalAssignedUsers) ||
+        JSON.stringify(costBreakdown) !== JSON.stringify(originalCostBreakdown);
       setHasChanges(changed);
     }
-  }, [formData, originalTask]);
+  }, [formData, originalTask, assignedUsers, originalAssignedUsers, costBreakdown, originalCostBreakdown]);
 
   // Auto-scroll to discussion if scrollToChat=true
   useEffect(() => {
@@ -313,6 +341,19 @@ const TaskDetail = () => {
     }
     if (formData.assignedTo !== (originalTask.assignedTo || '')) {
       payload.assignedTo = formData.assignedTo || null;
+    }
+
+    // Phase 2: Multi-assignment & cost breakdown
+    if (JSON.stringify(assignedUsers) !== JSON.stringify(originalAssignedUsers)) {
+      if (assignedUsers.length > 0 && assignedUsers.some(u => u.userId)) {
+        payload.assignedUsers = assignedUsers.filter(u => u.userId);
+        payload.assignedTo = null;
+      } else {
+        payload.assignedUsers = [];
+      }
+    }
+    if (JSON.stringify(costBreakdown) !== JSON.stringify(originalCostBreakdown)) {
+      payload.costBreakdown = costBreakdown;
     }
     
     // Handle status change separately (uses different endpoint)
@@ -1640,18 +1681,73 @@ const TaskDetail = () => {
                 {/* Assign To */}
                 <div style={{ marginBottom: '24px' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
-                    Assign To <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(Optional)</span>
+                    Assign To <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(Optional){assignedUsers.length > 0 ? ' — disabled (team assigned)' : ''}</span>
                   </label>
                   <select
-                    value={formData.assignedTo}
+                    value={assignedUsers.length > 0 ? '' : formData.assignedTo}
                     onChange={(e) => handleInputChange('assignedTo', e.target.value)}
-                    style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#fff', boxSizing: 'border-box', cursor: 'pointer' }}
+                    disabled={assignedUsers.length > 0}
+                    style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: assignedUsers.length > 0 ? '#f1f5f9' : '#fff', boxSizing: 'border-box', cursor: assignedUsers.length > 0 ? 'not-allowed' : 'pointer', opacity: assignedUsers.length > 0 ? 0.6 : 1 }}
                   >
                     <option value="">Not Assigned</option>
                     {adminUsers.map(u => (
                       <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* ASSIGN TEAM (Phase 2) */}
+                <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px' }}>👥 ASSIGN TEAM <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional)</span></h4>
+                  {assignedUsers.map((member, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
+                      <select
+                        value={member.userId}
+                        onChange={(e) => updateTeamMember(idx, 'userId', e.target.value)}
+                        style={{ flex: 2, padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                      >
+                        <option value="">Select user...</option>
+                        {adminUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                          <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        value={member.percentage}
+                        onChange={(e) => updateTeamMember(idx, 'percentage', e.target.value)}
+                        placeholder="%"
+                        min="0"
+                        max="100"
+                        style={{ flex: 0.7, padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
+                      />
+                      <button type="button" onClick={() => removeTeamMember(idx)} style={{ padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                    </div>
+                  ))}
+                  {assignedUsers.length > 0 && (
+                    <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: assignedUsersTotal > 100 ? '#dc2626' : '#16a34a' }}>
+                      Total: {assignedUsersTotal}% {assignedUsersTotal > 100 && '⚠️ Exceeds 100%'}
+                    </div>
+                  )}
+                  <button type="button" onClick={addTeamMember} disabled={assignedUsersTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
+                </div>
+
+                {/* COST BREAKDOWN (Phase 2) */}
+                <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px' }}>💰 COST BREAKDOWN <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional)</span></h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Expenses</label>
+                      <input type="number" min="0" value={costBreakdown.expenses} onChange={(e) => setCostBreakdown(prev => ({ ...prev, expenses: Math.max(0, Number(e.target.value) || 0) }))} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Tax</label>
+                      <input type="number" min="0" value={costBreakdown.tax} onChange={(e) => setCostBreakdown(prev => ({ ...prev, tax: Math.max(0, Number(e.target.value) || 0) }))} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Other</label>
+                      <input type="number" min="0" value={costBreakdown.other} onChange={(e) => setCostBreakdown(prev => ({ ...prev, other: Math.max(0, Number(e.target.value) || 0) }))} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Progress Slider */}

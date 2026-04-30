@@ -1075,6 +1075,9 @@ router.get('/tasks/:taskId', async (req, res) => {
         requireLink: task.requireLink || false,
         requireCustomInput: task.requireCustomInput || false,
         customInputPlaceholder: task.customInputPlaceholder || '',
+        // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 2)
+        assignedUsers: task.assignedUsers || [],
+        costBreakdown: task.costBreakdown || { expenses: 0, tax: 0, other: 0 },
       }
     });
   } catch (err) {
@@ -3136,7 +3139,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
   
   try {
     const { orderId } = req.params;
-    const { assignedTo } = req.body || {};
+    const { assignedTo, assignedUsers: reqAssignedUsers } = req.body || {};
     const adminId = req.user.id;
     
     const order = await Order.findById(orderId).session(session);
@@ -3176,6 +3179,8 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           // Phase 1: pass through if present in planSnapshot
           ...(item.planSnapshot?.assignedUsers?.length ? { assignedUsers: item.planSnapshot.assignedUsers } : {}),
           ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
+          // Phase 2: pass through from approve request body
+          ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
         };
         
         const task = await Task.create([taskData], { session });
