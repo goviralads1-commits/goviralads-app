@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { getCurrentUser, logout, getPermissions } from '../services/authService';
+import { getCurrentUser, logout, getPermissions, savePermissions } from '../services/authService';
 import api from '../services/api';
 
 const Header = ({ title }) => {
@@ -9,7 +9,7 @@ const Header = ({ title }) => {
   const location = useLocation();
   const user = getCurrentUser();
   const permissions = getPermissions();
-  const isMainAdmin = permissions?.isMainAdmin !== false; // default true if not set yet
+  const isMainAdmin = permissions?.isMainAdmin === true; // SECURITY: default-deny until permissions load
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -47,6 +47,16 @@ const Header = ({ title }) => {
     // Polling: Refresh notifications every 30 seconds
     const pollInterval = setInterval(fetchNotifications, 30000);
     
+    // SECURITY: Refresh permissions when tab regains focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        api.get('/admin/me/permissions').then(res => {
+          savePermissions(res.data);
+        }).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    
     // Close dropdowns on outside click
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false);
@@ -58,6 +68,7 @@ const Header = ({ title }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(pollInterval);
     };
   }, [fetchNotifications]);

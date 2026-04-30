@@ -3016,6 +3016,10 @@ router.get('/reports/clients/:clientId', async (req, res) => {
 // GET /admin/orders - Fetch all orders with optional status filter
 router.get('/orders', async (req, res) => {
   try {
+    // SECURITY: Only main admin can view orders
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { status, fromDate, toDate } = req.query;
     const query = {};
     
@@ -3075,6 +3079,10 @@ router.get('/orders', async (req, res) => {
 // GET /admin/orders/:orderId - Fetch single order details
 router.get('/orders/:orderId', async (req, res) => {
   try {
+    // SECURITY: Only main admin can view order details
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { orderId } = req.params;
     
     const order = await Order.findById(orderId)
@@ -3095,6 +3103,10 @@ router.get('/orders/:orderId', async (req, res) => {
 
 // POST /admin/orders/:orderId/approve - Approve order and create tasks
 router.post('/orders/:orderId/approve', async (req, res) => {
+  // SECURITY: Only main admin can approve orders
+  const _caller = await User.findById(req.user.id).populate('customRole');
+  if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
   const session = await mongoose.startSession();
   session.startTransaction();
   
@@ -3214,6 +3226,10 @@ router.post('/orders/:orderId/approve', async (req, res) => {
 
 // POST /admin/orders/:orderId/reject - Reject order and refund
 router.post('/orders/:orderId/reject', async (req, res) => {
+  // SECURITY: Only main admin can reject orders
+  const _caller = await User.findById(req.user.id).populate('customRole');
+  if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
   const session = await mongoose.startSession();
   session.startTransaction();
   
@@ -3785,6 +3801,10 @@ router.get('/users', async (req, res) => {
 // POST /admin/users - Create new user
 router.post('/users', async (req, res) => {
   try {
+    // SECURITY: Only main admin can create users
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { identifier, password, role, status, name, phone, company } = req.body;
 
     // Validation
@@ -4087,6 +4107,10 @@ router.post('/users/:userId/reset-password', async (req, res) => {
 // DELETE /admin/users/:userId - Soft delete user with email re-use capability
 router.delete('/users/:userId', async (req, res) => {
   try {
+    // SECURITY: Only main admin can delete users
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { userId } = req.params;
 
     const user = await User.findById(userId).exec();
@@ -5316,6 +5340,10 @@ router.get('/admin-users', async (req, res) => {
 // PATCH /admin/users/:userId/role — Update user's custom role
 router.patch('/users/:userId/role', async (req, res) => {
   try {
+    // SECURITY: Only main admin can assign roles
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { userId } = req.params;
     const { customRole } = req.body;
     
@@ -5392,6 +5420,10 @@ router.get('/me/permissions', async (req, res) => {
 // Create custom role
 router.post('/roles', async (req, res) => {
   try {
+    // SECURITY: Only main admin can manage roles
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { name, displayName, permissions } = req.body;
     
     if (!name || !displayName) {
@@ -5448,6 +5480,10 @@ router.get('/roles', async (req, res) => {
 // Update role
 router.patch('/roles/:roleId', async (req, res) => {
   try {
+    // SECURITY: Only main admin can manage roles
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { roleId } = req.params;
     const { displayName, permissions, isActive } = req.body;
     
@@ -5480,6 +5516,10 @@ router.patch('/roles/:roleId', async (req, res) => {
 // Delete role
 router.delete('/roles/:roleId', async (req, res) => {
   try {
+    // SECURITY: Only main admin can manage roles
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { roleId } = req.params;
     
     const role = await Role.findById(roleId);
@@ -5692,6 +5732,10 @@ router.get('/office-config', async (req, res) => {
 // UPDATE Office Config (full or partial)
 router.patch('/office-config', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const updates = req.body;
     let config = await OfficeConfig.getConfig();
     
@@ -5721,6 +5765,10 @@ router.patch('/office-config', async (req, res) => {
 // ADD Banner
 router.post('/office-config/banners', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { title, subtitle, gradient, imageUrl, ctaText, ctaLink, ctaLinkType } = req.body;
     
     // Title is now optional - no validation required
@@ -5752,6 +5800,10 @@ router.post('/office-config/banners', async (req, res) => {
 // UPDATE Banner
 router.patch('/office-config/banners/:bannerId', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { bannerId } = req.params;
     const updates = req.body;
     
@@ -5781,6 +5833,10 @@ router.patch('/office-config/banners/:bannerId', async (req, res) => {
 // DELETE Banner
 router.delete('/office-config/banners/:bannerId', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { bannerId } = req.params;
     const config = await OfficeConfig.getConfig();
     
@@ -5808,6 +5864,10 @@ router.delete('/office-config/banners/:bannerId', async (req, res) => {
 // REORDER Banners
 router.post('/office-config/banners/reorder', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { bannerIds } = req.body; // Array of banner IDs in new order
     
     if (!Array.isArray(bannerIds)) {
@@ -5838,6 +5898,10 @@ router.post('/office-config/banners/reorder', async (req, res) => {
 // UPDATE Sections Order/Visibility
 router.patch('/office-config/sections', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { sections } = req.body;
     
     if (!Array.isArray(sections)) {
@@ -5870,6 +5934,10 @@ router.patch('/office-config/sections', async (req, res) => {
 // UPDATE Featured Plans Config
 router.patch('/office-config/featured-plans', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify office config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { displayCount, selectionMode, manualPlanIds, showSeeAllButton, seeAllButtonText } = req.body;
     
     const config = await OfficeConfig.getConfig();
@@ -5935,6 +6003,10 @@ router.get('/billing/config', async (req, res) => {
 // PATCH /admin/billing/config - Update billing configuration
 router.patch('/billing/config', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify billing config
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const updates = req.body;
     // Only allow specific fields to be updated
     const allowedFields = [
@@ -6033,6 +6105,10 @@ router.get('/billing/receipts', async (req, res) => {
 // PATCH /admin/billing/invoices/:id/download-toggle - Toggle invoice download permission
 router.patch('/billing/invoices/:id/download-toggle', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify billing
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { id } = req.params;
     const { isDownloadableByClient } = req.body;
     const invoice = await billingService.toggleInvoiceDownload(id, isDownloadableByClient);
@@ -6049,6 +6125,10 @@ router.patch('/billing/invoices/:id/download-toggle', async (req, res) => {
 // PATCH /admin/billing/receipts/:id/download-toggle - Toggle receipt download permission
 router.patch('/billing/receipts/:id/download-toggle', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify billing
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { id } = req.params;
     const { isDownloadableByClient } = req.body;
     const receipt = await billingService.toggleReceiptDownload(id, isDownloadableByClient);
@@ -6138,6 +6218,10 @@ router.get('/credit-plans', async (req, res) => {
 // POST /admin/credit-plans - Create a new credit plan
 router.post('/credit-plans', async (req, res) => {
   try {
+    // SECURITY: Only main admin can manage credit plans
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { name, price, credits, bonusCredits, type, description, displayOrder, isActive } = req.body || {};
     
     // Validation
@@ -6192,6 +6276,10 @@ router.post('/credit-plans', async (req, res) => {
 // PATCH /admin/credit-plans/:id - Update a credit plan
 router.patch('/credit-plans/:id', async (req, res) => {
   try {
+    // SECURITY: Only main admin can manage credit plans
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { id } = req.params;
     const { name, price, credits, bonusCredits, type, description, displayOrder, isActive, validityDays, visibility, visibleToUsers } = req.body || {};
     
@@ -6275,6 +6363,10 @@ router.patch('/credit-plans/:id', async (req, res) => {
 // DELETE /admin/credit-plans/:id - Delete a credit plan
 router.delete('/credit-plans/:id', async (req, res) => {
   try {
+    // SECURITY: Only main admin can manage credit plans
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { id } = req.params;
     
     const plan = await CreditPlan.findById(id);
@@ -6438,6 +6530,10 @@ router.get('/settings', async (req, res) => {
 // PATCH /admin/settings - Update agency/branding settings
 router.patch('/settings', async (req, res) => {
   try {
+    // SECURITY: Only main admin can modify settings
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
     const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl } = req.body || {};
     
     const updates = {};
