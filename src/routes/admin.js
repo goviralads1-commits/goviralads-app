@@ -1223,28 +1223,61 @@ router.patch('/tasks/:taskId', async (req, res) => {
         if (currentProgress >= 100 && task.status !== 'COMPLETED') {
           task.status = 'COMPLETED';
           // COMMISSION CALCULATION: When auto-completed via progress
-          if (task.commissionValue > 0 && !task.commissionEarned && task.assignedTo) {
-            const taskValue = task.creditCost || 0;
-            if (task.commissionType === 'percentage') {
-              task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
-            } else {
-              task.commissionEarned = task.commissionValue;
-            }
-            console.log(`[COMMISSION] Auto-completion earned: ₹${task.commissionEarned}`);
-                      
-            // Create CommissionLog entry
-            try {
-              await CommissionLog.create({
-                userId: task.assignedTo,
-                taskId: task._id,
-                taskTitle: task.title,
-                amount: task.commissionEarned,
-                commissionType: task.commissionType,
-                commissionValue: task.commissionValue,
-              });
-              console.log(`[COMMISSION] Log created for auto-completion`);
-            } catch (logErr) {
-              console.error(`[COMMISSION] Failed to create log:`, logErr.message);
+          if (!task.commissionEarned) {
+            const validAssignedUsers = (task.assignedUsers || []).filter(u => u.userId && u.percentage > 0);
+
+            if (validAssignedUsers.length > 0) {
+              // CASE 1: Multi-assignment commission split
+              const taskValue = task.creditCost || 0;
+              const costs = task.costBreakdown || { expenses: 0, tax: 0, other: 0 };
+              const totalCosts = (Number(costs.expenses) || 0) + (Number(costs.tax) || 0) + (Number(costs.other) || 0);
+              const netValue = Math.max(0, taskValue - totalCosts);
+              let totalDistributed = 0;
+
+              for (const member of validAssignedUsers) {
+                const memberAmount = Math.round((member.percentage / 100) * netValue);
+                totalDistributed += memberAmount;
+                try {
+                  await CommissionLog.create({
+                    userId: member.userId,
+                    taskId: task._id,
+                    taskTitle: task.title,
+                    amount: memberAmount,
+                    commissionType: 'percentage',
+                    commissionValue: member.percentage,
+                  });
+                  console.log(`[COMMISSION-SPLIT] Auto: User ${member.userId} earned \u20b9${memberAmount} (${member.percentage}%)`);
+                } catch (logErr) {
+                  console.error(`[COMMISSION-SPLIT] Failed to create log:`, logErr.message);
+                }
+              }
+
+              task.commissionEarned = totalDistributed;
+              task.companyEarning = Math.max(0, netValue - totalDistributed);
+              console.log(`[COMMISSION-SPLIT] Auto: Company earning \u20b9${task.companyEarning}, Total distributed \u20b9${totalDistributed}`);
+
+            } else if (task.commissionValue > 0 && task.assignedTo) {
+              // CASE 2: Fallback — existing single-assign logic
+              const taskValue = task.creditCost || 0;
+              if (task.commissionType === 'percentage') {
+                task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
+              } else {
+                task.commissionEarned = task.commissionValue;
+              }
+              console.log(`[COMMISSION] Auto-completion earned: \u20b9${task.commissionEarned}`);
+              try {
+                await CommissionLog.create({
+                  userId: task.assignedTo,
+                  taskId: task._id,
+                  taskTitle: task.title,
+                  amount: task.commissionEarned,
+                  commissionType: task.commissionType,
+                  commissionValue: task.commissionValue,
+                });
+                console.log(`[COMMISSION] Log created for auto-completion`);
+              } catch (logErr) {
+                console.error(`[COMMISSION] Failed to create log:`, logErr.message);
+              }
             }
           }
         } else if (currentProgress > 0 && task.status === 'PENDING') {
@@ -1663,30 +1696,65 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
     
     // COMMISSION CALCULATION: When task is completed, calculate commission
-    if (crossedCompletion && task.commissionValue > 0 && !task.commissionEarned && task.assignedTo) {
-      console.log(`[COMMISSION] Calculating commission for task ${taskId}`);
-      const taskValue = task.creditCost || 0;
-      if (task.commissionType === 'percentage') {
-        task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
-      } else {
-        task.commissionEarned = task.commissionValue;
-      }
-      console.log(`[COMMISSION] Earned: ₹${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
-      await task.save();
-          
-      // Create CommissionLog entry
-      try {
-        await CommissionLog.create({
-          userId: task.assignedTo,
-          taskId: task._id,
-          taskTitle: task.title,
-          amount: task.commissionEarned,
-          commissionType: task.commissionType,
-          commissionValue: task.commissionValue,
-        });
-        console.log(`[COMMISSION] Log created for task completion`);
-      } catch (logErr) {
-        console.error(`[COMMISSION] Failed to create log:`, logErr.message);
+    if (crossedCompletion && !task.commissionEarned) {
+      const validAssignedUsers = (task.assignedUsers || []).filter(u => u.userId && u.percentage > 0);
+
+      if (validAssignedUsers.length > 0) {
+        // CASE 1: Multi-assignment commission split
+        console.log(`[COMMISSION-SPLIT] Calculating split for task ${taskId}`);
+        const taskValue = task.creditCost || 0;
+        const costs = task.costBreakdown || { expenses: 0, tax: 0, other: 0 };
+        const totalCosts = (Number(costs.expenses) || 0) + (Number(costs.tax) || 0) + (Number(costs.other) || 0);
+        const netValue = Math.max(0, taskValue - totalCosts);
+        let totalDistributed = 0;
+
+        for (const member of validAssignedUsers) {
+          const memberAmount = Math.round((member.percentage / 100) * netValue);
+          totalDistributed += memberAmount;
+          try {
+            await CommissionLog.create({
+              userId: member.userId,
+              taskId: task._id,
+              taskTitle: task.title,
+              amount: memberAmount,
+              commissionType: 'percentage',
+              commissionValue: member.percentage,
+            });
+            console.log(`[COMMISSION-SPLIT] Status: User ${member.userId} earned \u20b9${memberAmount} (${member.percentage}%)`);
+          } catch (logErr) {
+            console.error(`[COMMISSION-SPLIT] Failed to create log:`, logErr.message);
+          }
+        }
+
+        task.commissionEarned = totalDistributed;
+        task.companyEarning = Math.max(0, netValue - totalDistributed);
+        await task.save();
+        console.log(`[COMMISSION-SPLIT] Status: Company earning \u20b9${task.companyEarning}, Total distributed \u20b9${totalDistributed}`);
+
+      } else if (task.commissionValue > 0 && task.assignedTo) {
+        // CASE 2: Fallback — existing single-assign logic
+        console.log(`[COMMISSION] Calculating commission for task ${taskId}`);
+        const taskValue = task.creditCost || 0;
+        if (task.commissionType === 'percentage') {
+          task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
+        } else {
+          task.commissionEarned = task.commissionValue;
+        }
+        console.log(`[COMMISSION] Earned: \u20b9${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
+        await task.save();
+        try {
+          await CommissionLog.create({
+            userId: task.assignedTo,
+            taskId: task._id,
+            taskTitle: task.title,
+            amount: task.commissionEarned,
+            commissionType: task.commissionType,
+            commissionValue: task.commissionValue,
+          });
+          console.log(`[COMMISSION] Log created for task completion`);
+        } catch (logErr) {
+          console.error(`[COMMISSION] Failed to create log:`, logErr.message);
+        }
       }
     }
     

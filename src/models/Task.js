@@ -482,6 +482,7 @@ const taskSchema = new mongoose.Schema(
       tax: { type: Number, default: 0 },
       other: { type: Number, default: 0 },
     },
+    companyEarning: { type: Number, default: 0 },
   },
   {
     timestamps: true,
