@@ -3208,6 +3208,9 @@ router.post('/purchase-cart', async (req, res) => {
           showQuantityToClient: plan.showQuantityToClient !== false,
           showCreditsToClient: plan.showCreditsToClient !== false,
           customInputLabel: plan.customInputLabel || '',
+          // Plan default commission setup
+          defaultAssignedUsers: plan.defaultAssignedUsers || [],
+          defaultCostBreakdown: plan.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
         },
         inputs: item.inputs || [],
       });

@@ -20,6 +20,10 @@ const PlanDetail = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState(null); // { action: 'archived'|'deleted', message: string }
+  // Default Commission Setup state
+  const [defaultAssignedUsers, setDefaultAssignedUsers] = useState([]);
+  const [defaultCostBreakdown, setDefaultCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
+  const [adminUsers, setAdminUsers] = useState([]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -52,10 +56,11 @@ const PlanDetail = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [planRes, categoriesRes, usersRes] = await Promise.all([
+      const [planRes, categoriesRes, usersRes, adminUsersRes] = await Promise.all([
         api.get(`/admin/tasks/${planId}`),
         api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
-        api.get('/admin/users').catch(() => ({ data: { users: [] } }))
+        api.get('/admin/users').catch(() => ({ data: { users: [] } })),
+        api.get('/admin/users?role=ADMIN,EMPLOYEE').catch(() => ({ data: { users: [] } }))
       ]);
       
       const planData = planRes.data.task;
@@ -70,6 +75,11 @@ const PlanDetail = () => {
       setPlan(planData);
       setCategories(categoriesRes.data.categories || []);
       setUsers(usersRes.data.users || []);
+      setAdminUsers((adminUsersRes.data.users || []).filter(u => u.role !== 'CLIENT'));
+      
+      // Load default commission setup
+      setDefaultAssignedUsers((planData.defaultAssignedUsers || []).map(m => ({ userId: m.userId?._id || m.userId || '', percentage: m.percentage || 0 })));
+      setDefaultCostBreakdown(planData.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 });
       
       // Extract allowedClients IDs from populated data
       const allowedClientIds = (planData.allowedClients || []).map(c => 
@@ -155,6 +165,22 @@ const PlanDetail = () => {
     setMediaChanged(true);
   };
 
+  // Default Commission Setup handlers
+  const addDefaultTeamMember = () => {
+    setDefaultAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
+    setHasChanges(true);
+  };
+  const removeDefaultTeamMember = (idx) => {
+    setDefaultAssignedUsers(prev => prev.filter((_, i) => i !== idx));
+    setHasChanges(true);
+  };
+  const updateDefaultTeamMember = (idx, field, value) => {
+    setDefaultAssignedUsers(prev => prev.map((m, i) => i === idx ? { ...m, [field]: field === 'percentage' ? Math.max(0, Math.min(100, Number(value) || 0)) : value } : m));
+    setHasChanges(true);
+  };
+  const defaultAssignedUserIds = defaultAssignedUsers.map(m => m.userId).filter(Boolean);
+  const defaultAssignedUsersTotal = defaultAssignedUsers.reduce((sum, m) => sum + (Number(m.percentage) || 0), 0);
+
   const handleSave = async () => {
     if (!formData.title.trim()) {
       setToast({ type: 'error', message: 'Title is required' });
@@ -190,7 +216,10 @@ const PlanDetail = () => {
         requireLink: formData.requireLink ?? false,
         requireCustomInput: formData.requireCustomInput ?? false,
         customInputLabel: formData.customInputLabel || '',
-        customInputPlaceholder: formData.customInputPlaceholder || ''
+        customInputPlaceholder: formData.customInputPlaceholder || '',
+        // Default Commission Setup
+        defaultAssignedUsers: defaultAssignedUsers.filter(m => m.userId && m.percentage > 0),
+        defaultCostBreakdown: defaultCostBreakdown,
       };
       
       // Only include planMedia if it was intentionally modified
@@ -589,6 +618,72 @@ const PlanDetail = () => {
                 <span style={{ fontSize: '13px', fontWeight: '600', color: formData.isNew ? '#1d4ed8' : '#6b7280' }}>🆕 New Arrival</span>
               </label>
             </div>
+          </div>
+
+          {/* DEFAULT COMMISSION SETUP */}
+          <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '2px solid #e2e8f0' }}>
+            <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Setup</h4>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Pre-assign team & costs for tasks created from this plan</p>
+            
+            {/* Assign Team */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team Members</label>
+              {defaultAssignedUsers.map((member, idx) => (
+                <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
+                  <select
+                    value={member.userId}
+                    onChange={(e) => updateDefaultTeamMember(idx, 'userId', e.target.value)}
+                    style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                  >
+                    <option value="">Select user...</option>
+                    {adminUsers.filter(u => !defaultAssignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                      <option key={u.id} value={u.id}>{u.identifier || u.name || u.email} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    value={member.percentage}
+                    onChange={(e) => updateDefaultTeamMember(idx, 'percentage', e.target.value)}
+                    placeholder="%"
+                    min="0"
+                    max="100"
+                    style={{ flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
+                  />
+                  <button type="button" onClick={() => removeDefaultTeamMember(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                </div>
+              ))}
+              {defaultAssignedUsers.length > 0 && (
+                <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: defaultAssignedUsersTotal > 100 ? '#dc2626' : '#16a34a' }}>
+                  Total: {defaultAssignedUsersTotal}% {defaultAssignedUsersTotal > 100 && '⚠️ Exceeds 100%'}
+                </div>
+              )}
+              <button type="button" onClick={addDefaultTeamMember} disabled={defaultAssignedUsersTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
+            </div>
+
+            {/* Cost Breakdown */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Cost Breakdown</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Expenses</label>
+                  <input type="number" min="0" value={defaultCostBreakdown.expenses} onChange={(e) => { setDefaultCostBreakdown(prev => ({ ...prev, expenses: Math.max(0, Number(e.target.value) || 0) })); setHasChanges(true); }} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Tax</label>
+                  <input type="number" min="0" value={defaultCostBreakdown.tax} onChange={(e) => { setDefaultCostBreakdown(prev => ({ ...prev, tax: Math.max(0, Number(e.target.value) || 0) })); setHasChanges(true); }} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Other</label>
+                  <input type="number" min="0" value={defaultCostBreakdown.other} onChange={(e) => { setDefaultCostBreakdown(prev => ({ ...prev, other: Math.max(0, Number(e.target.value) || 0) })); setHasChanges(true); }} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            </div>
+            
+            {defaultAssignedUsers.length > 0 && (
+              <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#eff6ff', borderRadius: '8px', fontSize: '11px', color: '#3b82f6' }}>
+                ℹ️ These defaults will auto-apply when tasks are created from orders using this plan.
+              </div>
+            )}
           </div>
 
           {/* Save Button */}

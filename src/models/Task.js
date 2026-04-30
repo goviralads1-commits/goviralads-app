@@ -483,6 +483,17 @@ const taskSchema = new mongoose.Schema(
       other: { type: Number, default: 0 },
     },
     companyEarning: { type: Number, default: 0 },
+
+    // PLAN DEFAULTS (for order→task inheritance)
+    defaultAssignedUsers: [{
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      percentage: { type: Number, min: 0, max: 100, default: 0 },
+    }],
+    defaultCostBreakdown: {
+      expenses: { type: Number, default: 0 },
+      tax: { type: Number, default: 0 },
+      other: { type: Number, default: 0 },
+    },
   },
   {
     timestamps: true,

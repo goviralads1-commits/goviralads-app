@@ -1078,6 +1078,9 @@ router.get('/tasks/:taskId', async (req, res) => {
         // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 2)
         assignedUsers: task.assignedUsers || [],
         costBreakdown: task.costBreakdown || { expenses: 0, tax: 0, other: 0 },
+        // PLAN DEFAULTS
+        defaultAssignedUsers: task.defaultAssignedUsers || [],
+        defaultCostBreakdown: task.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
       }
     });
   } catch (err) {
@@ -3247,7 +3250,10 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           // Phase 1: pass through if present in planSnapshot
           ...(item.planSnapshot?.assignedUsers?.length ? { assignedUsers: item.planSnapshot.assignedUsers } : {}),
           ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
-          // Phase 2: pass through from approve request body
+          // Plan defaults: inherit defaultAssignedUsers/defaultCostBreakdown from plan
+          ...(item.planSnapshot?.defaultAssignedUsers?.length ? { assignedUsers: item.planSnapshot.defaultAssignedUsers } : {}),
+          ...(item.planSnapshot?.defaultCostBreakdown ? { costBreakdown: item.planSnapshot.defaultCostBreakdown } : {}),
+          // Phase 2: pass through from approve request body (highest priority)
           ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
         };
         

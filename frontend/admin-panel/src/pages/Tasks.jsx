@@ -2033,14 +2033,14 @@ const Tasks = () => {
                   )}
 
                   {/* ASSIGN TEAM (Phase 2) */}
-                  <div style={{marginTop: '28px', paddingTop: '20px', borderTop: '2px solid #e2e8f0'}}>
+                  <div style={{marginTop: '28px', paddingTop: '20px', borderTop: '2px solid #e2e8f0', maxWidth: '100%', overflow: 'hidden'}}>
                     <h4 style={{fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px'}}>👥 ASSIGN TEAM <span style={{fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none'}}>(Optional – overrides Assign To)</span></h4>
                     {assignedUsers.map((member, idx) => (
-                      <div key={idx} style={{display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center'}}>
+                      <div key={idx} style={{display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center'}}>
                         <select
                           value={member.userId}
                           onChange={(e) => updateTeamMember(idx, 'userId', e.target.value)}
-                          style={{flex: 2, padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box'}}
+                          style={{flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box'}}
                         >
                           <option value="">Select user...</option>
                           {adminUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
@@ -2054,9 +2054,9 @@ const Tasks = () => {
                           placeholder="%"
                           min="0"
                           max="100"
-                          style={{flex: 0.7, padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box'}}
+                          style={{flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box'}}
                         />
-                        <button type="button" onClick={() => removeTeamMember(idx)} style={{padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer'}}>✕</button>
+                        <button type="button" onClick={() => removeTeamMember(idx)} style={{flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer'}}>✕</button>
                       </div>
                     ))}
                     {assignedUsers.length > 0 && (
@@ -2073,9 +2073,9 @@ const Tasks = () => {
                   </div>
 
                   {/* COST BREAKDOWN (Phase 2) */}
-                  <div style={{marginTop: '28px', paddingTop: '20px', borderTop: '2px solid #e2e8f0'}}>
+                  <div style={{marginTop: '28px', paddingTop: '20px', borderTop: '2px solid #e2e8f0', marginBottom: '80px'}}>
                     <h4 style={{fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px'}}>💰 COST BREAKDOWN <span style={{fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none'}}>(Optional)</span></h4>
-                    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px'}}>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '12px'}}>
                       <div>
                         <label style={{display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px'}}>Expenses</label>
                         <input type="number" min="0" value={costBreakdown.expenses} onChange={(e) => setCostBreakdown(prev => ({...prev, expenses: Math.max(0, Number(e.target.value) || 0)}))} style={{width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box'}} />
