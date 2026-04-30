@@ -84,6 +84,14 @@ const MediaUploader = ({
     }
   };
 
+  // Auto-add on blur if valid URL exists
+  const handleBlur = (e) => {
+    e.target.style.borderColor = '#e2e8f0';
+    if (urlInput && urlInput.match(/^https?:\/\//) && media.length < maxItems) {
+      handleAdd();
+    }
+  };
+
   // Add media item
   const handleAdd = () => {
     if (!urlInput || media.length >= maxItems) return;
@@ -248,7 +256,7 @@ const MediaUploader = ({
                 transition: 'border-color 0.2s'
               }}
               onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+              onBlur={handleBlur}
             />
           </div>
 
