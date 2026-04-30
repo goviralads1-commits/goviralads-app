@@ -1159,6 +1159,15 @@ router.patch('/tasks/:taskId', async (req, res) => {
     const oldStatus = task.status;
     const oldDeliveryLink = task.finalDeliveryLink || '';
 
+    // Phase 1: assignedUsers validation on PATCH
+    if (updates.assignedUsers && Array.isArray(updates.assignedUsers) && updates.assignedUsers.length > 0) {
+      const totalPct = updates.assignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
+      if (totalPct > 100) return res.status(400).json({ error: 'VALIDATION FAILED: assignedUsers total percentage cannot exceed 100.' });
+      for (const u of updates.assignedUsers) {
+        if ((Number(u.percentage) || 0) < 0) return res.status(400).json({ error: 'VALIDATION FAILED: assignedUsers percentage cannot be negative.' });
+      }
+    }
+
     // Track if progress-related fields are being updated
     const progressFieldsUpdated = (
       updates.progress !== undefined ||
@@ -1796,7 +1805,10 @@ router.post('/tasks/assign', async (req, res) => {
       requireLink,
       requireCustomInput,
       customInputLabel,
-      customInputPlaceholder
+      customInputPlaceholder,
+      // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 1)
+      assignedUsers,
+      costBreakdown
     } = payload;
 
     // --- HARD BRANCH: PLAN (PRODUCT LISTING) ---
@@ -1877,6 +1889,15 @@ router.post('/tasks/assign', async (req, res) => {
     if (isActivePlan === true) return res.status(400).json({ error: 'TASK VALIDATION FAILED: Execution instances cannot be marked as Active Plans.' });
     // planMedia is allowed on tasks if cloned from a plan
 
+    // 2b. assignedUsers validation (Phase 1 - light)
+    if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
+      const totalPct = assignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
+      if (totalPct > 100) return res.status(400).json({ error: 'VALIDATION FAILED: assignedUsers total percentage cannot exceed 100.' });
+      for (const u of assignedUsers) {
+        if ((Number(u.percentage) || 0) < 0) return res.status(400).json({ error: 'VALIDATION FAILED: assignedUsers percentage cannot be negative.' });
+      }
+    }
+
     // 2. Client & Wallet Validation
     const client = await User.findById(clientId).exec();
     if (!client || client.role !== ROLES.CLIENT) {
@@ -1908,6 +1929,9 @@ router.post('/tasks/assign', async (req, res) => {
       assignedTo: assignedTo || null,
       commissionType: commissionType || 'percentage',
       commissionValue: Number(commissionValue) || 0,
+      // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 1)
+      ...(assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0 ? { assignedUsers } : {}),
+      ...(costBreakdown ? { costBreakdown } : {}),
     };
 
     // 3. Deduct & Assign (Service Level)
@@ -3149,6 +3173,9 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           customInputLabel: item.planSnapshot?.customInputLabel || '',
           clientInputs: item.inputs && item.inputs[i] ? [item.inputs[i]] : [],
           assignedTo: assignedTo || null,
+          // Phase 1: pass through if present in planSnapshot
+          ...(item.planSnapshot?.assignedUsers?.length ? { assignedUsers: item.planSnapshot.assignedUsers } : {}),
+          ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
         };
         
         const task = await Task.create([taskData], { session });

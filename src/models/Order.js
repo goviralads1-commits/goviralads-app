@@ -85,6 +85,12 @@ const orderItemSchema = new mongoose.Schema({
     milestones: { type: Array, default: [] },
     autoCompletionCap: { type: Number, default: 100 },
     customInputLabel: { type: String, default: '' },
+    assignedUsers: { type: Array, default: [] },
+    costBreakdown: {
+      expenses: { type: Number, default: 0 },
+      tax: { type: Number, default: 0 },
+      other: { type: Number, default: 0 },
+    },
   },
   inputs: [
     {

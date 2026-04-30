@@ -471,6 +471,17 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 1 - Schema Only)
+    assignedUsers: [{
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      percentage: { type: Number, min: 0, max: 100, default: 0 },
+    }],
+    costBreakdown: {
+      expenses: { type: Number, default: 0 },
+      tax: { type: Number, default: 0 },
+      other: { type: Number, default: 0 },
+    },
   },
   {
     timestamps: true,
