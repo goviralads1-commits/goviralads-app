@@ -27,6 +27,21 @@ const Tasks = () => {
     toDate: ''
   });
   
+  // Fetch tasks from API (server-side date filter)
+  const fetchTasks = async (dateOverride) => {
+    try {
+      const params = {};
+      const from = dateOverride?.fromDate ?? filters.fromDate;
+      const to = dateOverride?.toDate ?? filters.toDate;
+      if (from) params.fromDate = from;
+      if (to) params.toDate = to;
+      const res = await api.get('/admin/tasks', { params });
+      setTasks(res.data.tasks || []);
+    } catch (err) {
+      console.error('Tasks fetch error:', err);
+    }
+  };
+  
   // Bulk selection state (Phase 7)
   const [selectedTasks, setSelectedTasks] = useState([]);
   const [bulkApproving, setBulkApproving] = useState(false);
@@ -104,8 +119,11 @@ const Tasks = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const params = {};
+        if (filters.fromDate) params.fromDate = filters.fromDate;
+        if (filters.toDate) params.toDate = filters.toDate;
         const [tasksResponse, walletsResponse, categoriesResponse, adminUsersResponse] = await Promise.all([
-          api.get('/admin/tasks'),
+          api.get('/admin/tasks', { params }),
           api.get('/admin/wallets'),
           api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
           api.get('/admin/admin-users').catch(() => ({ data: { users: [] } }))
@@ -130,7 +148,7 @@ const Tasks = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [filters.fromDate, filters.toDate]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -228,16 +246,7 @@ const Tasks = () => {
       );
     }
 
-    // Date range filter
-    if (filters.fromDate) {
-      const from = new Date(filters.fromDate);
-      filtered = filtered.filter(t => new Date(t.createdAt) >= from);
-    }
-    if (filters.toDate) {
-      const to = new Date(filters.toDate);
-      to.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(t => new Date(t.createdAt) <= to);
-    }
+    // Date range filter — handled server-side, skip client-side
     
     // Sort
     filtered.sort((a, b) => {
