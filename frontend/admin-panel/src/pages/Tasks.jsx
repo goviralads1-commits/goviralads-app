@@ -22,7 +22,9 @@ const Tasks = () => {
     priority: 'ALL',
     clientId: 'ALL',
     search: '',
-    sort: 'newest'
+    sort: 'newest',
+    fromDate: '',
+    toDate: ''
   });
   
   // Bulk selection state (Phase 7)
@@ -224,6 +226,17 @@ const Tasks = () => {
         t.description?.toLowerCase().includes(searchLower) ||
         t.clientIdentifier?.toLowerCase().includes(searchLower)
       );
+    }
+
+    // Date range filter
+    if (filters.fromDate) {
+      const from = new Date(filters.fromDate);
+      filtered = filtered.filter(t => new Date(t.createdAt) >= from);
+    }
+    if (filters.toDate) {
+      const to = new Date(filters.toDate);
+      to.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(t => new Date(t.createdAt) <= to);
     }
     
     // Sort
@@ -895,6 +908,31 @@ const Tasks = () => {
             <option value="priority">By Priority</option>
             <option value="deadline">By Deadline</option>
           </select>
+
+          {/* Date Range Filter */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters(prev => ({...prev, fromDate: e.target.value}))}
+              style={{ padding: '10px 12px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '13px', color: '#0f172a', backgroundColor: '#f8fafc' }}
+            />
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>to</span>
+            <input
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters(prev => ({...prev, toDate: e.target.value}))}
+              style={{ padding: '10px 12px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '13px', color: '#0f172a', backgroundColor: '#f8fafc' }}
+            />
+            {(filters.fromDate || filters.toDate) && (
+              <button
+                onClick={() => setFilters(prev => ({...prev, fromDate: '', toDate: ''}))}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Results Count */}

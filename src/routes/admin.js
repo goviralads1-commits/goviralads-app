@@ -833,7 +833,7 @@ router.post('/subscription-requests/:id/reject', async (req, res) => {
 
 router.get('/tasks', async (req, res) => {
   try {
-    const { clientId, status } = req.query;
+    const { clientId, status, fromDate, toDate } = req.query;
 
     // HARD FILTER: Tasks ONLY - NEVER include Plans
     let filter = {
@@ -846,6 +846,17 @@ router.get('/tasks', async (req, res) => {
     
     if (status) {
       filter.status = status;
+    }
+
+    // Date range filter
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
     }
 
     // TASK VISIBILITY: sub-admins without canViewAllTasks only see tasks assigned TO them
