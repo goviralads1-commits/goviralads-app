@@ -6738,6 +6738,220 @@ router.patch('/settings', async (req, res) => {
   }
 });
 
+// ===== ANALYTICS DASHBOARD =====
+
+// GET /admin/analytics - Comprehensive read-only business analytics
+router.get('/analytics', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      dateFilter.$lte = end;
+    }
+    const hasDateFilter = Object.keys(dateFilter).length > 0;
+    const createdAtFilter = hasDateFilter ? { createdAt: dateFilter } : {};
+
+    // "This month" range (always current month, ignoring date filter)
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthFilter = { createdAt: { $gte: firstOfMonth } };
+
+    // Revenue types
+    const revenueTypes = ['RECHARGE_APPROVED', 'SUBSCRIPTION_CREDIT', 'MANUAL_CREDIT', 'CREDIT'];
+
+    // Run all aggregations in parallel
+    const [
+      revenueTotal, revenueThisMonth, pendingRechargeAgg,
+      ordersTotal, ordersThisMonth, ordersPending, ordersApproved,
+      taskStats, tasksCompleted, taskCostAgg,
+      commissionTotal, commissionThisMonth,
+      clientTotal, clientActive, clientsNewMonth,
+      topClientsRecharge, topClientsSpend, topClientsCommission,
+      serviceAgg
+    ] = await Promise.all([
+      // A. Revenue
+      WalletTransaction.aggregate([
+        { $match: { type: { $in: revenueTypes }, ...createdAtFilter } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      WalletTransaction.aggregate([
+        { $match: { type: { $in: revenueTypes }, ...monthFilter } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      RechargeRequest.aggregate([
+        { $match: { status: 'PENDING', ...createdAtFilter } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+      ]),
+
+      // B. Orders
+      Order.aggregate([
+        { $match: { orderStatus: { $ne: 'REJECTED' }, ...createdAtFilter } },
+        { $group: { _id: null, total: { $sum: '$totalAmount' }, count: { $sum: 1 } } }
+      ]),
+      Order.aggregate([
+        { $match: { orderStatus: { $ne: 'REJECTED' }, ...monthFilter } },
+        { $group: { _id: null, total: { $sum: '$totalAmount' }, count: { $sum: 1 } } }
+      ]),
+      Order.countDocuments({ orderStatus: 'PENDING_APPROVAL', ...createdAtFilter }),
+      Order.countDocuments({ orderStatus: { $in: ['APPROVED', 'IN_PROGRESS', 'COMPLETED'] }, ...createdAtFilter }),
+
+      // C. Tasks
+      Task.aggregate([
+        { $match: { isDeleted: { $ne: true }, ...createdAtFilter } },
+        { $group: {
+          _id: null,
+          total: { $sum: 1 },
+          active: { $sum: { $cond: [{ $in: ['$status', ['PENDING', 'IN_PROGRESS', 'PENDING_APPROVAL']] }, 1, 0] } },
+          completed: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
+          avgValue: { $avg: '$creditCost' }
+        }}
+      ]),
+      Task.countDocuments({ status: 'COMPLETED', ...createdAtFilter }),
+      Task.aggregate([
+        { $match: { status: 'COMPLETED', ...createdAtFilter } },
+        { $group: {
+          _id: null,
+          totalExpenses: { $sum: { $ifNull: ['$costBreakdown.expenses', 0] } },
+          totalTax: { $sum: { $ifNull: ['$costBreakdown.tax', 0] } },
+          totalOther: { $sum: { $ifNull: ['$costBreakdown.other', 0] } }
+        }}
+      ]),
+
+      // D. Commissions
+      CommissionLog.aggregate([
+        { $match: { ...createdAtFilter } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      CommissionLog.aggregate([
+        { $match: { ...monthFilter } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+
+      // E. Clients
+      User.countDocuments({ role: 'CLIENT', ...createdAtFilter }),
+      User.countDocuments({ role: 'CLIENT', status: 'ACTIVE', ...createdAtFilter }),
+      User.countDocuments({ role: 'CLIENT', ...monthFilter }),
+
+      // F. Top 10 Clients by recharge
+      WalletTransaction.aggregate([
+        { $match: { type: 'RECHARGE_APPROVED', ...createdAtFilter } },
+        { $lookup: { from: 'wallets', localField: 'walletId', foreignField: '_id', as: 'wallet' } },
+        { $unwind: '$wallet' },
+        { $group: { _id: '$wallet.clientId', totalRecharge: { $sum: '$amount' } } },
+        { $sort: { totalRecharge: -1 } },
+        { $limit: 10 },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+        { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+        { $project: { clientId: '$_id', totalRecharge: 1, identifier: { $ifNull: ['$user.name', { $ifNull: ['$user.email', '$user.phone'] }] } } }
+      ]),
+      // Top clients spend (orders)
+      Order.aggregate([
+        { $match: { orderStatus: { $ne: 'REJECTED' }, ...createdAtFilter } },
+        { $group: { _id: '$clientId', totalSpend: { $sum: '$totalAmount' } } }
+      ]),
+      // Top clients commission
+      CommissionLog.aggregate([
+        { $match: { ...createdAtFilter } },
+        { $group: { _id: '$userId', totalCommission: { $sum: '$amount' } } }
+      ]),
+
+      // G. Service analytics (top 5 by revenue from order items)
+      Order.aggregate([
+        { $match: { orderStatus: { $ne: 'REJECTED' }, ...createdAtFilter } },
+        { $unwind: '$items' },
+        { $group: {
+          _id: '$items.planId',
+          serviceName: { $first: '$items.planTitle' },
+          totalOrders: { $sum: '$items.quantity' },
+          totalRevenue: { $sum: '$items.totalPrice' }
+        }},
+        { $sort: { totalRevenue: -1 } },
+        { $limit: 5 }
+      ])
+    ]);
+
+    // Extract values
+    const revTotal = revenueTotal[0]?.total || 0;
+    const revMonth = revenueThisMonth[0]?.total || 0;
+    const pendRecharge = pendingRechargeAgg[0] || { total: 0, count: 0 };
+
+    const ordTotal = ordersTotal[0] || { total: 0, count: 0 };
+    const ordMonth = ordersThisMonth[0] || { total: 0, count: 0 };
+
+    const tStats = taskStats[0] || { total: 0, active: 0, completed: 0, avgValue: 0 };
+    const completionRate = tStats.total > 0 ? Math.round((tStats.completed / tStats.total) * 100) : 0;
+
+    const costData = taskCostAgg[0] || { totalExpenses: 0, totalTax: 0, totalOther: 0 };
+    const commTotal = commissionTotal[0]?.total || 0;
+    const commMonth = commissionThisMonth[0]?.total || 0;
+
+    const totalAllCosts = commTotal + costData.totalExpenses + costData.totalTax + costData.totalOther;
+    const netProfit = revTotal - totalAllCosts;
+
+    // Build top 10 clients with merged data
+    const spendMap = {};
+    topClientsSpend.forEach(c => { spendMap[c._id?.toString()] = c.totalSpend; });
+    const commMap = {};
+    topClientsCommission.forEach(c => { commMap[c._id?.toString()] = c.totalCommission; });
+
+    const top10 = topClientsRecharge.map(c => {
+      const id = c.clientId?.toString();
+      const spend = spendMap[id] || 0;
+      const comm = commMap[id] || 0;
+      return {
+        clientId: c.clientId,
+        identifier: c.identifier || 'Unknown',
+        totalRecharge: c.totalRecharge,
+        totalSpend: spend,
+        totalCommission: comm,
+        profit: c.totalRecharge - comm - costData.totalExpenses // simplified per-client
+      };
+    });
+
+    // Recent activity: merge last orders, completed tasks, approved recharges
+    const [recentOrders, recentTasks, recentRecharges] = await Promise.all([
+      Order.find({ ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('orderNumber clientId totalAmount orderStatus createdAt').lean(),
+      Task.find({ status: 'COMPLETED', ...createdAtFilter }).sort({ updatedAt: -1 }).limit(5).select('title creditCost updatedAt assignedTo').lean(),
+      RechargeRequest.find({ status: 'APPROVED', ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('amount createdAt').lean()
+    ]);
+
+    const recentActivity = [
+      ...recentOrders.map(o => ({ type: 'order', label: `Order ${o.orderNumber || ''}`, value: o.totalAmount, status: o.orderStatus, date: o.createdAt })),
+      ...recentTasks.map(t => ({ type: 'task', label: t.title || 'Task', value: t.creditCost, status: 'COMPLETED', date: t.updatedAt })),
+      ...recentRecharges.map(r => ({ type: 'recharge', label: 'Recharge Approved', value: r.amount, status: 'APPROVED', date: r.createdAt }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+
+    // Service profit calculation
+    const serviceTop5 = serviceAgg.map(s => ({
+      planId: s._id,
+      serviceName: s.serviceName || 'Unknown',
+      totalOrders: s.totalOrders,
+      totalRevenue: s.totalRevenue,
+      totalProfit: s.totalRevenue - (s.totalRevenue * (totalAllCosts / (revTotal || 1))) // proportional cost estimate
+    }));
+
+    res.json({
+      revenue: { total: revTotal, thisMonth: revMonth, pendingRechargeValue: pendRecharge.total },
+      orders: { total: ordTotal.count, totalValue: ordTotal.total, thisMonth: ordMonth.count, thisMonthValue: ordMonth.total, pendingCount: ordersPending, approvedCount: ordersApproved },
+      tasks: { total: tStats.total, active: tStats.active, completed: tStats.completed, completionRate, avgValue: Math.round(tStats.avgValue || 0) },
+      commissions: { totalPaid: commTotal, thisMonth: commMonth },
+      costs: { totalExpenses: costData.totalExpenses, totalTax: costData.totalTax, totalOther: costData.totalOther, totalAllCosts },
+      profit: { grossRevenue: revTotal, totalCosts: totalAllCosts, netProfit },
+      clients: { total: clientTotal, active: clientActive, newThisMonth: clientsNewMonth, top10 },
+      services: { top5: serviceTop5 },
+      recentActivity
+    });
+  } catch (err) {
+    console.error('Analytics error:', err);
+    res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
+
 // ===== COMMISSION TRACKING =====
 
 // GET /admin/commissions - Get commission logs with aggregation

@@ -15,6 +15,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false });
+  const [analytics, setAnalytics] = useState(null);
   const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -66,13 +67,14 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes] = await Promise.all([
+      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes] = await Promise.all([
         api.get('/admin/reports/overview'),
         api.get('/admin/notices'),
         api.get('/admin/clients'),
         api.get('/admin/plans').catch(() => ({ data: { plans: [] } })),
         api.get('/admin/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/admin/commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
+        api.get('/admin/analytics').catch(() => ({ data: null })),
       ]);
       setDashboardData(overviewRes.data);
       setNotices(noticesRes.data.notices || []);
@@ -87,6 +89,7 @@ const Dashboard = () => {
         userSummary: cd.userSummary || [],
         isMainAdmin: cd.isMainAdmin || false,
       });
+      if (analyticsRes.data) setAnalytics(analyticsRes.data);
     } catch (err) {
       setError('Failed to load dashboard data');
     } finally {
@@ -303,6 +306,160 @@ const Dashboard = () => {
             </button>
           </div>
         </div>
+
+        {/* BUSINESS ANALYTICS SECTION */}
+        {analytics && (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>📊 Business Analytics</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+              {/* Total Revenue */}
+              <div style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>💰</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.revenue?.total || 0).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Total Revenue</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+₹{(analytics.revenue?.thisMonth || 0).toLocaleString('en-IN')} this month</p>
+              </div>
+              {/* Orders */}
+              <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🛒</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{analytics.orders?.total || 0}</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Total Orders</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>{analytics.orders?.pendingCount || 0} pending approval</p>
+              </div>
+              {/* Active Tasks */}
+              <div style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>📋</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{analytics.tasks?.active || 0}</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Tasks</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>{analytics.tasks?.completionRate || 0}% completion rate</p>
+              </div>
+              {/* Commission Paid */}
+              <div style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>💵</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.commissions?.totalPaid || 0).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Commission Paid</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>Costs: ₹{(analytics.costs?.totalAllCosts || 0).toLocaleString('en-IN')}</p>
+              </div>
+              {/* Total Clients */}
+              <div style={{ background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>👥</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{analytics.clients?.active || 0}</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Clients</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+{analytics.clients?.newThisMonth || 0} this month</p>
+              </div>
+              {/* Net Profit */}
+              <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>📈</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.profit?.netProfit || 0).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Net Profit</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>Revenue - All Costs</p>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            {(analytics.recentActivity || []).length > 0 && (
+              <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent Activity</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {(analytics.recentActivity || []).map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: idx < analytics.recentActivity.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px',
+                          backgroundColor: item.type === 'order' ? '#dbeafe' : item.type === 'task' ? '#dcfce7' : '#fef3c7'
+                        }}>
+                          {item.type === 'order' ? '🛒' : item.type === 'task' ? '✅' : '💳'}
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '13px', fontWeight: '500', color: '#334155', margin: 0 }}>{item.label}</p>
+                          <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{item.status}</p>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 }}>₹{(item.value || 0).toLocaleString('en-IN')}</p>
+                        <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{item.date ? new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Top Clients + Top Services side by side */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Top Clients */}
+              {(analytics.clients?.top10 || []).length > 0 && (
+                <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Clients</h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Client</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Recharge</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Spend</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Commission</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(analytics.clients?.top10 || []).map((c, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
+                            <td style={{ padding: '6px 4px', fontSize: '12px', fontWeight: '500', color: '#334155' }}>{c.identifier}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>₹{(c.totalRecharge || 0).toLocaleString('en-IN')}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#3b82f6' }}>₹{(c.totalSpend || 0).toLocaleString('en-IN')}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#f59e0b' }}>₹{(c.totalCommission || 0).toLocaleString('en-IN')}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: (c.profit || 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: '600' }}>₹{(c.profit || 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Top Services */}
+              {(analytics.services?.top5 || []).length > 0 && (
+                <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Services</h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <th style={{ textAlign: 'left', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Service</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Orders</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Revenue</th>
+                          <th style={{ textAlign: 'right', padding: '6px 4px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(analytics.services?.top5 || []).map((s, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
+                            <td style={{ padding: '6px 4px', fontSize: '12px', fontWeight: '500', color: '#334155', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.serviceName}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#3b82f6', fontWeight: '600' }}>{s.totalOrders}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>₹{(s.totalRevenue || 0).toLocaleString('en-IN')}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: (s.totalProfit || 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: '600' }}>₹{Math.round(s.totalProfit || 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* COMMISSION EARNINGS SECTION */}
         <div style={{ marginBottom: '24px' }}>
