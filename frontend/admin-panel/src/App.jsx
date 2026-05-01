@@ -29,6 +29,152 @@ import ProgressIcons from './pages/ProgressIcons';
 import Support from './pages/Support';
 import NotFound from './pages/NotFound';
 
+// Branding Context — shared across app (preloader + login + anywhere)
+const BrandingContext = createContext({
+  appName: 'Go Viral Ads',
+  tagline: 'Admin Portal',
+  logoUrl: '',
+  accentColor: '#6366f1',
+  secondaryColor: '#22c55e',
+  isLoaded: false
+});
+
+export const useBranding = () => useContext(BrandingContext);
+
+// Branding Provider — fetches /public/branding once, shares via context
+const BrandingProvider = ({ children }) => {
+  const [branding, setBranding] = useState({
+    appName: 'Go Viral Ads',
+    tagline: 'Admin Portal',
+    logoUrl: '',
+    accentColor: '#6366f1',
+    secondaryColor: '#22c55e',
+    isLoaded: false
+  });
+
+  useEffect(() => {
+    let timeout;
+    const fetchBranding = async () => {
+      try {
+        const res = await api.get('/public/branding');
+        if (res.data) {
+          setBranding({
+            appName: res.data.appName || 'Go Viral Ads',
+            tagline: res.data.tagline || 'Admin Portal',
+            logoUrl: res.data.logoUrl || '',
+            accentColor: res.data.accentColor || '#6366f1',
+            secondaryColor: res.data.secondaryColor || '#22c55e',
+            isLoaded: true
+          });
+          return;
+        }
+      } catch (err) {
+        // Silent fail — use defaults
+      }
+      setBranding(prev => ({ ...prev, isLoaded: true }));
+    };
+    // Hard timeout: never wait more than 2s for branding
+    timeout = setTimeout(() => {
+      setBranding(prev => prev.isLoaded ? prev : { ...prev, isLoaded: true });
+    }, 2000);
+    fetchBranding();
+    return () => clearTimeout(timeout);
+  }, []);
+
+  return (
+    <BrandingContext.Provider value={branding}>
+      {children}
+    </BrandingContext.Provider>
+  );
+};
+
+// Branded Preloader — shows admin logo + spinner until branding is loaded
+const BrandedPreloader = ({ children }) => {
+  const branding = useBranding();
+  const [fadeOut, setFadeOut] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    if (branding.isLoaded) {
+      // Start fade-out, then hide
+      setFadeOut(true);
+      const t = setTimeout(() => setHidden(true), 300);
+      return () => clearTimeout(t);
+    }
+  }, [branding.isLoaded]);
+
+  if (hidden) return children;
+
+  const accent = branding.accentColor || '#6366f1';
+
+  return (
+    <>
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+        opacity: fadeOut ? 0 : 1,
+        transition: 'opacity 0.3s ease',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt="Logo"
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '16px',
+                objectFit: 'cover',
+                margin: '0 auto 20px',
+                display: 'block',
+                boxShadow: `0 8px 24px ${accent}40`
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '64px',
+              height: '64px',
+              background: `linear-gradient(135deg, ${accent} 0%, #4f46e5 100%)`,
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+              boxShadow: `0 8px 24px ${accent}40`
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          )}
+          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>
+            {branding.appName || 'Go Viral Ads'}
+          </h2>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            border: '3px solid #e2e8f0',
+            borderTopColor: accent,
+            borderRadius: '50%',
+            animation: 'preloader-spin .8s linear infinite',
+            margin: '16px auto 0'
+          }} />
+        </div>
+      </div>
+      <style>{`@keyframes preloader-spin { to { transform: rotate(360deg); } }`}</style>
+      {/* Mount children behind preloader so auth init starts immediately */}
+      <div style={{ visibility: 'hidden', position: 'absolute' }}>{children}</div>
+    </>
+  );
+};
+
 // Auth Context for managing auth state
 const AuthContext = createContext({
   isReady: false,
@@ -234,7 +380,9 @@ const App = () => {
   console.log('Admin app loaded');
   return (
     <ErrorBoundary>
+      <BrandingProvider>
       <AuthProvider>
+        <BrandedPreloader>
         <Router>
           <NotificationClickHandler />
           <div className="App">
@@ -357,7 +505,9 @@ const App = () => {
           </Routes>
         </div>
       </Router>
+        </BrandedPreloader>
       </AuthProvider>
+      </BrandingProvider>
     </ErrorBoundary>
   );
 };

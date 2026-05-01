@@ -31,7 +31,19 @@
     <link rel="preload" href="/src/main.tsx" as="script" crossorigin />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static preloader: visible instantly until React mounts -->
+      <div id="static-preloader" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif">
+        <div style="text-align:center">
+          <div style="width:56px;height:56px;background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 8px 24px rgba(99,102,241,0.3)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 12px"></div>
+          <p style="color:#64748b;font-size:13px;margin:0;font-weight:500">Loading...</p>
+        </div>
+      </div>
+      <style>@keyframes sp{to{transform:rotate(360deg)}}</style>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

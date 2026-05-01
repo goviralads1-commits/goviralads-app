@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login, savePermissions } from '../services/authService';
 import api from '../services/api';
+import { useBranding } from '../App';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -9,28 +10,14 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [branding, setBranding] = useState({ appName: 'Go Viral Ads', tagline: 'Admin Portal', logoUrl: '' });
+  const brandingCtx = useBranding();
+  const branding = {
+    appName: brandingCtx.appName || 'Go Viral Ads',
+    tagline: brandingCtx.tagline || 'Admin Portal',
+    logoUrl: brandingCtx.logoUrl || '',
+    accentColor: brandingCtx.accentColor || '#6366f1'
+  };
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Try to fetch public branding settings
-    const fetchBranding = async () => {
-      try {
-        const res = await api.get('/public/branding');
-        if (res.data) {
-          setBranding({
-            appName: res.data.appName || 'Go Viral Ads',
-            tagline: res.data.tagline || 'Admin Portal',
-            logoUrl: res.data.logoUrl || '',
-            accentColor: res.data.accentColor || '#6366f1',
-          });
-        }
-      } catch (err) {
-        // Silent fail - use defaults
-      }
-    };
-    fetchBranding();
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
