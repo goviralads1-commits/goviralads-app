@@ -25,6 +25,7 @@ const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsR
 const { authenticateJWT } = require('../middleware/auth');
 const { requireClient } = require('../middleware/authorization');
 const DeviceToken = require('../models/DeviceToken');
+const CommissionLog = require('../models/CommissionLog');
 const pushNotificationService = require('../services/pushNotificationService');
 
 const router = express.Router();
@@ -3641,6 +3642,53 @@ router.patch('/push-preference', async (req, res) => {
   } catch (err) {
     console.error('[PUSH] Save push preference error:', err.message);
     return res.status(500).json({ error: 'Failed to save push preference' });
+  }
+});
+
+// GET /client/my-commissions - Client sees their own commission logs
+router.get('/my-commissions', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { startDate, endDate } = req.query;
+
+    // Build filter: always scoped to current user only
+    const filter = { userId: clientId };
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    // Get commission logs for this user
+    const logs = await CommissionLog.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(500);
+
+    // Aggregate totals
+    const overallTotal = logs.reduce((sum, l) => sum + (l.amount || 0), 0);
+    const overallTaskCount = logs.length;
+
+    return res.status(200).json({
+      success: true,
+      logs: logs.map(l => ({
+        id: l._id.toString(),
+        taskId: l.taskId?.toString(),
+        taskTitle: l.taskTitle,
+        amount: l.amount,
+        commissionType: l.commissionType,
+        commissionValue: l.commissionValue,
+        createdAt: l.createdAt,
+      })),
+      overallTotal,
+      overallTaskCount,
+    });
+  } catch (err) {
+    console.error('[CLIENT-COMMISSIONS] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch commissions' });
   }
 });
 

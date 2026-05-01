@@ -45,6 +45,7 @@ const Dashboard = () => {
   const [featuredPlans, setFeaturedPlans] = useState([]);
   const [notices, setNotices] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [] });
   const [loading, setLoading] = useState(true);
   const [currentBanner, setCurrentBanner] = useState(0);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -54,15 +55,21 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, noticesRes, tasksRes] = await Promise.all([
+      const [configRes, noticesRes, tasksRes, commRes] = await Promise.all([
         api.get('/client/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
         api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
-        api.get('/client/tasks').catch(() => ({ data: { tasks: [] } }))
+        api.get('/client/tasks').catch(() => ({ data: { tasks: [] } })),
+        api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } }))
       ]);
       setConfig(configRes.data.config);
       setFeaturedPlans(configRes.data.featuredPlans || []);
       setNotices(noticesRes.data.notices || []);
       setTasks(tasksRes.data.tasks || []);
+      setCommissionData({
+        overallTotal: commRes.data?.overallTotal || 0,
+        overallTaskCount: commRes.data?.overallTaskCount || 0,
+        logs: (commRes.data?.logs || []).slice(0, 5)
+      });
     } catch (err) {
       // Silent fail - show empty states
     } finally {
@@ -373,6 +380,42 @@ const Dashboard = () => {
         )}
 
         {/* ACTIVE TASKS */}
+        {/* COMMISSION EARNINGS — only shows if client has logs */}
+        {commissionData.overallTaskCount > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <span style={{ fontSize: '20px' }}>💰</span>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Earnings</h3>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px 0', fontWeight: '600' }}>Total Earned</p>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#16a34a', margin: 0 }}>₹{(commissionData.overallTotal || 0).toLocaleString()}</p>
+            </div>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px 0', fontWeight: '600' }}>Tasks Completed</p>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: 0 }}>{commissionData.overallTaskCount}</p>
+            </div>
+          </div>
+          {commissionData.logs.length > 0 && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
+              <p style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0 }}>Recent Earnings</p>
+            </div>
+            {commissionData.logs.map((log, i) => (
+              <div key={log.id || i} style={{ padding: '12px 16px', borderBottom: i < commissionData.logs.length - 1 ? '1px solid #f8fafc' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{log.taskTitle || 'Task'}</p>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{log.createdAt ? new Date(log.createdAt).toLocaleDateString() : ''}</p>
+                </div>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: '#16a34a' }}>+₹{(log.amount || 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+          )}
+        </div>
+        )}
+
         {activeTasks.length > 0 && (
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
