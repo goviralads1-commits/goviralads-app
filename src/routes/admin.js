@@ -1174,6 +1174,24 @@ router.patch('/tasks/:taskId', async (req, res) => {
       }
     }
 
+    // Step 3: defaultAssignedUsers validation on PATCH (plan edit)
+    if (updates.defaultAssignedUsers && Array.isArray(updates.defaultAssignedUsers) && updates.defaultAssignedUsers.length > 0) {
+      const seenIds = new Set();
+      const totalPct = updates.defaultAssignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
+      if (totalPct > 100) return res.status(400).json({ error: 'VALIDATION FAILED: defaultAssignedUsers total percentage cannot exceed 100.' });
+      for (const u of updates.defaultAssignedUsers) {
+        if ((Number(u.percentage) || 0) < 0) return res.status(400).json({ error: 'VALIDATION FAILED: defaultAssignedUsers percentage cannot be negative.' });
+        if (seenIds.has(u.userId)) return res.status(400).json({ error: 'VALIDATION FAILED: Duplicate userId in defaultAssignedUsers.' });
+        if (u.userId) seenIds.add(u.userId);
+      }
+    }
+    if (updates.defaultCostBreakdown) {
+      const dcb = updates.defaultCostBreakdown;
+      if ((Number(dcb.expenses) || 0) < 0 || (Number(dcb.tax) || 0) < 0 || (Number(dcb.other) || 0) < 0) {
+        return res.status(400).json({ error: 'VALIDATION FAILED: defaultCostBreakdown values cannot be negative.' });
+      }
+    }
+
     // Track if progress-related fields are being updated
     const progressFieldsUpdated = (
       updates.progress !== undefined ||
@@ -1882,7 +1900,10 @@ router.post('/tasks/assign', async (req, res) => {
       customInputPlaceholder,
       // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 1)
       assignedUsers,
-      costBreakdown
+      costBreakdown,
+      // PLAN DEFAULT COMMISSION & COST (Step 3)
+      defaultAssignedUsers,
+      defaultCostBreakdown
     } = payload;
 
     // --- HARD BRANCH: PLAN (PRODUCT LISTING) ---
@@ -1898,6 +1919,24 @@ router.post('/tasks/assign', async (req, res) => {
       if (clientId) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Product listings cannot have a clientId. Use TASK mode for client assignments.' });
       if (startDate) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Product listings cannot have a startDate. They are evergreen products.' });
       if (endDate) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Product listings cannot have an endDate. They are evergreen products.' });
+
+      // 2b. Validate defaultAssignedUsers (Plan default commission)
+      if (defaultAssignedUsers && Array.isArray(defaultAssignedUsers) && defaultAssignedUsers.length > 0) {
+        const seenIds = new Set();
+        const totalPct = defaultAssignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
+        if (totalPct > 100) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: defaultAssignedUsers total percentage cannot exceed 100.' });
+        for (const u of defaultAssignedUsers) {
+          if ((Number(u.percentage) || 0) < 0) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: defaultAssignedUsers percentage cannot be negative.' });
+          if (seenIds.has(u.userId)) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Duplicate userId in defaultAssignedUsers.' });
+          if (u.userId) seenIds.add(u.userId);
+        }
+      }
+      // 2c. Validate defaultCostBreakdown
+      if (defaultCostBreakdown) {
+        if ((Number(defaultCostBreakdown.expenses) || 0) < 0 || (Number(defaultCostBreakdown.tax) || 0) < 0 || (Number(defaultCostBreakdown.other) || 0) < 0) {
+          return res.status(400).json({ error: 'PLAN VALIDATION FAILED: defaultCostBreakdown values cannot be negative.' });
+        }
+      }
 
       // 3. Create Plan
       const plan = await Task.create({
@@ -1937,7 +1976,10 @@ router.post('/tasks/assign', async (req, res) => {
         requireLink: requireLink || false,
         requireCustomInput: requireCustomInput || false,
         customInputLabel: customInputLabel || '',
-        customInputPlaceholder: customInputPlaceholder || ''
+        customInputPlaceholder: customInputPlaceholder || '',
+        // PLAN DEFAULT COMMISSION & COST (Step 3)
+        ...(defaultAssignedUsers && Array.isArray(defaultAssignedUsers) && defaultAssignedUsers.length > 0 ? { defaultAssignedUsers: defaultAssignedUsers.filter(u => u.userId && u.percentage > 0) } : {}),
+        ...(defaultCostBreakdown ? { defaultCostBreakdown } : {})
       });
 
       console.log('[FORENSIC] ========== PLAN CREATED ==========');
@@ -5440,6 +5482,28 @@ router.get('/admin-users', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to get admin users' });
+  }
+});
+
+// GET /admin/assignable-clients — Fetch CLIENT users for team assignment dropdowns
+router.get('/assignable-clients', async (req, res) => {
+  try {
+    const clients = await User.find({ role: ROLES.CLIENT, status: 'ACTIVE', isDeleted: { $ne: true } })
+      .select('identifier status profile')
+      .sort({ identifier: 1 })
+      .exec();
+
+    return res.status(200).json({
+      success: true,
+      users: clients.map(u => ({
+        id: u._id.toString(),
+        identifier: u.identifier,
+        name: u.profile?.name || '',
+        status: u.status,
+      })),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to get assignable clients' });
   }
 });
 

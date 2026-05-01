@@ -41,6 +41,7 @@ const TaskDetail = () => {
   const [approvalOptions, setApprovalOptions] = useState(['', '']);
   const [sendingApproval, setSendingApproval] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [clientUsers, setClientUsers] = useState([]);
   
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
@@ -194,9 +195,10 @@ const TaskDetail = () => {
     fetchTask();
   }, [fetchTask]);
 
-  // Fetch admin users for assign dropdown
+  // Fetch admin users for assign dropdown + client users for team assignment
   useEffect(() => {
     api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
+    api.get('/admin/assignable-clients').then(res => setClientUsers(res.data.users || [])).catch(() => {});
   }, []);
 
   // Load more (older) messages for pagination
@@ -1693,7 +1695,7 @@ const TaskDetail = () => {
                     style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: assignedUsers.length > 0 ? '#f1f5f9' : '#fff', boxSizing: 'border-box', cursor: assignedUsers.length > 0 ? 'not-allowed' : 'pointer', opacity: assignedUsers.length > 0 ? 0.6 : 1 }}
                   >
                     <option value="">Not Assigned</option>
-                    {adminUsers.map(u => (
+                    {clientUsers.map(u => (
                       <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
                     ))}
                   </select>
@@ -1714,8 +1716,8 @@ const TaskDetail = () => {
                         style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
                       >
                         <option value="">Select user...</option>
-                        {adminUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                          <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                        {clientUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                          <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
                         ))}
                       </select>
                       <input

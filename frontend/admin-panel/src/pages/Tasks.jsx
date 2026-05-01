@@ -14,6 +14,7 @@ const Tasks = () => {
   const [clients, setClients] = useState([]);
   const [categories, setCategories] = useState([]);  // Category list
   const [adminUsers, setAdminUsers] = useState([]);  // For task assignment
+  const [clientUsers, setClientUsers] = useState([]);  // For team assignment (clients)
   const [toast, setToast] = useState(null);
   
   // Filter state
@@ -143,15 +144,17 @@ const Tasks = () => {
         if (filters.fromDate) params.fromDate = filters.fromDate;
         if (filters.toDate) params.toDate = filters.toDate;
         if (showTrash) params.deleted = 'true';
-        const [tasksResponse, walletsResponse, categoriesResponse, adminUsersResponse] = await Promise.all([
+        const [tasksResponse, walletsResponse, categoriesResponse, adminUsersResponse, clientUsersResponse] = await Promise.all([
           api.get('/admin/tasks', { params }),
           api.get('/admin/wallets'),
           api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
-          api.get('/admin/admin-users').catch(() => ({ data: { users: [] } }))
+          api.get('/admin/admin-users').catch(() => ({ data: { users: [] } })),
+          api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } }))
         ]);
         setTasks(tasksResponse.data.tasks || []);
         setCategories(categoriesResponse.data.categories || []);
         setAdminUsers(adminUsersResponse.data.users || []);
+        setClientUsers(clientUsersResponse.data.users || []);
         // Map wallets to client format for dropdown
         const clientsFromWallets = (walletsResponse.data.wallets || []).map(w => ({
           id: w.clientId,
@@ -1973,7 +1976,7 @@ const Tasks = () => {
                       style={{width: '100%', padding: '14px 16px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: assignedUsers.length > 0 ? '#f1f5f9' : '#ffffff', boxSizing: 'border-box', outline: 'none', cursor: assignedUsers.length > 0 ? 'not-allowed' : 'pointer', opacity: assignedUsers.length > 0 ? 0.6 : 1, appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 16px center'}}
                     >
                       <option value="">Not Assigned</option>
-                      {adminUsers.map(user => (
+                      {clientUsers.map(user => (
                         <option key={user.id} value={user.id}>
                           {user.identifier} {user.customRoleName ? `(${user.customRoleName})` : ''}
                         </option>
@@ -2043,8 +2046,8 @@ const Tasks = () => {
                           style={{flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box'}}
                         >
                           <option value="">Select user...</option>
-                          {adminUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                            <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                          {clientUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                            <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
                           ))}
                         </select>
                         <input

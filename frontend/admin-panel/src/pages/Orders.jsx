@@ -31,6 +31,7 @@ const Orders = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [adminUsers, setAdminUsers] = useState([]);
+  const [clientUsers, setClientUsers] = useState([]);
   const [approveAssignTo, setApproveAssignTo] = useState('');
 
   // MULTI-ASSIGNMENT (Phase 2)
@@ -41,9 +42,10 @@ const Orders = () => {
   const approveTeamTotal = approveAssignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
   const approveTeamUserIds = approveAssignedUsers.map(u => u.userId).filter(Boolean);
 
-  // Fetch admin users for assign dropdown
+  // Fetch admin users for assign dropdown + client users for team assignment
   useEffect(() => {
     api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
+    api.get('/admin/assignable-clients').then(res => setClientUsers(res.data.users || [])).catch(() => {});
   }, []);
 
   // Fetch orders
@@ -515,7 +517,7 @@ const Orders = () => {
                       style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: approveAssignedUsers.length > 0 ? '#f1f5f9' : '#f8fafc', boxSizing: 'border-box', cursor: approveAssignedUsers.length > 0 ? 'not-allowed' : 'pointer', opacity: approveAssignedUsers.length > 0 ? 0.6 : 1 }}
                     >
                       <option value="">Not Assigned</option>
-                      {adminUsers.map(u => (
+                      {clientUsers.map(u => (
                         <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
                       ))}
                     </select>
@@ -532,8 +534,8 @@ const Orders = () => {
                           style={{ flex: 2, padding: '8px 10px', fontSize: '12px', border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', boxSizing: 'border-box' }}
                         >
                           <option value="">Select user...</option>
-                          {adminUsers.filter(u => !approveTeamUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                            <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                          {clientUsers.filter(u => !approveTeamUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                            <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
                           ))}
                         </select>
                         <input type="number" value={member.percentage} onChange={(e) => updateApproveTeamMember(idx, 'percentage', e.target.value)} placeholder="%" min="0" max="100" style={{ flex: 0.6, padding: '8px 6px', fontSize: '12px', border: '1px solid #e2e8f0', borderRadius: '6px', textAlign: 'center', boxSizing: 'border-box' }} />

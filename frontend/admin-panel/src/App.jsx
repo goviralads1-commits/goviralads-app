@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { isAuthenticated, getUserRole } from './services/authService';
+import { isAuthenticated, getUserRole, getPermissions, savePermissions } from './services/authService';
+import api from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoginForm from './components/LoginForm';
 import Header from './components/Header';
@@ -23,7 +24,6 @@ import OfficeCMS from './pages/OfficeCMS';
 import Orders from './pages/Orders';
 import Settings from './pages/Settings';
 import Roles from './pages/Roles';
-import Commissions from './pages/Commissions';
 import SubscriptionRequests from './pages/SubscriptionRequests';
 import ProgressIcons from './pages/ProgressIcons';
 import Support from './pages/Support';
@@ -33,21 +33,23 @@ import NotFound from './pages/NotFound';
 const AuthContext = createContext({
   isReady: false,
   isLoggedIn: false,
-  userRole: null
+  userRole: null,
+  permissionsLoaded: false
 });
 
 export const useAuth = () => useContext(AuthContext);
 
-// Auth Provider that waits for localStorage to be ready
+// Auth Provider that waits for localStorage to be ready AND permissions to be loaded
 const AuthProvider = ({ children }) => {
   const [authState, setAuthState] = useState({
     isReady: false,
     isLoggedIn: false,
-    userRole: null
+    userRole: null,
+    permissionsLoaded: false
   });
 
   useEffect(() => {
-    const initAuth = () => {
+    const initAuth = async () => {
       const token = localStorage.getItem('token');
       const loggedIn = !!token;
       const role = getUserRole();
@@ -56,13 +58,31 @@ const AuthProvider = ({ children }) => {
       console.log('[Auth] Token in localStorage:', token ? `YES (${token.length} chars)` : 'NO');
       console.log('[Auth] isLoggedIn:', loggedIn);
       console.log('[Auth] Role:', role);
-      console.log('[Auth] ================================');
+
+      if (loggedIn) {
+        // Check if permissions already in localStorage
+        const cached = getPermissions();
+        if (cached) {
+          console.log('[Auth] Permissions found in localStorage');
+          setAuthState({ isReady: true, isLoggedIn: true, userRole: role, permissionsLoaded: true });
+        } else {
+          // Fetch from API before marking ready
+          try {
+            console.log('[Auth] No cached permissions — fetching from API...');
+            const permRes = await api.get('/admin/me/permissions');
+            savePermissions(permRes.data);
+            console.log('[Auth] Permissions fetched and saved');
+          } catch (err) {
+            console.log('[Auth] Permissions fetch failed (non-fatal):', err.message);
+          }
+          setAuthState({ isReady: true, isLoggedIn: true, userRole: role, permissionsLoaded: true });
+        }
+      } else {
+        // Not logged in — no permissions to load
+        setAuthState({ isReady: true, isLoggedIn: false, userRole: role, permissionsLoaded: false });
+      }
       
-      setAuthState({
-        isReady: true,
-        isLoggedIn: loggedIn,
-        userRole: role
-      });
+      console.log('[Auth] ================================');
     };
 
     // Add small delay for localStorage hydration on new tabs
@@ -89,17 +109,20 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-// Protected Route Component - waits for auth to be ready
+// Protected Route Component - waits for auth AND permissions to be ready
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isReady, isLoggedIn, userRole } = useAuth();
+  const { isReady, isLoggedIn, userRole, permissionsLoaded } = useAuth();
   const location = useLocation();
   
   // CRITICAL: Double-check localStorage directly as backup
   const tokenExists = !!localStorage.getItem('token');
+  const permsCached = !!localStorage.getItem('permissions');
 
-  if (!isReady) {
-    console.log('[ProtectedRoute] Waiting for auth initialization...');
-    console.log('[ProtectedRoute] Direct localStorage check - token:', tokenExists ? 'YES' : 'NO');
+  // Wait for BOTH auth init AND permissions load before rendering
+  // permsCached covers the post-login case where context hasn't re-initialized yet
+  if (!isReady || (tokenExists && !permissionsLoaded && !permsCached)) {
+    console.log('[ProtectedRoute] Waiting for auth + permissions...');
+    console.log('[ProtectedRoute] isReady:', isReady, '| permissionsLoaded:', permissionsLoaded, '| token:', tokenExists ? 'YES' : 'NO');
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -308,11 +331,6 @@ const App = () => {
           <Route path="/roles" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Roles />
-            </ProtectedRoute>
-          } />
-          <Route path="/commissions" element={
-            <ProtectedRoute allowedRoles={['ADMIN']}>
-              <Commissions />
             </ProtectedRoute>
           } />
           <Route path="/orders" element={

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
+import { useAuth } from '../App';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false });
   const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -64,18 +66,27 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes] = await Promise.all([
+      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes] = await Promise.all([
         api.get('/admin/reports/overview'),
         api.get('/admin/notices'),
         api.get('/admin/clients'),
         api.get('/admin/plans').catch(() => ({ data: { plans: [] } })),
         api.get('/admin/tasks').catch(() => ({ data: { tasks: [] } })),
+        api.get('/admin/commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
       ]);
       setDashboardData(overviewRes.data);
       setNotices(noticesRes.data.notices || []);
       setClients(clientsRes.data.clients || []);
       setPlans(plansRes.data.plans || []);
       setTasks(tasksRes.data.tasks || []);
+      const cd = commissionsRes.data || {};
+      setCommissionData({
+        overallTotal: cd.overallTotal || 0,
+        overallTaskCount: cd.overallTaskCount || 0,
+        logs: (cd.logs || []).slice(0, 5),
+        userSummary: cd.userSummary || [],
+        isMainAdmin: cd.isMainAdmin || false,
+      });
     } catch (err) {
       setError('Failed to load dashboard data');
     } finally {
@@ -291,6 +302,82 @@ const Dashboard = () => {
               <span style={{ fontSize: '18px' }}>+</span> New Notice
             </button>
           </div>
+        </div>
+
+        {/* COMMISSION EARNINGS SECTION */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>💰 Commission Earnings</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+            {/* Total Revenue — main admin only */}
+            {commissionData?.isMainAdmin && (
+              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>💎</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>₹{((commissionData?.userSummary || []).reduce((sum, u) => sum + (u?.totalAmount || 0), 0) + Math.max(0, (commissionData?.overallTotal || 0))).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Revenue</p>
+              </div>
+            )}
+            {/* Commission Paid */}
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '16px' }}>💵</span>
+              </div>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#10b981', margin: '0 0 2px 0' }}>₹{(commissionData?.overallTotal || 0).toLocaleString('en-IN')}</p>
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{commissionData?.isMainAdmin ? 'Commission Paid' : 'Your Earnings'}</p>
+            </div>
+            {/* Company Profit — main admin only */}
+            {commissionData?.isMainAdmin && (
+              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🏢</span>
+                </div>
+                <p style={{ fontSize: '22px', fontWeight: '800', color: '#3b82f6', margin: '0 0 2px 0' }}>₹{Math.max(0, (commissionData?.overallTotal || 0)).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Company Profit</p>
+              </div>
+            )}
+            {/* Tasks Completed */}
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '16px' }}>✅</span>
+              </div>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#f59e0b', margin: '0 0 2px 0' }}>{commissionData?.overallTaskCount || 0}</p>
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Tasks Completed</p>
+            </div>
+          </div>
+
+          {/* Recent Commission Logs */}
+          {(commissionData?.logs || []).length > 0 ? (
+            <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent Activity</h4>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      {commissionData?.isMainAdmin && <th style={{ textAlign: 'left', padding: '8px 6px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>User</th>}
+                      <th style={{ textAlign: 'left', padding: '8px 6px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Task</th>
+                      <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Amount</th>
+                      <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: '11px', fontWeight: '600', color: '#94a3b8' }}>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(commissionData?.logs || []).map((log) => (
+                      <tr key={log?.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                        {commissionData?.isMainAdmin && <td style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '500', color: '#334155' }}>{log?.userIdentifier || 'Unknown'}</td>}
+                        <td style={{ padding: '8px 6px', fontSize: '13px', color: '#475569', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log?.taskTitle || 'N/A'}</td>
+                        <td style={{ textAlign: 'right', padding: '8px 6px', fontSize: '13px', fontWeight: '600', color: '#10b981' }}>₹{(log?.amount || 0).toLocaleString('en-IN')}</td>
+                        <td style={{ textAlign: 'right', padding: '8px 6px', fontSize: '12px', color: '#94a3b8' }}>{log?.createdAt ? new Date(log.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+              <p style={{ fontSize: '14px', color: '#94a3b8', margin: 0 }}>📭 No earnings yet. Commissions appear when assigned tasks are completed.</p>
+            </div>
+          )}
         </div>
 
         {/* QUICK ACCESS CARDS - Premium Design */}

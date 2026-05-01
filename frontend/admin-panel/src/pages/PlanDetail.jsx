@@ -24,6 +24,7 @@ const PlanDetail = () => {
   const [defaultAssignedUsers, setDefaultAssignedUsers] = useState([]);
   const [defaultCostBreakdown, setDefaultCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [adminUsers, setAdminUsers] = useState([]);
+  const [clientUsers, setClientUsers] = useState([]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -56,11 +57,12 @@ const PlanDetail = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [planRes, categoriesRes, usersRes, adminUsersRes] = await Promise.all([
+      const [planRes, categoriesRes, usersRes, adminUsersRes, clientUsersRes] = await Promise.all([
         api.get(`/admin/tasks/${planId}`),
         api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
         api.get('/admin/users').catch(() => ({ data: { users: [] } })),
-        api.get('/admin/users?role=ADMIN,EMPLOYEE').catch(() => ({ data: { users: [] } }))
+        api.get('/admin/users?role=ADMIN,EMPLOYEE').catch(() => ({ data: { users: [] } })),
+        api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } }))
       ]);
       
       const planData = planRes.data.task;
@@ -76,6 +78,7 @@ const PlanDetail = () => {
       setCategories(categoriesRes.data.categories || []);
       setUsers(usersRes.data.users || []);
       setAdminUsers((adminUsersRes.data.users || []).filter(u => u.role !== 'CLIENT'));
+      setClientUsers(clientUsersRes.data.users || []);
       
       // Load default commission setup
       setDefaultAssignedUsers((planData.defaultAssignedUsers || []).map(m => ({ userId: m.userId?._id || m.userId || '', percentage: m.percentage || 0 })));
@@ -636,8 +639,8 @@ const PlanDetail = () => {
                     style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
                   >
                     <option value="">Select user...</option>
-                    {adminUsers.filter(u => !defaultAssignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                      <option key={u.id} value={u.id}>{u.identifier || u.name || u.email} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
+                    {clientUsers.filter(u => !defaultAssignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                      <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
                     ))}
                   </select>
                   <input

@@ -68,6 +68,10 @@ const Plans = () => {
   const [showCreatePanel, setShowCreatePanel] = useState(false);
   const [creating, setCreating] = useState(false);
   const [users, setUsers] = useState([]);
+  // Default Commission Setup state (Create mode)
+  const [clientUsers, setClientUsers] = useState([]);
+  const [defaultAssignedUsers, setDefaultAssignedUsers] = useState([]);
+  const [defaultCostBreakdown, setDefaultCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -108,14 +112,16 @@ const Plans = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [plansRes, categoriesRes, usersRes] = await Promise.all([
+      const [plansRes, categoriesRes, usersRes, clientUsersRes] = await Promise.all([
         api.get('/admin/plans'),
         api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
-        api.get('/admin/users').catch(() => ({ data: { users: [] } }))
+        api.get('/admin/users').catch(() => ({ data: { users: [] } })),
+        api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } }))
       ]);
       setPlans(plansRes.data.plans || []);
       setCategories(categoriesRes.data.categories || []);
       setUsers(usersRes.data.users || []);
+      setClientUsers(clientUsersRes.data.users || []);
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load plans');
@@ -165,6 +171,15 @@ const Plans = () => {
       customInputLabel: '',
       customInputPlaceholder: ''
     });
+    setDefaultAssignedUsers([]);
+    setDefaultCostBreakdown({ expenses: 0, tax: 0, other: 0 });
+  };
+
+  // Default Commission handlers
+  const handleAddDefaultMember = () => setDefaultAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
+  const handleRemoveDefaultMember = (idx) => setDefaultAssignedUsers(prev => prev.filter((_, i) => i !== idx));
+  const handleDefaultMemberChange = (idx, field, value) => {
+    setDefaultAssignedUsers(prev => prev.map((m, i) => i === idx ? { ...m, [field]: field === 'percentage' ? Number(value) || 0 : value } : m));
   };
 
   const handleCreatePlan = async () => {
@@ -206,7 +221,10 @@ const Plans = () => {
         requireLink: formData.requireLink,
         requireCustomInput: formData.requireCustomInput,
         customInputLabel: formData.customInputLabel,
-        customInputPlaceholder: formData.customInputPlaceholder
+        customInputPlaceholder: formData.customInputPlaceholder,
+        // Default Commission Setup
+        defaultAssignedUsers: defaultAssignedUsers.filter(m => m.userId && m.percentage > 0),
+        defaultCostBreakdown: defaultCostBreakdown
       };
       
       if (formData.offerPrice) payload.offerPrice = Number(formData.offerPrice);
@@ -1029,6 +1047,52 @@ const Plans = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* DEFAULT COMMISSION SETUP */}
+              <div style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '18px', marginBottom: '24px', border: '1px solid #fde68a' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Setup</h4>
+                <p style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>These defaults auto-apply to tasks created from this plan.</p>
+
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team Members</label>
+                {defaultAssignedUsers.map((member, idx) => {
+                  const defaultAssignedUserIds = defaultAssignedUsers.map(m => m.userId).filter(Boolean);
+                  return (
+                    <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select
+                        value={member.userId}
+                        onChange={(e) => handleDefaultMemberChange(idx, 'userId', e.target.value)}
+                        style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                      >
+                        <option value="">Select user...</option>
+                        {clientUsers.filter(u => !defaultAssignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                          <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        value={member.percentage}
+                        onChange={(e) => handleDefaultMemberChange(idx, 'percentage', e.target.value)}
+                        placeholder="%"
+                        min="0" max="100"
+                        style={{ flex: '0 0 70px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
+                      />
+                      <button onClick={() => handleRemoveDefaultMember(idx)} style={{ flex: '0 0 32px', height: '38px', background: '#fee2e2', border: 'none', borderRadius: '8px', color: '#dc2626', fontWeight: '700', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                    </div>
+                  );
+                })}
+                {(() => { const total = defaultAssignedUsers.reduce((s, m) => s + (Number(m.percentage) || 0), 0); return defaultAssignedUsers.length > 0 ? <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: total > 100 ? '#dc2626' : '#16a34a' }}>Total: {total}%</div> : null; })()}
+                <button onClick={handleAddDefaultMember} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', background: '#f0f9ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '8px', cursor: 'pointer' }}>+ Add Member</button>
+
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px', marginTop: '16px' }}>Default Cost Breakdown</label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {['expenses', 'tax', 'other'].map(field => (
+                    <div key={field} style={{ flex: '1 1 30%', minWidth: '80px' }}>
+                      <label style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'capitalize' }}>{field}</label>
+                      <input type="number" value={defaultCostBreakdown[field]} onChange={(e) => setDefaultCostBreakdown(prev => ({ ...prev, [field]: Number(e.target.value) || 0 }))} min="0" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Preview */}
