@@ -16,6 +16,14 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false });
   const [analytics, setAnalytics] = useState(null);
+  // Date filter
+  const [dateFilter, setDateFilter] = useState({ type: 'month', label: 'This Month', startDate: '', endDate: '' });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  // Drill-down modal state
+  const [drillModal, setDrillModal] = useState(null); // { type: 'commission'|'tasks'|'revenue', title, items }
+  const [drillLoading, setDrillLoading] = useState(false);
   const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -65,8 +73,44 @@ const Dashboard = () => {
     { id: 3, title: 'New Arrivals', subtitle: 'Check out the latest plans', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }
   ];
 
+  const buildFilterParams = () => {
+    const p = {};
+    if (dateFilter.startDate) p.startDate = dateFilter.startDate;
+    if (dateFilter.endDate) p.endDate = dateFilter.endDate;
+    return p;
+  };
+
+  const applyDateFilter = (type) => {
+    const now = new Date();
+    let startDate = '', endDate = '', label = '';
+    if (type === 'today') {
+      const today = now.toISOString().split('T')[0];
+      startDate = today; endDate = today;
+      label = 'Today';
+    } else if (type === 'week') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - start.getDay());
+      startDate = start.toISOString().split('T')[0];
+      endDate = now.toISOString().split('T')[0];
+      label = 'This Week';
+    } else if (type === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      endDate = now.toISOString().split('T')[0];
+      label = 'This Month';
+    }
+    setDateFilter({ type, label, startDate, endDate });
+  };
+
+  const applyCustomFilter = () => {
+    if (customStart && customEnd) {
+      setDateFilter({ type: 'custom', label: `${customStart} → ${customEnd}`, startDate: customStart, endDate: customEnd });
+      setShowDatePicker(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     try {
+      const params = buildFilterParams();
       const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes] = await Promise.all([
         api.get('/admin/reports/overview'),
         api.get('/admin/notices'),
@@ -74,7 +118,7 @@ const Dashboard = () => {
         api.get('/admin/plans').catch(() => ({ data: { plans: [] } })),
         api.get('/admin/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/admin/commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
-        api.get('/admin/analytics').catch(() => ({ data: null })),
+        api.get('/admin/analytics', { params }).catch(() => ({ data: null })),
       ]);
       setDashboardData(overviewRes.data);
       setNotices(noticesRes.data.notices || []);
@@ -95,11 +139,73 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dateFilter]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Set default date filter to current month on mount
+  useEffect(() => {
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const endDate = now.toISOString().split('T')[0];
+    setDateFilter({ type: 'month', label: 'This Month', startDate, endDate });
+  }, []);
+
+  // Drill-down fetch handlers
+  const openDrillModal = async (type, title) => {
+    setDrillModal({ type, title, items: [], loading: true });
+    setDrillLoading(true);
+    try {
+      const params = buildFilterParams();
+      if (type === 'commission') {
+        const res = await api.get('/admin/commissions', { params });
+        const logs = (res.data?.logs || []).map(l => ({
+          user: l.userIdentifier || 'Unknown',
+          amount: l.amount || 0,
+          task: l.taskTitle || 'N/A',
+          date: l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+        }));
+        setDrillModal({ type, title, items: logs, loading: false });
+      } else if (type === 'tasks') {
+        const res = await api.get('/admin/tasks', { params });
+        const completed = (res.data?.tasks || []).filter(t => t.status === 'COMPLETED').map(t => ({
+          name: t.title || 'N/A',
+          client: t.clientName || t.assignedTo || 'N/A',
+          cost: t.creditCost || 0,
+          date: t.updatedAt ? new Date(t.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+        }));
+        setDrillModal({ type, title, items: completed, loading: false });
+      } else if (type === 'revenue') {
+        const [wtRes, ordRes] = await Promise.all([
+          api.get('/admin/wallet-transactions', { params }).catch(() => ({ data: { transactions: [] } })),
+          api.get('/admin/orders', { params }).catch(() => ({ data: { orders: [] } }))
+        ]);
+        const items = [
+          ...(wtRes.data?.transactions || []).filter(t => ['RECHARGE_APPROVED', 'CREDIT'].includes(t.type)).map(t => ({
+            label: `Recharge ${t.type}`,
+            amount: t.amount || 0,
+            client: '—',
+            date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+          })),
+          ...(ordRes.data?.orders || []).filter(o => o.orderStatus !== 'REJECTED').map(o => ({
+            label: `Order ${o.orderNumber || ''}`,
+            amount: o.totalAmount || 0,
+            client: '—',
+            date: o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+          }))
+        ].sort((a, b) => new Date(b.date) - new Date(a.date));
+        setDrillModal({ type, title, items, loading: false });
+      }
+    } catch (err) {
+      setDrillModal({ type, title, items: [], loading: false });
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
+  const closeDrillModal = () => setDrillModal(null);
 
   // Initialize push notifications after login
   useEffect(() => {
@@ -310,16 +416,44 @@ const Dashboard = () => {
         {/* BUSINESS ANALYTICS SECTION */}
         {analytics && (
           <div style={{ marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>📊 Business Analytics</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>📊 Business Analytics</h3>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {['today', 'week', 'month'].map(t => (
+                  <button key={t} onClick={() => { applyDateFilter(t); }} style={{
+                    padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: 'none',
+                    background: dateFilter.type === t ? '#6366f1' : '#f1f5f9',
+                    color: dateFilter.type === t ? '#fff' : '#64748b'
+                  }}>{t === 'today' ? 'Today' : t === 'week' ? 'This Week' : 'This Month'}</button>
+                ))}
+                <button onClick={() => setShowDatePicker(!showDatePicker)} style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                  border: dateFilter.type === 'custom' ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                  background: dateFilter.type === 'custom' ? '#eef2ff' : '#fff',
+                  color: dateFilter.type === 'custom' ? '#6366f1' : '#64748b'
+                }}>Custom</button>
+                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>{dateFilter.label}</span>
+              </div>
+            </div>
+            {showDatePicker && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
+                <span style={{ fontSize: '13px', color: '#94a3b8' }}>→</span>
+                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
+                <button onClick={applyCustomFilter} style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: 'none', background: '#6366f1', color: '#fff' }}>Apply</button>
+                <button onClick={() => setShowDatePicker(false)} style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b' }}>Cancel</button>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
-              {/* Total Revenue */}
-              <div style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+              {/* Total Revenue - CLICKABLE */}
+              <div onClick={() => openDrillModal('revenue', 'Revenue Breakdown')} style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', borderRadius: '16px', padding: '16px', color: '#fff', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>💰</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.revenue?.total || 0).toLocaleString('en-IN')}</p>
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Total Revenue</p>
                 <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+₹{(analytics.revenue?.thisMonth || 0).toLocaleString('en-IN')} this month</p>
+                <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
               </div>
               {/* Orders */}
               <div style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
@@ -330,23 +464,25 @@ const Dashboard = () => {
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Total Orders</p>
                 <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>{analytics.orders?.pendingCount || 0} pending approval</p>
               </div>
-              {/* Active Tasks */}
-              <div style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+              {/* Active Tasks - CLICKABLE */}
+              <div onClick={() => openDrillModal('tasks', 'Completed Tasks')} style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', borderRadius: '16px', padding: '16px', color: '#fff', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>📋</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{analytics.tasks?.active || 0}</p>
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Tasks</p>
                 <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>{analytics.tasks?.completionRate || 0}% completion rate</p>
+                <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
               </div>
-              {/* Commission Paid */}
-              <div style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
+              {/* Commission Paid - CLICKABLE */}
+              <div onClick={() => openDrillModal('commission', 'Commission Breakdown')} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '16px', padding: '16px', color: '#fff', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>💵</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.commissions?.totalPaid || 0).toLocaleString('en-IN')}</p>
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Commission Paid</p>
                 <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>Costs: ₹{(analytics.costs?.totalAllCosts || 0).toLocaleString('en-IN')}</p>
+                <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
               </div>
               {/* Total Clients */}
               <div style={{ background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
@@ -457,6 +593,45 @@ const Dashboard = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* DRILL-DOWN MODAL */}
+        {drillModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={closeDrillModal}>
+            <div onClick={e => e.stopPropagation()} style={{ backgroundColor: '#fff', borderRadius: '20px', width: '100%', maxWidth: '500px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{drillModal.title}</h3>
+                <button onClick={closeDrillModal} style={{ width: '32px', height: '32px', borderRadius: '8px', border: 'none', background: '#f1f5f9', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              </div>
+              {/* Content */}
+              <div style={{ overflowY: 'auto', flex: 1, padding: '0 20px 16px' }}>
+                {drillModal.loading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Loading...</div>
+                ) : drillModal.items.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No records found</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {drillModal.items.map((item, idx) => (
+                      <div key={idx} style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 2px 0' }}>
+                            {item.user || item.name || item.label || '—'}
+                          </p>
+                          <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
+                            {item.task || item.client || ''} • {item.date}
+                          </p>
+                        </div>
+                        <p style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e', margin: 0 }}>
+                          ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

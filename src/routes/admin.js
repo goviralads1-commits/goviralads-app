@@ -6847,7 +6847,19 @@ router.get('/analytics', async (req, res) => {
         { $limit: 10 },
         { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
         { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-        { $project: { clientId: '$_id', totalRecharge: 1, identifier: { $ifNull: ['$user.name', { $ifNull: ['$user.email', '$user.phone'] }] } } }
+        { $project: {
+          clientId: '$_id',
+          totalRecharge: 1,
+          identifier: {
+            $ifNull: ['$user.profile.name', {
+              $ifNull: ['$user.billing.companyName', {
+                $ifNull: ['$user.billing.name', {
+                  $ifNull: ['$user.identifier', 'Unknown']
+                }]
+              }]
+            }]
+          }
+        }}
       ]),
       // Top clients spend (orders)
       Order.aggregate([
