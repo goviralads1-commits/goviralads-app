@@ -84,19 +84,29 @@ const Dashboard = () => {
     const now = new Date();
     let startDate = '', endDate = '', label = '';
     if (type === 'today') {
-      const today = now.toISOString().split('T')[0];
-      startDate = today; endDate = today;
+      // TODAY: today 00:00:00 → now
+      startDate = now.toISOString().split('T')[0];
+      endDate = now.toISOString().split('T')[0];
       label = 'Today';
     } else if (type === 'week') {
+      // THIS WEEK (LAST 7 DAYS): today - 6 days (00:00:00) → now
       const start = new Date(now);
-      start.setDate(start.getDate() - start.getDay());
+      start.setDate(start.getDate() - 6);
       startDate = start.toISOString().split('T')[0];
       endDate = now.toISOString().split('T')[0];
-      label = 'This Week';
+      label = 'Last 7 Days';
     } else if (type === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      // THIS MONTH (DEFAULT): 1st of current month (00:00:00) → now
+      startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0];
       endDate = now.toISOString().split('T')[0];
       label = 'This Month';
+    } else if (type === 'lastmonth') {
+      // LAST MONTH: 1st of prev month → last day of prev month (23:59:59)
+      const prevMonthFirst = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      const prevMonthLast = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+      startDate = prevMonthFirst.toISOString().split('T')[0];
+      endDate = prevMonthLast.toISOString().split('T')[0];
+      label = 'Last Month';
     }
     setDateFilter({ type, label, startDate, endDate });
   };
@@ -117,7 +127,7 @@ const Dashboard = () => {
         api.get('/admin/clients'),
         api.get('/admin/plans').catch(() => ({ data: { plans: [] } })),
         api.get('/admin/tasks').catch(() => ({ data: { tasks: [] } })),
-        api.get('/admin/commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
+        api.get('/admin/commissions', { params }).catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
         api.get('/admin/analytics', { params }).catch(() => ({ data: null })),
       ]);
       setDashboardData(overviewRes.data);
@@ -148,7 +158,7 @@ const Dashboard = () => {
   // Set default date filter to current month on mount
   useEffect(() => {
     const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0];
     const endDate = now.toISOString().split('T')[0];
     setDateFilter({ type: 'month', label: 'This Month', startDate, endDate });
   }, []);
@@ -419,12 +429,12 @@ const Dashboard = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>📊 Business Analytics</h3>
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                {['today', 'week', 'month'].map(t => (
+                {['today', 'week', 'month', 'lastmonth'].map(t => (
                   <button key={t} onClick={() => { applyDateFilter(t); }} style={{
                     padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: 'none',
                     background: dateFilter.type === t ? '#6366f1' : '#f1f5f9',
                     color: dateFilter.type === t ? '#fff' : '#64748b'
-                  }}>{t === 'today' ? 'Today' : t === 'week' ? 'This Week' : 'This Month'}</button>
+                  }}>{t === 'today' ? 'Today' : t === 'week' ? 'Last 7 Days' : t === 'month' ? 'This Month' : 'Last Month'}</button>
                 ))}
                 <button onClick={() => setShowDatePicker(!showDatePicker)} style={{
                   padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',

@@ -6745,21 +6745,30 @@ router.get('/analytics', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    // Build date filter
+    // Build date filter with UTC consistency
+    // startDate = YYYY-MM-DD → 00:00:00 UTC
+    // endDate = YYYY-MM-DD → 23:59:59.999 UTC
     const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (startDate) {
+      const s = new Date(startDate + 'T00:00:00.000Z');
+      dateFilter.$gte = s;
+    }
     if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      dateFilter.$lte = end;
+      const e = new Date(endDate + 'T23:59:59.999Z');
+      dateFilter.$lte = e;
     }
     const hasDateFilter = Object.keys(dateFilter).length > 0;
     const createdAtFilter = hasDateFilter ? { createdAt: dateFilter } : {};
 
-    // "This month" range (always current month, ignoring date filter)
+    // "This month" range for comparison (always current month, ignoring date filter)
     const now = new Date();
-    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
     const monthFilter = { createdAt: { $gte: firstOfMonth } };
+
+    // Total clients count (all time)
+    const clientTotal = await User.countDocuments({ role: 'CLIENT', isActive: true });
+    // New clients this month
+    const clientsNewMonth = await User.countDocuments({ role: 'CLIENT', isActive: true, createdAt: { $gte: firstOfMonth } });
 
     // Revenue types
     const revenueTypes = ['RECHARGE_APPROVED', 'SUBSCRIPTION_CREDIT', 'MANUAL_CREDIT', 'CREDIT'];
@@ -6770,7 +6779,7 @@ router.get('/analytics', async (req, res) => {
       ordersTotal, ordersThisMonth, ordersPending, ordersApproved,
       taskStats, tasksCompleted, taskCostAgg,
       commissionTotal, commissionThisMonth,
-      clientTotal, clientActive, clientsNewMonth,
+      clientOrders, clientTasks,
       topClientsRecharge, topClientsSpend, topClientsCommission,
       serviceAgg
     ] = await Promise.all([
@@ -6801,12 +6810,13 @@ router.get('/analytics', async (req, res) => {
       Order.countDocuments({ orderStatus: { $in: ['APPROVED', 'IN_PROGRESS', 'COMPLETED'] }, ...createdAtFilter }),
 
       // C. Tasks
+      // ACTIVE TASKS: status != COMPLETED AND != CANCELLED
       Task.aggregate([
         { $match: { isDeleted: { $ne: true }, ...createdAtFilter } },
         { $group: {
           _id: null,
           total: { $sum: 1 },
-          active: { $sum: { $cond: [{ $in: ['$status', ['PENDING', 'IN_PROGRESS', 'PENDING_APPROVAL']] }, 1, 0] } },
+          active: { $sum: { $cond: [{ $and: [{ $ne: ['$status', 'COMPLETED'] }, { $ne: ['$status', 'CANCELLED'] }] }, 1, 0] } },
           completed: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
           avgValue: { $avg: '$creditCost' }
         }}
@@ -6833,9 +6843,17 @@ router.get('/analytics', async (req, res) => {
       ]),
 
       // E. Clients
-      User.countDocuments({ role: 'CLIENT', ...createdAtFilter }),
-      User.countDocuments({ role: 'CLIENT', status: 'ACTIVE', ...createdAtFilter }),
-      User.countDocuments({ role: 'CLIENT', ...monthFilter }),
+      // ACTIVE CLIENTS: users with at least 1 order OR task in selected date range
+      Order.aggregate([
+        { $match: { orderStatus: { $ne: 'REJECTED' }, ...createdAtFilter } },
+        { $group: { _id: '$clientId' } },
+        { $project: { _id: 1 } }
+      ]),
+      Task.aggregate([
+        { $match: { isDeleted: { $ne: true }, ...createdAtFilter } },
+        { $group: { _id: '$clientId' } },
+        { $project: { _id: 1 } }
+      ]),
 
       // F. Top 10 Clients by recharge
       WalletTransaction.aggregate([
@@ -6886,6 +6904,12 @@ router.get('/analytics', async (req, res) => {
         { $limit: 5 }
       ])
     ]);
+
+    // Compute active clients: merge unique clientIds from orders + tasks
+    const activeClientIds = new Set();
+    clientOrders.forEach(c => activeClientIds.add(c._id?.toString()));
+    clientTasks.forEach(c => activeClientIds.add(c._id?.toString()));
+    const activeClientCount = activeClientIds.size;
 
     // Extract values
     const revTotal = revenueTotal[0]?.total || 0;
@@ -6954,7 +6978,7 @@ router.get('/analytics', async (req, res) => {
       commissions: { totalPaid: commTotal, thisMonth: commMonth },
       costs: { totalExpenses: costData.totalExpenses, totalTax: costData.totalTax, totalOther: costData.totalOther, totalAllCosts },
       profit: { grossRevenue: revTotal, totalCosts: totalAllCosts, netProfit },
-      clients: { total: clientTotal, active: clientActive, newThisMonth: clientsNewMonth, top10 },
+      clients: { total: clientTotal, active: activeClientCount, newThisMonth: clientsNewMonth, top10 },
       services: { top5: serviceTop5 },
       recentActivity
     });
@@ -6976,14 +7000,13 @@ router.get('/commissions', async (req, res) => {
     
     const { startDate, endDate, userId } = req.query;
     
-    // Build date filter
+    // Build date filter with UTC consistency
     const filter = {};
     if (startDate || endDate) {
       filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (startDate) filter.createdAt.$gte = new Date(startDate + 'T00:00:00.000Z');
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+        const end = new Date(endDate + 'T23:59:59.999Z');
         filter.createdAt.$lte = end;
       }
     }
