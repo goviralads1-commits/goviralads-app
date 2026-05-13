@@ -21,6 +21,9 @@ const Wallet = () => {
   const [subscription, setSubscription] = useState(null);
   const [expiredSubscription, setExpiredSubscription] = useState(null);
   const [couponCode, setCouponCode] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [couponStatus, setCouponStatus] = useState(null); // null | 'valid' | 'invalid'
+  const [validatedCoupon, setValidatedCoupon] = useState(null); // { code, type, value }
   const [purchasingPlan, setPurchasingPlan] = useState(null); // planId being purchased
   const [pendingSubscriptionRequests, setPendingSubscriptionRequests] = useState([]);
   const [activeSection, setActiveSection] = useState(null); // null | 'recharge' | 'subscription'
@@ -76,6 +79,14 @@ const Wallet = () => {
         } catch (pendingErr) {
           console.log('[Wallet] Subscription requests endpoint not available');
         }
+
+        // Optional: available coupons for validation
+        try {
+          const couponRes = await api.get('/client/coupons');
+          setAvailableCoupons(couponRes.data.coupons || []);
+        } catch (couponErr) {
+          console.log('[Wallet] Coupons endpoint not available');
+        }
         
         setWalletData(walletResponse.data);
         setRechargeRequests(requestsResponse.data.requests || []);
@@ -94,7 +105,34 @@ const Wallet = () => {
   // Safety: always clear coupon field on mount — never pre-filled
   useEffect(() => {
     setCouponCode('');
+    setCouponStatus(null);
+    setValidatedCoupon(null);
   }, []);
+
+  // Validate coupon against fetched list
+  const handleValidateCoupon = () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) { setCouponStatus(null); setValidatedCoupon(null); return; }
+    const now = new Date();
+    const match = availableCoupons.find(c => c.code === code);
+    if (!match) { setCouponStatus('invalid'); setValidatedCoupon(null); return; }
+    if (match.expiryDate && new Date(match.expiryDate) < now) { setCouponStatus('invalid'); setValidatedCoupon(null); return; }
+    setCouponStatus('valid');
+    setValidatedCoupon(match);
+  };
+
+  const clearCoupon = () => {
+    setCouponCode('');
+    setCouponStatus(null);
+    setValidatedCoupon(null);
+  };
+
+  // Calculate discounted price for display only
+  const getDiscountedPrice = (plan) => {
+    if (!validatedCoupon || validatedCoupon.type !== 'discount') return null;
+    const discounted = Math.max(0, plan.price * (1 - validatedCoupon.value / 100));
+    return Math.round(discounted * 100) / 100;
+  };
 
   // Helper: days until expiry (0 = today, negative = past)
   const getDaysUntilExpiry = (expiresAt) => {
@@ -125,7 +163,7 @@ const Wallet = () => {
       });
       setToast('Request submitted. Waiting for admin approval.');
       setTimeout(() => setToast(null), 4000);
-      setCouponCode('');
+      clearCoupon();
       if (res.data.request) {
         setPendingSubscriptionRequests(prev => [...prev, res.data.request]);
       }
@@ -440,28 +478,44 @@ const Wallet = () => {
           <div style={{marginBottom: '24px'}}>
             <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '16px'}}>Choose a Plan</h3>
             {/* Coupon Input - Inline */}
-            <div style={{display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px'}}>
+            <div style={{display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap'}}>
               <input
                 type="text"
                 value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponStatus(null); setValidatedCoupon(null); }}
                 placeholder="Have a coupon?"
                 style={{
                   padding: '10px 14px',
                   fontSize: '14px',
-                  border: '2px solid #e2e8f0',
+                  border: couponStatus === 'invalid' ? '2px solid #ef4444' : couponStatus === 'valid' ? '2px solid #16a34a' : '2px solid #e2e8f0',
                   borderRadius: '12px',
                   outline: 'none',
                   letterSpacing: '1px',
                   fontWeight: couponCode ? '600' : '400',
-                  width: '180px',
+                  width: '160px',
                   backgroundColor: '#fff'
                 }}
               />
-              {couponCode && (
+              {!couponStatus && couponCode && (
+                <button
+                  onClick={handleValidateCoupon}
+                  style={{
+                    padding: '8px 14px', fontSize: '13px', fontWeight: '700',
+                    background: '#6366f1', color: '#fff', border: 'none',
+                    borderRadius: '10px', cursor: 'pointer'
+                  }}
+                >Apply</button>
+              )}
+              {couponStatus === 'valid' && (
                 <>
-                  <span style={{fontSize: '12px', color: '#16a34a', fontWeight: '600'}}>Applied</span>
-                  <button onClick={() => setCouponCode('')} style={{background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '16px'}}>×</button>
+                  <span style={{fontSize: '12px', color: '#16a34a', fontWeight: '700'}}>✓ Coupon Applied</span>
+                  <button onClick={clearCoupon} style={{background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '16px'}}>×</button>
+                </>
+              )}
+              {couponStatus === 'invalid' && (
+                <>
+                  <span style={{fontSize: '12px', color: '#ef4444', fontWeight: '700'}}>✗ Invalid Coupon</span>
+                  <button onClick={clearCoupon} style={{background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '16px'}}>×</button>
                 </>
               )}
             </div>
@@ -542,13 +596,29 @@ const Wallet = () => {
                     </p>
 
                     {/* Price */}
-                    <p style={{
-                      fontSize: '32px', fontWeight: '800',
-                      color: isCurrentPlan ? '#16a34a' : isBestValue ? '#4f46e5' : '#1e293b',
-                      margin: '8px 0 8px 0', lineHeight: 1
-                    }}>
-                      ₹{plan.price?.toLocaleString()}
-                    </p>
+                    {(() => {
+                      const discounted = getDiscountedPrice(plan);
+                      if (discounted !== null) {
+                        return (
+                          <div style={{margin: '8px 0 8px 0'}}>
+                            <p style={{fontSize: '16px', fontWeight: '600', color: '#94a3b8', margin: '0', textDecoration: 'line-through', lineHeight: 1}}>
+                              ₹{plan.price?.toLocaleString()}
+                            </p>
+                            <p style={{fontSize: '30px', fontWeight: '800', color: isCurrentPlan ? '#16a34a' : isBestValue ? '#4f46e5' : '#1e293b', margin: '4px 0 0 0', lineHeight: 1}}>
+                              ₹{discounted.toLocaleString()}
+                            </p>
+                            <span style={{fontSize: '11px', fontWeight: '700', color: '#fff', background: '#16a34a', padding: '2px 8px', borderRadius: '6px', marginTop: '4px', display: 'inline-block'}}>
+                              {validatedCoupon.value}% OFF
+                            </span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <p style={{fontSize: '32px', fontWeight: '800', color: isCurrentPlan ? '#16a34a' : isBestValue ? '#4f46e5' : '#1e293b', margin: '8px 0 8px 0', lineHeight: 1}}>
+                          ₹{plan.price?.toLocaleString()}
+                        </p>
+                      );
+                    })()}
 
                     {/* Credits */}
                     <p style={{
@@ -566,6 +636,17 @@ const Wallet = () => {
                         backgroundColor: '#ecfdf5', padding: '4px 10px', borderRadius: '8px', display: 'inline-block'
                       }}>
                         +{plan.bonusCredits?.toLocaleString()} Bonus
+                      </p>
+                    )}
+
+                    {/* Coupon bonus badge */}
+                    {validatedCoupon && validatedCoupon.type === 'bonus' && (
+                      <p style={{
+                        fontSize: '12px', fontWeight: '700',
+                        color: '#6366f1', margin: '4px 0 0 0',
+                        backgroundColor: '#eef2ff', padding: '4px 10px', borderRadius: '8px', display: 'inline-block'
+                      }}>
+                        +{validatedCoupon.value?.toLocaleString()} Coupon Bonus
                       </p>
                     )}
 
@@ -1368,11 +1449,31 @@ const Wallet = () => {
               <p style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
                 {subModalPlan.plan?.name}
               </p>
-              <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#475569' }}>
-                Price: <strong>₹{subModalPlan.plan?.price?.toLocaleString()}</strong>
-              </p>
+              {(() => {
+                const discounted = getDiscountedPrice(subModalPlan.plan);
+                if (discounted !== null) {
+                  return (
+                    <>
+                      <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#94a3b8', textDecoration: 'line-through' }}>
+                        Price: ₹{subModalPlan.plan?.price?.toLocaleString()}
+                      </p>
+                      <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#16a34a', fontWeight: '700' }}>
+                        Payable: <strong>₹{discounted.toLocaleString()}</strong>
+                        <span style={{ marginLeft: '8px', fontSize: '12px', background: '#dcfce7', padding: '2px 8px', borderRadius: '6px' }}>
+                          {validatedCoupon.value}% OFF
+                        </span>
+                      </p>
+                    </>
+                  );
+                }
+                return (
+                  <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#475569' }}>
+                    Price: <strong>₹{subModalPlan.plan?.price?.toLocaleString()}</strong>
+                  </p>
+                );
+              })()}
               <p style={{ margin: '0', fontSize: '14px', color: '#475569' }}>
-                Credits: <strong>{subModalPlan.plan?.credits?.toLocaleString()}{subModalPlan.plan?.bonusCredits > 0 ? ` + ${subModalPlan.plan.bonusCredits} bonus` : ''}</strong>
+                Credits: <strong>{subModalPlan.plan?.credits?.toLocaleString()}{subModalPlan.plan?.bonusCredits > 0 ? ` + ${subModalPlan.plan.bonusCredits} bonus` : ''}{validatedCoupon?.type === 'bonus' ? ` + ${validatedCoupon.value} coupon bonus` : ''}</strong>
               </p>
             </div>
 
