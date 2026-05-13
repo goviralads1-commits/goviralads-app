@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
+import { getCurrentUser } from '../services/authService';
 
 // Helper: Extract video thumbnail URL
 const getVideoThumbnail = (url) => {
@@ -46,6 +47,7 @@ const Dashboard = () => {
   const [notices, setNotices] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [] });
+  const [walletData, setWalletData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentBanner, setCurrentBanner] = useState(0);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -55,11 +57,12 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, noticesRes, tasksRes, commRes] = await Promise.all([
+      const [configRes, noticesRes, tasksRes, commRes, walletRes] = await Promise.all([
         api.get('/client/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
         api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
         api.get('/client/tasks').catch(() => ({ data: { tasks: [] } })),
-        api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } }))
+        api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } })),
+        api.get('/client/wallet').catch(() => ({ data: { balance: 0, walletCredits: 0, subscriptionCredits: 0 } }))
       ]);
       setConfig(configRes.data.config);
       setFeaturedPlans(configRes.data.featuredPlans || []);
@@ -70,6 +73,7 @@ const Dashboard = () => {
         overallTaskCount: commRes.data?.overallTaskCount || 0,
         logs: (commRes.data?.logs || []).slice(0, 5)
       });
+      setWalletData(walletRes.data || null);
     } catch (err) {
       // Silent fail - show empty states
     } finally {
@@ -140,6 +144,8 @@ const Dashboard = () => {
   const pendingTasks = tasks.filter(t => t.status === 'PENDING_APPROVAL');
   const activeTasks = tasks.filter(t => ['ACTIVE', 'IN_PROGRESS', 'PENDING', 'SCHEDULED'].includes(t.status));
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED').slice(0, 3); // Show only recent 3
+  const allCompletedCount = tasks.filter(t => t.status === 'COMPLETED').length;
+  const user = getCurrentUser();
 
   // Get banners from config or fallback
   const banners = config?.banners?.length > 0 ? config.banners : [
@@ -201,10 +207,62 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '16px 20px 100px' }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '0 20px 100px' }}>
         
-        {/* Page Title */}
-        <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: '0 0 16px 0', letterSpacing: '-0.3px' }}>{config?.pageTitle || 'Office'}</h1>
+        {/* HERO SECTION — Gradient Card */}
+        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)', borderRadius: '0 0 28px 28px', padding: '28px 24px 24px', marginBottom: '20px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(99,102,241,0.2)' }} />
+          <div style={{ position: 'absolute', bottom: '-20px', left: '-20px', width: '100px', height: '100px', borderRadius: '50%', background: 'rgba(139,92,246,0.15)' }} />
+          <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: '0 0 4px 0', position: 'relative', zIndex: 1 }}>Welcome back,</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 20px 0', letterSpacing: '-0.3px', position: 'relative', zIndex: 1 }}>{user?.identifier || config?.pageTitle || 'Office'}</h1>
+          
+          {/* Wallet Balance Card */}
+          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '16px 20px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wallet Balance</p>
+                <p style={{ fontSize: '28px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>₹{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'}</p>
+              </div>
+              <button onClick={() => navigate('/wallet')} style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '12px', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                + Add Credits
+              </button>
+            </div>
+            {walletData && (walletData.subscriptionCredits > 0 || walletData.walletCredits > 0) && (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                {walletData.subscriptionCredits > 0 && (
+                  <div>
+                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Plan Credits</p>
+                    <p style={{ fontSize: '14px', fontWeight: '700', color: '#a5b4fc', margin: 0 }}>{walletData.subscriptionCredits}</p>
+                  </div>
+                )}
+                <div>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Wallet</p>
+                  <p style={{ fontSize: '14px', fontWeight: '700', color: '#86efac', margin: 0 }}>₹{(walletData.walletCredits || 0).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* STATS STRIP */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '24px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{tasks.length}</p>
+            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total</p>
+          </div>
+          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontSize: '20px', fontWeight: '800', color: '#22c55e', margin: '0 0 2px 0' }}>{activeTasks.length}</p>
+            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Active</p>
+          </div>
+          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontSize: '20px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>{allCompletedCount}</p>
+            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Done</p>
+          </div>
+          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <p style={{ fontSize: '20px', fontWeight: '800', color: '#f59e0b', margin: '0 0 2px 0' }}>{pendingTasks.length}</p>
+            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pending</p>
+          </div>
+        </div>
 
         {/* BANNER CAROUSEL */}
         {banners.length > 0 && (
@@ -267,16 +325,108 @@ const Dashboard = () => {
         </div>
         )}
 
+        {/* ACTIVE TASKS */}
+        {activeTasks.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: '14px' }}>⚡</span>
+              </div>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Active Tasks</h3>
+              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{activeTasks.length}</span>
+            </div>
+            <button onClick={() => navigate('/tasks')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
+              View All →
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {activeTasks.slice(0, 3).map(task => (
+              <div 
+                key={task.id || task._id} 
+                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
+                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', fontSize: '20px', background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)', flexShrink: 0 }}>{task.icon || '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ flex: 1, height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${task.progress || 0}%`, height: '100%', background: 'linear-gradient(90deg, #22c55e, #16a34a)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#16a34a', minWidth: '32px', textAlign: 'right' }}>{task.progress || 0}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
+
+        {/* PENDING ADMIN REVIEW TASKS */}
+        {pendingTasks.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '14px' }}>⏳</span>
+            </div>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Review</h3>
+            <span style={{ backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{pendingTasks.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {pendingTasks.map(task => (
+              <div 
+                key={task.id || task._id} 
+                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
+                style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', fontSize: '20px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', flexShrink: 0 }}>{task.icon || '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    <p style={{ fontSize: '12px', color: '#d97706', margin: 0 }}>Waiting for admin approval</p>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#92400e', backgroundColor: '#fef3c7', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}>₹{task.creditsUsed || task.creditCost || 0}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
+
+        {/* EARNINGS STRIP — Boost banner */}
+        {commissionData.overallTaskCount > 0 && (
+        <div style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', borderRadius: '16px', padding: '16px 20px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: '18px' }}>💰</span>
+            </div>
+            <div>
+              <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 2px 0', fontWeight: '600' }}>Total Earned</p>
+              <p style={{ fontSize: '20px', fontWeight: '800', color: '#166534', margin: 0 }}>₹{(commissionData.overallTotal || 0).toLocaleString()}</p>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '11px', color: '#16a34a', margin: '0 0 2px 0', fontWeight: '600' }}>{commissionData.overallTaskCount} tasks</p>
+            <p style={{ fontSize: '12px', color: '#15803d', margin: 0, fontWeight: '700' }}>completed</p>
+          </div>
+        </div>
+        )}
+
         {/* FEATURED PLANS */}
         {featuredSection.isEnabled && (
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', backgroundColor: '#fff', borderRadius: '14px', padding: '12px 16px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '18px' }}>{featuredSection.icon || '⭐'}</span>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: '14px' }}>{featuredSection.icon || '⭐'}</span>
+              </div>
               <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{featuredSection.title || 'Featured Plans'}</h3>
             </div>
             {config?.featuredPlansConfig?.showSeeAllButton !== false && (
-            <button onClick={() => navigate('/plans')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer', opacity: 0.9 }}>
+            <button onClick={() => navigate('/plans')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
               {config?.featuredPlansConfig?.seeAllButtonText || 'See All'} →
             </button>
             )}
@@ -291,7 +441,7 @@ const Dashboard = () => {
                 <div 
                   key={plan.id || idx} 
                   onClick={() => navigate(`/plans/${plan.id}`)}
-                  style={{ backgroundColor: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
+                  style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
                 >
                   {/* 1:1 Aspect Ratio Container */}
                   <div style={{ position: 'relative', width: '100%', paddingBottom: '100%', backgroundColor: '#f4f6fa', overflow: 'hidden' }}>
@@ -351,135 +501,34 @@ const Dashboard = () => {
         </div>
         )}
 
-        {/* PENDING ADMIN REVIEW TASKS */}
-        {pendingTasks.length > 0 && (
-        <div style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <span style={{ fontSize: '20px' }}>⏳</span>
-            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Admin Review</h3>
-            <span style={{ backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{pendingTasks.length}</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {pendingTasks.map(task => (
-              <div 
-                key={task.id || task._id} 
-                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fffbeb', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #f59e0b', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '20px', backgroundColor: '#fef3c7', flexShrink: 0 }}>{task.icon || '📝'}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
-                    <p style={{ fontSize: '12px', color: '#d97706', margin: 0 }}>Waiting for admin to start your task</p>
-                  </div>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706', backgroundColor: '#fef3c7', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}>₹{task.creditsUsed || task.creditCost || 0}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        )}
-
-        {/* ACTIVE TASKS */}
-        {/* COMMISSION EARNINGS — only shows if client has logs */}
-        {commissionData.overallTaskCount > 0 && (
-        <div style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <span style={{ fontSize: '20px' }}>💰</span>
-            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Earnings</h3>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ backgroundColor: '#f0fdf4', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #dcfce7' }}>
-              <p style={{ fontSize: '11px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total Earned</p>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#15803d', margin: 0 }}>₹{(commissionData.overallTotal || 0).toLocaleString()}</p>
-            </div>
-            <div style={{ backgroundColor: '#eef2ff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e0e7ff' }}>
-              <p style={{ fontSize: '11px', color: '#6366f1', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Tasks Completed</p>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#4f46e5', margin: 0 }}>{commissionData.overallTaskCount}</p>
-            </div>
-          </div>
-          {commissionData.logs.length > 0 && (
-          <div style={{ backgroundColor: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #eef2f7' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9' }}>
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Recent Earnings</p>
-            </div>
-            {commissionData.logs.map((log, i) => (
-              <div key={log.id || i} style={{ padding: '12px 16px', borderBottom: i < commissionData.logs.length - 1 ? '1px solid #f8fafc' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.taskTitle || 'Task'}</p>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{log.createdAt ? new Date(log.createdAt).toLocaleDateString() : ''}</p>
-                </div>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: '#16a34a' }}>+₹{(log.amount || 0).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-          )}
-        </div>
-        )}
-
-        {activeTasks.length > 0 && (
-        <div style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>🟢</span>
-              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Active Tasks</h3>
-              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{activeTasks.length}</span>
-            </div>
-            <button onClick={() => navigate('/tasks')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
-              View All →
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {activeTasks.slice(0, 3).map(task => (
-              <div 
-                key={task.id || task._id} 
-                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #22c55e', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '20px', backgroundColor: '#dcfce7', flexShrink: 0 }}>{task.icon || '📝'}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ flex: 1, height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${task.progress || 0}%`, height: '100%', backgroundColor: '#22c55e', borderRadius: '3px', transition: 'width 0.3s ease' }} />
-                      </div>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#22c55e' }}>{task.progress || 0}%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        )}
-
         {/* RECENTLY COMPLETED TASKS */}
         {completedTasks.length > 0 && (
-        <div style={{ marginBottom: '28px' }}>
+        <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>✅</span>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #94a3b8, #64748b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: '14px' }}>✅</span>
+              </div>
               <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recently Completed</h3>
             </div>
-            <button onClick={() => navigate('/tasks')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => navigate('/tasks')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
               View All →
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {completedTasks.map(task => (
               <div 
                 key={task.id || task._id} 
                 onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #94a3b8', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease', opacity: 0.8 }}
+                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '20px', backgroundColor: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
+                  <span style={{ width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', fontSize: '20px', background: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ''}</p>
                   </div>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#16a34a', backgroundColor: '#dcfce7', padding: '3px 8px', borderRadius: '6px' }}>Done</span>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#16a34a', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '8px' }}>Done</span>
                 </div>
               </div>
             ))}
