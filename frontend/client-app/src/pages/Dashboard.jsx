@@ -271,17 +271,17 @@ const Dashboard = () => {
         {featuredSection.isEnabled && (
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>{featuredSection.icon || '⭐'}</span>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{featuredSection.title || 'Featured Plans'}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>{featuredSection.icon || '⭐'}</span>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{featuredSection.title || 'Featured Plans'}</h3>
             </div>
             {config?.featuredPlansConfig?.showSeeAllButton !== false && (
-            <button onClick={() => navigate('/plans')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => navigate('/plans')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer', opacity: 0.9 }}>
               {config?.featuredPlansConfig?.seeAllButtonText || 'See All'} →
             </button>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             {featuredPlans.slice(0, config?.featuredPlansConfig?.displayCount || 4).map((plan, idx) => {
               const coverMedia = plan.planMedia?.[0];
               const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
@@ -291,10 +291,10 @@ const Dashboard = () => {
                 <div 
                   key={plan.id || idx} 
                   onClick={() => navigate(`/plans/${plan.id}`)}
-                  style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+                  style={{ backgroundColor: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
                 >
                   {/* 1:1 Aspect Ratio Container */}
-                  <div style={{ position: 'relative', width: '100%', paddingBottom: '100%', backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', width: '100%', paddingBottom: '100%', backgroundColor: '#f4f6fa', overflow: 'hidden' }}>
                     {displayUrl ? (
                       <>
                         <img 
@@ -309,7 +309,7 @@ const Dashboard = () => {
                         </div>
                         {/* Play icon overlay for videos */}
                         {isVideo && (
-                          <div style={{ position: 'absolute', top: '8px', right: '8px', width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ position: 'absolute', top: '8px', right: '8px', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
                               <polygon points="5,3 19,12 5,21" />
                             </svg>
@@ -322,9 +322,9 @@ const Dashboard = () => {
                       </div>
                     )}
                   </div>
-                  <div style={{ padding: '12px' }}>
-                    <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.title}</p>
-                    <p style={{ fontSize: '16px', fontWeight: '800', color: '#22c55e', margin: 0 }}>₹{plan.offerPrice || plan.creditCost || 0}</p>
+                  <div style={{ padding: '10px 12px 12px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.title}</p>
+                    <p style={{ fontSize: '15px', fontWeight: '800', color: '#16a34a', margin: 0 }}>₹{plan.offerPrice || plan.creditCost || 0}</p>
                   </div>
                 </div>
               );
