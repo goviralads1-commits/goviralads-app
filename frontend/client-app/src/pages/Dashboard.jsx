@@ -364,7 +364,7 @@ const Dashboard = () => {
               <div 
                 key={task.id || task._id} 
                 onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #f59e0b', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'transform 0.2s' }}
+                style={{ backgroundColor: '#fffbeb', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #f59e0b', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
@@ -434,15 +434,15 @@ const Dashboard = () => {
               <div 
                 key={task.id || task._id} 
                 onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #22c55e', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s' }}
+                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #22c55e', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ flex: 1, height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${task.progress || 0}%`, height: '100%', backgroundColor: '#22c55e', borderRadius: '3px', transition: 'width 0.3s' }} />
+                      <div style={{ flex: 1, height: '5px', backgroundColor: '#eef2f7', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${task.progress || 0}%`, height: '100%', backgroundColor: '#22c55e', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                       </div>
                       <span style={{ fontSize: '12px', fontWeight: '700', color: '#22c55e' }}>{task.progress || 0}%</span>
                     </div>
@@ -471,7 +471,7 @@ const Dashboard = () => {
               <div 
                 key={task.id || task._id} 
                 onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #94a3b8', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s', opacity: 0.8 }}
+                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #94a3b8', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease', opacity: 0.8 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
@@ -479,7 +479,7 @@ const Dashboard = () => {
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ''}</p>
                   </div>
-                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#22c55e', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '8px' }}>Done</span>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#16a34a', backgroundColor: '#dcfce7', padding: '3px 8px', borderRadius: '6px' }}>Done</span>
                 </div>
               </div>
             ))}
