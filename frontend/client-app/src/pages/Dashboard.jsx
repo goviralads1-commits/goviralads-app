@@ -389,19 +389,19 @@ const Dashboard = () => {
             <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Earnings</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px 0', fontWeight: '600' }}>Total Earned</p>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#16a34a', margin: 0 }}>₹{(commissionData.overallTotal || 0).toLocaleString()}</p>
+            <div style={{ backgroundColor: '#f0fdf4', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #dcfce7' }}>
+              <p style={{ fontSize: '11px', color: '#16a34a', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total Earned</p>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#15803d', margin: 0 }}>₹{(commissionData.overallTotal || 0).toLocaleString()}</p>
             </div>
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px 0', fontWeight: '600' }}>Tasks Completed</p>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: 0 }}>{commissionData.overallTaskCount}</p>
+            <div style={{ backgroundColor: '#eef2ff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e0e7ff' }}>
+              <p style={{ fontSize: '11px', color: '#6366f1', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Tasks Completed</p>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#4f46e5', margin: 0 }}>{commissionData.overallTaskCount}</p>
             </div>
           </div>
           {commissionData.logs.length > 0 && (
-          <div style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
-              <p style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0 }}>Recent Earnings</p>
+          <div style={{ backgroundColor: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #eef2f7' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9' }}>
+              <p style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Recent Earnings</p>
             </div>
             {commissionData.logs.map((log, i) => (
               <div key={log.id || i} style={{ padding: '12px 16px', borderBottom: i < commissionData.logs.length - 1 ? '1px solid #f8fafc' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
