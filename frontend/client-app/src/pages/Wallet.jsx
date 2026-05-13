@@ -532,6 +532,15 @@ const Wallet = () => {
                       }}>ACTIVE</span>
                     )}
 
+                    {/* Plan Name + Duration */}
+                    <p style={{
+                      fontSize: '13px', fontWeight: '700',
+                      color: '#475569', margin: '0 0 6px 0',
+                      lineHeight: 1.3
+                    }}>
+                      {plan.name}{plan.validityDays ? ` · ${plan.validityDays} Days` : ''}
+                    </p>
+
                     {/* Price */}
                     <p style={{
                       fontSize: '32px', fontWeight: '800',
