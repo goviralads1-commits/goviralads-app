@@ -638,13 +638,13 @@ const Dashboard = () => {
 
       {/* NOTICE DETAIL MODAL */}
       {selectedNotice && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{selectedNotice.type === 'REQUIREMENT' ? '📋 Requirement' : selectedNotice.type === 'PROMOTION' ? '🎁 Promotion' : '🔄 Update'}</h3>
               <button 
                 onClick={() => setSelectedNotice(null)} 
-                style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: '12px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}
+                style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: '10px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}
               >
                 ✕
               </button>
@@ -653,20 +653,20 @@ const Dashboard = () => {
               <h4 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 12px 0' }}>{selectedNotice.title}</h4>
               
               {selectedNotice.imageUrl && (
-                <img src={selectedNotice.imageUrl} alt="" style={{ width: '100%', borderRadius: '16px', marginBottom: '16px' }} />
+                <img src={selectedNotice.imageUrl} alt="" style={{ width: '100%', borderRadius: '14px', marginBottom: '16px' }} />
               )}
               
               <p style={{ fontSize: '15px', color: '#374151', lineHeight: 1.7, margin: '0 0 20px 0', whiteSpace: 'pre-wrap' }}>{selectedNotice.content}</p>
               
               {selectedNotice.linkUrl && (
-                <a href={selectedNotice.linkUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#f1f5f9', color: '#6366f1', borderRadius: '12px', fontSize: '14px', fontWeight: '600', textDecoration: 'none', marginBottom: '20px' }}>
+                <a href={selectedNotice.linkUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#eef2ff', color: '#6366f1', borderRadius: '12px', border: '1px solid #e0e7ff', fontSize: '14px', fontWeight: '600', textDecoration: 'none', marginBottom: '20px' }}>
                   {selectedNotice.linkText || 'Learn More'} →
                 </a>
               )}
               
               {/* Response Section */}
               {selectedNotice.responseType && selectedNotice.responseType !== 'NONE' && !selectedNotice.hasResponded && (
-                <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#fef3c7', borderRadius: '16px' }}>
+                <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#fef3c7', borderRadius: '14px' }}>
                   <p style={{ fontSize: '14px', fontWeight: '700', color: '#92400e', margin: '0 0 16px 0' }}>⚠️ Your response is required</p>
                   
                   {selectedNotice.responseType === 'YES_NO' && (
@@ -734,7 +734,7 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
-            <div style={{ padding: '16px 20px calc(16px + env(safe-area-inset-bottom))', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ padding: '16px 20px calc(16px + env(safe-area-inset-bottom))', borderTop: '1px solid #eef2f7' }}>
               <button onClick={() => setSelectedNotice(null)} style={{ width: '100%', padding: '16px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '14px', border: 'none', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
                 Close
               </button>
