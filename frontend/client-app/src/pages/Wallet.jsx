@@ -592,7 +592,7 @@ const Wallet = () => {
                       color: '#475569', margin: '0 0 6px 0',
                       lineHeight: 1.3
                     }}>
-                      {plan.name}{plan.validityDays ? ` · ${plan.validityDays} Days` : ''}
+                      {plan.name}{plan.validityDays && !plan.name?.toLowerCase().includes(`${plan.validityDays}`) ? ` • ${plan.validityDays} Days` : ''}
                     </p>
 
                     {/* Price */}
@@ -628,14 +628,14 @@ const Wallet = () => {
                       {plan.credits?.toLocaleString()} Credits
                     </p>
 
-                    {/* Bonus */}
+                    {/* Plan Bonus */}
                     {plan.bonusCredits > 0 && (
                       <p style={{
                         fontSize: '13px', fontWeight: '700',
-                        color: '#10b981', margin: '0',
+                        color: '#10b981', margin: '0 0 4px 0',
                         backgroundColor: '#ecfdf5', padding: '4px 10px', borderRadius: '8px', display: 'inline-block'
                       }}>
-                        +{plan.bonusCredits?.toLocaleString()} Bonus
+                        +{plan.bonusCredits?.toLocaleString()} Plan Bonus
                       </p>
                     )}
 
@@ -643,12 +643,28 @@ const Wallet = () => {
                     {validatedCoupon && validatedCoupon.type === 'bonus' && (
                       <p style={{
                         fontSize: '12px', fontWeight: '700',
-                        color: '#6366f1', margin: '4px 0 0 0',
+                        color: '#6366f1', margin: '0 0 4px 0',
                         backgroundColor: '#eef2ff', padding: '4px 10px', borderRadius: '8px', display: 'inline-block'
                       }}>
                         +{validatedCoupon.value?.toLocaleString()} Coupon Bonus
                       </p>
                     )}
+
+                    {/* Total Credits */}
+                    {(() => {
+                      const total = (plan.credits || 0) + (plan.bonusCredits || 0) + (validatedCoupon?.type === 'bonus' ? validatedCoupon.value : 0);
+                      const showTotal = (plan.bonusCredits > 0) || (validatedCoupon?.type === 'bonus');
+                      if (!showTotal) return null;
+                      return (
+                        <p style={{
+                          fontSize: '13px', fontWeight: '800',
+                          color: '#0f172a', margin: '4px 0 0 0',
+                          borderTop: '1px solid #e2e8f0', paddingTop: '6px'
+                        }}>
+                          Total: {total.toLocaleString()} Credits
+                        </p>
+                      );
+                    })()}
 
                     {/* Loading/Status */}
                     {isBuying && (
@@ -1472,9 +1488,21 @@ const Wallet = () => {
                   </p>
                 );
               })()}
-              <p style={{ margin: '0', fontSize: '14px', color: '#475569' }}>
-                Credits: <strong>{subModalPlan.plan?.credits?.toLocaleString()}{subModalPlan.plan?.bonusCredits > 0 ? ` + ${subModalPlan.plan.bonusCredits} bonus` : ''}{validatedCoupon?.type === 'bonus' ? ` + ${validatedCoupon.value} coupon bonus` : ''}</strong>
+              <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#475569' }}>
+                Credits: <strong>{subModalPlan.plan?.credits?.toLocaleString()}</strong>
+                {subModalPlan.plan?.bonusCredits > 0 && <span style={{ color: '#10b981', fontWeight: '600' }}> + {subModalPlan.plan.bonusCredits.toLocaleString()} plan bonus</span>}
+                {validatedCoupon?.type === 'bonus' && <span style={{ color: '#6366f1', fontWeight: '600' }}> + {validatedCoupon.value.toLocaleString()} coupon bonus</span>}
               </p>
+              {(() => {
+                const total = (subModalPlan.plan?.credits || 0) + (subModalPlan.plan?.bonusCredits || 0) + (validatedCoupon?.type === 'bonus' ? validatedCoupon.value : 0);
+                const showTotal = (subModalPlan.plan?.bonusCredits > 0) || (validatedCoupon?.type === 'bonus');
+                if (!showTotal) return null;
+                return (
+                  <p style={{ margin: '0', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                    Total: <strong>{total.toLocaleString()} Credits</strong>
+                  </p>
+                );
+              })()}
             </div>
 
             <div style={{ marginBottom: '20px' }}>
