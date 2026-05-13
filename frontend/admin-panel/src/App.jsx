@@ -263,6 +263,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   // CRITICAL: Double-check localStorage directly as backup
   const tokenExists = !!localStorage.getItem('token');
   const permsCached = !!localStorage.getItem('permissions');
+  let storedRole = null;
+  try {
+    const storedUser = localStorage.getItem('user');
+    storedRole = storedUser ? JSON.parse(storedUser)?.role : null;
+  } catch (e) {
+    storedRole = null;
+  }
 
   // Wait for BOTH auth init AND permissions load before rendering
   // permsCached covers the post-login case where context hasn't re-initialized yet
@@ -310,8 +317,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(userRole)) {
-    console.log('[ProtectedRoute] Role mismatch:', userRole, 'not in', allowedRoles);
+  if (allowedRoles && !allowedRoles.includes(userRole || storedRole)) {
+    console.log('[ProtectedRoute] Role mismatch:', userRole || storedRole, 'not in', allowedRoles);
     return <Navigate to="/unauthorized" replace />;
   }
 
