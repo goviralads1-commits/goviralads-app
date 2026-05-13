@@ -572,68 +572,69 @@ const Wallet = () => {
               })}
             </div>
 
-            {/* Active Subscription Status */}
-            {subscription && (() => {
-              const daysLeft = getDaysUntilExpiry(subscription.expiresAt);
-              const isExpiringSoon = daysLeft <= 2;
-              return (
-                <div style={{
-                  marginTop: '16px',
-                  padding: '16px 18px',
-                  background: isExpiringSoon
-                    ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
-                    : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                  borderRadius: '14px',
-                  border: isExpiringSoon ? '1px solid #fcd34d' : '1px solid #86efac',
-                }}>
-                  {/* Plan Name */}
-                  <p style={{
-                    fontSize: '15px',
-                    fontWeight: '800',
-                    color: isExpiringSoon ? '#92400e' : '#15803d',
-                    margin: '0 0 10px 0',
-                    letterSpacing: '-0.3px'
-                  }}>
-                    {subscription.planName || 'Active Plan'}
-                  </p>
-                  {/* Credits + Days Row */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    flexWrap: 'wrap'
-                  }}>
-                    <div style={{
-                      padding: '6px 12px',
-                      backgroundColor: isExpiringSoon ? 'rgba(146,64,14,0.08)' : 'rgba(21,128,61,0.08)',
-                      borderRadius: '8px',
-                    }}>
-                      <p style={{fontSize: '14px', fontWeight: '700', color: isExpiringSoon ? '#92400e' : '#15803d', margin: 0}}>
-                        {subscription.creditsRemaining?.toLocaleString()} credits
-                      </p>
-                    </div>
-                    <div style={{
-                      padding: '6px 12px',
-                      backgroundColor: isExpiringSoon ? 'rgba(146,64,14,0.08)' : 'rgba(21,128,61,0.08)',
-                      borderRadius: '8px',
-                    }}>
-                      <p style={{fontSize: '14px', fontWeight: '700', color: isExpiringSoon ? '#a16207' : '#166534', margin: 0}}>
-                        {isExpiringSoon
-                          ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
-                          : `${daysLeft} days left`
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  {/* Expiry date subtext */}
-                  <p style={{fontSize: '11px', color: isExpiringSoon ? '#a16207' : '#166534', margin: '8px 0 0 0', opacity: 0.8}}>
-                    Expires {new Date(subscription.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </p>
-                </div>
-              );
-            })()}
           </div>
         )}
+
+        {/* Active Subscription Status — ALWAYS visible when subscription exists */}
+        {subscription && (() => {
+          const daysLeft = getDaysUntilExpiry(subscription.expiresAt);
+          const isExpiringSoon = daysLeft <= 2;
+          return (
+            <div style={{
+              marginBottom: '20px',
+              padding: '16px 18px',
+              background: isExpiringSoon
+                ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+                : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+              borderRadius: '14px',
+              border: isExpiringSoon ? '1px solid #fcd34d' : '1px solid #86efac',
+            }}>
+              {/* Plan Name */}
+              <p style={{
+                fontSize: '15px',
+                fontWeight: '800',
+                color: isExpiringSoon ? '#92400e' : '#15803d',
+                margin: '0 0 10px 0',
+                letterSpacing: '-0.3px'
+              }}>
+                {subscription.planName || 'Active Plan'}
+              </p>
+              {/* Credits + Days Row */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{
+                  padding: '6px 12px',
+                  backgroundColor: isExpiringSoon ? 'rgba(146,64,14,0.08)' : 'rgba(21,128,61,0.08)',
+                  borderRadius: '8px',
+                }}>
+                  <p style={{fontSize: '14px', fontWeight: '700', color: isExpiringSoon ? '#92400e' : '#15803d', margin: 0}}>
+                    {subscription.creditsRemaining?.toLocaleString()} credits
+                  </p>
+                </div>
+                <div style={{
+                  padding: '6px 12px',
+                  backgroundColor: isExpiringSoon ? 'rgba(146,64,14,0.08)' : 'rgba(21,128,61,0.08)',
+                  borderRadius: '8px',
+                }}>
+                  <p style={{fontSize: '14px', fontWeight: '700', color: isExpiringSoon ? '#a16207' : '#166534', margin: 0}}>
+                    {isExpiringSoon
+                      ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
+                      : `${daysLeft} days left`
+                    }
+                  </p>
+                </div>
+              </div>
+              {/* Expiry date subtext */}
+              <p style={{fontSize: '11px', color: isExpiringSoon ? '#a16207' : '#166534', margin: '8px 0 0 0', opacity: 0.8}}>
+                Expires {new Date(subscription.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+          );
+        })()}
 
         {/* ISSUE 1 FIX: One-time Credit Packs Section */}
         {creditPlans.filter(p => p.type === 'PACK').length > 0 && (
