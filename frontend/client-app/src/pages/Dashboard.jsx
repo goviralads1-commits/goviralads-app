@@ -490,7 +490,7 @@ const Dashboard = () => {
         {/* UPDATES SECTION */}
         {updatesSection.isEnabled && (
         <div style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', backgroundColor: '#fff', borderRadius: '14px', padding: '10px 16px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <span style={{ fontSize: '20px' }}>{config?.updatesSectionConfig?.icon || '🔄'}</span>
             <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{config?.updatesSectionConfig?.title || 'Updates'}</h3>
             <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{updates.length}</span>
@@ -501,7 +501,7 @@ const Dashboard = () => {
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{config?.updatesSectionConfig?.emptyText || 'No updates at the moment'}</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {updates.map(notice => (
                 <div 
                   key={notice.id} 
@@ -513,7 +513,7 @@ const Dashboard = () => {
                       <img src={notice.imageUrl} alt="" style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover' }} />
                     ) : (
                       <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '22px' }}>🔄</span>
+                        <span style={{ fontSize: '20px' }}>🔄</span>
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -538,7 +538,7 @@ const Dashboard = () => {
         {/* REQUIREMENTS SECTION */}
         {requirementsSection.isEnabled && (
         <div style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', backgroundColor: '#fff', borderRadius: '14px', padding: '10px 16px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <span style={{ fontSize: '20px' }}>{config?.requirementsSectionConfig?.icon || '📋'}</span>
             <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{config?.requirementsSectionConfig?.title || 'Requirements'}</h3>
             <span style={{ backgroundColor: '#ffedd5', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{requirements.length}</span>
@@ -549,7 +549,7 @@ const Dashboard = () => {
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{config?.requirementsSectionConfig?.emptyText || 'All caught up! No requirements pending.'}</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {requirements.map(notice => (
                 <div 
                   key={notice.id} 
@@ -558,7 +558,7 @@ const Dashboard = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                     <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: notice.responseRequired && !notice.hasResponded ? '#fee2e2' : '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '22px' }}>{notice.hasResponded ? '✅' : '📋'}</span>
+                      <span style={{ fontSize: '20px' }}>{notice.hasResponded ? '✅' : '📋'}</span>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
@@ -588,7 +588,7 @@ const Dashboard = () => {
         {/* PROMOTIONS SECTION */}
         {promotionsSection.isEnabled && (
         <div style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', backgroundColor: '#fff', borderRadius: '14px', padding: '10px 16px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <span style={{ fontSize: '20px' }}>{promotionsSectionConfig.icon}</span>
             <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{promotionsSectionConfig.title}</h3>
             <span style={{ backgroundColor: '#fed7aa', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{promotions.length}</span>
@@ -599,7 +599,7 @@ const Dashboard = () => {
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{promotionsSectionConfig.emptyText}</p>
             </div>
           ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {promotions.map(notice => (
               <div 
                 key={notice.id} 
@@ -608,7 +608,7 @@ const Dashboard = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '22px' }}>{notice.hasResponded ? '✅' : '🎁'}</span>
+                    <span style={{ fontSize: '20px' }}>{notice.hasResponded ? '✅' : '🎁'}</span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
