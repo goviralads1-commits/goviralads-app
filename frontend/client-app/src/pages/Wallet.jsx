@@ -83,9 +83,11 @@ const Wallet = () => {
         // Optional: available coupons for validation
         try {
           const couponRes = await api.get('/client/coupons');
-          setAvailableCoupons(couponRes.data.coupons || []);
+          const coupons = couponRes.data.coupons || [];
+          console.log('[COUPON_DEBUG] fetched coupons:', coupons);
+          setAvailableCoupons(coupons);
         } catch (couponErr) {
-          console.log('[Wallet] Coupons endpoint not available');
+          console.log('[Wallet] Coupons endpoint failed:', couponErr.response?.status, couponErr.message);
         }
         
         setWalletData(walletResponse.data);
@@ -113,8 +115,9 @@ const Wallet = () => {
   const handleValidateCoupon = () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) { setCouponStatus(null); setValidatedCoupon(null); return; }
+    console.log('[COUPON_DEBUG] entered:', code, '| available:', availableCoupons.map(c => c.code));
     const now = new Date();
-    const match = availableCoupons.find(c => c.code === code);
+    const match = availableCoupons.find(c => c.code?.trim().toUpperCase() === code);
     if (!match) { setCouponStatus('invalid'); setValidatedCoupon(null); return; }
     if (match.expiryDate && new Date(match.expiryDate) < now) { setCouponStatus('invalid'); setValidatedCoupon(null); return; }
     setCouponStatus('valid');
