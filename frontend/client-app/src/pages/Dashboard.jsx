@@ -174,18 +174,18 @@ const Dashboard = () => {
       <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
         <Header />
         <div style={{ maxWidth: '960px', margin: '0 auto', padding: '20px', paddingBottom: '100px' }}>
-          <div style={{ height: '160px', backgroundColor: '#e2e8f0', borderRadius: '24px', marginBottom: '24px', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ height: '160px', background: 'linear-gradient(90deg, #e2e8f0 25%, #edf2f7 50%, #e2e8f0 75%)', backgroundSize: '200% 100%', borderRadius: '24px', marginBottom: '24px', animation: 'shimmer 1.8s ease-in-out infinite' }} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' }}>
             {[1,2,3,4].map(i => (
-              <div key={i} style={{ height: '160px', backgroundColor: '#e2e8f0', borderRadius: '16px', animation: 'pulse 1.5s infinite' }} />
+              <div key={i} style={{ height: '160px', background: 'linear-gradient(90deg, #e2e8f0 25%, #edf2f7 50%, #e2e8f0 75%)', backgroundSize: '200% 100%', borderRadius: '16px', animation: 'shimmer 1.8s ease-in-out infinite' }} />
             ))}
           </div>
-          <div style={{ height: '56px', backgroundColor: '#e2e8f0', borderRadius: '16px', marginBottom: '24px', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ height: '56px', background: 'linear-gradient(90deg, #e2e8f0 25%, #edf2f7 50%, #e2e8f0 75%)', backgroundSize: '200% 100%', borderRadius: '16px', marginBottom: '24px', animation: 'shimmer 1.8s ease-in-out infinite' }} />
           {[1,2].map(i => (
-            <div key={i} style={{ height: '100px', backgroundColor: '#e2e8f0', borderRadius: '16px', marginBottom: '12px', animation: 'pulse 1.5s infinite' }} />
+            <div key={i} style={{ height: '100px', background: 'linear-gradient(90deg, #e2e8f0 25%, #edf2f7 50%, #e2e8f0 75%)', backgroundSize: '200% 100%', borderRadius: '16px', marginBottom: '12px', animation: 'shimmer 1.8s ease-in-out infinite' }} />
           ))}
         </div>
-        <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+        <style>{`@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
       </div>
     );
   }
