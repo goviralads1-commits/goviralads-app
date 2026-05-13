@@ -356,8 +356,8 @@ const Dashboard = () => {
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
             <span style={{ fontSize: '20px' }}>⏳</span>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Admin Review</h3>
-            <span style={{ backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{pendingTasks.length}</span>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Admin Review</h3>
+            <span style={{ backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{pendingTasks.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {pendingTasks.map(task => (
@@ -386,7 +386,7 @@ const Dashboard = () => {
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
             <span style={{ fontSize: '20px' }}>💰</span>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Earnings</h3>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>My Earnings</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
@@ -422,8 +422,8 @@ const Dashboard = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '20px' }}>🟢</span>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Active Tasks</h3>
-              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{activeTasks.length}</span>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Active Tasks</h3>
+              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{activeTasks.length}</span>
             </div>
             <button onClick={() => navigate('/tasks')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
               View All →
@@ -460,7 +460,7 @@ const Dashboard = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '20px' }}>✅</span>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recently Completed</h3>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recently Completed</h3>
             </div>
             <button onClick={() => navigate('/tasks')} style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
               View All →
@@ -492,8 +492,8 @@ const Dashboard = () => {
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
             <span style={{ fontSize: '20px' }}>{config?.updatesSectionConfig?.icon || '🔄'}</span>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{config?.updatesSectionConfig?.title || 'Updates'}</h3>
-            <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{updates.length}</span>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{config?.updatesSectionConfig?.title || 'Updates'}</h3>
+            <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{updates.length}</span>
           </div>
           {updates.length === 0 ? (
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
@@ -540,8 +540,8 @@ const Dashboard = () => {
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
             <span style={{ fontSize: '20px' }}>{config?.requirementsSectionConfig?.icon || '📋'}</span>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{config?.requirementsSectionConfig?.title || 'Requirements'}</h3>
-            <span style={{ backgroundColor: '#ffedd5', color: '#c2410c', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{requirements.length}</span>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{config?.requirementsSectionConfig?.title || 'Requirements'}</h3>
+            <span style={{ backgroundColor: '#ffedd5', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{requirements.length}</span>
           </div>
           {requirements.length === 0 ? (
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
@@ -590,8 +590,8 @@ const Dashboard = () => {
         <div style={{ marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
             <span style={{ fontSize: '20px' }}>{promotionsSectionConfig.icon}</span>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{promotionsSectionConfig.title}</h3>
-            <span style={{ backgroundColor: '#fed7aa', color: '#c2410c', padding: '2px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '700' }}>{promotions.length}</span>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{promotionsSectionConfig.title}</h3>
+            <span style={{ backgroundColor: '#fed7aa', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{promotions.length}</span>
           </div>
           {promotions.length === 0 ? (
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
