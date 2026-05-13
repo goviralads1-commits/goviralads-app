@@ -188,16 +188,42 @@ const NotificationClickHandler = () => {
   return null;
 };
 
-// Main App Component
-const App = () => {
+// App shell that gates all rendering behind auth readiness
+const AppShell = () => {
+  const { isReady } = useAuth();
+
+  if (!isReady) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            border: '4px solid rgba(255,255,255,0.3)',
+            borderTopColor: '#fff',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 20px'
+          }} />
+          <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '15px', fontWeight: '500', margin: 0 }}>Loading...</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <CartProvider>
-          <Router>
-            <NotificationClickHandler />
-            <div className="App">
-              <Routes>
+    <CartProvider>
+      <Router>
+        <NotificationClickHandler />
+        <div className="App">
+          <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginForm />} />
             <Route path="/legal/:slug" element={<LegalPage />} />
@@ -281,7 +307,16 @@ const App = () => {
         </div>
       </Router>
     </CartProvider>
-    </AuthProvider>
+  );
+};
+
+// Main App Component
+const App = () => {
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
     </ErrorBoundary>
   );
 };
