@@ -208,24 +208,25 @@ const Dashboard = () => {
 
         {/* BANNER CAROUSEL */}
         {banners.length > 0 && (
-        <div style={{ position: 'relative', marginBottom: '24px' }}>
+        <div style={{ position: 'relative', marginBottom: '20px' }}>
           <div 
             className="banner-container"
             style={{ 
               background: banners[currentBanner]?.imageUrl ? `url(${banners[currentBanner].imageUrl})` : (banners[currentBanner]?.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
-              borderRadius: '24px',
-              padding: '32px 24px',
+              borderRadius: '20px',
+              padding: '28px 22px',
               aspectRatio: '16 / 6',
               minHeight: '140px',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              transition: 'background 0.5s ease',
+              transition: 'background 0.4s ease',
               overflow: 'hidden',
               position: 'relative',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat'
+              backgroundRepeat: 'no-repeat',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.10)'
             }}
           >
             <style>{`
@@ -236,30 +237,30 @@ const Dashboard = () => {
                 }
               }
             `}</style>
-            <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+            <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '130px', height: '130px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.08)' }} />
             {banners[currentBanner]?.title && (
-              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#fff', margin: '0 0 6px', position: 'relative', zIndex: 1, lineHeight: 1.2 }}>
                 {banners[currentBanner].title}
               </h2>
             )}
             {banners[currentBanner]?.subtitle && (
-              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.9)', margin: '0 0 16px', position: 'relative', zIndex: 1 }}>
+              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', margin: '0 0 16px', position: 'relative', zIndex: 1, lineHeight: 1.4 }}>
                 {banners[currentBanner].subtitle}
               </p>
             )}
             {(banners[currentBanner]?.ctaText && banners[currentBanner]?.ctaLink) && (
               <button 
                 onClick={() => handleCtaClick(banners[currentBanner])}
-                style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', cursor: 'pointer', position: 'relative', zIndex: 1 }}
+                style={{ alignSelf: 'flex-start', padding: '10px 20px', backgroundColor: '#fff', color: '#0f172a', fontSize: '13px', fontWeight: '700', borderRadius: '10px', border: 'none', cursor: 'pointer', position: 'relative', zIndex: 1, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', transition: 'box-shadow 0.2s ease' }}
               >
                 {banners[currentBanner].ctaText}
               </button>
             )}
           </div>
           {banners.length > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '12px' }}>
             {banners.map((_, idx) => (
-              <button key={idx} onClick={() => setCurrentBanner(idx)} style={{ width: idx === currentBanner ? '24px' : '8px', height: '8px', borderRadius: '4px', border: 'none', cursor: 'pointer', backgroundColor: idx === currentBanner ? '#6366f1' : '#e2e8f0', transition: 'all 0.3s ease' }} />
+              <button key={idx} onClick={() => setCurrentBanner(idx)} style={{ width: idx === currentBanner ? '20px' : '7px', height: '7px', borderRadius: '4px', border: 'none', cursor: 'pointer', backgroundColor: idx === currentBanner ? '#6366f1' : '#d1d5db', transition: 'all 0.3s ease' }} />
             ))}
           </div>
           )}
