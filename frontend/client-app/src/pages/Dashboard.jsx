@@ -201,10 +201,10 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '20px', paddingBottom: '100px' }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '16px 20px 100px' }}>
         
         {/* Page Title */}
-        <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: '0 0 20px 0', letterSpacing: '-0.3px' }}>{config?.pageTitle || 'Office'}</h1>
+        <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: '0 0 16px 0', letterSpacing: '-0.3px' }}>{config?.pageTitle || 'Office'}</h1>
 
         {/* BANNER CAROUSEL */}
         {banners.length > 0 && (
@@ -270,7 +270,7 @@ const Dashboard = () => {
         {/* FEATURED PLANS */}
         {featuredSection.isEnabled && (
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', backgroundColor: '#fff', borderRadius: '14px', padding: '12px 16px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '18px' }}>{featuredSection.icon || '⭐'}</span>
               <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>{featuredSection.title || 'Featured Plans'}</h3>
