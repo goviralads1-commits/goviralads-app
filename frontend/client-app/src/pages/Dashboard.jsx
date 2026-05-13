@@ -196,7 +196,7 @@ const Dashboard = () => {
       
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', top: '76px', left: '50%', transform: 'translateX(-50%)', background: toast.type === 'error' ? '#ef4444' : '#16a34a', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '13px', fontWeight: '600', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 1000, whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'fixed', top: '76px', left: '50%', transform: 'translateX(-50%)', background: toast.type === 'error' ? '#ef4444' : '#16a34a', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '13px', fontWeight: '600', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 1000, whiteSpace: 'nowrap', maxWidth: 'calc(100vw - 40px)' }}>
           {toast.message}
         </div>
       )}
@@ -404,9 +404,9 @@ const Dashboard = () => {
               <p style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Recent Earnings</p>
             </div>
             {commissionData.logs.map((log, i) => (
-              <div key={log.id || i} style={{ padding: '12px 16px', borderBottom: i < commissionData.logs.length - 1 ? '1px solid #f8fafc' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{log.taskTitle || 'Task'}</p>
+              <div key={log.id || i} style={{ padding: '12px 16px', borderBottom: i < commissionData.logs.length - 1 ? '1px solid #f8fafc' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.taskTitle || 'Task'}</p>
                   <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{log.createdAt ? new Date(log.createdAt).toLocaleDateString() : ''}</p>
                 </div>
                 <span style={{ fontSize: '14px', fontWeight: '700', color: '#16a34a' }}>+₹{(log.amount || 0).toLocaleString()}</span>
