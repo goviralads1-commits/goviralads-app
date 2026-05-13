@@ -196,7 +196,7 @@ const Dashboard = () => {
       
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', background: toast.type === 'error' ? '#ef4444' : '#22c55e', color: '#fff', padding: '14px 28px', borderRadius: '16px', fontSize: '14px', fontWeight: '600', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', top: '76px', left: '50%', transform: 'translateX(-50%)', background: toast.type === 'error' ? '#ef4444' : '#16a34a', color: '#fff', padding: '12px 24px', borderRadius: '12px', fontSize: '13px', fontWeight: '600', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 1000, whiteSpace: 'nowrap' }}>
           {toast.message}
         </div>
       )}
@@ -204,7 +204,7 @@ const Dashboard = () => {
       <div style={{ maxWidth: '960px', margin: '0 auto', padding: '20px', paddingBottom: '100px' }}>
         
         {/* Page Title */}
-        <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 20px 0' }}>{config?.pageTitle || 'Office'}</h1>
+        <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: '0 0 20px 0', letterSpacing: '-0.3px' }}>{config?.pageTitle || 'Office'}</h1>
 
         {/* BANNER CAROUSEL */}
         {banners.length > 0 && (
