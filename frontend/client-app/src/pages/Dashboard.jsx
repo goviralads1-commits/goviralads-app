@@ -147,6 +147,20 @@ const Dashboard = () => {
   const allCompletedCount = tasks.filter(t => t.status === 'COMPLETED').length;
   const user = getCurrentUser();
 
+  // Derive display name: prefer stored name fields, fallback to email parsing
+  const getDisplayName = () => {
+    if (user?.displayName) return user.displayName;
+    if (user?.fullName) return user.fullName;
+    if (user?.name) return user.name;
+    const identifier = user?.identifier;
+    if (!identifier) return 'User';
+    const namePart = identifier.split('@')[0];
+    return namePart
+      .replace(/[._-]/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase())
+      .trim() || 'User';
+  };
+
   // Get banners from config or fallback
   const banners = config?.banners?.length > 0 ? config.banners : [
     { id: 'default1', title: 'Premium Services', subtitle: 'Get started with our top plans', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', ctaText: 'Explore Now', ctaLink: '/plans', ctaLinkType: 'internal' }
@@ -197,7 +211,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", overflowX: 'hidden' }}>
       <Header />
       
       {/* Toast */}
@@ -214,16 +228,16 @@ const Dashboard = () => {
           <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(99,102,241,0.2)' }} />
           <div style={{ position: 'absolute', bottom: '-20px', left: '-20px', width: '100px', height: '100px', borderRadius: '50%', background: 'rgba(139,92,246,0.15)' }} />
           <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: '0 0 4px 0', position: 'relative', zIndex: 1 }}>Welcome back,</p>
-          <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 20px 0', letterSpacing: '-0.3px', position: 'relative', zIndex: 1 }}>{user?.identifier || config?.pageTitle || 'Office'}</h1>
+          <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#fff', margin: '0 0 16px 0', letterSpacing: '-0.3px', position: 'relative', zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getDisplayName()} 👋</h1>
           
           {/* Wallet Balance Card */}
-          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '16px 20px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wallet Balance</p>
-                <p style={{ fontSize: '28px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>₹{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'}</p>
+          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '14px 16px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 3px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wallet Balance</p>
+                <p style={{ fontSize: '26px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>₹{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'}</p>
               </div>
-              <button onClick={() => navigate('/wallet')} style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '12px', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+              <button onClick={() => navigate('/wallet')} style={{ padding: '9px 16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 + Add Credits
               </button>
             </div>
@@ -290,8 +304,9 @@ const Dashboard = () => {
             <style>{`
               @media (max-width: 768px) {
                 .banner-container {
-                  aspect-ratio: 16 / 7 !important;
-                  background-size: contain !important;
+                  aspect-ratio: 16 / 8 !important;
+                  background-size: cover !important;
+                  background-position: center center !important;
                 }
               }
             `}</style>
