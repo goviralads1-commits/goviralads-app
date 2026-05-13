@@ -496,7 +496,7 @@ const Dashboard = () => {
             <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{updates.length}</span>
           </div>
           {updates.length === 0 ? (
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '32px', textAlign: 'center', border: '1px solid #eef2f7' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.5 }}>{config?.updatesSectionConfig?.emptyIcon || '📭'}</div>
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{config?.updatesSectionConfig?.emptyText || 'No updates at the moment'}</p>
             </div>
@@ -506,13 +506,13 @@ const Dashboard = () => {
                 <div 
                   key={notice.id} 
                   onClick={() => handleViewNotice(notice)}
-                  style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #3b82f6', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s' }}
+                  style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: '3px solid #3b82f6', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                     {notice.imageUrl ? (
-                      <img src={notice.imageUrl} alt="" style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover' }} />
+                      <img src={notice.imageUrl} alt="" style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover' }} />
                     ) : (
-                      <div style={{ width: '50px', height: '50px', borderRadius: '12px', backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontSize: '22px' }}>🔄</span>
                       </div>
                     )}
@@ -524,7 +524,7 @@ const Dashboard = () => {
                       <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{notice.content}</p>
                       <span style={{ fontSize: '12px', color: '#94a3b8' }}>{new Date(notice.createdAt).toLocaleDateString()}</span>
                     </div>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2">
                       <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
@@ -544,7 +544,7 @@ const Dashboard = () => {
             <span style={{ backgroundColor: '#ffedd5', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{requirements.length}</span>
           </div>
           {requirements.length === 0 ? (
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '32px', textAlign: 'center', border: '1px solid #eef2f7' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.5 }}>{config?.requirementsSectionConfig?.emptyIcon || '✅'}</div>
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{config?.requirementsSectionConfig?.emptyText || 'All caught up! No requirements pending.'}</p>
             </div>
@@ -554,10 +554,10 @@ const Dashboard = () => {
                 <div 
                   key={notice.id} 
                   onClick={() => handleViewNotice(notice)}
-                  style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: `4px solid ${notice.priority === 'URGENT' ? '#ef4444' : notice.priority === 'HIGH' ? '#f59e0b' : '#22c55e'}`, border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s' }}
+                  style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: `3px solid ${notice.priority === 'URGENT' ? '#ef4444' : notice.priority === 'HIGH' ? '#f59e0b' : '#22c55e'}`, border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <div style={{ width: '50px', height: '50px', borderRadius: '12px', backgroundColor: notice.responseRequired && !notice.hasResponded ? '#fee2e2' : '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: notice.responseRequired && !notice.hasResponded ? '#fee2e2' : '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontSize: '22px' }}>{notice.hasResponded ? '✅' : '📋'}</span>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -574,7 +574,7 @@ const Dashboard = () => {
                       <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{notice.content}</p>
                       <span style={{ fontSize: '12px', color: '#94a3b8' }}>{new Date(notice.createdAt).toLocaleDateString()}</span>
                     </div>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2">
                       <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
@@ -594,7 +594,7 @@ const Dashboard = () => {
             <span style={{ backgroundColor: '#fed7aa', color: '#c2410c', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{promotions.length}</span>
           </div>
           {promotions.length === 0 ? (
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '32px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '32px', textAlign: 'center', border: '1px solid #eef2f7' }}>
               <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.5 }}>{promotionsSectionConfig.emptyIcon}</div>
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{promotionsSectionConfig.emptyText}</p>
             </div>
@@ -604,10 +604,10 @@ const Dashboard = () => {
               <div 
                 key={notice.id} 
                 onClick={() => handleViewNotice(notice)}
-                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: '4px solid #f97316', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'transform 0.2s' }}
+                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: '3px solid #f97316', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                  <div style={{ width: '50px', height: '50px', borderRadius: '12px', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: '22px' }}>{notice.hasResponded ? '✅' : '🎁'}</span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -624,7 +624,7 @@ const Dashboard = () => {
                     <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{notice.content}</p>
                     <span style={{ fontSize: '12px', color: '#94a3b8' }}>{new Date(notice.createdAt).toLocaleDateString()}</span>
                   </div>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2">
                     <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
