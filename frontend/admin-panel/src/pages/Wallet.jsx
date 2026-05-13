@@ -15,6 +15,16 @@ const Wallet = () => {
   const [toast, setToast] = useState(null);
   const [walletTab, setWalletTab] = useState('clients'); // 'clients' | 'rechargeRequests' | 'planRequests'
   
+  // Mobile responsive
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
   // Add funds modal
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [addAmount, setAddAmount] = useState('');
@@ -168,6 +178,7 @@ const Wallet = () => {
       const response = await api.get(`/admin/wallets/${clientId}`);
       setClientWallet(response.data);
       setSelectedClient(clientId);
+      if (isMobile) setMobileView('detail');
     } catch (err) {
       console.error('Client wallet error:', err);
       setToast('Failed to load client wallet');
@@ -297,7 +308,7 @@ const Wallet = () => {
         <h1 style={{fontSize: '28px', fontWeight: '700', color: '#0f172a', marginBottom: '24px'}}>Wallet Management</h1>
         
         {/* Tab Switcher */}
-        <div style={{display: 'flex', gap: '8px', marginBottom: '20px'}}>
+        <div style={{display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap'}}>
           <button
             onClick={() => setWalletTab('clients')}
             style={{
@@ -373,8 +384,9 @@ const Wallet = () => {
         </div>
 
         {walletTab === 'clients' ? (
-        <div style={{display: 'grid', gridTemplateColumns: '380px 1fr', gap: '24px'}}>
-          {/* Client List */}
+        <div style={{display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '380px 1fr', gap: '24px'}}>
+          {/* Client List - hidden on mobile when viewing detail */}
+          {(!isMobile || mobileView === 'list') && (
           <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
             <h2 style={{fontSize: '16px', fontWeight: '700', color: '#334155', marginBottom: '16px'}}>Clients</h2>
             
@@ -406,9 +418,25 @@ const Wallet = () => {
               </div>
             )}
           </div>
+          )}
 
-          {/* Client Detail */}
+          {/* Client Detail - hidden on mobile when viewing list */}
+          {(!isMobile || mobileView === 'detail') && (
           <div style={{backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'}}>
+            {isMobile && selectedClient && (
+              <button
+                onClick={() => { setMobileView('list'); setSelectedClient(null); setClientWallet(null); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '10px 16px', marginBottom: '16px',
+                  backgroundColor: '#f1f5f9', color: '#475569',
+                  fontSize: '14px', fontWeight: '600', borderRadius: '10px',
+                  border: 'none', cursor: 'pointer'
+                }}
+              >
+                ← Back to Clients
+              </button>
+            )}
             {!selectedClient ? (
               <div style={{textAlign: 'center', padding: '60px 0'}}>
                 <p style={{fontSize: '16px', color: '#94a3b8'}}>Select a client to view wallet details</p>
@@ -420,7 +448,7 @@ const Wallet = () => {
             ) : clientWallet ? (
               <>
                 {/* Header */}
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px'}}>
+                <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', gap: '12px'}}>
                   <div>
                     <h2 style={{fontSize: '18px', fontWeight: '700', color: '#334155', margin: '0 0 4px 0'}}>
                       {clientWallet.clientIdentifier}
@@ -429,7 +457,7 @@ const Wallet = () => {
                       ₹{clientWallet.balance.toFixed(2)}
                     </p>
                   </div>
-                  <div style={{display: 'flex', gap: '8px'}}>
+                  <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
                     <button
                       onClick={() => setShowAddFunds(true)}
                       style={{
@@ -483,8 +511,8 @@ const Wallet = () => {
                         backgroundColor: '#f8fafc',
                         borderRadius: '12px'
                       }}>
-                        <div>
-                          <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0'}}>
+                        <div style={{minWidth: 0, flex: 1}}>
+                          <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0', wordBreak: 'break-word'}}>
                             {tx.description || tx.type}
                           </p>
                           <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
@@ -495,7 +523,9 @@ const Wallet = () => {
                         <span style={{
                           fontSize: '16px',
                           fontWeight: '700',
-                          color: tx.amount > 0 ? '#10b981' : '#ef4444'
+                          color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                          flexShrink: 0,
+                          marginLeft: '12px'
                         }}>
                           {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}
                         </span>
@@ -506,6 +536,7 @@ const Wallet = () => {
               </>
             ) : null}
           </div>
+          )}
         </div>
         ) : walletTab === 'rechargeRequests' ? (
         /* Recharge Requests Tab */

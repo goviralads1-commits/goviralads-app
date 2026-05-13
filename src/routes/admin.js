@@ -55,17 +55,30 @@ router.get('/wallets', async (req, res) => {
     }
     
     const wallets = await Wallet.find(filter)
-      .populate('clientId', 'identifier')
+      .populate('clientId', 'identifier isDeleted status')
       .exec();
 
+    const now = new Date();
+
+    // Filter out deleted users and wallets with missing clientId
+    const activeWallets = wallets.filter(w => w.clientId && !w.clientId.isDeleted);
+
     return res.status(200).json({
-      wallets: wallets.map((w) => ({
-        clientId: w.clientId._id.toString(),
-        clientIdentifier: w.clientId.identifier,
-        balance: w.balance,
-        createdAt: w.createdAt,
-        updatedAt: w.updatedAt,
-      })),
+      wallets: activeWallets.map((w) => {
+        // Use same calculated balance as detail endpoint
+        const subNotExpired = w.subscriptionExpiresAt && new Date(w.subscriptionExpiresAt) > now;
+        const activeSubCredits = subNotExpired ? (w.subscriptionCredits || 0) : 0;
+        const walletCreditsValue = w.walletCredits || 0;
+        const totalCredits = activeSubCredits + walletCreditsValue;
+
+        return {
+          clientId: w.clientId._id.toString(),
+          clientIdentifier: w.clientId.identifier,
+          balance: totalCredits,
+          createdAt: w.createdAt,
+          updatedAt: w.updatedAt,
+        };
+      }),
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to retrieve wallets' });
