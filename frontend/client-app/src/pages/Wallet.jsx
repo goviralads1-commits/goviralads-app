@@ -593,7 +593,7 @@ const Wallet = () => {
                       color: '#475569', margin: '0 0 6px 0',
                       lineHeight: 1.3
                     }}>
-                      {plan.name}{plan.validityDays && !plan.name?.toLowerCase().includes(`${plan.validityDays}`) ? ` • ${plan.validityDays} Days` : ''}
+                      {plan.name}{plan.validityDays ? (plan.name?.match(new RegExp(`${plan.validityDays}\s*(day|days)`, 'i')) ? '' : ` • ${plan.validityDays} Days`) : ''}
                     </p>
 
                     {/* Price */}
