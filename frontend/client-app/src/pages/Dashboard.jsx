@@ -344,7 +344,7 @@ const Dashboard = () => {
                 navigate(config?.seeMoreButtonConfig?.link || '/plans');
               }
             }}
-            style={{ width: '100%', padding: '18px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', fontSize: '16px', fontWeight: '700', borderRadius: '16px', border: 'none', cursor: 'pointer', boxShadow: '0 6px 20px rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
+            style={{ width: '100%', padding: '16px 20px', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', fontSize: '15px', fontWeight: '700', borderRadius: '14px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 16px rgba(99,102,241,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'box-shadow 0.2s ease' }}
           >
             {config?.seeMoreButtonConfig?.text || 'See More Plans'}
           </button>
