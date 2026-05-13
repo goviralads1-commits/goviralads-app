@@ -6,7 +6,7 @@ import Header from '../components/Header';
 
 const Cart = () => {
   const navigate = useNavigate();
-  const { cartItems, cartTotal, removeFromCart, clearCart } = useCart();
+  const { cartItems, cartTotal, removeFromCart, clearCart, updateCartItemQuantity } = useCart();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [toast, setToast] = useState(null);
@@ -227,16 +227,51 @@ const Cart = () => {
                     {item.categoryName && (
                       <span style={{ fontSize: '12px', color: '#6c757d' }}>{item.categoryName}</span>
                     )}
-                    <div style={{ marginTop: '8px' }}>
-                      {item.originalPrice && item.originalPrice > item.price && (
-                        <span style={{ fontSize: '13px', color: '#adb5bd', textDecoration: 'line-through', marginRight: '8px' }}>
-                          ₹{item.originalPrice}
+                    <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
+                        {item.originalPrice && item.originalPrice > item.price && (
+                          <span style={{ fontSize: '13px', color: '#adb5bd', textDecoration: 'line-through', marginRight: '8px' }}>
+                            ₹{item.originalPrice}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '16px', fontWeight: '700', color: '#28a745' }}>
+                          ₹{item.price}
                         </span>
-                      )}
-                      <span style={{ fontSize: '18px', fontWeight: '700', color: '#28a745' }}>
-                        ₹{item.price}
-                      </span>
+                      </div>
+                      {/* Quantity Controls */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          onClick={() => {
+                            if ((item.quantity || 1) <= 1) { removeFromCart(item.id); }
+                            else { updateCartItemQuantity(item.id, (item.quantity || 1) - 1); }
+                          }}
+                          style={{
+                            width: '30px', height: '30px', borderRadius: '8px',
+                            backgroundColor: '#f1f3f5', border: '1px solid #e2e8f0',
+                            fontSize: '16px', fontWeight: '700', color: '#475569',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >−</button>
+                        <span style={{ fontSize: '15px', fontWeight: '700', minWidth: '20px', textAlign: 'center', color: '#1a1a2e' }}>
+                          {item.quantity || 1}
+                        </span>
+                        <button
+                          onClick={() => updateCartItemQuantity(item.id, (item.quantity || 1) + 1)}
+                          style={{
+                            width: '30px', height: '30px', borderRadius: '8px',
+                            backgroundColor: '#f1f3f5', border: '1px solid #e2e8f0',
+                            fontSize: '16px', fontWeight: '700', color: '#475569',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >+</button>
+                      </div>
                     </div>
+                    {/* Per-item subtotal */}
+                    {(item.quantity || 1) > 1 && (
+                      <p style={{ fontSize: '13px', fontWeight: '600', color: '#6c757d', margin: '6px 0 0 0' }}>
+                        Subtotal: ₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}
+                      </p>
+                    )}
                   </div>
 
                   {/* Remove Button */}
@@ -282,7 +317,7 @@ const Cart = () => {
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 16px 0' }}>Order Summary</h3>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ color: '#6c757d' }}>Items ({cartItems.length})</span>
+                <span style={{ color: '#6c757d' }}>Items ({cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0)})</span>
                 <span style={{ fontWeight: '600', color: '#1a1a2e' }}>₹{cartTotal.toLocaleString()}</span>
               </div>
               
@@ -314,7 +349,7 @@ const Cart = () => {
         }}>
           <div style={{ maxWidth: '680px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '2px' }}>Total ({cartItems.length} items)</div>
+              <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '2px' }}>Total ({cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0)} items)</div>
               <div style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>₹{cartTotal.toLocaleString()}</div>
             </div>
             <button
@@ -356,8 +391,8 @@ const Cart = () => {
             <div style={{ backgroundColor: '#f8f9fa', borderRadius: '16px', padding: '16px', marginBottom: '20px' }}>
               {modalItems.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e9ecef' }}>
-                  <span style={{ fontSize: '14px', color: '#1a1a2e', fontWeight: '500' }}>{item.title}</span>
-                  <span style={{ fontSize: '14px', color: '#28a745', fontWeight: '600' }}>₹{item.price}</span>
+                  <span style={{ fontSize: '14px', color: '#1a1a2e', fontWeight: '500' }}>{item.title} {(item.quantity || 1) > 1 ? `×${item.quantity}` : ''}</span>
+                  <span style={{ fontSize: '14px', color: '#28a745', fontWeight: '600' }}>₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}</span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', marginTop: '8px' }}>
