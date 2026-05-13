@@ -46,8 +46,8 @@ const Plans = () => {
   const { addToCart, removeFromCart, updateCartItemQuantity, getCartItemQuantity, isInCart, cartCount } = useCart();
   
   // Restore state from navigation (back from plan detail)
-  const restoredCategory = location.state?.category;
-  const restoredScrollY = location.state?.scrollY;
+  const restoredCategory = location.state?.category || sessionStorage.getItem('plans_category');
+  const restoredScrollY = location.state?.scrollY || Number(sessionStorage.getItem('plans_scrollY')) || null;
   
   const [plans, setPlans] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -72,10 +72,12 @@ const Plans = () => {
   // Media carousel state
   const [activeMediaIndex, setActiveMediaIndex] = useState({});
 
-  // Update from URL param changes
+  // Update from URL param changes (only override if URL explicitly sets category)
   useEffect(() => {
     if (urlCategory) {
       setSelectedCategory(urlCategory);
+      // Clear saved restore since URL is explicitly setting category
+      sessionStorage.removeItem('plans_category');
     }
   }, [urlCategory]);
 
@@ -114,6 +116,9 @@ const Plans = () => {
       requestAnimationFrame(() => {
         window.scrollTo(0, restoredScrollY);
       });
+      // Clear sessionStorage after successful restore
+      sessionStorage.removeItem('plans_category');
+      sessionStorage.removeItem('plans_scrollY');
     }
   }, [loading, restoredScrollY]);
 
@@ -491,7 +496,12 @@ const Plans = () => {
               return (
                 <div
                   key={plan.id}
-                  onClick={() => navigate(`/plans/${plan.id}`, { state: { category: selectedCategory, scrollY: window.scrollY } })}
+                  onClick={() => {
+                    // Save current position before navigating to detail
+                    sessionStorage.setItem('plans_category', selectedCategory);
+                    sessionStorage.setItem('plans_scrollY', String(window.scrollY));
+                    navigate(`/plans/${plan.id}`, { state: { category: selectedCategory, scrollY: window.scrollY } });
+                  }}
                   style={{
                     backgroundColor: '#ffffff', 
                     borderRadius: '20px', 
@@ -714,7 +724,7 @@ const Plans = () => {
                     {/* Action Buttons - Quantity Controls */}
                     <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
                       <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/plans/${plan.id}`, { state: { category: selectedCategory, scrollY: window.scrollY } }); }}
+                        onClick={(e) => { e.stopPropagation(); sessionStorage.setItem('plans_category', selectedCategory); sessionStorage.setItem('plans_scrollY', String(window.scrollY)); navigate(`/plans/${plan.id}`, { state: { category: selectedCategory, scrollY: window.scrollY } }); }}
                         style={{
                           width: '100%', padding: '10px 8px', backgroundColor: '#f1f5f9', color: '#475569',
                           fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: '1px solid #e2e8f0',
