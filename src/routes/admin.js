@@ -3305,8 +3305,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           // Phase 1: pass through if present in planSnapshot
           ...(item.planSnapshot?.assignedUsers?.length ? { assignedUsers: item.planSnapshot.assignedUsers } : {}),
           ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
-          // Plan defaults: inherit defaultAssignedUsers/defaultCostBreakdown from plan
-          ...(item.planSnapshot?.defaultAssignedUsers?.length ? { assignedUsers: item.planSnapshot.defaultAssignedUsers } : {}),
+          // Plan defaults: inherit defaultCostBreakdown from plan (commission structure only, NOT user assignment)
           ...(item.planSnapshot?.defaultCostBreakdown ? { costBreakdown: item.planSnapshot.defaultCostBreakdown } : {}),
           // Phase 2: pass through from approve request body (highest priority)
           ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),

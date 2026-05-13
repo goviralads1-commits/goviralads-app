@@ -732,12 +732,12 @@ const PlanDetail = () => {
 
           {/* DEFAULT COMMISSION SETUP */}
           <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '2px solid #e2e8f0' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Setup</h4>
-            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Pre-assign team & costs for tasks created from this plan</p>
+            <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Splits</h4>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Define commission percentages. Actual members are assigned during task management, not automatically from here.</p>
             
             {/* Assign Team */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team Members</label>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Commission Members (template only — not auto-assigned)</label>
               {defaultAssignedUsers.map((member, idx) => (
                 <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
                   <select
@@ -791,7 +791,7 @@ const PlanDetail = () => {
             
             {defaultAssignedUsers.length > 0 && (
               <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#eff6ff', borderRadius: '8px', fontSize: '11px', color: '#3b82f6' }}>
-                ℹ️ These defaults will auto-apply when tasks are created from orders using this plan.
+                ℹ️ These commission splits are saved as defaults. Members must be manually assigned to tasks during approval or task management.
               </div>
             )}
           </div>
