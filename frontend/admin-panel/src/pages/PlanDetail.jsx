@@ -34,6 +34,7 @@ const PlanDetail = () => {
     originalPrice: '',
     categoryId: '',
     progressTarget: 100,
+    milestones: [],
     quantity: '',
     showQuantityToClient: true,
     showCreditsToClient: true,
@@ -97,6 +98,7 @@ const PlanDetail = () => {
         originalPrice: planData.originalPrice || '',
         categoryId: planData.categoryId || '',
         progressTarget: planData.progressTarget || 100,
+        milestones: planData.milestones || [],
         quantity: planData.quantity || '',
         showQuantityToClient: planData.showQuantityToClient ?? true,
         showCreditsToClient: planData.showCreditsToClient ?? true,
@@ -202,6 +204,7 @@ const PlanDetail = () => {
         originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
         categoryId: formData.categoryId || null,
         progressTarget: Number(formData.progressTarget) || 100,
+        milestones: formData.milestones,
         quantity: formData.quantity ? Number(formData.quantity) : undefined,
         showQuantityToClient: formData.showQuantityToClient,
         showCreditsToClient: formData.showCreditsToClient,
@@ -481,6 +484,110 @@ const PlanDetail = () => {
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Quantity</label>
               <input type="number" value={formData.quantity} onChange={(e) => handleInputChange('quantity', e.target.value)} placeholder="Optional" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
+            </div>
+
+            {/* Milestones Editor — reused from TaskDetail.jsx */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>Milestones</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newMilestones = [...formData.milestones, { name: '', percentage: 0, color: '#6366f1' }];
+                    handleInputChange('milestones', newMilestones);
+                  }}
+                  style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', backgroundColor: '#eef2ff', color: '#6366f1', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <span>+</span> Add Milestone
+                </button>
+              </div>
+
+              {formData.milestones.length === 0 ? (
+                <div style={{ padding: '24px', backgroundColor: '#f8fafc', borderRadius: '12px', textAlign: 'center', border: '2px dashed #e2e8f0' }}>
+                  <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>No milestones defined. Click "Add Milestone" to create progress checkpoints that will be inherited by tasks created from this plan.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[...formData.milestones]
+                    .sort((a, b) => (a.percentage || 0) - (b.percentage || 0))
+                    .map((milestone, idx) => {
+                      const originalIdx = formData.milestones.findIndex(m => m === milestone);
+                      return (
+                        <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                          {/* Color Picker */}
+                          <input
+                            type="color"
+                            value={milestone.color || '#6366f1'}
+                            onChange={(e) => {
+                              const updated = [...formData.milestones];
+                              updated[originalIdx] = { ...updated[originalIdx], color: e.target.value };
+                              handleInputChange('milestones', updated);
+                            }}
+                            style={{ width: '32px', height: '32px', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: 0 }}
+                          />
+                          {/* Name */}
+                          <input
+                            type="text"
+                            value={milestone.name || ''}
+                            placeholder="Milestone name"
+                            onChange={(e) => {
+                              const updated = [...formData.milestones];
+                              updated[originalIdx] = { ...updated[originalIdx], name: e.target.value };
+                              handleInputChange('milestones', updated);
+                            }}
+                            style={{ flex: 1, padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', backgroundColor: '#fff' }}
+                          />
+                          {/* Percentage */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {(() => {
+                              const otherPercentages = formData.milestones
+                                .filter((_, i) => i !== originalIdx)
+                                .map(m => m.percentage);
+                              const isDuplicate = otherPercentages.includes(milestone.percentage);
+                              return (
+                                <>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={milestone.percentage || 0}
+                                    onChange={(e) => {
+                                      let val = Number(e.target.value);
+                                      if (val > 100) val = 100;
+                                      if (val < 0) val = 0;
+                                      const updated = [...formData.milestones];
+                                      updated[originalIdx] = { ...updated[originalIdx], percentage: val };
+                                      handleInputChange('milestones', updated);
+                                    }}
+                                    style={{ 
+                                      width: '70px', padding: '8px 10px', fontSize: '13px', 
+                                      border: isDuplicate ? '2px solid #ef4444' : '1px solid #e2e8f0', 
+                                      borderRadius: '8px', outline: 'none', backgroundColor: isDuplicate ? '#fef2f2' : '#fff', textAlign: 'center' 
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '13px', color: '#64748b' }}>%</span>
+                                  {isDuplicate && <span style={{ fontSize: '10px', color: '#ef4444', marginLeft: '4px' }}>dup</span>}
+                                </>
+                              );
+                            })()}
+                          </div>
+                          {/* Remove Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = formData.milestones.filter((_, i) => i !== originalIdx);
+                              handleInputChange('milestones', updated);
+                            }}
+                            style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}
+                            title="Remove milestone"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
 
