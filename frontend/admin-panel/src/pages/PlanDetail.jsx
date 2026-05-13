@@ -21,7 +21,8 @@ const PlanDetail = () => {
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState(null); // { action: 'archived'|'deleted', message: string }
   // Default Commission Setup state
-  const [defaultAssignedUsers, setDefaultAssignedUsers] = useState([]);
+  const [defaultAssignedUsers, setDefaultAssignedUsers] = useState([]); // kept for backward compat
+  const [defaultCommissionRoles, setDefaultCommissionRoles] = useState([]);
   const [defaultCostBreakdown, setDefaultCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [adminUsers, setAdminUsers] = useState([]);
   const [clientUsers, setClientUsers] = useState([]);
@@ -83,6 +84,7 @@ const PlanDetail = () => {
       
       // Load default commission setup
       setDefaultAssignedUsers((planData.defaultAssignedUsers || []).map(m => ({ userId: m.userId?._id || m.userId || '', percentage: m.percentage || 0 })));
+      setDefaultCommissionRoles((planData.defaultCommissionRoles || []).map(r => ({ role: r.role || '', percentage: r.percentage || 0 })));
       setDefaultCostBreakdown(planData.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 });
       
       // Extract allowedClients IDs from populated data
@@ -170,21 +172,20 @@ const PlanDetail = () => {
     setMediaChanged(true);
   };
 
-  // Default Commission Setup handlers
-  const addDefaultTeamMember = () => {
-    setDefaultAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
+  // Default Commission Roles handlers
+  const addCommissionRole = () => {
+    setDefaultCommissionRoles(prev => [...prev, { role: '', percentage: 0 }]);
     setHasChanges(true);
   };
-  const removeDefaultTeamMember = (idx) => {
-    setDefaultAssignedUsers(prev => prev.filter((_, i) => i !== idx));
+  const removeCommissionRole = (idx) => {
+    setDefaultCommissionRoles(prev => prev.filter((_, i) => i !== idx));
     setHasChanges(true);
   };
-  const updateDefaultTeamMember = (idx, field, value) => {
-    setDefaultAssignedUsers(prev => prev.map((m, i) => i === idx ? { ...m, [field]: field === 'percentage' ? Math.max(0, Math.min(100, Number(value) || 0)) : value } : m));
+  const updateCommissionRole = (idx, field, value) => {
+    setDefaultCommissionRoles(prev => prev.map((r, i) => i === idx ? { ...r, [field]: field === 'percentage' ? Math.max(0, Math.min(100, Number(value) || 0)) : value } : r));
     setHasChanges(true);
   };
-  const defaultAssignedUserIds = defaultAssignedUsers.map(m => m.userId).filter(Boolean);
-  const defaultAssignedUsersTotal = defaultAssignedUsers.reduce((sum, m) => sum + (Number(m.percentage) || 0), 0);
+  const commissionRolesTotal = defaultCommissionRoles.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0);
 
   const handleSave = async () => {
     if (!formData.title.trim()) {
@@ -224,7 +225,7 @@ const PlanDetail = () => {
         customInputLabel: formData.customInputLabel || '',
         customInputPlaceholder: formData.customInputPlaceholder || '',
         // Default Commission Setup
-        defaultAssignedUsers: defaultAssignedUsers.filter(m => m.userId && m.percentage > 0),
+        defaultCommissionRoles: defaultCommissionRoles.filter(r => r.role && r.role.trim() && r.percentage > 0),
         defaultCostBreakdown: defaultCostBreakdown,
       };
       
@@ -733,41 +734,38 @@ const PlanDetail = () => {
           {/* DEFAULT COMMISSION SETUP */}
           <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '2px solid #e2e8f0' }}>
             <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Splits</h4>
-            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Define commission percentages. Actual members are assigned during task management, not automatically from here.</p>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Define commission roles and percentages. Actual members are assigned during task management.</p>
             
-            {/* Assign Team */}
+            {/* Commission Roles */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Commission Members (template only — not auto-assigned)</label>
-              {defaultAssignedUsers.map((member, idx) => (
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Commission Roles</label>
+              {defaultCommissionRoles.map((entry, idx) => (
                 <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
-                  <select
-                    value={member.userId}
-                    onChange={(e) => updateDefaultTeamMember(idx, 'userId', e.target.value)}
+                  <input
+                    type="text"
+                    value={entry.role}
+                    onChange={(e) => updateCommissionRole(idx, 'role', e.target.value)}
+                    placeholder="Role name (e.g. Editor, Manager)"
                     style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                  >
-                    <option value="">Select user...</option>
-                    {clientUsers.filter(u => !defaultAssignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                      <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
-                    ))}
-                  </select>
+                  />
                   <input
                     type="number"
-                    value={member.percentage}
-                    onChange={(e) => updateDefaultTeamMember(idx, 'percentage', e.target.value)}
+                    value={entry.percentage}
+                    onChange={(e) => updateCommissionRole(idx, 'percentage', e.target.value)}
                     placeholder="%"
                     min="0"
                     max="100"
                     style={{ flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
                   />
-                  <button type="button" onClick={() => removeDefaultTeamMember(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                  <button type="button" onClick={() => removeCommissionRole(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
                 </div>
               ))}
-              {defaultAssignedUsers.length > 0 && (
-                <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: defaultAssignedUsersTotal > 100 ? '#dc2626' : '#16a34a' }}>
-                  Total: {defaultAssignedUsersTotal}% {defaultAssignedUsersTotal > 100 && '⚠️ Exceeds 100%'}
+              {defaultCommissionRoles.length > 0 && (
+                <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: commissionRolesTotal > 100 ? '#dc2626' : '#16a34a' }}>
+                  Total: {commissionRolesTotal}% {commissionRolesTotal > 100 && '⚠️ Exceeds 100%'}
                 </div>
               )}
-              <button type="button" onClick={addDefaultTeamMember} disabled={defaultAssignedUsersTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
+              <button type="button" onClick={addCommissionRole} disabled={commissionRolesTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Commission Role</button>
             </div>
 
             {/* Cost Breakdown */}
@@ -789,9 +787,9 @@ const PlanDetail = () => {
               </div>
             </div>
             
-            {defaultAssignedUsers.length > 0 && (
+            {defaultCommissionRoles.length > 0 && (
               <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#eff6ff', borderRadius: '8px', fontSize: '11px', color: '#3b82f6' }}>
-                ℹ️ These commission splits are saved as defaults. Members must be manually assigned to tasks during approval or task management.
+                ℹ️ These roles define commission percentages only. Actual users are assigned during task management.
               </div>
             )}
           </div>

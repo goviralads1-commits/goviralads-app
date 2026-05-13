@@ -3211,6 +3211,7 @@ router.post('/purchase-cart', async (req, res) => {
           customInputLabel: plan.customInputLabel || '',
           // Plan default commission setup
           defaultAssignedUsers: plan.defaultAssignedUsers || [],
+          defaultCommissionRoles: plan.defaultCommissionRoles || [],
           defaultCostBreakdown: plan.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
         },
         inputs: item.inputs || [],

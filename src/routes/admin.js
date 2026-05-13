@@ -1093,6 +1093,7 @@ router.get('/tasks/:taskId', async (req, res) => {
         costBreakdown: task.costBreakdown || { expenses: 0, tax: 0, other: 0 },
         // PLAN DEFAULTS
         defaultAssignedUsers: task.defaultAssignedUsers || [],
+        defaultCommissionRoles: task.defaultCommissionRoles || [],
         defaultCostBreakdown: task.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
       }
     });
@@ -1202,6 +1203,16 @@ router.patch('/tasks/:taskId', async (req, res) => {
       const dcb = updates.defaultCostBreakdown;
       if ((Number(dcb.expenses) || 0) < 0 || (Number(dcb.tax) || 0) < 0 || (Number(dcb.other) || 0) < 0) {
         return res.status(400).json({ error: 'VALIDATION FAILED: defaultCostBreakdown values cannot be negative.' });
+      }
+    }
+
+    // Step 3b: defaultCommissionRoles validation on PATCH (plan edit)
+    if (updates.defaultCommissionRoles && Array.isArray(updates.defaultCommissionRoles) && updates.defaultCommissionRoles.length > 0) {
+      const totalPct = updates.defaultCommissionRoles.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0);
+      if (totalPct > 100) return res.status(400).json({ error: 'VALIDATION FAILED: Commission roles total percentage cannot exceed 100.' });
+      for (const r of updates.defaultCommissionRoles) {
+        if (!r.role || !r.role.trim()) return res.status(400).json({ error: 'VALIDATION FAILED: Commission role name cannot be empty.' });
+        if ((Number(r.percentage) || 0) < 0) return res.status(400).json({ error: 'VALIDATION FAILED: Commission role percentage cannot be negative.' });
       }
     }
 
@@ -1916,7 +1927,8 @@ router.post('/tasks/assign', async (req, res) => {
       costBreakdown,
       // PLAN DEFAULT COMMISSION & COST (Step 3)
       defaultAssignedUsers,
-      defaultCostBreakdown
+      defaultCostBreakdown,
+      defaultCommissionRoles
     } = payload;
 
     // --- HARD BRANCH: PLAN (PRODUCT LISTING) ---
@@ -1948,6 +1960,16 @@ router.post('/tasks/assign', async (req, res) => {
       if (defaultCostBreakdown) {
         if ((Number(defaultCostBreakdown.expenses) || 0) < 0 || (Number(defaultCostBreakdown.tax) || 0) < 0 || (Number(defaultCostBreakdown.other) || 0) < 0) {
           return res.status(400).json({ error: 'PLAN VALIDATION FAILED: defaultCostBreakdown values cannot be negative.' });
+        }
+      }
+
+      // 2d. Validate defaultCommissionRoles
+      if (defaultCommissionRoles && Array.isArray(defaultCommissionRoles) && defaultCommissionRoles.length > 0) {
+        const totalPct = defaultCommissionRoles.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0);
+        if (totalPct > 100) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Commission roles total percentage cannot exceed 100.' });
+        for (const r of defaultCommissionRoles) {
+          if (!r.role || !r.role.trim()) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Commission role name cannot be empty.' });
+          if ((Number(r.percentage) || 0) < 0) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Commission role percentage cannot be negative.' });
         }
       }
 
@@ -1992,6 +2014,7 @@ router.post('/tasks/assign', async (req, res) => {
         customInputPlaceholder: customInputPlaceholder || '',
         // PLAN DEFAULT COMMISSION & COST (Step 3)
         ...(defaultAssignedUsers && Array.isArray(defaultAssignedUsers) && defaultAssignedUsers.length > 0 ? { defaultAssignedUsers: defaultAssignedUsers.filter(u => u.userId && u.percentage > 0) } : {}),
+        ...(defaultCommissionRoles && Array.isArray(defaultCommissionRoles) && defaultCommissionRoles.length > 0 ? { defaultCommissionRoles: defaultCommissionRoles.filter(r => r.role && r.role.trim() && r.percentage > 0) } : {}),
         ...(defaultCostBreakdown ? { defaultCostBreakdown } : {})
       });
 

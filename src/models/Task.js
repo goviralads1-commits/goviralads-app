@@ -489,6 +489,10 @@ const taskSchema = new mongoose.Schema(
       userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       percentage: { type: Number, min: 0, max: 100, default: 0 },
     }],
+    defaultCommissionRoles: [{
+      role: { type: String, trim: true },
+      percentage: { type: Number, min: 0, max: 100, default: 0 },
+    }],
     defaultCostBreakdown: {
       expenses: { type: Number, default: 0 },
       tax: { type: Number, default: 0 },
