@@ -367,12 +367,12 @@ const Dashboard = () => {
                 style={{ backgroundColor: '#fffbeb', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #f59e0b', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
+                  <span style={{ width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '20px', backgroundColor: '#fef3c7', flexShrink: 0 }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <p style={{ fontSize: '12px', color: '#d97706', margin: 0 }}>Waiting for admin to start your task</p>
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>₹{task.creditsUsed || task.creditCost || 0}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706', backgroundColor: '#fef3c7', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}>₹{task.creditsUsed || task.creditCost || 0}</span>
                 </div>
               </div>
             ))}
@@ -437,11 +437,11 @@ const Dashboard = () => {
                 style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #22c55e', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
+                  <span style={{ width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '20px', backgroundColor: '#dcfce7', flexShrink: 0 }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ flex: 1, height: '5px', backgroundColor: '#eef2f7', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ flex: 1, height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
                         <div style={{ width: `${task.progress || 0}%`, height: '100%', backgroundColor: '#22c55e', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                       </div>
                       <span style={{ fontSize: '12px', fontWeight: '700', color: '#22c55e' }}>{task.progress || 0}%</span>
@@ -474,7 +474,7 @@ const Dashboard = () => {
                 style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderLeft: '3px solid #94a3b8', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease', opacity: 0.8 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '24px' }}>{task.icon || '📝'}</span>
+                  <span style={{ width: '36px', height: '36px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '20px', backgroundColor: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '15px', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ''}</p>
