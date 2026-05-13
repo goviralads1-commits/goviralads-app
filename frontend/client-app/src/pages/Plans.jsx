@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
@@ -40,9 +40,14 @@ const getMediaDisplayUrl = (media) => {
 
 const Plans = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const urlCategory = searchParams.get('category');
   const { addToCart, removeFromCart, updateCartItemQuantity, getCartItemQuantity, isInCart, cartCount } = useCart();
+  
+  // Restore state from navigation (back from plan detail)
+  const restoredCategory = location.state?.category;
+  const restoredScrollY = location.state?.scrollY;
   
   const [plans, setPlans] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -51,7 +56,7 @@ const Plans = () => {
   const [toast, setToast] = useState(null);
   
   // Filters & View
-  const [selectedCategory, setSelectedCategory] = useState(urlCategory || 'ALL');
+  const [selectedCategory, setSelectedCategory] = useState(restoredCategory || urlCategory || 'ALL');
   const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -100,6 +105,17 @@ const Plans = () => {
     setLoading(true);
     fetchData();
   }, [fetchData]);
+
+  // Restore scroll position after plans load (from back navigation)
+  const scrollRestored = useRef(false);
+  useEffect(() => {
+    if (!loading && restoredScrollY && !scrollRestored.current) {
+      scrollRestored.current = true;
+      requestAnimationFrame(() => {
+        window.scrollTo(0, restoredScrollY);
+      });
+    }
+  }, [loading, restoredScrollY]);
 
   const [quantities, setQuantities] = useState({});
   
@@ -475,7 +491,7 @@ const Plans = () => {
               return (
                 <div
                   key={plan.id}
-                  onClick={() => navigate(`/plans/${plan.id}`)}
+                  onClick={() => navigate(`/plans/${plan.id}`, { state: { category: selectedCategory, scrollY: window.scrollY } })}
                   style={{
                     backgroundColor: '#ffffff', 
                     borderRadius: '20px', 
@@ -698,7 +714,7 @@ const Plans = () => {
                     {/* Action Buttons - Quantity Controls */}
                     <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
                       <button
-                        onClick={(e) => { e.stopPropagation(); navigate(`/plans/${plan.id}`); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/plans/${plan.id}`, { state: { category: selectedCategory, scrollY: window.scrollY } }); }}
                         style={{
                           width: '100%', padding: '10px 8px', backgroundColor: '#f1f5f9', color: '#475569',
                           fontSize: '12px', fontWeight: '600', borderRadius: '10px', border: '1px solid #e2e8f0',

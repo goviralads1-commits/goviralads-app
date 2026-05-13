@@ -103,7 +103,7 @@ const PlanDetail = () => {
           <div style={{ fontSize: '64px', marginBottom: '20px' }}>😔</div>
           <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a1a2e', marginBottom: '12px' }}>Plan not found</h2>
           <p style={{ fontSize: '15px', color: '#6c757d', marginBottom: '28px' }}>{error || 'This plan may have been removed.'}</p>
-          <button onClick={() => navigate('/plans')} style={{ padding: '14px 32px', backgroundColor: '#28a745', color: '#fff', fontSize: '15px', fontWeight: '600', borderRadius: '14px', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => navigate(-1)} style={{ padding: '14px 32px', backgroundColor: '#28a745', color: '#fff', fontSize: '15px', fontWeight: '600', borderRadius: '14px', border: 'none', cursor: 'pointer' }}>
             Back to Marketplace
           </button>
         </div>
@@ -139,7 +139,7 @@ const PlanDetail = () => {
         
         {/* Back Button */}
         <button 
-          onClick={() => navigate('/plans')} 
+          onClick={() => navigate(-1)} 
           style={{ 
             display: 'inline-flex', alignItems: 'center', gap: '8px', 
             padding: '12px 18px', backgroundColor: '#fff', border: 'none', borderRadius: '14px', 
