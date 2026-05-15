@@ -1739,7 +1739,7 @@ const TaskDetail = () => {
                 {/* ASSIGN TEAM (Phase 2) */}
                 <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0', maxWidth: '100%', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setCommissionCollapsed(prev => !prev)}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>👥 ASSIGN TEAM <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional){assignedUsers.length > 0 && assignedUsers.some(u => u.userId) ? ` — ${assignedUsers.filter(u => u.userId).length} member${assignedUsers.filter(u => u.userId).length > 1 ? 's' : ''}` : ''}</span></h4>
+                    <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>👥 ASSIGN TEAM <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>{task?.status === 'COMPLETED' ? '(Locked — Task Completed)' : '(Optional)'}{assignedUsers.length > 0 && assignedUsers.some(u => u.userId) ? ` — ${assignedUsers.filter(u => u.userId).length} member${assignedUsers.filter(u => u.userId).length > 1 ? 's' : ''}` : ''}</span></h4>
                     <span style={{ fontSize: '16px', color: '#94a3b8', transform: commissionCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
                   </div>
                   {!commissionCollapsed && (<div style={{ marginTop: '16px' }}>
@@ -1760,7 +1760,8 @@ const TaskDetail = () => {
                             <select
                               value={assignedUsers[idx]?.userId || ''}
                               onChange={(e) => updateRoleSlot(idx, e.target.value)}
-                              style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                              disabled={task?.status === 'COMPLETED'}
+                              style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: task?.status === 'COMPLETED' ? '#f1f5f9' : '#fff', boxSizing: 'border-box' }}
                             >
                               <option value="">Select {tpl.role}...</option>
                               {matchingUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === assignedUsers[idx]?.userId).map(u => (
@@ -1787,7 +1788,8 @@ const TaskDetail = () => {
                       <select
                         value={member.userId}
                         onChange={(e) => updateTeamMember(idx, 'userId', e.target.value)}
-                        style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                        disabled={task?.status === 'COMPLETED'}
+                        style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: task?.status === 'COMPLETED' ? '#f1f5f9' : '#fff', boxSizing: 'border-box' }}
                       >
                         <option value="">Select user...</option>
                         {clientUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (

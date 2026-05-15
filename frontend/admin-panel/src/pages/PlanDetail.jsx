@@ -23,6 +23,7 @@ const PlanDetail = () => {
   // Default Commission Setup state
   const [defaultAssignedUsers, setDefaultAssignedUsers] = useState([]); // kept for backward compat
   const [defaultCommissionRoles, setDefaultCommissionRoles] = useState([]);
+  const [designationOptions, setDesignationOptions] = useState([]);
   const [defaultCostBreakdown, setDefaultCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [adminUsers, setAdminUsers] = useState([]);
   const [clientUsers, setClientUsers] = useState([]);
@@ -59,12 +60,13 @@ const PlanDetail = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [planRes, categoriesRes, usersRes, adminUsersRes, clientUsersRes] = await Promise.all([
+      const [planRes, categoriesRes, usersRes, adminUsersRes, clientUsersRes, designRes] = await Promise.all([
         api.get(`/admin/tasks/${planId}`),
         api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
         api.get('/admin/users').catch(() => ({ data: { users: [] } })),
         api.get('/admin/users?role=ADMIN,EMPLOYEE').catch(() => ({ data: { users: [] } })),
-        api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } }))
+        api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } })),
+        api.get('/admin/designation-options').catch(() => ({ data: { designations: [] } })),
       ]);
       
       const planData = planRes.data.task;
@@ -81,6 +83,7 @@ const PlanDetail = () => {
       setUsers(usersRes.data.users || []);
       setAdminUsers((adminUsersRes.data.users || []).filter(u => u.role !== 'CLIENT'));
       setClientUsers(clientUsersRes.data.users || []);
+      setDesignationOptions(designRes.data.designations || []);
       
       // Load default commission setup
       setDefaultAssignedUsers((planData.defaultAssignedUsers || []).map(m => ({ userId: m.userId?._id || m.userId || '', percentage: m.percentage || 0 })));
@@ -741,13 +744,14 @@ const PlanDetail = () => {
               <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Commission Roles</label>
               {defaultCommissionRoles.map((entry, idx) => (
                 <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
-                  <input
-                    type="text"
+                  <select
                     value={entry.role}
                     onChange={(e) => updateCommissionRole(idx, 'role', e.target.value)}
-                    placeholder="Role name (e.g. Editor, Manager)"
                     style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                  />
+                  >
+                    <option value="">Select role...</option>
+                    {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
                   <input
                     type="number"
                     value={entry.percentage}

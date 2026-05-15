@@ -73,6 +73,7 @@ const Profile = () => {
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', confirmPassword: '', role: 'CLIENT', status: 'ACTIVE', name: '', phone: '', company: '' });
   const [clientSettings, setClientSettings] = useState({ defaultUploadFolder: '', designation: '' });
+  const [designationOptions, setDesignationOptions] = useState([]);
   const [savingClientSettings, setSavingClientSettings] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   // Push notification state
@@ -236,15 +237,17 @@ const Profile = () => {
   const fetchUserDetail = async (userId) => {
     try {
       setDetailLoading(true);
-      const [detailRes, tasksRes, walletRes, purchasesRes, responsesRes] = await Promise.all([
+      const [detailRes, tasksRes, walletRes, purchasesRes, responsesRes, designRes] = await Promise.all([
         api.get(`/admin/users/${userId}`),
         api.get(`/admin/users/${userId}/tasks`),
         api.get(`/admin/users/${userId}/wallet`),
         api.get(`/admin/users/${userId}/purchases`),
         api.get(`/admin/users/${userId}/responses`),
+        api.get('/admin/designation-options').catch(() => ({ data: { designations: [] } })),
       ]);
       setUserDetail(detailRes.data.user);
       setClientSettings({ defaultUploadFolder: detailRes.data.user.defaultUploadFolder || '', designation: detailRes.data.user.profile?.designation || '' });
+      setDesignationOptions(designRes.data.designations || []);
       setUserStats(detailRes.data.stats);
       setUserTasks(tasksRes.data.tasks);
       setUserWallet({ balance: walletRes.data.balance, transactions: walletRes.data.transactions });
@@ -1385,13 +1388,14 @@ const Profile = () => {
                   <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0' }}>Client Settings</h3>
                   <div style={{ marginBottom: '16px' }}>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Designation (Commission Role)</label>
-                    <input
-                      type="text"
+                    <select
                       value={clientSettings.designation}
                       onChange={(e) => setClientSettings({ ...clientSettings, designation: e.target.value })}
-                      placeholder="e.g., Editor, Manager, Script Writer"
-                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }}
-                    />
+                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
+                    >
+                      <option value="">— No Designation —</option>
+                      {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                     <p style={{ fontSize: '12px', color: '#94a3b8', margin: '8px 0 0' }}>Used to match this user to commission role slots in tasks</p>
                   </div>
                   <div style={{ marginBottom: '16px' }}>

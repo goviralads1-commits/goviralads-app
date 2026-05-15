@@ -1174,6 +1174,11 @@ router.patch('/tasks/:taskId', async (req, res) => {
       return res.status(404).json({ error: 'TASK NOT FOUND: Cannot update a non-existent task.' });
     }
 
+    // Safety: block assignedUsers edits on completed tasks
+    if (task.status === 'COMPLETED' && updates.assignedUsers) {
+      return res.status(400).json({ error: 'Cannot modify commission assignments on completed tasks.' });
+    }
+
     // Track old values for completion notification
     const oldProgress = task.progress || 0;
     const oldStatus = task.status;
@@ -5665,6 +5670,16 @@ router.post('/roles', async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to create role' });
+  }
+});
+
+// Get designation options (role displayNames only — for commission role selection)
+router.get('/designation-options', async (req, res) => {
+  try {
+    const roles = await Role.find({ isActive: true }).select('displayName').sort({ displayName: 1 });
+    return res.status(200).json({ designations: roles.map(r => r.displayName) });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to get designation options' });
   }
 });
 

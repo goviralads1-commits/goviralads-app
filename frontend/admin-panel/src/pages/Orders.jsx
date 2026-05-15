@@ -34,15 +34,7 @@ const Orders = () => {
   const [clientUsers, setClientUsers] = useState([]);
   const [approveAssignTo, setApproveAssignTo] = useState('');
 
-  // MULTI-ASSIGNMENT (Phase 2)
-  const [approveAssignedUsers, setApproveAssignedUsers] = useState([]);
-  const addApproveTeamMember = () => setApproveAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
-  const removeApproveTeamMember = (index) => setApproveAssignedUsers(prev => prev.filter((_, i) => i !== index));
-  const updateApproveTeamMember = (index, field, value) => setApproveAssignedUsers(prev => prev.map((item, i) => i === index ? { ...item, [field]: field === 'percentage' ? Number(value) || 0 : value } : item));
-  const approveTeamTotal = approveAssignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
-  const approveTeamUserIds = approveAssignedUsers.map(u => u.userId).filter(Boolean);
-
-  // Fetch admin users for assign dropdown + client users for team assignment
+  // Fetch admin users for assign dropdown
   useEffect(() => {
     api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
     api.get('/admin/assignable-clients').then(res => setClientUsers(res.data.users || [])).catch(() => {});
@@ -89,10 +81,7 @@ const Orders = () => {
     setActionLoading(true);
     try {
       const body = {};
-      if (approveAssignedUsers.length > 0 && approveAssignedUsers.some(u => u.userId)) {
-        body.assignedUsers = approveAssignedUsers.filter(u => u.userId);
-        body.assignedTo = null;
-      } else if (approveAssignTo) {
+      if (approveAssignTo) {
         body.assignedTo = approveAssignTo;
       }
       const res = await api.post(`/admin/orders/${selectedOrder.id || selectedOrder._id}/approve`, body);
@@ -100,7 +89,6 @@ const Orders = () => {
       setShowDetailModal(false);
       setSelectedOrder(null);
       setApproveAssignTo('');
-      setApproveAssignedUsers([]);
       fetchOrders();
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.error || 'Failed to approve order' });
@@ -508,46 +496,18 @@ const Orders = () => {
                   {/* Assign To (Optional) */}
                   <div style={{ marginBottom: '16px' }}>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
-                      Assign To <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(Optional){approveAssignedUsers.length > 0 ? ' — disabled (team assigned)' : ''}</span>
+                      Assign To <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400' }}>(Optional)</span>
                     </label>
                     <select
-                      value={approveAssignedUsers.length > 0 ? '' : approveAssignTo}
+                      value={approveAssignTo}
                       onChange={(e) => setApproveAssignTo(e.target.value)}
-                      disabled={approveAssignedUsers.length > 0}
-                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: approveAssignedUsers.length > 0 ? '#f1f5f9' : '#f8fafc', boxSizing: 'border-box', cursor: approveAssignedUsers.length > 0 ? 'not-allowed' : 'pointer', opacity: approveAssignedUsers.length > 0 ? 0.6 : 1 }}
+                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc', boxSizing: 'border-box', cursor: 'pointer' }}
                     >
                       <option value="">Not Assigned</option>
                       {clientUsers.map(u => (
                         <option key={u.id} value={u.id}>{u.identifier} {u.customRoleName ? `(${u.customRoleName})` : ''}</option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* ASSIGN TEAM (Phase 2) */}
-                  <div style={{ marginBottom: '16px', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', marginBottom: '12px' }}>👥 ASSIGN TEAM <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional)</span></h4>
-                    {approveAssignedUsers.map((member, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
-                        <select
-                          value={member.userId}
-                          onChange={(e) => updateApproveTeamMember(idx, 'userId', e.target.value)}
-                          style={{ flex: 2, padding: '8px 10px', fontSize: '12px', border: '1px solid #e2e8f0', borderRadius: '6px', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                        >
-                          <option value="">Select user...</option>
-                          {clientUsers.filter(u => !approveTeamUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                            <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
-                          ))}
-                        </select>
-                        <input type="number" value={member.percentage} onChange={(e) => updateApproveTeamMember(idx, 'percentage', e.target.value)} placeholder="%" min="0" max="100" style={{ flex: 0.6, padding: '8px 6px', fontSize: '12px', border: '1px solid #e2e8f0', borderRadius: '6px', textAlign: 'center', boxSizing: 'border-box' }} />
-                        <button type="button" onClick={() => removeApproveTeamMember(idx)} style={{ padding: '6px 10px', fontSize: '12px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '6px', cursor: 'pointer' }}>✕</button>
-                      </div>
-                    ))}
-                    {approveAssignedUsers.length > 0 && (
-                      <div style={{ marginBottom: '8px', fontSize: '11px', fontWeight: '600', color: approveTeamTotal > 100 ? '#dc2626' : '#16a34a' }}>
-                        Total: {approveTeamTotal}% {approveTeamTotal > 100 && '⚠️ Exceeds 100%'}
-                      </div>
-                    )}
-                    <button type="button" onClick={addApproveTeamMember} disabled={approveTeamTotal >= 100} style={{ padding: '8px 12px', fontSize: '12px', fontWeight: '600', border: '1px dashed #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px' }}>
