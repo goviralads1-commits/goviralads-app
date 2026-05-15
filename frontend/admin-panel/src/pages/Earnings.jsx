@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 
@@ -186,7 +187,7 @@ const Earnings = () => {
             <button onClick={() => setView('summary')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'summary' ? '2px solid #6366f1' : '1px solid #e2e8f0', backgroundColor: view === 'summary' ? '#eef2ff' : '#fff', color: view === 'summary' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>By User</button>
             <button onClick={() => setView('logs')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'logs' ? '2px solid #6366f1' : '1px solid #e2e8f0', backgroundColor: view === 'logs' ? '#eef2ff' : '#fff', color: view === 'logs' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>All Logs</button>
             <button onClick={() => setView('ledger')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'ledger' ? '2px solid #22c55e' : '1px solid #e2e8f0', backgroundColor: view === 'ledger' ? '#f0fdf4' : '#fff', color: view === 'ledger' ? '#16a34a' : '#64748b', cursor: 'pointer' }}>Ledger</button>
-            <a href="/earnings-redeems" style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#fff', color: '#7c3aed', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }}>Redeems</a>
+            <Link to="/earnings-redeems" style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#fff', color: '#7c3aed', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }}>Redeems</Link>
           </div>
           {view === 'ledger' && (
             <select value={ledgerTypeFilter} onChange={(e) => setLedgerTypeFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>

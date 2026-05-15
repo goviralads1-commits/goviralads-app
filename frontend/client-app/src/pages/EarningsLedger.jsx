@@ -160,6 +160,22 @@ const EarningsLedger = () => {
             {hasPending ? 'Redeem Pending...' : !config?.redeemEnabled ? 'Redeem Disabled' : 'Redeem Earnings'}
           </button>
 
+          {/* View Redeem Requests Link */}
+          {redeemRequests.length > 0 && (
+            <button
+              onClick={() => setActiveTab('redeems')}
+              style={{
+                marginTop: '10px', width: '100%', padding: '10px',
+                background: 'transparent',
+                color: '#7c3aed',
+                fontSize: '13px', fontWeight: '600', border: 'none',
+                cursor: 'pointer', textDecoration: 'underline',
+              }}
+            >
+              View Redeem Requests ({redeemRequests.length})
+            </button>
+          )}
+
           {/* Limits Info */}
           {config?.redeemEnabled && (
             <p style={{ fontSize: '11px', color: '#16a34a', margin: '8px 0 0 0', textAlign: 'center' }}>
