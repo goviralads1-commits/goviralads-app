@@ -463,6 +463,9 @@ const Header = ({ title }) => {
                     <Link to="/orders" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500' }}>
                       <span style={{ fontSize: '16px' }}>📦</span> My Orders
                     </Link>
+                    <Link to="/earnings-ledger" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#22c55e', fontSize: '14px', fontWeight: '600' }}>
+                      <span style={{ fontSize: '16px' }}>💰</span> Earnings & Redeem
+                    </Link>
                     <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', fontSize: '14px', fontWeight: '500', cursor: 'pointer', textAlign: 'left' }}>
                       <span style={{ fontSize: '16px' }}>🚪</span> Logout
                     </button>

@@ -148,6 +148,42 @@ const Earnings = () => {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: '0 0 24px 0' }}>Earnings & Commissions</h1>
 
+        {/* Earnings Redeem Settings - ALWAYS VISIBLE FOR MAIN ADMIN */}
+        {isMainAdmin && earningsConfig && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '2px solid #7c3aed', padding: '20px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#7c3aed', margin: 0 }}>🏦 Earnings Redeem Settings</h3>
+              <button onClick={handleConfigSave} disabled={configLoading} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: 'none', backgroundColor: '#7c3aed', color: '#fff', cursor: 'pointer', opacity: configLoading ? 0.6 : 1 }}>
+                {configLoading ? 'Saving...' : '💾 Save Settings'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+                <input type="checkbox" checked={earningsConfig.redeemEnabled || false} onChange={(e) => setEarningsConfig({ ...earningsConfig, redeemEnabled: e.target.checked })} style={{ width: '16px', height: '16px' }} />
+                Redeem Enabled
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+                <input type="checkbox" checked={earningsConfig.walletConversionEnabled || false} onChange={(e) => setEarningsConfig({ ...earningsConfig, walletConversionEnabled: e.target.checked })} style={{ width: '16px', height: '16px' }} />
+                Wallet Conversion
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+                <input type="checkbox" checked={earningsConfig.externalPayoutEnabled || false} onChange={(e) => setEarningsConfig({ ...earningsConfig, externalPayoutEnabled: e.target.checked })} style={{ width: '16px', height: '16px' }} />
+                External Payout
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Minimum Redeem Amount (₹)</label>
+                <input type="number" value={earningsConfig.minimumRedeemAmount || ''} onChange={(e) => setEarningsConfig({ ...earningsConfig, minimumRedeemAmount: Number(e.target.value) })} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '8px', width: '140px' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Maximum Redeem Amount (₹)</label>
+                <input type="number" value={earningsConfig.maximumRedeemAmount || ''} onChange={(e) => setEarningsConfig({ ...earningsConfig, maximumRedeemAmount: Number(e.target.value) })} style={{ padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '8px', width: '140px' }} />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
@@ -281,46 +317,6 @@ const Earnings = () => {
             </div>
           ) : (
             <>
-              {/* Config Panel */}
-              {isMainAdmin && (
-                <div style={{ marginBottom: '16px' }}>
-                  <button onClick={() => setShowConfigPanel(!showConfigPanel)} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: showConfigPanel ? '#eef2ff' : '#fff', color: '#6366f1', cursor: 'pointer' }}>
-                    {showConfigPanel ? 'Hide Config' : 'Redeem Settings'}
-                  </button>
-                  {showConfigPanel && earningsConfig && (
-                    <div style={{ marginTop: '12px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '20px' }}>
-                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#334155', margin: '0 0 16px 0' }}>Earnings Redeem Configuration</h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569' }}>
-                          <input type="checkbox" checked={earningsConfig.redeemEnabled || false} onChange={(e) => setEarningsConfig({ ...earningsConfig, redeemEnabled: e.target.checked })} />
-                          Redeem Enabled
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569' }}>
-                          <input type="checkbox" checked={earningsConfig.walletConversionEnabled || false} onChange={(e) => setEarningsConfig({ ...earningsConfig, walletConversionEnabled: e.target.checked })} />
-                          Wallet Conversion
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569' }}>
-                          <input type="checkbox" checked={earningsConfig.externalPayoutEnabled || false} onChange={(e) => setEarningsConfig({ ...earningsConfig, externalPayoutEnabled: e.target.checked })} />
-                          External Payout
-                        </label>
-                      </div>
-                      <div style={{ display: 'flex', gap: '14px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                        <div>
-                          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Min Redeem</label>
-                          <input type="number" value={earningsConfig.minimumRedeemAmount || ''} onChange={(e) => setEarningsConfig({ ...earningsConfig, minimumRedeemAmount: Number(e.target.value) })} style={{ padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', width: '120px' }} />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Max Redeem</label>
-                          <input type="number" value={earningsConfig.maximumRedeemAmount || ''} onChange={(e) => setEarningsConfig({ ...earningsConfig, maximumRedeemAmount: Number(e.target.value) })} style={{ padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', width: '120px' }} />
-                        </div>
-                        <button onClick={handleConfigSave} disabled={configLoading} style={{ alignSelf: 'flex-end', padding: '8px 20px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: 'none', backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer', opacity: configLoading ? 0.6 : 1 }}>
-                          {configLoading ? 'Saving...' : 'Save Config'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
               {/* User Balances */}
               {ledgerBalances.length > 0 && !selectedUser && (
                 <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '16px' }}>
