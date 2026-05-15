@@ -16,6 +16,8 @@ const TRANSACTION_TYPES = Object.freeze({
   // Admin wallet operations
   MANUAL_CREDIT: 'MANUAL_CREDIT',
   MANUAL_DEBIT: 'MANUAL_DEBIT',
+  // Earnings redeem
+  EARNINGS_REDEEM: 'EARNINGS_REDEEM',
   // Legacy/fallback types (for backward compatibility)
   CREDIT: 'CREDIT',
   DEBIT: 'DEBIT',

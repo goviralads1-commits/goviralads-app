@@ -27,6 +27,9 @@ const { requireClient } = require('../middleware/authorization');
 const DeviceToken = require('../models/DeviceToken');
 const CommissionLog = require('../models/CommissionLog');
 const pushNotificationService = require('../services/pushNotificationService');
+const EarningsLedger = require('../models/EarningsLedger');
+const EarningsConfig = require('../models/EarningsConfig');
+const EarningsRedeemRequest = require('../models/EarningsRedeemRequest');
 
 const router = express.Router();
 
@@ -3698,8 +3701,6 @@ router.get('/earnings-balance', async (req, res) => {
   try {
     const clientId = req.user.id;
     const { startDate, endDate } = req.query;
-    const EarningsLedger = require('../models/EarningsLedger');
-    const mongoose = require('mongoose');
 
     // Compute balance
     const [agg] = await EarningsLedger.aggregate([
@@ -3739,6 +3740,119 @@ router.get('/earnings-balance', async (req, res) => {
   } catch (err) {
     console.error('[CLIENT-EARNINGS-BALANCE] Fetch error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch earnings balance.' });
+  }
+});
+
+// GET /client/earnings/config - Get redeem config for client display
+router.get('/earnings/config', async (req, res) => {
+  try {
+    const config = await EarningsConfig.getConfig();
+    return res.status(200).json({
+      success: true,
+      redeemEnabled: config.redeemEnabled,
+      minimumRedeemAmount: config.minimumRedeemAmount,
+      maximumRedeemAmount: config.maximumRedeemAmount,
+      walletConversionEnabled: config.walletConversionEnabled,
+      externalPayoutEnabled: config.externalPayoutEnabled,
+    });
+  } catch (err) {
+    console.error('[CLIENT-EARNINGS-CONFIG] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch earnings config.' });
+  }
+});
+
+// GET /client/earnings/redeem-requests - Get user's redeem request history
+router.get('/earnings/redeem-requests', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const requests = await EarningsRedeemRequest.find({ userId: clientId })
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    return res.status(200).json({
+      success: true,
+      requests: requests.map(r => ({
+        id: r._id.toString(),
+        requestedAmount: r.requestedAmount,
+        status: r.status,
+        payoutMethod: r.payoutMethod,
+        transactionReference: r.transactionReference,
+        adminNote: r.adminNote,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[CLIENT-REDEEM-REQUESTS] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch redeem requests.' });
+  }
+});
+
+// POST /client/earnings/redeem-request - Create new redeem request
+router.post('/earnings/redeem-request', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { amount } = req.body || {};
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'A valid positive amount is required.' });
+    }
+
+    // 1. Read config
+    const config = await EarningsConfig.getConfig();
+
+    // 2. Validate redeem is enabled
+    if (!config.redeemEnabled) {
+      return res.status(400).json({ error: 'Redeem is currently disabled.' });
+    }
+
+    // 3. Validate amount limits
+    if (amount < config.minimumRedeemAmount) {
+      return res.status(400).json({ error: `Minimum redeem amount is ₹${config.minimumRedeemAmount}.` });
+    }
+    if (amount > config.maximumRedeemAmount) {
+      return res.status(400).json({ error: `Maximum redeem amount is ₹${config.maximumRedeemAmount}.` });
+    }
+
+    // 4. Compute current balance
+    const [agg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(clientId) } },
+      { $group: { _id: null, balance: { $sum: '$amount' } } }
+    ]);
+    const currentBalance = agg?.balance || 0;
+
+    if (amount > currentBalance) {
+      return res.status(400).json({ error: `Insufficient balance. Your current earnings balance is ₹${currentBalance}.` });
+    }
+
+    // 5. Check for existing PENDING request
+    const existingPending = await EarningsRedeemRequest.findOne({
+      userId: clientId,
+      status: 'PENDING',
+    });
+    if (existingPending) {
+      return res.status(400).json({ error: 'You already have a pending redeem request. Please wait for it to be processed.' });
+    }
+
+    // 6. Create request
+    const request = await EarningsRedeemRequest.create({
+      userId: clientId,
+      requestedAmount: amount,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Redeem request submitted successfully.',
+      request: {
+        id: request._id.toString(),
+        requestedAmount: request.requestedAmount,
+        status: request.status,
+        createdAt: request.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('[CLIENT-REDEEM-REQUEST] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to submit redeem request.' });
   }
 });
 

@@ -29,6 +29,7 @@ const billingService = require('../services/billingService');
 const CommissionLog = require('../models/CommissionLog');
 const EarningsLedger = require('../models/EarningsLedger');
 const EarningsConfig = require('../models/EarningsConfig');
+const EarningsRedeemRequest = require('../models/EarningsRedeemRequest');
 const pdfService = require('../services/pdfService');
 const { ProgressIconLibrary } = require('../models/ProgressIconLibrary');
 const { authenticateJWT } = require('../middleware/auth');
@@ -7391,6 +7392,228 @@ router.put('/earnings/config', async (req, res) => {
   } catch (err) {
     console.error('[EARNINGS-CONFIG] Update error:', err.message);
     return res.status(500).json({ error: 'Failed to update earnings config.' });
+  }
+});
+
+// =============================================================================
+// EARNINGS REDEEM MANAGEMENT
+// =============================================================================
+
+// GET /admin/earnings/redeem-requests - List all redeem requests with filters
+router.get('/earnings/redeem-requests', async (req, res) => {
+  try {
+    const { status, userId, startDate, endDate } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    if (userId) filter.userId = userId;
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    const requests = await EarningsRedeemRequest.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .populate('userId', 'identifier email')
+      .populate('approvedByAdminId', 'identifier');
+
+    return res.status(200).json({
+      success: true,
+      requests: requests.map(r => ({
+        id: r._id.toString(),
+        userId: r.userId?._id?.toString() || '',
+        userIdentifier: r.userId?.identifier || 'Unknown',
+        userEmail: r.userId?.email || '',
+        requestedAmount: r.requestedAmount,
+        status: r.status,
+        payoutMethod: r.payoutMethod,
+        transactionReference: r.transactionReference,
+        adminNote: r.adminNote,
+        approvedByAdmin: r.approvedByAdminId?.identifier || null,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[ADMIN-REDEEM-REQUESTS] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch redeem requests.' });
+  }
+});
+
+// POST /admin/earnings/redeem-approve - Approve a redeem request (wallet or external)
+router.post('/earnings/redeem-approve', async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { requestId, payoutMethod, transactionReference, adminNote } = req.body || {};
+
+    if (!requestId) return res.status(400).json({ error: 'requestId is required.' });
+    if (!payoutMethod || !['WALLET', 'EXTERNAL'].includes(payoutMethod)) {
+      return res.status(400).json({ error: 'payoutMethod must be WALLET or EXTERNAL.' });
+    }
+    if (payoutMethod === 'EXTERNAL' && (!transactionReference || !transactionReference.trim())) {
+      return res.status(400).json({ error: 'transactionReference is required for external payouts.' });
+    }
+
+    // Find pending request
+    const request = await EarningsRedeemRequest.findById(requestId);
+    if (!request) return res.status(404).json({ error: 'Redeem request not found.' });
+    if (request.status !== 'PENDING') {
+      return res.status(400).json({ error: `Request is already ${request.status}. Cannot approve.` });
+    }
+
+    // SAFETY: Recompute live balance to prevent double-redeem
+    const [agg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(request.userId.toString()) } },
+      { $group: { _id: null, balance: { $sum: '$amount' } } }
+    ]);
+    const currentBalance = agg?.balance || 0;
+
+    if (request.requestedAmount > currentBalance) {
+      return res.status(400).json({ error: `Insufficient earnings balance. Current: \u20b9${currentBalance}, Requested: \u20b9${request.requestedAmount}.` });
+    }
+
+    const ledgerType = payoutMethod === 'WALLET' ? 'REDEEM_TO_WALLET' : 'EXTERNAL_PAYOUT';
+    const newStatus = payoutMethod === 'WALLET' ? 'APPROVED_WALLET' : 'APPROVED_EXTERNAL';
+    const ledgerEntryIds = [];
+
+    // Try transactional approach
+    try {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          // 1. Create ledger deduction
+          const [ledgerEntry] = await EarningsLedger.create([{
+            userId: request.userId,
+            type: ledgerType,
+            amount: -Math.abs(request.requestedAmount),
+            note: adminNote || `Redeem ${payoutMethod.toLowerCase()} - approved`,
+            createdByAdminId: adminId,
+          }], { session });
+          ledgerEntryIds.push(ledgerEntry._id);
+
+          // 2. If WALLET: credit wallet
+          if (payoutMethod === 'WALLET') {
+            let wallet = await Wallet.findOne({ clientId: request.userId }).session(session);
+            if (!wallet) {
+              wallet = await Wallet.create([{ clientId: request.userId, balance: 0 }], { session });
+              wallet = wallet[0];
+            }
+            await Wallet.findByIdAndUpdate(wallet._id, { $inc: { walletCredits: request.requestedAmount } }, { session });
+            await WalletTransaction.create([{
+              walletId: wallet._id,
+              type: TRANSACTION_TYPES.EARNINGS_REDEEM,
+              amount: request.requestedAmount,
+              description: `Earnings redeem to wallet (\u20b9${request.requestedAmount})`,
+              referenceId: request._id,
+            }], { session });
+          }
+
+          // 3. Update request status
+          request.status = newStatus;
+          request.payoutMethod = payoutMethod;
+          request.transactionReference = transactionReference || null;
+          request.adminNote = adminNote || '';
+          request.approvedByAdminId = adminId;
+          request.relatedLedgerEntryIds = ledgerEntryIds;
+          await request.save({ session });
+        });
+      } finally {
+        session.endSession();
+      }
+    } catch (txErr) {
+      console.warn('[EARNINGS-REDEEM] Transaction not supported — running in fallback mode');
+
+      // Fallback: sequential (with idempotency check on request status)
+      const freshRequest = await EarningsRedeemRequest.findById(requestId);
+      if (freshRequest.status !== 'PENDING') {
+        return res.status(400).json({ error: 'Request was already processed.' });
+      }
+
+      // 1. Ledger deduction
+      const ledgerEntry = await EarningsLedger.create({
+        userId: request.userId,
+        type: ledgerType,
+        amount: -Math.abs(request.requestedAmount),
+        note: adminNote || `Redeem ${payoutMethod.toLowerCase()} - approved`,
+        createdByAdminId: adminId,
+      });
+      ledgerEntryIds.push(ledgerEntry._id);
+
+      // 2. If WALLET: credit wallet
+      if (payoutMethod === 'WALLET') {
+        let wallet = await Wallet.findOne({ clientId: request.userId });
+        if (!wallet) {
+          wallet = await Wallet.create({ clientId: request.userId, balance: 0 });
+        }
+        await Wallet.findByIdAndUpdate(wallet._id, { $inc: { walletCredits: request.requestedAmount } });
+        await WalletTransaction.create({
+          walletId: wallet._id,
+          type: TRANSACTION_TYPES.EARNINGS_REDEEM,
+          amount: request.requestedAmount,
+          description: `Earnings redeem to wallet (\u20b9${request.requestedAmount})`,
+          referenceId: request._id,
+        });
+      }
+
+      // 3. Update request
+      freshRequest.status = newStatus;
+      freshRequest.payoutMethod = payoutMethod;
+      freshRequest.transactionReference = transactionReference || null;
+      freshRequest.adminNote = adminNote || '';
+      freshRequest.approvedByAdminId = adminId;
+      freshRequest.relatedLedgerEntryIds = ledgerEntryIds;
+      await freshRequest.save();
+    }
+
+    // Compute new balance
+    const [newAgg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(request.userId.toString()) } },
+      { $group: { _id: null, balance: { $sum: '$amount' } } }
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: `Redeem request approved via ${payoutMethod}.`,
+      newBalance: newAgg?.balance || 0,
+    });
+  } catch (err) {
+    console.error('[ADMIN-REDEEM-APPROVE] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to approve redeem request.' });
+  }
+});
+
+// POST /admin/earnings/redeem-reject - Reject a redeem request
+router.post('/earnings/redeem-reject', async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { requestId, adminNote } = req.body || {};
+
+    if (!requestId) return res.status(400).json({ error: 'requestId is required.' });
+
+    const request = await EarningsRedeemRequest.findById(requestId);
+    if (!request) return res.status(404).json({ error: 'Redeem request not found.' });
+    if (request.status !== 'PENDING') {
+      return res.status(400).json({ error: `Request is already ${request.status}. Cannot reject.` });
+    }
+
+    // No ledger deduction for rejection
+    request.status = 'REJECTED';
+    request.adminNote = adminNote || '';
+    request.approvedByAdminId = adminId;
+    await request.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Redeem request rejected.',
+    });
+  } catch (err) {
+    console.error('[ADMIN-REDEEM-REJECT] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to reject redeem request.' });
   }
 });
 
