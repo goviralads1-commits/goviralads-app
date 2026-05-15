@@ -27,6 +27,7 @@ import Roles from './pages/Roles';
 import SubscriptionRequests from './pages/SubscriptionRequests';
 import ProgressIcons from './pages/ProgressIcons';
 import Support from './pages/Support';
+import Earnings from './pages/Earnings';
 import NotFound from './pages/NotFound';
 
 // Branding Context — shared across app (preloader + login + anywhere)
@@ -501,6 +502,11 @@ const App = () => {
           <Route path="/support" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Support />
+            </ProtectedRoute>
+          } />
+          <Route path="/earnings" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Earnings />
             </ProtectedRoute>
           } />
           <Route path="/subscription-requests" element={

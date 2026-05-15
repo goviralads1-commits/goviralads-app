@@ -21,6 +21,7 @@ import TicketDetail from './pages/TicketDetail';
 import Support from './pages/Support';
 import Notifications from './pages/Notifications';
 import LegalPage from './pages/LegalPage';
+import Earnings from './pages/Earnings';
 import NotFound from './pages/NotFound';
 
 // Auth Context for managing auth state
@@ -297,6 +298,11 @@ const AppShell = () => {
           <Route path="/orders" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <Orders />
+            </ProtectedRoute>
+          } />
+          <Route path="/earnings" element={
+            <ProtectedRoute allowedRoles={['CLIENT']}>
+              <Earnings />
             </ProtectedRoute>
           } />
           
