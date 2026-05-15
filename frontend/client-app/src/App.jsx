@@ -22,6 +22,7 @@ import Support from './pages/Support';
 import Notifications from './pages/Notifications';
 import LegalPage from './pages/LegalPage';
 import Earnings from './pages/Earnings';
+import EarningsLedgerPage from './pages/EarningsLedger';
 import NotFound from './pages/NotFound';
 
 // Auth Context for managing auth state
@@ -303,6 +304,11 @@ const AppShell = () => {
           <Route path="/earnings" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <Earnings />
+            </ProtectedRoute>
+          } />
+          <Route path="/earnings-ledger" element={
+            <ProtectedRoute allowedRoles={['CLIENT']}>
+              <EarningsLedgerPage />
             </ProtectedRoute>
           } />
           

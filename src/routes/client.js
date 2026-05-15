@@ -3693,4 +3693,53 @@ router.get('/my-commissions', async (req, res) => {
   }
 });
 
+// GET /client/earnings-balance - Ledger-based earnings balance + entries
+router.get('/earnings-balance', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { startDate, endDate } = req.query;
+    const EarningsLedger = require('../models/EarningsLedger');
+    const mongoose = require('mongoose');
+
+    // Compute balance
+    const [agg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(clientId) } },
+      { $group: { _id: null, balance: { $sum: '$amount' }, entries: { $sum: 1 } } }
+    ]);
+
+    // Get entries with optional date filter
+    const filter = { userId: clientId };
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    const entries = await EarningsLedger.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(500);
+
+    return res.status(200).json({
+      success: true,
+      balance: agg?.balance || 0,
+      totalEntries: agg?.entries || 0,
+      entries: entries.map(e => ({
+        id: e._id.toString(),
+        type: e.type,
+        amount: e.amount,
+        sourceTaskId: e.sourceTaskId?.toString() || null,
+        note: e.note,
+        createdAt: e.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[CLIENT-EARNINGS-BALANCE] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch earnings balance.' });
+  }
+});
+
 module.exports = router;

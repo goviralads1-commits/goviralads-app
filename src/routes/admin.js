@@ -27,6 +27,8 @@ const Coupon = require('../models/Coupon');
 const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/SubscriptionRequest');
 const billingService = require('../services/billingService');
 const CommissionLog = require('../models/CommissionLog');
+const EarningsLedger = require('../models/EarningsLedger');
+const EarningsConfig = require('../models/EarningsConfig');
 const pdfService = require('../services/pdfService');
 const { ProgressIconLibrary } = require('../models/ProgressIconLibrary');
 const { authenticateJWT } = require('../middleware/auth');
@@ -37,6 +39,57 @@ const DeviceToken = require('../models/DeviceToken');
 const pushNotificationService = require('../services/pushNotificationService');
 
 const router = express.Router();
+
+// Helper: Create CommissionLog + EarningsLedger entry (transactional with fallback)
+async function createCommissionWithLedger({ userId, taskId, taskTitle, amount, commissionType, commissionValue }) {
+  try {
+    const session = await mongoose.startSession();
+    try {
+      let commissionLog;
+      await session.withTransaction(async () => {
+        [commissionLog] = await CommissionLog.create([{
+          userId, taskId, taskTitle, amount, commissionType, commissionValue,
+        }], { session });
+        // Idempotency check: skip if ledger entry already exists for this user+task
+        const existingLedger = await EarningsLedger.findOne({
+          userId, sourceTaskId: taskId, type: 'COMMISSION_EARNED',
+        }).session(session);
+        if (!existingLedger) {
+          await EarningsLedger.create([{
+            userId,
+            type: 'COMMISSION_EARNED',
+            amount,
+            sourceTaskId: taskId,
+            sourceCommissionLogId: commissionLog._id,
+          }], { session });
+        }
+      });
+      return commissionLog;
+    } finally {
+      session.endSession();
+    }
+  } catch (txErr) {
+    // Fallback: non-transactional (environment may not support replica set)
+    console.warn('[EARNINGS-LEDGER] Transaction not supported \u2014 running in fallback mode (partial-financial-risk)');
+    const commissionLog = await CommissionLog.create({
+      userId, taskId, taskTitle, amount, commissionType, commissionValue,
+    });
+    // Idempotency check in fallback
+    const existingLedger = await EarningsLedger.findOne({
+      userId, sourceTaskId: taskId, type: 'COMMISSION_EARNED',
+    });
+    if (!existingLedger) {
+      await EarningsLedger.create({
+        userId,
+        type: 'COMMISSION_EARNED',
+        amount,
+        sourceTaskId: taskId,
+        sourceCommissionLogId: commissionLog._id,
+      });
+    }
+    return commissionLog;
+  }
+}
 
 router.use(authenticateJWT);
 router.use(requireAdmin);
@@ -1174,9 +1227,13 @@ router.patch('/tasks/:taskId', async (req, res) => {
       return res.status(404).json({ error: 'TASK NOT FOUND: Cannot update a non-existent task.' });
     }
 
-    // Safety: block assignedUsers edits on completed tasks
-    if (task.status === 'COMPLETED' && updates.assignedUsers) {
-      return res.status(400).json({ error: 'Cannot modify commission assignments on completed tasks.' });
+    // Safety: block financial/assignment field edits on completed tasks
+    if (task.status === 'COMPLETED') {
+      const blockedFields = ['assignedUsers', 'commissionValue', 'commissionType', 'defaultCommissionRoles', 'costBreakdown'];
+      const attempted = blockedFields.filter(f => updates[f] !== undefined);
+      if (attempted.length > 0) {
+        return res.status(400).json({ error: `Cannot modify ${attempted.join(', ')} on completed tasks.` });
+      }
     }
 
     // Track old values for completion notification
@@ -1288,7 +1345,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
                 const memberAmount = Math.round((member.percentage / 100) * netValue);
                 totalDistributed += memberAmount;
                 try {
-                  await CommissionLog.create({
+                  await createCommissionWithLedger({
                     userId: member.userId,
                     taskId: task._id,
                     taskTitle: task.title,
@@ -1316,7 +1373,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
               }
               console.log(`[COMMISSION] Auto-completion earned: \u20b9${task.commissionEarned}`);
               try {
-                await CommissionLog.create({
+                await createCommissionWithLedger({
                   userId: task.assignedTo,
                   taskId: task._id,
                   taskTitle: task.title,
@@ -1762,7 +1819,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
           const memberAmount = Math.round((member.percentage / 100) * netValue);
           totalDistributed += memberAmount;
           try {
-            await CommissionLog.create({
+            await createCommissionWithLedger({
               userId: member.userId,
               taskId: task._id,
               taskTitle: task.title,
@@ -1793,7 +1850,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
         console.log(`[COMMISSION] Earned: \u20b9${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
         await task.save();
         try {
-          await CommissionLog.create({
+          await createCommissionWithLedger({
             userId: task.assignedTo,
             taskId: task._id,
             taskTitle: task.title,
@@ -7141,6 +7198,199 @@ router.get('/commissions', async (req, res) => {
   } catch (err) {
     console.error('[COMMISSIONS] Fetch error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch commissions' });
+  }
+});
+
+// =============================================================================
+// EARNINGS LEDGER SYSTEM
+// Immutable append-only financial ledger for computed earnings balance
+// =============================================================================
+
+// POST /admin/earnings/adjust - Admin manual adjustment (bonus/deduct/correction)
+router.post('/earnings/adjust', async (req, res) => {
+  try {
+    const { userId, type, amount, note } = req.body;
+
+    // Validate type
+    const allowedTypes = ['ADMIN_BONUS', 'ADMIN_DEDUCT', 'ADMIN_CORRECTION'];
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({ error: `Invalid type. Allowed: ${allowedTypes.join(', ')}` });
+    }
+    if (!userId || !amount || amount <= 0) {
+      return res.status(400).json({ error: 'userId and positive amount are required.' });
+    }
+
+    // Validate user exists
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Determine ledger amount (negative for deductions)
+    let ledgerAmount = amount;
+    if (type === 'ADMIN_DEDUCT') {
+      // Balance protection: prevent deduction exceeding current balance
+      const [agg] = await EarningsLedger.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        { $group: { _id: null, balance: { $sum: '$amount' } } }
+      ]);
+      const currentBalance = agg?.balance || 0;
+      if (amount > currentBalance) {
+        return res.status(400).json({ error: 'Deduction exceeds current earnings balance.', currentBalance });
+      }
+      ledgerAmount = -amount;
+    }
+
+    // Create immutable ledger entry
+    const entry = await EarningsLedger.create({
+      userId,
+      type,
+      amount: ledgerAmount,
+      note: note || '',
+      createdByAdminId: req.user.id,
+    });
+
+    // Compute new balance
+    const [balAgg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: null, balance: { $sum: '$amount' } } }
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      entry: { id: entry._id.toString(), type: entry.type, amount: entry.amount, note: entry.note, createdAt: entry.createdAt },
+      newBalance: balAgg?.balance || 0,
+    });
+  } catch (err) {
+    console.error('[EARNINGS-ADJUST] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to create earnings adjustment.' });
+  }
+});
+
+// GET /admin/earnings/balance/:userId - Computed earnings balance for a user
+router.get('/earnings/balance/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [agg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: null, balance: { $sum: '$amount' }, entries: { $sum: 1 } } }
+    ]);
+    return res.status(200).json({
+      success: true,
+      userId,
+      balance: agg?.balance || 0,
+      entries: agg?.entries || 0,
+    });
+  } catch (err) {
+    console.error('[EARNINGS-BALANCE] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to get earnings balance.' });
+  }
+});
+
+// GET /admin/earnings/ledger - List ledger entries with filters
+router.get('/earnings/ledger', async (req, res) => {
+  try {
+    const { userId, startDate, endDate, type } = req.query;
+    const filter = {};
+    if (userId) filter.userId = userId;
+    if (type) filter.type = type;
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate + 'T00:00:00.000Z');
+      if (endDate) filter.createdAt.$lte = new Date(endDate + 'T23:59:59.999Z');
+    }
+
+    const entries = await EarningsLedger.find(filter)
+      .populate('userId', 'identifier')
+      .populate('createdByAdminId', 'identifier')
+      .sort({ createdAt: -1 })
+      .limit(500);
+
+    // Compute per-user balances if no userId filter
+    let userBalances = [];
+    if (!userId) {
+      userBalances = await EarningsLedger.aggregate([
+        { $group: { _id: '$userId', balance: { $sum: '$amount' }, entries: { $sum: 1 } } },
+        { $sort: { balance: -1 } }
+      ]);
+      const userIds = userBalances.map(u => u._id);
+      const users = await User.find({ _id: { $in: userIds } }).select('identifier');
+      const userMap = {};
+      users.forEach(u => { userMap[u._id.toString()] = u.identifier; });
+      userBalances = userBalances.map(u => ({
+        userId: u._id.toString(),
+        userIdentifier: userMap[u._id.toString()] || 'Unknown',
+        balance: u.balance,
+        entries: u.entries,
+      }));
+    }
+
+    return res.status(200).json({
+      success: true,
+      entries: entries.map(e => ({
+        id: e._id.toString(),
+        userId: e.userId?._id?.toString() || null,
+        userIdentifier: e.userId?.identifier || 'Unknown',
+        type: e.type,
+        amount: e.amount,
+        sourceTaskId: e.sourceTaskId?.toString() || null,
+        note: e.note,
+        createdByAdmin: e.createdByAdminId?.identifier || null,
+        createdAt: e.createdAt,
+      })),
+      userBalances,
+    });
+  } catch (err) {
+    console.error('[EARNINGS-LEDGER] Fetch error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch earnings ledger.' });
+  }
+});
+
+// GET /admin/earnings/config - Get earnings settings
+router.get('/earnings/config', async (req, res) => {
+  try {
+    const config = await EarningsConfig.getConfig();
+    return res.status(200).json({
+      success: true,
+      config: {
+        minimumRedeemAmount: config.minimumRedeemAmount,
+        maximumRedeemAmount: config.maximumRedeemAmount,
+        redeemEnabled: config.redeemEnabled,
+        walletConversionEnabled: config.walletConversionEnabled,
+        externalPayoutEnabled: config.externalPayoutEnabled,
+      },
+    });
+  } catch (err) {
+    console.error('[EARNINGS-CONFIG] Get error:', err.message);
+    return res.status(500).json({ error: 'Failed to get earnings config.' });
+  }
+});
+
+// PUT /admin/earnings/config - Update earnings settings
+router.put('/earnings/config', async (req, res) => {
+  try {
+    const { minimumRedeemAmount, maximumRedeemAmount, redeemEnabled, walletConversionEnabled, externalPayoutEnabled } = req.body;
+    const updates = {};
+    if (minimumRedeemAmount !== undefined) updates.minimumRedeemAmount = minimumRedeemAmount;
+    if (maximumRedeemAmount !== undefined) updates.maximumRedeemAmount = maximumRedeemAmount;
+    if (redeemEnabled !== undefined) updates.redeemEnabled = redeemEnabled;
+    if (walletConversionEnabled !== undefined) updates.walletConversionEnabled = walletConversionEnabled;
+    if (externalPayoutEnabled !== undefined) updates.externalPayoutEnabled = externalPayoutEnabled;
+
+    const config = await EarningsConfig.updateConfig(updates);
+    return res.status(200).json({
+      success: true,
+      config: {
+        minimumRedeemAmount: config.minimumRedeemAmount,
+        maximumRedeemAmount: config.maximumRedeemAmount,
+        redeemEnabled: config.redeemEnabled,
+        walletConversionEnabled: config.walletConversionEnabled,
+        externalPayoutEnabled: config.externalPayoutEnabled,
+      },
+    });
+  } catch (err) {
+    console.error('[EARNINGS-CONFIG] Update error:', err.message);
+    return res.status(500).json({ error: 'Failed to update earnings config.' });
   }
 });
 
