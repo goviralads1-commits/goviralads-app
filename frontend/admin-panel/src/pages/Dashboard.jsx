@@ -656,7 +656,7 @@ const Dashboard = () => {
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>💎</span>
                 </div>
-                <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>₹{((commissionData?.userSummary || []).reduce((sum, u) => sum + (u?.totalAmount || 0), 0) + Math.max(0, (commissionData?.overallTotal || 0))).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>₹{(commissionData?.overallTotal || 0).toLocaleString('en-IN')}</p>
                 <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Revenue</p>
               </div>
             )}

@@ -3649,7 +3649,7 @@ router.patch('/push-preference', async (req, res) => {
   }
 });
 
-// GET /client/my-commissions - Client sees their own commission logs
+// GET /client/my-commissions - Client sees their own commission logs (history) + ledger balance
 router.get('/my-commissions', async (req, res) => {
   try {
     const clientId = req.user.id;
@@ -3667,13 +3667,18 @@ router.get('/my-commissions', async (req, res) => {
       }
     }
 
-    // Get commission logs for this user
+    // Get commission logs for history display (unchanged)
     const logs = await CommissionLog.find(filter)
       .sort({ createdAt: -1 })
       .limit(500);
 
-    // Aggregate totals
-    const overallTotal = logs.reduce((sum, l) => sum + (l.amount || 0), 0);
+    // Get ledger-based balance (single source of truth)
+    const [ledgerAgg] = await EarningsLedger.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(clientId) } },
+      { $group: { _id: null, balance: { $sum: '$amount' }, entries: { $sum: 1 } } }
+    ]);
+
+    const overallTotal = ledgerAgg?.balance || 0;
     const overallTaskCount = logs.length;
 
     return res.status(200).json({

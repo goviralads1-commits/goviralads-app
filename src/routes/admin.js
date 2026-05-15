@@ -7104,7 +7104,7 @@ router.get('/analytics', async (req, res) => {
 
 // ===== COMMISSION TRACKING =====
 
-// GET /admin/commissions - Get commission logs with aggregation
+// GET /admin/commissions - Get commission logs with aggregation (ledger-based totals)
 router.get('/commissions', async (req, res) => {
   try {
     const adminUser = await User.findById(req.user.id);
@@ -7134,39 +7134,46 @@ router.get('/commissions', async (req, res) => {
       filter.userId = userId;
     }
     
-    // Get commission logs
+    // Get commission logs for history display (unchanged)
     const logs = await CommissionLog.find(filter)
       .populate('userId', 'identifier')
       .sort({ createdAt: -1 })
       .limit(500);
     
-    // Aggregate by user
-    const userAggregation = await CommissionLog.aggregate([
-      { $match: filter },
+    // Get ledger-based totals (single source of truth)
+    const ledgerFilter = {};
+    if (!isMainAdmin) {
+      ledgerFilter.userId = adminUser._id;
+    } else if (userId) {
+      ledgerFilter.userId = userId;
+    }
+    
+    const ledgerAgg = await EarningsLedger.aggregate([
+      { $match: ledgerFilter },
       {
         $group: {
           _id: '$userId',
           totalAmount: { $sum: '$amount' },
-          taskCount: { $sum: 1 },
+          entries: { $sum: 1 },
         },
       },
     ]);
     
-    // Get overall total
-    const overallTotal = userAggregation.reduce((sum, u) => sum + u.totalAmount, 0);
-    const overallTaskCount = userAggregation.reduce((sum, u) => sum + u.taskCount, 0);
+    // Get overall total from ledger
+    const overallTotal = ledgerAgg.reduce((sum, u) => sum + u.totalAmount, 0);
+    const overallTaskCount = logs.length;
     
     // Populate user details for aggregation
-    const userIds = userAggregation.map(u => u._id);
+    const userIds = ledgerAgg.map(u => u._id);
     const users = await User.find({ _id: { $in: userIds } }).select('identifier');
     const userMap = {};
     users.forEach(u => { userMap[u._id.toString()] = u.identifier; });
     
-    const userSummary = userAggregation.map(u => ({
+    const userSummary = ledgerAgg.map(u => ({
       userId: u._id.toString(),
       userIdentifier: userMap[u._id.toString()] || 'Unknown',
       totalAmount: u.totalAmount,
-      taskCount: u.taskCount,
+      taskCount: u.entries,
     }));
     
     // Get list of admin users for filter dropdown (main admin only)
