@@ -93,6 +93,7 @@ const orderItemSchema = new mongoose.Schema({
     },
     // Plan default commission (for order→task inheritance)
     defaultAssignedUsers: { type: Array, default: [] },
+    defaultCommissionRoles: { type: Array, default: [] },
     defaultCostBreakdown: {
       expenses: { type: Number, default: 0 },
       tax: { type: Number, default: 0 },

@@ -160,6 +160,9 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
       assignedTo: taskDetails.assignedTo || null,
       commissionType: taskDetails.commissionType || 'percentage',
       commissionValue: taskDetails.commissionValue || 0,
+      // MULTI-ASSIGNMENT & COMMISSION ROLE TEMPLATES
+      ...(taskDetails.assignedUsers ? { assignedUsers: taskDetails.assignedUsers } : {}),
+      ...(taskDetails.defaultCommissionRoles ? { defaultCommissionRoles: taskDetails.defaultCommissionRoles } : {}),
     });
     console.log('Step 5: Task created:', task._id.toString());
 

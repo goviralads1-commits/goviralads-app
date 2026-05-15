@@ -72,7 +72,7 @@ const Profile = () => {
 
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', confirmPassword: '', role: 'CLIENT', status: 'ACTIVE', name: '', phone: '', company: '' });
-  const [clientSettings, setClientSettings] = useState({ defaultUploadFolder: '' });
+  const [clientSettings, setClientSettings] = useState({ defaultUploadFolder: '', designation: '' });
   const [savingClientSettings, setSavingClientSettings] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   // Push notification state
@@ -244,7 +244,7 @@ const Profile = () => {
         api.get(`/admin/users/${userId}/responses`),
       ]);
       setUserDetail(detailRes.data.user);
-      setClientSettings({ defaultUploadFolder: detailRes.data.user.defaultUploadFolder || '' });
+      setClientSettings({ defaultUploadFolder: detailRes.data.user.defaultUploadFolder || '', designation: detailRes.data.user.profile?.designation || '' });
       setUserStats(detailRes.data.stats);
       setUserTasks(tasksRes.data.tasks);
       setUserWallet({ balance: walletRes.data.balance, transactions: walletRes.data.transactions });
@@ -433,7 +433,8 @@ const Profile = () => {
     try {
       setSavingClientSettings(true);
       await api.patch(`/admin/users/${selectedUser.id}`, {
-        defaultUploadFolder: clientSettings.defaultUploadFolder.trim()
+        defaultUploadFolder: clientSettings.defaultUploadFolder.trim(),
+        designation: clientSettings.designation.trim()
       });
       showToast('Client settings saved');
       fetchUserDetail(selectedUser.id);
@@ -1382,6 +1383,17 @@ const Profile = () => {
                 {/* Client Settings */}
                 <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                   <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0' }}>Client Settings</h3>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Designation (Commission Role)</label>
+                    <input
+                      type="text"
+                      value={clientSettings.designation}
+                      onChange={(e) => setClientSettings({ ...clientSettings, designation: e.target.value })}
+                      placeholder="e.g., Editor, Manager, Script Writer"
+                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                    <p style={{ fontSize: '12px', color: '#94a3b8', margin: '8px 0 0' }}>Used to match this user to commission role slots in tasks</p>
+                  </div>
                   <div style={{ marginBottom: '16px' }}>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Default Upload Folder (Google Drive Link)</label>
                     <input

@@ -2084,6 +2084,8 @@ router.post('/tasks/assign', async (req, res) => {
       // MULTI-ASSIGNMENT & COST BREAKDOWN (Phase 1)
       ...(assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0 ? { assignedUsers } : {}),
       ...(costBreakdown ? { costBreakdown } : {}),
+      // COMMISSION ROLE TEMPLATES (direct task creation)
+      ...(defaultCommissionRoles && Array.isArray(defaultCommissionRoles) && defaultCommissionRoles.length > 0 ? { defaultCommissionRoles } : {}),
     };
 
     // 3. Deduct & Assign (Service Level)
@@ -3328,8 +3330,9 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           // Phase 1: pass through if present in planSnapshot
           ...(item.planSnapshot?.assignedUsers?.length ? { assignedUsers: item.planSnapshot.assignedUsers } : {}),
           ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
-          // Plan defaults: inherit defaultCostBreakdown from plan (commission structure only, NOT user assignment)
+          // Plan defaults: inherit defaultCostBreakdown and commission role templates from plan
           ...(item.planSnapshot?.defaultCostBreakdown ? { costBreakdown: item.planSnapshot.defaultCostBreakdown } : {}),
+          ...(item.planSnapshot?.defaultCommissionRoles?.length ? { defaultCommissionRoles: item.planSnapshot.defaultCommissionRoles } : {}),
           // Phase 2: pass through from approve request body (highest priority)
           ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
         };
@@ -4107,6 +4110,7 @@ router.get('/users/:userId', async (req, res) => {
           phone: user.profile?.phone || '',
           photoUrl: user.profile?.photoUrl || null,
           company: user.profile?.company || '',
+          designation: user.profile?.designation || '',
           timezone: user.profile?.timezone || 'UTC',
           language: user.profile?.language || 'en',
         },
@@ -4136,7 +4140,7 @@ router.get('/users/:userId', async (req, res) => {
 router.patch('/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { identifier, status, name, phone, photoUrl, company, timezone, language, preferences, defaultUploadFolder } = req.body || {};
+    const { identifier, status, name, phone, photoUrl, company, designation, timezone, language, preferences, defaultUploadFolder } = req.body || {};
 
     const user = await User.findById(userId).exec();
     if (!user) {
@@ -4152,6 +4156,7 @@ router.patch('/users/:userId', async (req, res) => {
     if (phone !== undefined) user.profile.phone = phone.trim();
     if (photoUrl !== undefined) user.profile.photoUrl = photoUrl || null;
     if (company !== undefined) user.profile.company = company.trim();
+    if (designation !== undefined) user.profile.designation = designation.trim();
     if (timezone !== undefined) user.profile.timezone = timezone;
     if (language !== undefined) user.profile.language = language;
 
@@ -5534,6 +5539,7 @@ router.get('/assignable-clients', async (req, res) => {
         id: u._id.toString(),
         identifier: u.identifier,
         name: u.profile?.name || '',
+        designation: u.profile?.designation || '',
         status: u.status,
       })),
     });

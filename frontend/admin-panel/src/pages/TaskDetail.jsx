@@ -100,6 +100,7 @@ const TaskDetail = () => {
   const [costBreakdown, setCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [originalCostBreakdown, setOriginalCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [commissionCollapsed, setCommissionCollapsed] = useState(false);
+  const [commissionRoleTemplates, setCommissionRoleTemplates] = useState([]); // from plan
 
   const addTeamMember = () => {
     setAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
@@ -109,6 +110,10 @@ const TaskDetail = () => {
   };
   const updateTeamMember = (index, field, value) => {
     setAssignedUsers(prev => prev.map((item, i) => i === index ? { ...item, [field]: field === 'percentage' ? Number(value) || 0 : value } : item));
+  };
+  // Role-template slot update: sets userId for a specific role slot
+  const updateRoleSlot = (index, userId) => {
+    setAssignedUsers(prev => prev.map((item, i) => i === index ? { ...item, userId } : item));
   };
   const assignedUsersTotal = assignedUsers.reduce((sum, u) => sum + (Number(u.percentage) || 0), 0);
   const assignedUserIds = assignedUsers.map(u => u.userId).filter(Boolean);
@@ -159,8 +164,33 @@ const TaskDetail = () => {
 
       // Initialize multi-assignment & cost breakdown (Phase 2)
       const loadedUsers = (taskData.assignedUsers || []).map(u => ({ userId: u.userId || '', percentage: u.percentage || 0 }));
-      setAssignedUsers(loadedUsers);
-      setOriginalAssignedUsers(loadedUsers);
+      const roleTemplates = taskData.defaultCommissionRoles || [];
+      setCommissionRoleTemplates(roleTemplates);
+      // Role-template mode: always maintain slots aligned with templates
+      if (roleTemplates.length > 0) {
+        if (loadedUsers.length === 0) {
+          // Fresh task: create empty slots matching templates
+          const templateSlots = roleTemplates.map(t => ({ userId: '', percentage: t.percentage || 0 }));
+          setAssignedUsers(templateSlots);
+          setOriginalAssignedUsers(templateSlots);
+        } else {
+          // Reload: rebuild full slot array aligned to templates
+          // Each saved user maps back to its template slot by matching percentage
+          // Use sequential alignment: slots saved in template order
+          const rebuiltSlots = roleTemplates.map((t, i) => {
+            if (i < loadedUsers.length) {
+              return { userId: loadedUsers[i].userId || '', percentage: t.percentage || 0 };
+            }
+            return { userId: '', percentage: t.percentage || 0 };
+          });
+          setAssignedUsers(rebuiltSlots);
+          setOriginalAssignedUsers(rebuiltSlots);
+        }
+      } else {
+        // Manual mode: use loaded users as-is
+        setAssignedUsers(loadedUsers);
+        setOriginalAssignedUsers(loadedUsers);
+      }
       // Auto-collapse commission section if pre-populated from plan
       if (loadedUsers.length > 0) setCommissionCollapsed(true);
       const loadedCost = taskData.costBreakdown || { expenses: 0, tax: 0, other: 0 };
@@ -351,7 +381,12 @@ const TaskDetail = () => {
     // Phase 2: Multi-assignment & cost breakdown
     if (JSON.stringify(assignedUsers) !== JSON.stringify(originalAssignedUsers)) {
       if (assignedUsers.length > 0 && assignedUsers.some(u => u.userId)) {
-        payload.assignedUsers = assignedUsers.filter(u => u.userId);
+        // In role-template mode, save ALL slots (including empty) to preserve positional alignment
+        if (commissionRoleTemplates.length > 0) {
+          payload.assignedUsers = assignedUsers.map(u => ({ userId: u.userId || null, percentage: u.percentage || 0 }));
+        } else {
+          payload.assignedUsers = assignedUsers.filter(u => u.userId);
+        }
         payload.assignedTo = null;
       } else {
         payload.assignedUsers = [];
@@ -1704,10 +1739,49 @@ const TaskDetail = () => {
                 {/* ASSIGN TEAM (Phase 2) */}
                 <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0', maxWidth: '100%', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setCommissionCollapsed(prev => !prev)}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>👥 ASSIGN TEAM <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional){assignedUsers.length > 0 ? ` — ${assignedUsers.length} member${assignedUsers.length > 1 ? 's' : ''}` : ''}</span></h4>
+                    <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>👥 ASSIGN TEAM <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional){assignedUsers.length > 0 && assignedUsers.some(u => u.userId) ? ` — ${assignedUsers.filter(u => u.userId).length} member${assignedUsers.filter(u => u.userId).length > 1 ? 's' : ''}` : ''}</span></h4>
                     <span style={{ fontSize: '16px', color: '#94a3b8', transform: commissionCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
                   </div>
                   {!commissionCollapsed && (<div style={{ marginTop: '16px' }}>
+
+                  {/* ROLE-TEMPLATE MODE: Show designation-filtered slots */}
+                  {commissionRoleTemplates.length > 0 ? (
+                    <>
+                      {commissionRoleTemplates.map((tpl, idx) => {
+                        const matchingUsers = clientUsers.filter(u =>
+                          u.designation?.trim().toLowerCase() === tpl.role?.trim().toLowerCase()
+                        );
+                        return (
+                          <div key={idx} style={{ marginBottom: '12px', padding: '12px', backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>{tpl.role}</span>
+                              <span style={{ fontSize: '12px', fontWeight: '500', color: '#6366f1', backgroundColor: '#eef2ff', padding: '2px 8px', borderRadius: '12px' }}>{tpl.percentage}%</span>
+                            </div>
+                            <select
+                              value={assignedUsers[idx]?.userId || ''}
+                              onChange={(e) => updateRoleSlot(idx, e.target.value)}
+                              style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                            >
+                              <option value="">Select {tpl.role}...</option>
+                              {matchingUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === assignedUsers[idx]?.userId).map(u => (
+                                <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
+                              ))}
+                            </select>
+                            {matchingUsers.length === 0 && (
+                              <p style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px', marginBottom: 0 }}>⚠️ No users with designation "{tpl.role}" found</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {assignedUsers.length > 0 && assignedUsers.some(u => u.userId) && (
+                        <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: '600', color: assignedUsersTotal > 100 ? '#dc2626' : '#16a34a' }}>
+                          Total: {assignedUsersTotal}% {assignedUsersTotal > 100 && '⚠️ Exceeds 100%'}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* MANUAL MODE: Backward-compatible generic assignment */
+                    <>
                   {assignedUsers.map((member, idx) => (
                     <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
                       <select
@@ -1738,6 +1812,9 @@ const TaskDetail = () => {
                     </div>
                   )}
                   <button type="button" onClick={addTeamMember} disabled={assignedUsersTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
+                    </>
+                  )}
+
                   </div>)}
                 </div>
 
