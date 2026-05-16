@@ -7276,6 +7276,128 @@ router.post('/earnings/adjust', async (req, res) => {
   }
 });
 
+// POST /admin/earnings/backfill-ledger - Backfill EarningsLedger from historical CommissionLog (main admin only)
+router.post('/earnings/backfill-ledger', async (req, res) => {
+  try {
+    // SECURITY: Only main admin can run migration
+    const caller = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = caller && caller.role === 'ADMIN' && !caller.customRole;
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Only main admin can run this migration.' });
+    }
+
+    const { dryRun } = req.body || {};
+    const isDryRun = dryRun !== false; // Default to dry run for safety
+
+    console.log(`[BACKFILL-LEDGER] Starting ${isDryRun ? 'DRY RUN' : 'LIVE MIGRATION'}`);
+
+    // Count total CommissionLog entries
+    const totalCommissions = await CommissionLog.countDocuments();
+
+    // Count existing EarningsLedger entries linked to CommissionLog
+    const existingLedgerCount = await EarningsLedger.countDocuments({
+      type: 'COMMISSION_EARNED',
+      sourceCommissionLogId: { $exists: true, $ne: null },
+    });
+
+    // Fetch all CommissionLog entries
+    const allCommissions = await CommissionLog.find({}).sort({ createdAt: 1 }).lean();
+
+    let created = 0;
+    let skipped = 0;
+    let errors = 0;
+    let totalCreatedAmount = 0;
+    let totalSkippedAmount = 0;
+    const sampleEntries = [];
+
+    for (const commission of allCommissions) {
+      try {
+        // Check if ledger entry already exists for this commission
+        const existingLedger = await EarningsLedger.findOne({
+          userId: commission.userId,
+          sourceCommissionLogId: commission._id,
+          type: 'COMMISSION_EARNED',
+        });
+
+        if (existingLedger) {
+          skipped++;
+          totalSkippedAmount += commission.amount || 0;
+          continue;
+        }
+
+        // Missing entry found
+        if (isDryRun) {
+          if (sampleEntries.length < 5) {
+            sampleEntries.push({
+              userId: commission.userId.toString(),
+              amount: commission.amount || 0,
+              taskTitle: commission.taskTitle || 'N/A',
+            });
+          }
+          created++;
+          totalCreatedAmount += commission.amount || 0;
+        } else {
+          // Create the ledger entry
+          await EarningsLedger.create({
+            userId: commission.userId,
+            type: 'COMMISSION_EARNED',
+            amount: commission.amount || 0,
+            sourceTaskId: commission.taskId,
+            sourceCommissionLogId: commission._id,
+            note: 'Historical backfill from CommissionLog',
+          });
+          created++;
+          totalCreatedAmount += commission.amount || 0;
+        }
+      } catch (err) {
+        errors++;
+        console.error(`[BACKFILL-LEDGER] Error processing commission ${commission._id}:`, err.message);
+      }
+    }
+
+    // Verify a sample user balance
+    let verificationSample = null;
+    if (!isDryRun && created > 0 && allCommissions.length > 0) {
+      const sampleCommission = allCommissions[0];
+      const [balanceAgg] = await EarningsLedger.aggregate([
+        { $match: { userId: sampleCommission.userId } },
+        { $group: { _id: null, balance: { $sum: '$amount' }, entries: { $sum: 1 } } }
+      ]);
+
+      const userCommissions = await CommissionLog.find({ userId: sampleCommission.userId });
+      const commissionTotal = userCommissions.reduce((sum, c) => sum + (c.amount || 0), 0);
+
+      verificationSample = {
+        userId: sampleCommission.userId.toString(),
+        commissionLogTotal: commissionTotal,
+        commissionLogEntries: userCommissions.length,
+        earningsLedgerBalance: balanceAgg?.balance || 0,
+        earningsLedgerEntries: balanceAgg?.entries || 0,
+        matches: commissionTotal === (balanceAgg?.balance || 0),
+      };
+    }
+
+    console.log(`[BACKFILL-LEDGER] Complete: ${created} created, ${skipped} skipped, ${errors} errors`);
+
+    return res.status(200).json({
+      success: true,
+      mode: isDryRun ? 'dry-run' : 'live',
+      totalCommissions,
+      existingLedgerEntries: existingLedgerCount,
+      created,
+      skipped,
+      errors,
+      totalCreatedAmount,
+      totalSkippedAmount,
+      sampleEntries: sampleEntries.slice(0, 5),
+      verificationSample,
+    });
+  } catch (err) {
+    console.error('[BACKFILL-LEDGER] Fatal error:', err.message);
+    return res.status(500).json({ error: 'Migration failed: ' + err.message });
+  }
+});
+
 // GET /admin/earnings/balance/:userId - Computed earnings balance for a user
 router.get('/earnings/balance/:userId', async (req, res) => {
   try {

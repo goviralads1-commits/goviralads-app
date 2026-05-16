@@ -32,6 +32,10 @@ const Earnings = () => {
   const [configLoading, setConfigLoading] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(false);
 
+  // Backfill migration state
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState(null);
+
   // Filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -115,6 +119,31 @@ const Earnings = () => {
     }
   };
 
+  // Handle backfill migration
+  const handleBackfill = async (dryRun = true) => {
+    setBackfillLoading(true);
+    setBackfillResult(null);
+    try {
+      const res = await api.post('/admin/earnings/backfill-ledger', { dryRun });
+      setBackfillResult(res.data);
+      setToast({ 
+        type: 'success', 
+        message: dryRun 
+          ? `Dry run: Would create ${res.data.created} entries (₹${res.data.totalCreatedAmount})`
+          : `Migration complete: Created ${res.data.created} entries (₹${res.data.totalCreatedAmount})`
+      });
+      // Refresh data after live migration
+      if (!dryRun) {
+        fetchData();
+        if (view === 'ledger') fetchLedger();
+      }
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Migration failed.' });
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
+
   // Handle adjustment
   const handleAdjust = async () => {
     if (!adjUserId || !adjAmount || Number(adjAmount) <= 0) return;
@@ -147,6 +176,57 @@ const Earnings = () => {
       <Header />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
         <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: '0 0 24px 0' }}>Earnings & Commissions</h1>
+
+        {/* BACKFILL MIGRATION PANEL - MAIN ADMIN ONLY */}
+        {isMainAdmin && (
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '2px solid #f59e0b', padding: '20px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f59e0b', margin: 0 }}>🔄 Historical Commission Backfill</h3>
+            </div>
+            <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>
+              Migrate historical CommissionLog entries into EarningsLedger. This fixes balance discrepancies for users with past commissions.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={() => handleBackfill(true)} 
+                disabled={backfillLoading}
+                style={{ padding: '10px 20px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '2px solid #f59e0b', backgroundColor: '#fff', color: '#f59e0b', cursor: backfillLoading ? 'not-allowed' : 'pointer', opacity: backfillLoading ? 0.6 : 1 }}
+              >
+                {backfillLoading ? 'Running...' : '🔍 Dry Run (Preview)'}
+              </button>
+              <button 
+                onClick={() => handleBackfill(false)} 
+                disabled={backfillLoading}
+                style={{ padding: '10px 20px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: 'none', backgroundColor: '#f59e0b', color: '#fff', cursor: backfillLoading ? 'not-allowed' : 'pointer', opacity: backfillLoading ? 0.6 : 1 }}
+              >
+                {backfillLoading ? 'Running...' : '⚡ Run Migration'}
+              </button>
+            </div>
+            {backfillResult && (
+              <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#fef3c7', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ fontWeight: '600', marginBottom: '8px', color: '#92400e' }}>
+                  {backfillResult.mode === 'dry-run' ? '🔍 DRY RUN RESULTS' : '✅ MIGRATION COMPLETE'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                  <div><span style={{ color: '#64748b' }}>Total Commissions:</span> <strong>{backfillResult.totalCommissions}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Already Existed:</span> <strong>{backfillResult.skipped}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>{backfillResult.mode === 'dry-run' ? 'Would Create:' : 'Created:'}</span> <strong style={{ color: '#16a34a' }}>{backfillResult.created}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Amount:</span> <strong style={{ color: '#16a34a' }}>₹{backfillResult.totalCreatedAmount.toLocaleString('en-IN')}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Errors:</span> <strong style={{ color: backfillResult.errors > 0 ? '#dc2626' : '#16a34a' }}>{backfillResult.errors}</strong></div>
+                </div>
+                {backfillResult.verificationSample && (
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #fcd34d' }}>
+                    <strong>Verification Sample:</strong><br />
+                    User: {backfillResult.verificationSample.userId}<br />
+                    CommissionLog: ₹{backfillResult.verificationSample.commissionLogTotal} ({backfillResult.verificationSample.commissionLogEntries} entries)<br />
+                    EarningsLedger: ₹{backfillResult.verificationSample.earningsLedgerBalance} ({backfillResult.verificationSample.earningsLedgerEntries} entries)<br />
+                    Match: {backfillResult.verificationSample.matches ? '✅ YES' : '❌ NO'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Earnings Redeem Settings - ALWAYS VISIBLE FOR MAIN ADMIN */}
         {isMainAdmin && earningsConfig && (
