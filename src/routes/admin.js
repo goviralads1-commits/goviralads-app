@@ -7176,11 +7176,12 @@ router.get('/commissions', async (req, res) => {
       taskCount: u.entries,
     }));
     
-    // Get list of admin users for filter dropdown (main admin only)
+    // Get list of assignable operational users for filter dropdown (main admin only)
+    // These are CLIENT users with designations who can be assigned to tasks and earn commissions
     let adminUsers = [];
     if (isMainAdmin) {
-      adminUsers = await User.find({ role: { $in: ['admin', 'ADMIN'] } })
-        .select('_id identifier')
+      adminUsers = await User.find({ role: ROLES.CLIENT, status: 'ACTIVE', isDeleted: { $ne: true } })
+        .select('_id identifier profile')
         .sort({ identifier: 1 });
     }
     
@@ -7200,7 +7201,7 @@ router.get('/commissions', async (req, res) => {
       userSummary,
       overallTotal,
       overallTaskCount,
-      adminUsers: adminUsers.map(u => ({ id: u._id.toString(), identifier: u.identifier })),
+      adminUsers: adminUsers.map(u => ({ id: u._id.toString(), identifier: u.identifier, name: u.profile?.name || '' })),
       isMainAdmin,
     });
   } catch (err) {

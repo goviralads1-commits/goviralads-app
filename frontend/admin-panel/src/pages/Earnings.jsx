@@ -215,7 +215,7 @@ const Earnings = () => {
               <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>User</label>
               <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} style={{ padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', minWidth: '160px' }}>
                 <option value="">All Users</option>
-                {adminUsers.map(u => <option key={u.id} value={u.id}>{u.identifier}</option>)}
+                {adminUsers.map(u => <option key={u.id} value={u.id}>{u.name || u.identifier}</option>)}
               </select>
             </div>
           )}
@@ -391,7 +391,7 @@ const Earnings = () => {
                 <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>User</label>
                 <select value={adjUserId} onChange={(e) => setAdjUserId(e.target.value)} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }}>
                   <option value="">Select user...</option>
-                  {adminUsers.map(u => <option key={u.id} value={u.id}>{u.identifier}</option>)}
+                  {adminUsers.map(u => <option key={u.id} value={u.id}>{u.name || u.identifier}</option>)}
                 </select>
               </div>
               <div style={{ marginBottom: '14px' }}>
