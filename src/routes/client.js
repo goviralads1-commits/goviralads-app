@@ -495,10 +495,17 @@ router.get('/tasks/:taskId', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // Ensure the task belongs to the current client
-    if (task.clientId.toString() !== clientId) {
+    // Ensure the task belongs to the current client OR user is assigned operational user
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => u.userId && u.userId.toString() === clientId);
+    
+    if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Access denied' });
     }
+
+    // Determine if this is an assigned user (not the task owner)
+    // Assigned users should NOT see sensitive pricing/billing/internal data
+    const isAssignedUserOnly = !isTaskOwner && isAssignedUser;
 
     // === SAME PROCESSING LOGIC AS GET /tasks LIST ===
     const now = new Date();
@@ -589,12 +596,15 @@ router.get('/tasks/:taskId', async (req, res) => {
         id: task._id.toString(),
         title: task.title,
         description: task.description,
-        creditCost: task.creditCost,
-        creditsUsed: task.creditsUsed || 0,
+        // SENSITIVE FIELDS: Hide from assigned users, show to task owner
+        creditCost: isAssignedUserOnly ? undefined : task.creditCost,
+        creditsUsed: isAssignedUserOnly ? undefined : task.creditsUsed || 0,
         priority: task.priority,
         startDate: task.startDate,
         endDate: task.endDate,
         publicNotes: task.publicNotes,
+        // INTERNAL NOTES: Hidden from assigned users
+        internalNotes: isAssignedUserOnly ? undefined : task.internalNotes,
         progressMode: task.progressMode,
         progress: currentProgress,
         progressTarget: task.progressTarget,
@@ -605,13 +615,14 @@ router.get('/tasks/:taskId', async (req, res) => {
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
         // PLAN SYSTEM EXTENSIONS (CLIENT VISIBILITY)
-        quantity: task.quantity,
-        showQuantityToClient: task.showQuantityToClient,
-        showCreditsToClient: task.showCreditsToClient,
+        // Hide pricing from assigned users
+        quantity: isAssignedUserOnly ? undefined : task.quantity,
+        showQuantityToClient: isAssignedUserOnly ? undefined : task.showQuantityToClient,
+        showCreditsToClient: isAssignedUserOnly ? undefined : task.showCreditsToClient,
         featureImage: task.featureImage,
-        offerPrice: task.offerPrice,
-        originalPrice: task.originalPrice,
-        countdownEndDate: task.countdownEndDate,
+        offerPrice: isAssignedUserOnly ? undefined : task.offerPrice,
+        originalPrice: isAssignedUserOnly ? undefined : task.originalPrice,
+        countdownEndDate: isAssignedUserOnly ? undefined : task.countdownEndDate,
         // MILESTONES - CRITICAL FIX
         milestones: currentMilestones.map(m => ({
           name: m.name,
@@ -801,14 +812,17 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     const page = parseInt(req.query.page) || 0; // 0 = latest, 1 = older, etc.
     const limit = parseInt(req.query.limit) || 30;
     
-    const task = await Task.findById(taskId).select('messages clientId').exec();
+    const task = await Task.findById(taskId).select('messages clientId assignedUsers').exec();
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    // Verify ownership
-    if (task.clientId.toString() !== clientId) {
+    // Verify access: task owner OR assigned user
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => u.userId && u.userId.toString() === clientId);
+    
+    if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     
@@ -887,7 +901,11 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    if (task.clientId.toString() !== clientId) {
+    // Verify access: task owner OR assigned user
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => u.userId && u.userId.toString() === clientId);
+    
+    if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Not authorized to message on this task' });
     }
 
@@ -1727,10 +1745,17 @@ router.get('/tasks', async (req, res) => {
     console.log('=== CLIENT TASKS FETCH ===' );
     console.log('Client ID from token:', clientId);
     console.log('MODE: TASK');
-    console.log('VISIBILITY TARGET: ClientTasks');
+    console.log('VISIBILITY TARGET: ClientTasks + AssignedTasks');
 
-    // STRICT VISIBILITY: Only return client tasks (NOT plans)
-    const filter = { clientId: clientId, isListedInPlans: { $ne: true } };
+    // STRICT VISIBILITY: Return tasks where user is owner OR assigned operational user
+    // This allows assigned team members (project managers/editors) to see their tasks
+    const filter = {
+      isListedInPlans: { $ne: true },
+      $or: [
+        { clientId: clientId },  // Task owner
+        { 'assignedUsers.userId': clientId }  // Assigned operational user
+      ]
+    };
     console.log('Filter:', JSON.stringify(filter));
     const tasks = await Task.find(filter).sort({ createdAt: -1 }).exec();
     console.log('Tasks found:', tasks.length);
