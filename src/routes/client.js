@@ -489,7 +489,7 @@ router.get('/tasks/:taskId', async (req, res) => {
     const { taskId } = req.params;
     const clientId = req.user.id;
 
-    const task = await Task.findById(taskId).exec();
+    const task = await Task.findById(taskId).populate('assignedUsers.userId', 'profile.designation').exec();
 
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
@@ -618,7 +618,8 @@ router.get('/tasks/:taskId', async (req, res) => {
         isAssignedUser: isAssignedUserOnly,
         assignedUsers: (task.assignedUsers || []).map(u => ({
           userId: u.userId?.toString(),
-          percentage: u.percentage
+          percentage: u.percentage,
+          designation: u.userId?.profile?.designation || '', // Include designation for sender identity
         })),
         // PLAN SYSTEM EXTENSIONS (CLIENT VISIBILITY)
         // Hide pricing from assigned users
@@ -651,12 +652,31 @@ router.get('/tasks/:taskId', async (req, res) => {
         finalDeliveredAt: task.finalDeliveredAt || null,
         // TASK DISCUSSION (Phase 6) - Return only LATEST 30 messages for performance
         // Use GET /client/tasks/:taskId/messages?page=X for older messages
-        messages: (task.messages || []).slice(-30).map(m => ({
-          sender: m.sender,
-          text: m.text,
-          attachments: m.attachments || [],
-          createdAt: m.createdAt,
-        })),
+        messages: (task.messages || []).slice(-30).map(m => {
+          // Resolve sender identity label for better UX
+          let senderLabel = 'CLIENT'; // Default for task owner
+          
+          if (m.sender === 'ADMIN') {
+            senderLabel = 'ADMIN';
+          } else if (m.senderId) {
+            // Check if sender is an assigned operational user
+            const assignedUser = (task.assignedUsers || []).find(u => u.userId && u.userId.toString() === m.senderId.toString());
+            if (assignedUser) {
+              // This is an assigned operational user - will show designation in frontend
+              senderLabel = 'ASSIGNED_USER';
+            }
+            // Otherwise it's the task owner client - keep 'CLIENT'
+          }
+          
+          return {
+            sender: m.sender,
+            senderId: m.senderId?.toString(),
+            senderLabel, // New field for UI display
+            text: m.text,
+            attachments: m.attachments || [],
+            createdAt: m.createdAt,
+          };
+        }),
         // Total count for pagination UI
         totalMessages: (task.messages || []).length,
         hasMoreMessages: (task.messages || []).length > 30,
@@ -818,7 +838,7 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     const page = parseInt(req.query.page) || 0; // 0 = latest, 1 = older, etc.
     const limit = parseInt(req.query.limit) || 30;
     
-    const task = await Task.findById(taskId).select('messages clientId assignedUsers').exec();
+    const task = await Task.findById(taskId).select('messages clientId assignedUsers').populate('assignedUsers.userId', 'profile.designation').exec();
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
@@ -852,12 +872,28 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
       });
     }
     
-    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => ({
-      sender: m.sender,
-      text: m.text,
-      attachments: m.attachments || [],
-      createdAt: m.createdAt,
-    }));
+    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => {
+      // Resolve sender identity label
+      let senderLabel = 'CLIENT';
+      
+      if (m.sender === 'ADMIN') {
+        senderLabel = 'ADMIN';
+      } else if (m.senderId) {
+        const assignedUser = (task.assignedUsers || []).find(u => u.userId && u.userId.toString() === m.senderId.toString());
+        if (assignedUser) {
+          senderLabel = 'ASSIGNED_USER';
+        }
+      }
+      
+      return {
+        sender: m.sender,
+        senderId: m.senderId?.toString(),
+        senderLabel,
+        text: m.text,
+        attachments: m.attachments || [],
+        createdAt: m.createdAt,
+      };
+    });
     
     console.log(`[Chat Pagination] Task ${taskId}: page=${page}, returned ${paginatedMessages.length}/${totalMessages} messages`);
     
@@ -901,7 +937,7 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       }
     }
 
-    const task = await Task.findById(taskId).exec();
+    const task = await Task.findById(taskId).populate('assignedUsers.userId', 'profile.designation').exec();
 
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });

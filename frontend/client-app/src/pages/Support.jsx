@@ -384,18 +384,29 @@ const Support = () => {
               );
             }
             const isAdmin = item.sender === 'ADMIN';
-            // Determine sender identity for better display
-            let senderLabel = 'You';
+            const isAssignedUser = item.senderLabel === 'ASSIGNED_USER';
+            const isCurrentUser = item.senderId === currentUserId;
+            
+            // Determine sender display label
+            let senderLabel = 'CLIENT';
             if (isAdmin) {
-              senderLabel = 'Admin';
-            } else if (item.senderId && item.senderId !== currentUserId) {
-              // Message from another assigned user or task owner
-              senderLabel = 'Team';
+              senderLabel = 'ADMIN';
+            } else if (isCurrentUser) {
+              senderLabel = 'You';
+            } else if (isAssignedUser) {
+              // Try to find designation from assignedUsers array
+              const assignedUser = (selectedTask.assignedUsers || []).find(u => u.userId === item.senderId);
+              if (assignedUser && assignedUser.designation) {
+                senderLabel = assignedUser.designation;
+              } else {
+                senderLabel = 'TEAM'; // Fallback if no designation
+              }
             }
+            
             return (
-              <div key={`m-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-start' : (item.senderId === currentUserId ? 'flex-end' : 'flex-start'), marginBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '600', color: isAdmin ? '#6366f1' : (item.senderId === currentUserId ? '#22c55e' : '#64748b'), marginBottom: '4px' }}>{senderLabel}</span>
-                <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#f1f5f9' : (item.senderId === currentUserId ? '#22c55e' : '#f1f5f9'), color: isAdmin ? '#0f172a' : (item.senderId === currentUserId ? '#fff' : '#0f172a') }}>
+              <div key={`m-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-start' : (isCurrentUser ? 'flex-end' : 'flex-start'), marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: isAdmin ? '#6366f1' : (isCurrentUser ? '#22c55e' : '#64748b'), marginBottom: '4px' }}>{senderLabel}</span>
+                <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#f1f5f9' : (isCurrentUser ? '#22c55e' : '#f1f5f9'), color: isAdmin ? '#0f172a' : (isCurrentUser ? '#fff' : '#0f172a') }}>
                   {item.attachments?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: item.text && item.text !== '[Image]' ? '6px' : 0 }}>
                       {item.attachments.map((att, i) => (
