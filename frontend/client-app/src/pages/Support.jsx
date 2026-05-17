@@ -12,6 +12,20 @@ const Support = () => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState(null); // Store taskId to open after load
+  const [currentUserId, setCurrentUserId] = useState(null);
+  
+  // Get current user ID from stored user data
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUserId(user.id || user._id);
+      }
+    } catch (err) {
+      console.error('[Support] Failed to get current user ID:', err);
+    }
+  }, []);
   
   // Chat state
   const [messageText, setMessageText] = useState('');
@@ -370,10 +384,18 @@ const Support = () => {
               );
             }
             const isAdmin = item.sender === 'ADMIN';
+            // Determine sender identity for better display
+            let senderLabel = 'You';
+            if (isAdmin) {
+              senderLabel = 'Admin';
+            } else if (item.senderId && item.senderId !== currentUserId) {
+              // Message from another assigned user or task owner
+              senderLabel = 'Team';
+            }
             return (
-              <div key={`m-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-start' : 'flex-end', marginBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '600', color: isAdmin ? '#6366f1' : '#64748b', marginBottom: '4px' }}>{isAdmin ? 'Admin' : 'You'}</span>
-                <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#f1f5f9' : '#22c55e', color: isAdmin ? '#0f172a' : '#fff' }}>
+              <div key={`m-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-start' : (item.senderId === currentUserId ? 'flex-end' : 'flex-start'), marginBottom: '12px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: isAdmin ? '#6366f1' : (item.senderId === currentUserId ? '#22c55e' : '#64748b'), marginBottom: '4px' }}>{senderLabel}</span>
+                <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#f1f5f9' : (item.senderId === currentUserId ? '#22c55e' : '#f1f5f9'), color: isAdmin ? '#0f172a' : (item.senderId === currentUserId ? '#fff' : '#0f172a') }}>
                   {item.attachments?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: item.text && item.text !== '[Image]' ? '6px' : 0 }}>
                       {item.attachments.map((att, i) => (
@@ -565,15 +587,22 @@ const Support = () => {
             {tasks.map((task) => {
               const taskId = task._id || task.id;
               if (!taskId) return null;
+              // Determine if this is an assigned task or owned task
+              const isAssignedTask = task.isAssignedUser === true;
               return (
-                <div key={taskId} onClick={() => openChat(task)} style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s' }}>
+                <div key={taskId} onClick={() => openChat(task)} style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', border: isAssignedTask ? '2px solid #6366f1' : '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '20px' }}>💬</span>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: isAssignedTask ? '#eef2ff' : '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: '20px' }}>{isAssignedTask ? '👥' : '💬'}</span>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                        <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</h3>
+                          {isAssignedTask && (
+                            <span style={{ fontSize: '10px', fontWeight: '700', color: '#6366f1', backgroundColor: '#eef2ff', padding: '3px 8px', borderRadius: '6px', flexShrink: 0 }}>ASSIGNED</span>
+                          )}
+                        </div>
                         <span style={{ fontSize: '12px', color: '#94a3b8', flexShrink: 0 }}>{formatTime(task.lastMessageAt || task.lastApprovalAt)}</span>
                       </div>
                       <div style={{ marginTop: '6px', display: 'flex', gap: '8px' }}>

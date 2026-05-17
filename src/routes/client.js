@@ -614,6 +614,12 @@ router.get('/tasks/:taskId', async (req, res) => {
         deadline: task.deadline || task.endDate,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
+        // TASK OWNERSHIP INFO - needed for UI to show "My Task" vs "Assigned Task"
+        isAssignedUser: isAssignedUserOnly,
+        assignedUsers: (task.assignedUsers || []).map(u => ({
+          userId: u.userId?.toString(),
+          percentage: u.percentage
+        })),
         // PLAN SYSTEM EXTENSIONS (CLIENT VISIBILITY)
         // Hide pricing from assigned users
         quantity: isAssignedUserOnly ? undefined : task.quantity,
