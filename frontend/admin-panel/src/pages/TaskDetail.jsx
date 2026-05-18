@@ -960,20 +960,43 @@ const TaskDetail = () => {
     };
 
     // Render helper for message
-    const renderMessage = (msg, idx) => (
+    const renderMessage = (msg, idx) => {
+      const isAdmin = msg.sender === 'ADMIN';
+      const isAssignedUser = msg.senderLabel === 'ASSIGNED_USER';
+      
+      // Determine sender display label
+      let senderLabel = 'Client';
+      if (isAdmin) {
+        senderLabel = 'Admin';
+      } else if (isAssignedUser) {
+        // Assigned operational user - show designation
+        const assignedUser = (task.assignedUsers || []).find(u => {
+          if (!u.userId) return false;
+          const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId;
+          return userIdStr === msg.senderId;
+        });
+        if (assignedUser && assignedUser.designation) {
+          senderLabel = assignedUser.designation;
+        } else {
+          senderLabel = 'Team'; // Fallback if no designation
+        }
+      }
+      // Otherwise it's the task owner client - keep 'Client'
+      
+      return (
       <div key={`msg-${idx}`} style={{ 
         display: 'flex', flexDirection: 'column',
-        alignItems: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start',
+        alignItems: isAdmin ? 'flex-end' : 'flex-start',
         marginBottom: isFullScreen ? '16px' : '12px'
       }}>
         <span style={{ 
           fontSize: '11px', fontWeight: '600', 
-          color: msg.sender === 'ADMIN' ? '#6366f1' : '#64748b',
+          color: isAdmin ? '#6366f1' : '#64748b',
           marginBottom: '4px',
-          paddingLeft: msg.sender === 'ADMIN' ? '0' : '4px',
-          paddingRight: msg.sender === 'ADMIN' ? '4px' : '0'
+          paddingLeft: isAdmin ? '0' : '4px',
+          paddingRight: isAdmin ? '4px' : '0'
         }}>
-          {msg.sender === 'ADMIN' ? 'Admin' : 'Client'}
+          {senderLabel}
         </span>
         <div style={{
           maxWidth: isFullScreen ? '80%' : '70%', padding: isFullScreen ? '12px 16px' : '10px 14px', borderRadius: isFullScreen ? '16px' : '14px',
@@ -1015,6 +1038,7 @@ const TaskDetail = () => {
         </div>
       </div>
     );
+  };
 
     return (
       <>

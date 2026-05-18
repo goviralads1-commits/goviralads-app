@@ -567,12 +567,35 @@ Status: ${status}
     };
 
     // Render message
-    const renderMessage = (msg, idx) => (
-      <div key={`msg-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
-        <span style={{ fontSize: '11px', fontWeight: '600', color: msg.sender === 'ADMIN' ? '#6366f1' : '#64748b', marginBottom: '4px' }}>
-          {msg.sender === 'ADMIN' ? 'Admin' : 'Client'}
+    const renderMessage = (msg, idx) => {
+      const isAdmin = msg.sender === 'ADMIN';
+      const isAssignedUser = msg.senderLabel === 'ASSIGNED_USER';
+      
+      // Determine sender display label
+      let senderLabel = 'Client';
+      if (isAdmin) {
+        senderLabel = 'Admin';
+      } else if (isAssignedUser) {
+        // Assigned operational user - show designation
+        const assignedUser = (selectedTask.assignedUsers || []).find(u => {
+          if (!u.userId) return false;
+          const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId;
+          return userIdStr === msg.senderId;
+        });
+        if (assignedUser && assignedUser.designation) {
+          senderLabel = assignedUser.designation;
+        } else {
+          senderLabel = 'Team'; // Fallback if no designation
+        }
+      }
+      // Otherwise it's the task owner client - keep 'Client'
+      
+      return (
+      <div key={`msg-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
+        <span style={{ fontSize: '11px', fontWeight: '600', color: isAdmin ? '#6366f1' : '#64748b', marginBottom: '4px' }}>
+          {senderLabel}
         </span>
-        <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: msg.sender === 'ADMIN' ? '#6366f1' : '#f1f5f9', color: msg.sender === 'ADMIN' ? '#fff' : '#0f172a' }}>
+        <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#6366f1' : '#f1f5f9', color: isAdmin ? '#fff' : '#0f172a' }}>
           {msg.attachments && msg.attachments.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: msg.text && msg.text !== '[Image]' ? '6px' : 0 }}>
               {msg.attachments.map((att, attIdx) => {
@@ -588,6 +611,7 @@ Status: ${status}
         </div>
       </div>
     );
+  };
 
     // Render chat content (supports filter mode)
     const renderChatContent = () => {
