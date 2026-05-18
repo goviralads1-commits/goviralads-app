@@ -665,7 +665,12 @@ router.get('/tasks/:taskId', async (req, res) => {
             senderLabel = 'ADMIN';
           } else if (m.senderId) {
             // Check if sender is an assigned operational user
-            const assignedUser = (task.assignedUsers || []).find(u => u.userId && u.userId.toString() === m.senderId.toString());
+            const assignedUser = (task.assignedUsers || []).find(u => {
+              if (!u.userId) return false;
+              // Handle both populated and non-populated userId
+              const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+              return userIdStr === m.senderId.toString();
+            });
             if (assignedUser) {
               // This is an assigned operational user - will show designation in frontend
               senderLabel = 'ASSIGNED_USER';
@@ -895,7 +900,11 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
       if (m.sender === 'ADMIN') {
         senderLabel = 'ADMIN';
       } else if (m.senderId) {
-        const assignedUser = (task.assignedUsers || []).find(u => u.userId && u.userId.toString() === m.senderId.toString());
+        const assignedUser = (task.assignedUsers || []).find(u => {
+          if (!u.userId) return false;
+          const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+          return userIdStr === m.senderId.toString();
+        });
         if (assignedUser) {
           senderLabel = 'ASSIGNED_USER';
         }

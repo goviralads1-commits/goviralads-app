@@ -32,6 +32,20 @@ const TaskDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  
+  // Get current user ID from stored user data
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUserId(user.id || user._id);
+      }
+    } catch (err) {
+      console.error('[TaskDetail] Failed to get current user ID:', err);
+    }
+  }, []);
   
   // Content submission state (Phase 2)
   const [contentText, setContentText] = useState('');
@@ -437,21 +451,55 @@ const TaskDetail = () => {
     );
 
     // Render helper for message
-    const renderMessage = (msg, idx) => (
+    const renderMessage = (msg, idx) => {
+      const isAdmin = msg.sender === 'ADMIN';
+      const isAssignedUser = msg.senderLabel === 'ASSIGNED_USER';
+      const isCurrentUser = msg.senderId === currentUserId;
+      const isTaskOwner = task && task.clientId === msg.senderId;
+      
+      // Determine sender display label
+      let senderLabel = 'CLIENT';
+      if (isAdmin) {
+        senderLabel = 'Admin';
+      } else if (isCurrentUser && isAssignedUser) {
+        // Current user is an assigned operational user
+        const assignedUser = (task.assignedUsers || []).find(u => u.userId === msg.senderId);
+        if (assignedUser && assignedUser.designation) {
+          senderLabel = assignedUser.designation;
+        } else {
+          senderLabel = 'You';
+        }
+      } else if (isCurrentUser) {
+        // Current user is the task owner
+        senderLabel = 'You';
+      } else if (isAssignedUser) {
+        // Other assigned operational user
+        const assignedUser = (task.assignedUsers || []).find(u => u.userId === msg.senderId);
+        if (assignedUser && assignedUser.designation) {
+          senderLabel = assignedUser.designation;
+        } else {
+          senderLabel = 'Team';
+        }
+      } else if (isTaskOwner) {
+        // Real client/customer (task owner)
+        senderLabel = 'Client';
+      }
+      
+      return (
       <div key={`msg-${idx}`} style={{
         display: 'flex', flexDirection: 'column',
-        alignItems: msg.sender === 'ADMIN' ? 'flex-end' : 'flex-start',
+        alignItems: isAdmin ? 'flex-end' : 'flex-start',
         marginBottom
       }}>
         {/* Sender Label */}
         <span style={{
           fontSize: '11px', fontWeight: '600',
-          color: msg.sender === 'ADMIN' ? '#6366f1' : '#64748b',
+          color: isAdmin ? '#6366f1' : '#64748b',
           marginBottom: '4px',
-          paddingLeft: msg.sender === 'ADMIN' ? '0' : '4px',
-          paddingRight: msg.sender === 'ADMIN' ? '4px' : '0'
+          paddingLeft: isAdmin ? '0' : '4px',
+          paddingRight: isAdmin ? '4px' : '0'
         }}>
-          {msg.sender === 'ADMIN' ? 'Admin' : (isFullScreen ? 'You' : 'Client')}
+          {senderLabel}
         </span>
         {/* Message Bubble */}
         <div style={{
@@ -492,6 +540,7 @@ const TaskDetail = () => {
         </div>
       </div>
     );
+  };
 
     return (
       <>

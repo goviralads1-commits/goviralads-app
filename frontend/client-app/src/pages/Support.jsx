@@ -386,21 +386,34 @@ const Support = () => {
             const isAdmin = item.sender === 'ADMIN';
             const isAssignedUser = item.senderLabel === 'ASSIGNED_USER';
             const isCurrentUser = item.senderId === currentUserId;
+            const isTaskOwner = selectedTask && selectedTask.clientId === item.senderId;
             
             // Determine sender display label
             let senderLabel = 'CLIENT';
             if (isAdmin) {
               senderLabel = 'ADMIN';
+            } else if (isCurrentUser && isAssignedUser) {
+              // Current user is an assigned operational user
+              const assignedUser = (selectedTask.assignedUsers || []).find(u => u.userId === item.senderId);
+              if (assignedUser && assignedUser.designation) {
+                senderLabel = assignedUser.designation;
+              } else {
+                senderLabel = 'You';
+              }
             } else if (isCurrentUser) {
+              // Current user is the task owner
               senderLabel = 'You';
             } else if (isAssignedUser) {
-              // Try to find designation from assignedUsers array
+              // Other assigned operational user
               const assignedUser = (selectedTask.assignedUsers || []).find(u => u.userId === item.senderId);
               if (assignedUser && assignedUser.designation) {
                 senderLabel = assignedUser.designation;
               } else {
                 senderLabel = 'TEAM'; // Fallback if no designation
               }
+            } else if (isTaskOwner) {
+              // Real client/customer (task owner)
+              senderLabel = 'CLIENT';
             }
             
             return (
