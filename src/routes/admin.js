@@ -1020,6 +1020,7 @@ router.get('/tasks/:taskId', async (req, res) => {
       .populate('clientId', 'identifier')
       .populate('assignedBy', 'identifier')
       .populate('assignedTo', 'identifier')
+      .populate('assignedUsers.userId', 'profile.designation')
       .exec();
 
     if (!task) {
@@ -1098,12 +1099,35 @@ router.get('/tasks/:taskId', async (req, res) => {
         finalDeliveredAt: task.finalDeliveredAt || null,
         // TASK DISCUSSION (Phase 6) - Return only LATEST 30 messages for performance
         // Use GET /admin/tasks/:taskId/messages?page=X for older messages
-        messages: (task.messages || []).slice(-30).map(m => ({
-          sender: m.sender,
-          text: m.text,
-          attachments: m.attachments || [],
-          createdAt: m.createdAt,
-        })),
+        messages: (task.messages || []).slice(-30).map(m => {
+          // Resolve sender identity label for admin panel
+          let senderLabel = 'Client'; // Default for task owner
+          
+          if (m.sender === 'ADMIN') {
+            senderLabel = 'Admin';
+          } else if (m.senderId) {
+            // Check if sender is an assigned operational user
+            const assignedUser = (task.assignedUsers || []).find(u => {
+              if (!u.userId) return false;
+              const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+              return userIdStr === m.senderId.toString();
+            });
+            if (assignedUser) {
+              // This is an assigned operational user
+              senderLabel = assignedUser.userId?.profile?.designation || 'Team';
+            }
+            // Otherwise it's the task owner client - keep 'Client'
+          }
+          
+          return {
+            sender: m.sender,
+            senderId: m.senderId?.toString(),
+            senderLabel, // Include sender identity for admin panel
+            text: m.text,
+            attachments: m.attachments || [],
+            createdAt: m.createdAt,
+          };
+        }),
         // Total count for pagination UI
         totalMessages: (task.messages || []).length,
         hasMoreMessages: (task.messages || []).length > 30,
@@ -1167,7 +1191,7 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     const page = parseInt(req.query.page) || 0; // 0 = latest, 1 = older, etc.
     const limit = parseInt(req.query.limit) || 30;
     
-    const task = await Task.findById(taskId).select('messages clientId assignedTo').exec();
+    const task = await Task.findById(taskId).select('messages clientId assignedTo assignedUsers').populate('assignedUsers.userId', 'profile.designation').exec();
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
@@ -1193,12 +1217,32 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
       });
     }
     
-    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => ({
-      sender: m.sender,
-      text: m.text,
-      attachments: m.attachments || [],
-      createdAt: m.createdAt,
-    }));
+    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => {
+      // Resolve sender identity label
+      let senderLabel = 'Client';
+      
+      if (m.sender === 'ADMIN') {
+        senderLabel = 'Admin';
+      } else if (m.senderId) {
+        const assignedUser = (task.assignedUsers || []).find(u => {
+          if (!u.userId) return false;
+          const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+          return userIdStr === m.senderId.toString();
+        });
+        if (assignedUser) {
+          senderLabel = assignedUser.userId?.profile?.designation || 'Team';
+        }
+      }
+      
+      return {
+        sender: m.sender,
+        senderId: m.senderId?.toString(),
+        senderLabel,
+        text: m.text,
+        attachments: m.attachments || [],
+        createdAt: m.createdAt,
+      };
+    });
     
     console.log(`[Chat Pagination] Task ${taskId}: page=${page}, returned ${paginatedMessages.length}/${totalMessages} messages`);
     
