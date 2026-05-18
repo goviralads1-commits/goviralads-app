@@ -497,7 +497,12 @@ router.get('/tasks/:taskId', async (req, res) => {
 
     // Ensure the task belongs to the current client OR user is assigned operational user
     const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
-    const isAssignedUser = (task.assignedUsers || []).some(u => u.userId && u.userId.toString() === clientId);
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      // Handle both populated and non-populated userId
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
     
     if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Access denied' });
@@ -755,8 +760,15 @@ router.post('/tasks/:taskId/content', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // Ensure the task belongs to the current client
-    if (!task.clientId || task.clientId.toString() !== clientId) {
+    // Ensure the task belongs to the current client OR user is assigned operational user
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
+    
+    if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -846,7 +858,11 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     
     // Verify access: task owner OR assigned user
     const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
-    const isAssignedUser = (task.assignedUsers || []).some(u => u.userId && u.userId.toString() === clientId);
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
     
     if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Not authorized' });
@@ -945,7 +961,11 @@ router.post('/tasks/:taskId/message', async (req, res) => {
 
     // Verify access: task owner OR assigned user
     const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
-    const isAssignedUser = (task.assignedUsers || []).some(u => u.userId && u.userId.toString() === clientId);
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
     
     if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Not authorized to message on this task' });
@@ -1047,8 +1067,15 @@ router.post('/tasks/:taskId/approvals/:approvalId/select', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // Verify task belongs to client
-    if (task.clientId?.toString() !== clientId) {
+    // Verify task belongs to client OR user is assigned operational user
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
+    
+    if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
