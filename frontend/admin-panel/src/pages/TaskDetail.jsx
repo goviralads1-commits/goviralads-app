@@ -962,26 +962,9 @@ const TaskDetail = () => {
     // Render helper for message
     const renderMessage = (msg, idx) => {
       const isAdmin = msg.sender === 'ADMIN';
-      const isAssignedUser = msg.senderLabel === 'ASSIGNED_USER';
       
-      // Determine sender display label
-      let senderLabel = 'Client';
-      if (isAdmin) {
-        senderLabel = 'Admin';
-      } else if (isAssignedUser) {
-        // Assigned operational user - show designation
-        const assignedUser = (task.assignedUsers || []).find(u => {
-          if (!u.userId) return false;
-          const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId;
-          return userIdStr === msg.senderId;
-        });
-        if (assignedUser && assignedUser.designation) {
-          senderLabel = assignedUser.designation;
-        } else {
-          senderLabel = 'Team'; // Fallback if no designation
-        }
-      }
-      // Otherwise it's the task owner client - keep 'Client'
+      // Use senderLabel directly from backend (already resolved to designation)
+      const senderLabel = msg.senderLabel || (isAdmin ? 'Admin' : 'Client');
       
       return (
       <div key={`msg-${idx}`} style={{ 
