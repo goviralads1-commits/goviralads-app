@@ -8,10 +8,25 @@ const LegalPage = () => {
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [agencyInfo, setAgencyInfo] = useState(null);
 
   useEffect(() => {
     fetchPage();
+    fetchAgencyInfo();
   }, [slug]);
+
+  const fetchAgencyInfo = async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      if (!API_URL) return;
+      const response = await fetch(`${API_URL}/public/agency-info`);
+      if (response.ok) {
+        setAgencyInfo(await response.json());
+      }
+    } catch (err) {
+      // Silent fail
+    }
+  };
 
   const fetchPage = async () => {
     setLoading(true);
@@ -89,6 +104,55 @@ const LegalPage = () => {
             </p>
           )}
         </article>
+
+        {slug === 'contact-us' && agencyInfo && (
+          <div style={{ marginTop: spacing[6], padding: spacing[6], background: colors.background.tertiary, borderRadius: radius.xl }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, color: colors.text.primary, fontFamily: typography.fontFamily.sans }}>
+              {agencyInfo.agencyName || 'Contact Us'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {agencyInfo.agencyAddress && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '18px' }}>📍</span>
+                  <span style={{ fontSize: typography.fontSize.base, color: colors.text.secondary, lineHeight: 1.6, fontFamily: typography.fontFamily.sans }}>{agencyInfo.agencyAddress}</span>
+                </div>
+              )}
+              {agencyInfo.supportEmail && (
+                <a href={`mailto:${agencyInfo.supportEmail}`} style={{ display: 'flex', gap: '10px', alignItems: 'center', textDecoration: 'none' }}>
+                  <span style={{ fontSize: '18px' }}>✉️</span>
+                  <span style={{ fontSize: typography.fontSize.base, color: colors.primary[500], fontFamily: typography.fontFamily.sans }}>{agencyInfo.supportEmail}</span>
+                </a>
+              )}
+              {agencyInfo.phoneNumber && (
+                <a href={`tel:${agencyInfo.phoneNumber}`} style={{ display: 'flex', gap: '10px', alignItems: 'center', textDecoration: 'none' }}>
+                  <span style={{ fontSize: '18px' }}>📞</span>
+                  <span style={{ fontSize: typography.fontSize.base, color: colors.primary[500], fontFamily: typography.fontFamily.sans }}>{agencyInfo.phoneNumber}</span>
+                </a>
+              )}
+              {agencyInfo.whatsappNumber && (
+                <a href={`https://wa.me/${agencyInfo.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', gap: '10px', alignItems: 'center', textDecoration: 'none' }}>
+                  <span style={{ fontSize: '18px' }}>💬</span>
+                  <span style={{ fontSize: typography.fontSize.base, color: colors.primary[500], fontFamily: typography.fontFamily.sans }}>{agencyInfo.whatsappNumber}</span>
+                </a>
+              )}
+              {agencyInfo.websiteUrl && (
+                <a href={agencyInfo.websiteUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', gap: '10px', alignItems: 'center', textDecoration: 'none' }}>
+                  <span style={{ fontSize: '18px' }}>🌐</span>
+                  <span style={{ fontSize: typography.fontSize.base, color: colors.primary[500], fontFamily: typography.fontFamily.sans }}>{agencyInfo.websiteUrl}</span>
+                </a>
+              )}
+              {agencyInfo.socialLinks && Object.keys(agencyInfo.socialLinks).length > 0 && (
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
+                  {agencyInfo.socialLinks.facebook && <a href={agencyInfo.socialLinks.facebook} target="_blank" rel="noopener noreferrer" style={{ fontSize: '24px', textDecoration: 'none' }}>📘</a>}
+                  {agencyInfo.socialLinks.instagram && <a href={agencyInfo.socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ fontSize: '24px', textDecoration: 'none' }}>📷</a>}
+                  {agencyInfo.socialLinks.twitter && <a href={agencyInfo.socialLinks.twitter} target="_blank" rel="noopener noreferrer" style={{ fontSize: '24px', textDecoration: 'none' }}>🐦</a>}
+                  {agencyInfo.socialLinks.linkedin && <a href={agencyInfo.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: '24px', textDecoration: 'none' }}>💼</a>}
+                  {agencyInfo.socialLinks.youtube && <a href={agencyInfo.socialLinks.youtube} target="_blank" rel="noopener noreferrer" style={{ fontSize: '24px', textDecoration: 'none' }}>▶️</a>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
       
       <footer style={styles.footer}>
@@ -99,7 +163,7 @@ const LegalPage = () => {
           <span style={styles.footerSeparator}>•</span>
           <span onClick={() => navigate('/legal/contact-us')} style={{ ...styles.footerLink, cursor: 'pointer' }}>Contact</span>
         </div>
-        <p style={styles.footerCopyright}>© {new Date().getFullYear()} Go Viral Ads. All rights reserved.</p>
+        <p style={styles.footerCopyright}>© {new Date().getFullYear()} {agencyInfo?.agencyName || 'Go Viral Ads'}. All rights reserved.</p>
       </footer>
     </div>
   );
