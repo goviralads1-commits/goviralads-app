@@ -239,6 +239,18 @@ const Support = () => {
     }
   }, [selectedTask, scrollToBottom]);
 
+  // Close fullscreen chat on ESC key
+  useEffect(() => {
+    if (!isChatFullScreen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsChatFullScreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isChatFullScreen]);
+
   const handleSendMessage = async () => {
     if ((!messageText.trim() && messageAttachments.length === 0) || sendingMessage) return;
 

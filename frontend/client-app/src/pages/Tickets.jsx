@@ -9,6 +9,7 @@ const Tickets = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState(null);
   const [formData, setFormData] = useState({
     subject: '',
     category: 'GENERAL',
@@ -19,6 +20,13 @@ const Tickets = () => {
   useEffect(() => {
     fetchTickets();
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchTickets = async () => {
     try {
@@ -33,38 +41,21 @@ const Tickets = () => {
   };
 
   const handleCreate = async () => {
-    console.log('[TICKET UI] ==============================');
-    console.log('[TICKET UI] Create button clicked');
-    console.log('[TICKET UI] Form data:', JSON.stringify(formData));
-    
-    // Log the FULL URL that will be called
-    const fullUrl = `${import.meta.env.VITE_API_URL}/client/tickets`;
-    console.log('[TICKET UI] FULL API URL:', fullUrl);
-    console.log('[TICKET UI] VITE_API_URL env:', import.meta.env.VITE_API_URL);
-    
     if (!formData.subject.trim() || !formData.message.trim()) {
-      console.error('[TICKET UI] Validation failed: empty fields');
-      alert('Please fill in all required fields');
+      setToast({ type: 'error', message: 'Please fill in all required fields' });
       return;
     }
 
     try {
       setCreating(true);
-      console.log('[TICKET UI] Sending POST to:', fullUrl);
-      const response = await api.post('/client/tickets', formData);
-      console.log('[TICKET UI] SUCCESS! Response:', response.data);
-      console.log('[TICKET UI] ==============================');
+      await api.post('/client/tickets', formData);
       setShowCreateModal(false);
       setFormData({ subject: '', category: 'GENERAL', priority: 'NORMAL', message: '' });
+      setToast({ type: 'success', message: 'Ticket created successfully' });
       fetchTickets();
     } catch (err) {
-      console.error('[TICKET UI] ==============================');
-      console.error('[TICKET UI] FAILED!');
-      console.error('[TICKET UI]   Status:', err.response?.status);
-      console.error('[TICKET UI]   URL called:', fullUrl);
-      console.error('[TICKET UI]   Error:', err.response?.data || err.message);
       const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message || 'Failed to create ticket';
-      alert(errorMsg);
+      setToast({ type: 'error', message: errorMsg });
     } finally {
       setCreating(false);
     }
@@ -324,6 +315,18 @@ const Tickets = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: toast.type === 'error' ? '#ef4444' : '#10b981',
+          color: '#fff', padding: '12px 24px', borderRadius: '12px',
+          fontSize: '14px', fontWeight: '600', zIndex: 10000,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+        }}>
+          {toast.message}
         </div>
       )}
     </div>

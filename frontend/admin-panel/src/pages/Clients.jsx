@@ -11,6 +11,14 @@ const Clients = () => {
   const [adjustmentAmount, setAdjustmentAmount] = useState('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [adjustmentSubmitting, setAdjustmentSubmitting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,8 +53,9 @@ const Clients = () => {
       setAdjustmentAmount('');
       setAdjustmentReason('');
       setShowAdjustForm(false);
+      setToast({ type: 'success', message: 'Wallet adjusted successfully' });
     } catch (err) {
-      setError('Failed to adjust wallet');
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to adjust wallet' });
       console.error('Adjustment error:', err);
     } finally {
       setAdjustmentSubmitting(false);
@@ -228,6 +237,18 @@ const Clients = () => {
           </div>
         )}
       </div>
+
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: toast.type === 'error' ? '#ef4444' : '#10b981',
+          color: '#fff', padding: '12px 24px', borderRadius: '12px',
+          fontSize: '14px', fontWeight: '600', zIndex: 10000,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+        }}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 };

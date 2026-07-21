@@ -12,11 +12,19 @@ const TicketDetail = () => {
   const [replyAttachments, setReplyAttachments] = useState([]);
   const [replying, setReplying] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchTicket();
   }, [ticketId]);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchTicket = async () => {
     try {
@@ -32,7 +40,7 @@ const TicketDetail = () => {
 
   const handleReply = async () => {
     if (!replyText.trim() && replyAttachments.length === 0) {
-      alert('Please enter a message or attach an image');
+      setToast({ type: 'error', message: 'Please enter a message or attach an image' });
       return;
     }
 
@@ -54,7 +62,7 @@ const TicketDetail = () => {
             throw new Error('Image upload failed');
           }
         } catch (uploadErr) {
-          alert('Failed to upload image');
+          setToast({ type: 'error', message: 'Failed to upload image' });
           setReplying(false);
           return; // DO NOT send message
         }
@@ -70,9 +78,10 @@ const TicketDetail = () => {
       replyAttachments.forEach(att => URL.revokeObjectURL(att.previewUrl));
       setReplyText('');
       setReplyAttachments([]);
+      setToast({ type: 'success', message: 'Reply sent successfully' });
       fetchTicket();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to send reply');
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to send reply' });
     } finally {
       setReplying(false);
     }
@@ -314,6 +323,18 @@ const TicketDetail = () => {
           </div>
         )}
       </div>
+
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: toast.type === 'error' ? '#ef4444' : '#10b981',
+          color: '#fff', padding: '12px 24px', borderRadius: '12px',
+          fontSize: '14px', fontWeight: '600', zIndex: 10000,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+        }}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 };

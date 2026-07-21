@@ -93,11 +93,11 @@ const LegalPage = () => {
       
       <footer style={styles.footer}>
         <div style={styles.footerLinks}>
-          <a href="/legal/privacy-policy" style={styles.footerLink}>Privacy Policy</a>
+          <span onClick={() => navigate('/legal/privacy-policy')} style={{ ...styles.footerLink, cursor: 'pointer' }}>Privacy Policy</span>
           <span style={styles.footerSeparator}>•</span>
-          <a href="/legal/terms-of-service" style={styles.footerLink}>Terms</a>
+          <span onClick={() => navigate('/legal/terms-of-service')} style={{ ...styles.footerLink, cursor: 'pointer' }}>Terms</span>
           <span style={styles.footerSeparator}>•</span>
-          <a href="/legal/contact-us" style={styles.footerLink}>Contact</a>
+          <span onClick={() => navigate('/legal/contact-us')} style={{ ...styles.footerLink, cursor: 'pointer' }}>Contact</span>
         </div>
         <p style={styles.footerCopyright}>© {new Date().getFullYear()} Go Viral Ads. All rights reserved.</p>
       </footer>

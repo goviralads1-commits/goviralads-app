@@ -170,7 +170,7 @@ const Profile = () => {
       fetchAdminProfile();
       setEditMode(false);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to save profile');
+      showToast(err.response?.data?.error || 'Failed to save profile', 'error');
     } finally {
       setSaving(false);
     }
