@@ -110,6 +110,17 @@ const LegalPage = () => {
       // Clean up any remaining bracket placeholders
       content = content.replace(/\[Your [^\]]*\]/gi, '');
       content = content.replace(/\[Placeholder[^\]]*\]/gi, '');
+      // Replace [CONFIRM: ...] placeholders from seeded legal page content
+      if (agencyInfo.agencyAddress) {
+        content = content.replace(/\[CONFIRM:\s*Registered Business Address\]/gi, agencyInfo.agencyAddress);
+        content = content.replace(/\[CONFIRM:\s*City,\s*State,\s*PIN Code\]/gi, '');
+        content = content.replace(/\[CONFIRM:\s*Country\]/gi, '');
+      }
+      if (agencyInfo.phoneNumber) {
+        content = content.replace(/\[CONFIRM:\s*Contact Phone Number\]/gi, agencyInfo.phoneNumber);
+      }
+      // Remove any remaining [CONFIRM: ...] placeholders that have no value
+      content = content.replace(/\[CONFIRM:[^\]]*\]/gi, '');
     }
     return content;
   })();

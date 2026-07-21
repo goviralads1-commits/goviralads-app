@@ -6949,6 +6949,8 @@ router.get('/settings', async (req, res) => {
         logoUrl: settings.logoUrl || '',
         phoneNumber: settings.phoneNumber || '',
         websiteUrl: settings.websiteUrl || '',
+        whatsappNumber: settings.whatsappNumber || '',
+        socialLinks: settings.socialLinks || { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
         updatedAt: settings.updatedAt,
       },
     });
@@ -6965,7 +6967,7 @@ router.patch('/settings', async (req, res) => {
     const _caller = await User.findById(req.user.id).populate('customRole');
     if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
 
-    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl } = req.body || {};
+    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl, whatsappNumber, socialLinks } = req.body || {};
     
     const updates = {};
     if (agencyName !== undefined) updates.agencyName = agencyName.trim();
@@ -6975,6 +6977,15 @@ router.patch('/settings', async (req, res) => {
     if (logoUrl !== undefined) updates.logoUrl = logoUrl.trim();
     if (phoneNumber !== undefined) updates.phoneNumber = phoneNumber.trim();
     if (websiteUrl !== undefined) updates.websiteUrl = websiteUrl.trim();
+    if (whatsappNumber !== undefined) updates.whatsappNumber = whatsappNumber.trim();
+    if (socialLinks !== undefined && typeof socialLinks === 'object') {
+      updates.socialLinks = {};
+      if (socialLinks.facebook !== undefined) updates.socialLinks.facebook = String(socialLinks.facebook || '').trim();
+      if (socialLinks.instagram !== undefined) updates.socialLinks.instagram = String(socialLinks.instagram || '').trim();
+      if (socialLinks.twitter !== undefined) updates.socialLinks.twitter = String(socialLinks.twitter || '').trim();
+      if (socialLinks.linkedin !== undefined) updates.socialLinks.linkedin = String(socialLinks.linkedin || '').trim();
+      if (socialLinks.youtube !== undefined) updates.socialLinks.youtube = String(socialLinks.youtube || '').trim();
+    }
     
     const settings = await Settings.updateSettings(updates);
     
