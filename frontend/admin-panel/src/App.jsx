@@ -95,19 +95,34 @@ const BrandedPreloader = ({ children }) => {
   const branding = useBranding();
   const [fadeOut, setFadeOut] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
-    if (branding.isLoaded) {
-      // Start fade-out, then hide
+    // Only fade out when branding is loaded AND either:
+    // - the logo image has finished loading (onLoad fired), OR
+    // - there is no logo URL (SVG fallback is fine), OR
+    // - the image failed to load (onError fired, fallback to SVG)
+    if (branding.isLoaded && (!branding.logoUrl || imageLoaded || imageError)) {
       setFadeOut(true);
       const t = setTimeout(() => setHidden(true), 300);
       return () => clearTimeout(t);
     }
-  }, [branding.isLoaded]);
+  }, [branding.isLoaded, branding.logoUrl, imageLoaded, imageError]);
+
+  // Safety net: force hide after 4s regardless (prevents stuck preloader)
+  useEffect(() => {
+    const safety = setTimeout(() => {
+      setFadeOut(true);
+      setTimeout(() => setHidden(true), 300);
+    }, 4000);
+    return () => clearTimeout(safety);
+  }, []);
 
   if (hidden) return children;
 
   const accent = branding.accentColor || '#6366f1';
+  const showLogo = branding.logoUrl && !imageError;
 
   return (
     <>
@@ -124,10 +139,12 @@ const BrandedPreloader = ({ children }) => {
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
       }}>
         <div style={{ textAlign: 'center' }}>
-          {branding.logoUrl ? (
+          {showLogo ? (
             <img
               src={branding.logoUrl}
               alt="Logo"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
               style={{
                 width: '64px',
                 height: '64px',

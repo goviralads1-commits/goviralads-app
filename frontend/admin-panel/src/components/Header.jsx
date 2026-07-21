@@ -392,7 +392,7 @@ const Header = ({ title }) => {
                       <span style={{ fontSize: '16px' }}>🎨</span> Progress Icons
                     </Link>
                     <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '8px 0' }} />
-                    <Link to="/profile" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
+                    <Link to="/profile" state={{ activeTab: 'users' }} onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>👥</span> User Manager
                     </Link>
                     <Link to="/billing" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
