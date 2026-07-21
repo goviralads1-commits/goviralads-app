@@ -82,7 +82,8 @@ const Profile = () => {
   const [employeeAssignmentsLoading, setEmployeeAssignmentsLoading] = useState(false);
   const [showAssignEmployeeModal, setShowAssignEmployeeModal] = useState(false);
   const [availableEmployees, setAvailableEmployees] = useState([]);
-  const [assignEmployeeData, setAssignEmployeeData] = useState({ employeeId: '', role: '', notes: '' });
+  const [availableRoles, setAvailableRoles] = useState([]);
+  const [assignEmployeeData, setAssignEmployeeData] = useState({ employeeId: '', role: '', notes: '', commissionEnabled: false, commissionPercentage: 0 });
 
   // Push notification state
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -290,6 +291,15 @@ const Profile = () => {
     }
   };
 
+  const fetchAvailableRoles = async () => {
+    try {
+      const res = await api.get('/admin/employees/roles');
+      setAvailableRoles(res.data.roles || []);
+    } catch (err) {
+      setAvailableRoles([]);
+    }
+  };
+
   const handleAssignEmployee = async () => {
     if (!selectedUser || !assignEmployeeData.employeeId) return;
     try {
@@ -298,10 +308,14 @@ const Profile = () => {
         employeeId: assignEmployeeData.employeeId,
         role: assignEmployeeData.role || undefined,
         notes: assignEmployeeData.notes || undefined,
+        commissionSettings: {
+          enabled: assignEmployeeData.commissionEnabled,
+          percentage: Number(assignEmployeeData.commissionPercentage) || 0,
+        },
       });
       showToast('Employee assigned successfully');
       setShowAssignEmployeeModal(false);
-      setAssignEmployeeData({ employeeId: '', role: '', notes: '' });
+      setAssignEmployeeData({ employeeId: '', role: '', notes: '', commissionEnabled: false, commissionPercentage: 0 });
       fetchEmployeeAssignments(selectedUser.id);
     } catch (err) {
       showToast(err.response?.data?.error || 'Failed to assign employee', 'error');
@@ -1768,7 +1782,7 @@ const Profile = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Assigned Employees</h3>
                       <button
-                        onClick={() => { fetchAvailableEmployees(); setShowAssignEmployeeModal(true); }}
+                        onClick={() => { fetchAvailableEmployees(); fetchAvailableRoles(); setShowAssignEmployeeModal(true); }}
                         style={{
                           padding: '10px 20px',
                           backgroundColor: '#6366f1',
@@ -2400,15 +2414,49 @@ const Profile = () => {
                 {/* Role */}
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>Role (optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., DESIGNER, EDITOR, MANAGER"
+                  <select
                     value={assignEmployeeData.role}
                     onChange={e => setAssignEmployeeData({...assignEmployeeData, role: e.target.value})}
-                    style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', cursor: 'pointer', boxSizing: 'border-box' }}
                     onFocus={(e) => e.target.style.borderColor = '#6366f1'}
                     onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                  />
+                  >
+                    <option value="">Use employee's default role</option>
+                    {availableRoles.map(r => (
+                      <option key={r.key} value={r.value}>{r.value.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Commission Settings */}
+                <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: assignEmployeeData.commissionEnabled ? '12px' : '0' }}>
+                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Commission</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#64748b' }}>
+                      <input
+                        type="checkbox"
+                        checked={assignEmployeeData.commissionEnabled}
+                        onChange={e => setAssignEmployeeData({...assignEmployeeData, commissionEnabled: e.target.checked})}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#6366f1' }}
+                      />
+                      Enable commission
+                    </label>
+                  </div>
+                  {assignEmployeeData.commissionEnabled && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', color: '#64748b', marginBottom: '6px' }}>Commission Percentage (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={assignEmployeeData.commissionPercentage}
+                        onChange={e => setAssignEmployeeData({...assignEmployeeData, commissionPercentage: e.target.value})}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                        onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                        onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Notes */}
