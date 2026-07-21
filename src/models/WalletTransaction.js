@@ -22,6 +22,8 @@ const TRANSACTION_TYPES = Object.freeze({
   CREDIT: 'CREDIT',
   DEBIT: 'DEBIT',
   REFUND: 'REFUND',
+  // Subscription lifecycle
+  SUBSCRIPTION_EXPIRED: 'SUBSCRIPTION_EXPIRED',
 });
 
 const walletTransactionSchema = new mongoose.Schema(

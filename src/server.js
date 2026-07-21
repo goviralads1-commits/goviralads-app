@@ -413,6 +413,8 @@ async function start() {
 // Expire subscriptions whose expiresAt has passed
 function startSubscriptionExpiryJob() {
   const Wallet = require('./models/Wallet');
+  const { WalletTransaction, TRANSACTION_TYPES } = require('./models/WalletTransaction');
+  const { createNotification } = require('./services/notificationService');
   const expireSubscriptions = async () => {
     try {
       // 1. Expire UserSubscription records (legacy)
@@ -425,13 +427,50 @@ function startSubscriptionExpiryJob() {
       }
 
       // 2. Reset wallet.subscriptionCredits for expired subscriptions
+      // B2: Include $ne: null to catch wallets with null expiry that shouldn't have active credits
+      // B1: Create ledger entry + notification for each expired wallet
       const now = new Date();
-      const walletResult = await Wallet.updateMany(
-        { subscriptionExpiresAt: { $lt: now }, subscriptionCredits: { $gt: 0 } },
-        { $set: { subscriptionCredits: 0 } }
-      );
-      if (walletResult.modifiedCount > 0) {
-        console.log(`[EXPIRY] Reset subscriptionCredits on ${walletResult.modifiedCount} wallet(s)`);
+      const expiredWallets = await Wallet.find({
+        subscriptionExpiresAt: { $lt: now, $ne: null },
+        subscriptionCredits: { $gt: 0 },
+      }).exec();
+
+      for (const wallet of expiredWallets) {
+        const expiredCredits = wallet.subscriptionCredits || 0;
+
+        // B1: Create ledger entry for credit expiry
+        try {
+          await WalletTransaction.create({
+            walletId: wallet._id,
+            type: TRANSACTION_TYPES.SUBSCRIPTION_EXPIRED,
+            amount: 0,
+            credits: -expiredCredits,
+            description: `Subscription credits expired (${expiredCredits} credits)`,
+            referenceId: null,
+          });
+        } catch (txErr) {
+          console.error('[EXPIRY] Failed to create ledger entry:', txErr.message);
+        }
+
+        // B1: Notify client about expiry
+        try {
+          await createNotification({
+            recipientId: wallet.clientId,
+            title: 'Subscription Credits Expired',
+            message: `Your ${expiredCredits} subscription credits have expired. Please recharge to continue.`,
+            relatedEntity: { entityType: 'WALLET', entityId: wallet._id },
+          });
+        } catch (notifErr) {
+          console.error('[EXPIRY] Notification error:', notifErr.message);
+        }
+
+        // Reset credits
+        wallet.subscriptionCredits = 0;
+        await wallet.save();
+      }
+
+      if (expiredWallets.length > 0) {
+        console.log(`[EXPIRY] Reset subscriptionCredits on ${expiredWallets.length} wallet(s)`);
       }
     } catch (err) {
       console.error('[EXPIRY] Subscription expiry job error:', err.message);

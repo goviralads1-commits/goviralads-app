@@ -1309,7 +1309,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
 
     // Safety: block financial/assignment field edits on completed tasks
     if (task.status === 'COMPLETED') {
-      const blockedFields = ['assignedUsers', 'commissionValue', 'commissionType', 'defaultCommissionRoles', 'costBreakdown'];
+      const blockedFields = ['assignedUsers', 'assignedTo', 'commissionValue', 'commissionType', 'defaultCommissionRoles', 'costBreakdown'];
       const attempted = blockedFields.filter(f => updates[f] !== undefined);
       if (attempted.length > 0) {
         return res.status(400).json({ error: `Cannot modify ${attempted.join(', ')} on completed tasks.` });
@@ -1415,7 +1415,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
 
             if (validAssignedUsers.length > 0) {
               // CASE 1: Multi-assignment commission split
-              const taskValue = task.creditCost || 0;
+              const taskValue = task.creditsUsed || task.creditCost || 0;
               const costs = task.costBreakdown || { expenses: 0, tax: 0, other: 0 };
               const totalCosts = (Number(costs.expenses) || 0) + (Number(costs.tax) || 0) + (Number(costs.other) || 0);
               const netValue = Math.max(0, taskValue - totalCosts);
@@ -1445,7 +1445,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
 
             } else if (task.commissionValue > 0 && task.assignedTo) {
               // CASE 2: Fallback — existing single-assign logic
-              const taskValue = task.creditCost || 0;
+              const taskValue = task.creditsUsed || task.creditCost || 0;
               if (task.commissionType === 'percentage') {
                 task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
               } else {
@@ -1889,7 +1889,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
       if (validAssignedUsers.length > 0) {
         // CASE 1: Multi-assignment commission split
         console.log(`[COMMISSION-SPLIT] Calculating split for task ${taskId}`);
-        const taskValue = task.creditCost || 0;
+        const taskValue = task.creditsUsed || task.creditCost || 0;
         const costs = task.costBreakdown || { expenses: 0, tax: 0, other: 0 };
         const totalCosts = (Number(costs.expenses) || 0) + (Number(costs.tax) || 0) + (Number(costs.other) || 0);
         const netValue = Math.max(0, taskValue - totalCosts);
@@ -1921,7 +1921,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
       } else if (task.commissionValue > 0 && task.assignedTo) {
         // CASE 2: Fallback — existing single-assign logic
         console.log(`[COMMISSION] Calculating commission for task ${taskId}`);
-        const taskValue = task.creditCost || 0;
+        const taskValue = task.creditsUsed || task.creditCost || 0;
         if (task.commissionType === 'percentage') {
           task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
         } else {
@@ -2332,11 +2332,33 @@ router.patch('/tasks/:taskId/trash', async (req, res) => {
       return res.status(400).json({ error: 'Cannot trash plan templates. Use plan delete instead.' });
     }
 
+    // B5: Refund credits on trash
+    const refundAmount = task.creditsUsed || task.creditCost || 0;
+    if (refundAmount > 0 && task.clientId) {
+      const wallet = await Wallet.findOne({ clientId: task.clientId }).exec();
+      if (wallet) {
+        await Wallet.findByIdAndUpdate(wallet._id, { $inc: { walletCredits: refundAmount } });
+        await WalletTransaction.create({
+          walletId: wallet._id,
+          type: TRANSACTION_TYPES.REFUND,
+          amount: refundAmount,
+          credits: refundAmount,
+          description: `Refund for trashed task: ${task.title}`,
+          referenceId: task._id,
+        });
+      }
+    }
+
+    // Reverse commission if earned
+    if (task.commissionEarned && task.commissionEarned > 0) {
+      await reverseCommissionForTask(task._id, 'Task trashed');
+    }
+
     task.isDeleted = true;
     task.deletedAt = new Date();
     await task.save();
 
-    res.json({ success: true, message: 'Task moved to trash' });
+    res.json({ success: true, message: 'Task moved to trash', refundAmount });
   } catch (err) {
     console.error('Trash task error:', err);
     res.status(500).json({ error: 'Failed to trash task' });
