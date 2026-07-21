@@ -318,7 +318,7 @@ const Plans = () => {
       )}
       
       {/* Main Layout: Left Category Rail + Right Content */}
-      <div style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
+      <div className="plans-layout" style={{ display: 'flex', maxWidth: '1400px', margin: '0 auto' }}>
         
         {/* LEFT VERTICAL CATEGORY RAIL - Sticky Position */}
         <div className="category-rail" style={{ 
@@ -330,7 +330,7 @@ const Plans = () => {
           alignSelf: 'flex-start',
           height: 'fit-content',
           maxHeight: 'calc(100vh - 80px)',
-          overflow: 'visible',
+          overflowY: 'auto',
           paddingTop: '16px', 
           paddingBottom: '16px',
           scrollbarWidth: 'none', 
@@ -584,7 +584,7 @@ const Plans = () => {
             </div>
           ) : (
             /* Plans Grid - Premium Style (matches Client) */
-            <div style={{ 
+            <div className="plans-grid" style={{ 
               display: viewMode === 'grid' ? 'grid' : 'flex', 
               gridTemplateColumns: viewMode === 'grid' ? 'repeat(2, 1fr)' : undefined, 
               flexDirection: viewMode === 'list' ? 'column' : undefined, 
@@ -1176,6 +1176,47 @@ const Plans = () => {
           }
           .plans-media-grid {
             grid-template-columns: 1fr !important;
+          }
+        }
+        
+        /* Hide scrollbar on category rail */
+        .category-rail::-webkit-scrollbar {
+          display: none;
+        }
+        
+        /* MOBILE RESPONSIVE - Category Rail */
+        @media (max-width: 768px) {
+          .plans-layout {
+            flex-direction: column !important;
+          }
+          .category-rail {
+            position: relative !important;
+            top: 0 !important;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            border-right: none !important;
+            border-bottom: 1px solid #eef2f6 !important;
+            padding: 16px !important;
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 10px !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+          }
+          .category-rail > div {
+            flex-shrink: 0 !important;
+            margin: 0 !important;
+            padding: 12px 10px !important;
+            min-width: 75px !important;
+          }
+          .plans-grid {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
           }
         }
       `}</style>

@@ -279,7 +279,7 @@ const Plans = () => {
           alignSelf: 'flex-start',
           height: 'fit-content',
           maxHeight: 'calc(100vh - 80px)',
-          overflow: 'visible',
+          overflowY: 'auto',
           paddingTop: '20px', 
           paddingBottom: '20px',
           scrollbarWidth: 'none', 
