@@ -1833,7 +1833,7 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
         title: subscription.title,
       },
       tasksCreated: clonedTasks.length,
-      walletBalance: wallet.balance,
+      walletBalance: (wallet.walletCredits || 0) + (wallet.subscriptionCredits || 0),
     });
   } catch (err) {
     console.error('Subscription purchase error:', err);
@@ -2529,7 +2529,7 @@ router.get('/profile', async (req, res) => {
         companyName: user.billing?.companyName || user.profile?.company || '',
       },
       stats: {
-        walletBalance: wallet?.balance || 0,
+        walletBalance: (wallet?.walletCredits || 0) + (wallet?.subscriptionCredits || 0),
         activeTasks,
         completedTasks,
         pendingTasks,
@@ -3529,7 +3529,7 @@ router.post('/purchase-cart', async (req, res) => {
       },
       // Include tasks array for backward compatibility (empty since tasks created on approval)
       tasks: [],
-      walletBalance: updatedWallet?.balance ?? 0,
+      walletBalance: (updatedWallet?.walletCredits || 0) + (updatedWallet?.subscriptionCredits || 0),
       message: 'Order placed successfully. Awaiting admin approval.',
     });
 

@@ -3274,7 +3274,7 @@ router.get('/reports/clients', async (req, res) => {
         return {
           clientId: wallet.clientId._id.toString(),
           clientIdentifier: wallet.clientId.identifier,
-          balance: wallet.balance,
+          balance: (wallet.walletCredits || 0) + (wallet.subscriptionCredits || 0),
           taskCount,
           lastActivity: recentTask ? recentTask.createdAt : wallet.updatedAt,
         };
@@ -4135,7 +4135,7 @@ router.get('/users', async (req, res) => {
         phone: user.profile?.phone || '',
         photoUrl: user.profile?.photoUrl || null,
         company: user.profile?.company || '',
-        walletBalance: wallet?.balance || 0,
+        walletBalance: (wallet?.walletCredits || 0) + (wallet?.subscriptionCredits || 0),
         activeTasks,
         totalTasks,
         createdAt: user.createdAt,
@@ -4296,7 +4296,7 @@ router.get('/users/:userId', async (req, res) => {
         lastActivityAt: user.lastActivityAt,
       },
       stats: {
-        walletBalance: wallet?.balance || 0,
+        walletBalance: (wallet?.walletCredits || 0) + (wallet?.subscriptionCredits || 0),
         activeTasks,
         completedTasks,
         pendingTasks,
@@ -4571,7 +4571,7 @@ router.get('/users/:userId/wallet', async (req, res) => {
     const total = await WalletTransaction.countDocuments({ walletId: wallet._id }).exec();
 
     return res.status(200).json({
-      balance: wallet.balance,
+      balance: (wallet.walletCredits || 0) + (wallet.subscriptionCredits || 0),
       transactions: transactions.map(t => ({
         id: t._id.toString(),
         type: t.type,
@@ -4913,7 +4913,7 @@ router.get('/users', async (req, res) => {
     const userIds = users.map(u => u._id);
     const wallets = await Wallet.find({ clientId: { $in: userIds } }).exec();
     const walletMap = {};
-    wallets.forEach(w => { walletMap[w.clientId.toString()] = w.balance; });
+    wallets.forEach(w => { walletMap[w.clientId.toString()] = (w.walletCredits || 0) + (w.subscriptionCredits || 0); });
 
     const taskCounts = await Task.aggregate([
       { $match: { clientId: { $in: userIds }, isListedInPlans: { $ne: true } } },
@@ -5069,7 +5069,7 @@ router.post('/users/:userId/wallet', async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Wallet updated successfully',
-      balance: wallet.balance,
+      balance: (wallet.walletCredits || 0) + (wallet.subscriptionCredits || 0),
     });
   } catch (err) {
     console.error('Failed to update wallet:', err);
