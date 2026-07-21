@@ -407,6 +407,9 @@ const Header = ({ title }) => {
                     <Link to="/earnings-redeems" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#7c3aed', fontSize: '14px', fontWeight: '600', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>🏦</span> Redeem Requests
                     </Link>
+                    <Link to="/employees" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
+                      <span style={{ fontSize: '16px' }}>👥</span> Employees
+                    </Link>
                     {isMainAdmin && (
                       <Link to="/roles" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#6366f1', fontSize: '14px', fontWeight: '600', transition: 'background 0.2s' }}>
                         <span style={{ fontSize: '16px' }}>🔑</span> Roles & Permissions

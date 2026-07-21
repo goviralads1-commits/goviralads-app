@@ -28,6 +28,7 @@ import ProgressIcons from './pages/ProgressIcons';
 import Support from './pages/Support';
 import Earnings from './pages/Earnings';
 import EarningsRedeems from './pages/EarningsRedeems';
+import Employees from './pages/Employees';
 import NotFound from './pages/NotFound';
 
 // Branding Context — shared across app (preloader + login + anywhere)
@@ -529,6 +530,11 @@ const App = () => {
           <Route path="/earnings-redeems" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <EarningsRedeems />
+            </ProtectedRoute>
+          } />
+          <Route path="/employees" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Employees />
             </ProtectedRoute>
           } />
           <Route path="/subscription-requests" element={
