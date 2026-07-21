@@ -24,7 +24,6 @@ import OfficeCMS from './pages/OfficeCMS';
 import Orders from './pages/Orders';
 import Settings from './pages/Settings';
 import Roles from './pages/Roles';
-import SubscriptionRequests from './pages/SubscriptionRequests';
 import ProgressIcons from './pages/ProgressIcons';
 import Support from './pages/Support';
 import Earnings from './pages/Earnings';

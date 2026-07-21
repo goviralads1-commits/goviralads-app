@@ -13,6 +13,7 @@ const EarningsRedeems = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [pendingTotal, setPendingTotal] = useState(0);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('PENDING');
@@ -52,9 +53,17 @@ const EarningsRedeems = () => {
     }
   }, [statusFilter, startDate, endDate]);
 
+  const fetchPendingTotal = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/earnings/redeem-requests', { params: { status: 'PENDING' } });
+      setPendingTotal((res.data?.requests || []).length);
+    } catch (err) { /* silent */ }
+  }, []);
+
   useEffect(() => {
     fetchRequests();
-  }, [fetchRequests]);
+    fetchPendingTotal();
+  }, [fetchRequests, fetchPendingTotal]);
 
   const openApprove = (req) => {
     setSelectedRequest(req);
@@ -87,6 +96,7 @@ const EarningsRedeems = () => {
       showToast(`Request approved via ${payoutMethod}.`, 'success');
       setShowApproveModal(false);
       fetchRequests();
+      fetchPendingTotal();
     } catch (err) {
       showToast(err.response?.data?.error || 'Approval failed.', 'error');
     } finally {
@@ -105,6 +115,7 @@ const EarningsRedeems = () => {
       showToast('Request rejected.', 'success');
       setShowRejectModal(false);
       fetchRequests();
+      fetchPendingTotal();
     } catch (err) {
       showToast(err.response?.data?.error || 'Rejection failed.', 'error');
     } finally {
@@ -112,17 +123,15 @@ const EarningsRedeems = () => {
     }
   };
 
-  const pendingCount = requests.filter(r => r.status === 'PENDING').length;
-
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Header />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
           <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Earnings Redeem Requests</h1>
-          {pendingCount > 0 && statusFilter !== 'PENDING' && (
+          {pendingTotal > 0 && statusFilter !== 'PENDING' && (
             <span style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '600' }}>
-              {pendingCount} pending
+              {pendingTotal} pending
             </span>
           )}
         </div>
