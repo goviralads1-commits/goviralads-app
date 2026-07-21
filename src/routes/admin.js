@@ -4616,13 +4616,27 @@ router.post('/users/:userId/wallet', async (req, res) => {
       wallet = await Wallet.create({ clientId: userId, balance: 0 });
     }
 
-    const actualAmount = type === 'DEDUCT' ? -Math.abs(amount) : Math.abs(amount);
-    
-    if (type === 'DEDUCT' && wallet.balance < Math.abs(amount)) {
-      return res.status(400).json({ error: 'Insufficient balance' });
-    }
+    const absAmount = Math.abs(amount);
+    const actualAmount = type === 'DEDUCT' ? -absAmount : absAmount;
 
-    wallet.balance += actualAmount;
+    if (type === 'DEDUCT') {
+      const totalAvailable = wallet.walletCredits + (wallet.subscriptionCredits || 0);
+      if (totalAvailable < absAmount) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+      // Hybrid deduction: walletCredits first, then subscriptionCredits
+      let remaining = absAmount;
+      const fromWallet = Math.min(wallet.walletCredits, remaining);
+      wallet.walletCredits -= fromWallet;
+      remaining -= fromWallet;
+      if (remaining > 0) {
+        wallet.subscriptionCredits = Math.max(0, (wallet.subscriptionCredits || 0) - remaining);
+      }
+    } else {
+      wallet.walletCredits += absAmount;
+    }
+    // Sync legacy balance for backward compatibility
+    wallet.balance = wallet.walletCredits + (wallet.subscriptionCredits || 0);
     await wallet.save();
 
     // Create transaction record
@@ -5021,14 +5035,27 @@ router.post('/users/:userId/wallet', async (req, res) => {
       wallet = await Wallet.create({ clientId: userId, balance: 0 });
     }
 
-    const adjustmentAmount = type === 'ADD' ? parseFloat(amount) : -parseFloat(amount);
-    const newBalance = wallet.balance + adjustmentAmount;
+    const absAmount = parseFloat(amount);
+    const adjustmentAmount = type === 'ADD' ? absAmount : -absAmount;
 
-    if (newBalance < 0) {
-      return res.status(400).json({ error: 'Insufficient balance' });
+    if (type === 'DEDUCT') {
+      const totalAvailable = wallet.walletCredits + (wallet.subscriptionCredits || 0);
+      if (totalAvailable < absAmount) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+      // Hybrid deduction: walletCredits first, then subscriptionCredits
+      let remaining = absAmount;
+      const fromWallet = Math.min(wallet.walletCredits, remaining);
+      wallet.walletCredits -= fromWallet;
+      remaining -= fromWallet;
+      if (remaining > 0) {
+        wallet.subscriptionCredits = Math.max(0, (wallet.subscriptionCredits || 0) - remaining);
+      }
+    } else {
+      wallet.walletCredits += absAmount;
     }
-
-    wallet.balance = newBalance;
+    // Sync legacy balance for backward compatibility
+    wallet.balance = wallet.walletCredits + (wallet.subscriptionCredits || 0);
     await wallet.save();
 
     await WalletTransaction.create({
