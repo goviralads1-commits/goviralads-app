@@ -198,11 +198,11 @@ const EarningsLedger = () => {
         )}
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-          <button onClick={() => setActiveTab('ledger')} style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: activeTab === 'ledger' ? '2px solid #22c55e' : '1px solid #e2e8f0', backgroundColor: activeTab === 'ledger' ? '#f0fdf4' : '#fff', color: activeTab === 'ledger' ? '#16a34a' : '#64748b', cursor: 'pointer' }}>
+        <div className="premium-tab-bar" data-theme="purple" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <button onClick={() => setActiveTab('ledger')} className={`premium-tab${activeTab === 'ledger' ? ' active' : ''}`} style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', borderRadius: '10px' }}>
             Ledger
           </button>
-          <button onClick={() => setActiveTab('redeems')} style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', border: activeTab === 'redeems' ? '2px solid #7c3aed' : '1px solid #e2e8f0', backgroundColor: activeTab === 'redeems' ? '#f5f3ff' : '#fff', color: activeTab === 'redeems' ? '#7c3aed' : '#64748b', cursor: 'pointer' }}>
+          <button onClick={() => setActiveTab('redeems')} className={`premium-tab${activeTab === 'redeems' ? ' active' : ''}`} style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', borderRadius: '10px' }}>
             Redeem History {redeemRequests.length > 0 && `(${redeemRequests.length})`}
           </button>
         </div>

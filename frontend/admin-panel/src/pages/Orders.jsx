@@ -160,23 +160,18 @@ const Orders = () => {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           marginBottom: '20px', flexWrap: 'wrap', gap: '12px'
         }}>
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <div className="premium-tab-bar" data-theme="indigo" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
             {ORDER_STATUSES.map(status => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
+                className={`premium-tab${statusFilter === status ? ' active' : ''}`}
                 style={{
                   padding: '10px 18px',
                   borderRadius: '10px',
-                  border: 'none',
-                  backgroundColor: statusFilter === status ? '#6366f1' : '#fff',
-                  color: statusFilter === status ? '#fff' : '#64748b',
                   fontSize: '13px',
                   fontWeight: '600',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  boxShadow: statusFilter === status ? '0 4px 12px rgba(99,102,241,0.3)' : '0 2px 8px rgba(0,0,0,0.04)',
-                  transition: 'all 0.2s'
+                  whiteSpace: 'nowrap'
                 }}
               >
                 {status === 'ALL' ? 'All Orders' : statusColors[status]?.label || status}

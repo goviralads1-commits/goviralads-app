@@ -1564,32 +1564,18 @@ const Profile = () => {
                 </div>
 
                 {/* Tabs Navigation */}
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+                <div className="premium-tab-bar" data-theme="indigo" style={{ display: 'flex', gap: '6px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
                   {['overview', 'tasks', 'wallet', 'purchases', 'responses', 'employees'].map(tab => (
                     <button
                       key={tab}
                       onClick={() => setActiveUserTab(tab)}
+                      className={`premium-tab${activeUserTab === tab ? ' active' : ''}`}
                       style={{
                         padding: '10px 20px',
                         fontSize: '14px',
                         fontWeight: '600',
                         borderRadius: '10px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        backgroundColor: activeUserTab === tab ? '#6366f1' : '#f8fafc',
-                        color: activeUserTab === tab ? '#ffffff' : '#64748b',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (activeUserTab !== tab) {
-                          e.target.style.backgroundColor = '#f1f5f9';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (activeUserTab !== tab) {
-                          e.target.style.backgroundColor = '#f8fafc';
-                        }
+                        whiteSpace: 'nowrap'
                       }}
                     >
                       {tab.charAt(0).toUpperCase() + tab.slice(1)}

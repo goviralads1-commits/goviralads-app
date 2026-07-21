@@ -1074,7 +1074,7 @@ const Dashboard = () => {
         </div>
 
         {/* SECTION TABS */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="premium-tab-bar" data-theme="indigo" style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
           {[
             { id: 'updates', label: 'Updates', icon: '🔄', count: updates.length },
             { id: 'requirements', label: 'Requirements', icon: '📋', count: requirements.length },
@@ -1083,14 +1083,11 @@ const Dashboard = () => {
             <button
               key={tab.id}
               onClick={() => setActiveSection(tab.id)}
+              className={`premium-tab${activeSection === tab.id ? ' active' : ''}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px',
-                borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                backgroundColor: activeSection === tab.id ? '#6366f1' : '#fff',
-                color: activeSection === tab.id ? '#fff' : '#64748b',
+                borderRadius: '12px', whiteSpace: 'nowrap',
                 fontWeight: '600', fontSize: '14px',
-                boxShadow: activeSection === tab.id ? '0 4px 12px rgba(99,102,241,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
-                transition: 'all 0.2s ease',
               }}
             >
               <span>{tab.icon}</span>

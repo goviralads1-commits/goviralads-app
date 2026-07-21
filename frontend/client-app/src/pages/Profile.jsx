@@ -318,19 +318,16 @@ const Profile = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="premium-tab-bar" data-theme="gray" style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              className={`premium-tab${activeTab === tab.id ? ' active' : ''}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px',
-                borderRadius: '12px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                backgroundColor: activeTab === tab.id ? '#6366f1' : '#fff',
-                color: activeTab === tab.id ? '#fff' : '#64748b',
+                borderRadius: '12px', whiteSpace: 'nowrap',
                 fontWeight: '600', fontSize: '14px',
-                boxShadow: activeTab === tab.id ? '0 4px 12px rgba(99,102,241,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
-                transition: 'all 0.2s ease',
               }}
             >
               <span>{tab.icon}</span>

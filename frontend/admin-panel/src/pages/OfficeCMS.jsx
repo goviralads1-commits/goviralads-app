@@ -205,7 +205,7 @@ const OfficeCMS = () => {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="premium-tab-bar" data-theme="indigo" style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
           {[
             { id: 'banners', label: '🖼️ Banners', desc: 'Hero slides' },
             { id: 'sections', label: '📑 Sections', desc: 'Order & visibility' },
@@ -215,12 +215,10 @@ const OfficeCMS = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              className={`premium-tab${activeTab === tab.id ? ' active' : ''}`}
               style={{
-                padding: '14px 20px', borderRadius: '14px', border: 'none', cursor: 'pointer', textAlign: 'left',
-                backgroundColor: activeTab === tab.id ? '#6366f1' : '#fff',
-                color: activeTab === tab.id ? '#fff' : '#64748b',
-                boxShadow: activeTab === tab.id ? '0 4px 12px rgba(99,102,241,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
-                transition: 'all 0.2s', minWidth: '140px'
+                padding: '14px 20px', borderRadius: '14px', textAlign: 'left',
+                minWidth: '140px'
               }}
             >
               <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '2px' }}>{tab.label}</div>

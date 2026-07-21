@@ -1016,7 +1016,7 @@ const Wallet = () => {
         )}
 
         {/* Tab Toggle */}
-        <div ref={subscriptionRef} style={{
+        <div ref={subscriptionRef} className="premium-tab-bar" data-theme="blue" style={{
           display: 'flex',
           backgroundColor: '#fff',
           borderRadius: '16px',
@@ -1026,51 +1026,39 @@ const Wallet = () => {
         }}>
           <button
             onClick={() => setActiveTab('transactions')}
+            className={`premium-tab${activeTab === 'transactions' ? ' active' : ''}`}
             style={{
               flex: 1,
               padding: '14px 16px',
               fontSize: '14px',
               fontWeight: '600',
-              borderRadius: '12px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'transactions' ? '#6366f1' : 'transparent',
-              color: activeTab === 'transactions' ? '#fff' : '#64748b',
-              transition: 'all 0.2s ease'
+              borderRadius: '12px'
             }}
           >
             Credit Transactions
           </button>
           <button
             onClick={() => setActiveTab('recharge')}
+            className={`premium-tab${activeTab === 'recharge' ? ' active' : ''}`}
             style={{
               flex: 1,
               padding: '14px 16px',
               fontSize: '14px',
               fontWeight: '600',
-              borderRadius: '12px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'recharge' ? '#6366f1' : 'transparent',
-              color: activeTab === 'recharge' ? '#fff' : '#64748b',
-              transition: 'all 0.2s ease'
+              borderRadius: '12px'
             }}
           >
             Recharge
           </button>
           <button
             onClick={() => setActiveTab('invoices')}
+            className={`premium-tab${activeTab === 'invoices' ? ' active' : ''}`}
             style={{
               flex: 1,
               padding: '14px 16px',
               fontSize: '14px',
               fontWeight: '600',
-              borderRadius: '12px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'invoices' ? '#6366f1' : 'transparent',
-              color: activeTab === 'invoices' ? '#fff' : '#64748b',
-              transition: 'all 0.2s ease'
+              borderRadius: '12px'
             }}
           >
             Invoices

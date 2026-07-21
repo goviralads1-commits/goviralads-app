@@ -140,7 +140,7 @@ const Orders = () => {
         </div>
 
         {/* Status Filter Tabs */}
-        <div style={{
+        <div className="premium-tab-bar" data-theme="green" style={{
           display: 'flex', gap: '8px', marginBottom: '20px',
           overflowX: 'auto', paddingBottom: '4px', WebkitOverflowScrolling: 'touch'
         }}>
@@ -148,18 +148,13 @@ const Orders = () => {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
+              className={`premium-tab${statusFilter === status ? ' active' : ''}`}
               style={{
                 padding: '10px 16px',
                 borderRadius: '10px',
-                border: 'none',
-                backgroundColor: statusFilter === status ? '#22c55e' : '#fff',
-                color: statusFilter === status ? '#fff' : '#64748b',
                 fontSize: '13px',
                 fontWeight: '600',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                boxShadow: statusFilter === status ? '0 4px 12px rgba(34,197,94,0.3)' : '0 2px 8px rgba(0,0,0,0.04)',
-                transition: 'all 0.2s'
+                whiteSpace: 'nowrap'
               }}
             >
               {status === 'ALL' ? 'All' : statusColors[status]?.label || status}

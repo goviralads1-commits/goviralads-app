@@ -89,3 +89,39 @@ body.modal-open {
 button, a, input[type="checkbox"], input[type="radio"] {
   -webkit-tap-highlight-color: rgba(0,0,0,0.1);
 }
+
+/* ============================================
+   PREMIUM TAB SYSTEM (Swiggy-inspired)
+   Shared between Client App and Admin Panel
+   Visual polish only — layout stays per-page
+   ============================================ */
+
+.premium-tab {
+  cursor: pointer;
+  border: none;
+  font-weight: 600;
+  transition: background 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.65);
+  color: #64748b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  opacity: 0.75;
+}
+
+.premium-tab.active {
+  background: linear-gradient(135deg, var(--tab-theme, #6366f1) 0%, var(--tab-theme-dark, #4f46e5) 100%);
+  color: #fff;
+  box-shadow: 0 3px 14px var(--tab-shadow, rgba(99, 102, 241, 0.25));
+  opacity: 1;
+}
+
+/* Theme variants — subtle, premium */
+.premium-tab-bar[data-theme="blue"]   { --tab-theme: #3b82f6; --tab-theme-dark: #2563eb; --tab-shadow: rgba(59, 130, 246, 0.25); }
+.premium-tab-bar[data-theme="green"]  { --tab-theme: #22c55e; --tab-theme-dark: #16a34a; --tab-shadow: rgba(34, 197, 94, 0.25); }
+.premium-tab-bar[data-theme="purple"] { --tab-theme: #8b5cf6; --tab-theme-dark: #7c3aed; --tab-shadow: rgba(139, 92, 246, 0.25); }
+.premium-tab-bar[data-theme="indigo"] { --tab-theme: #6366f1; --tab-theme-dark: #4f46e5; --tab-shadow: rgba(99, 102, 241, 0.25); }
+.premium-tab-bar[data-theme="teal"]   { --tab-theme: #14b8a6; --tab-theme-dark: #0d9488; --tab-shadow: rgba(20, 184, 166, 0.25); }
+.premium-tab-bar[data-theme="gray"]   { --tab-theme: #64748b; --tab-theme-dark: #475569; --tab-shadow: rgba(100, 116, 139, 0.25); }
