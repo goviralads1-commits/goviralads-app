@@ -92,6 +92,37 @@ async function createCommissionWithLedger({ userId, taskId, taskTitle, amount, c
   }
 }
 
+// Helper: Reverse commission for a task (used on task reopen)
+async function reverseCommissionForTask(taskId, reason) {
+  try {
+    const ledgerEntries = await EarningsLedger.find({
+      sourceTaskId: taskId,
+      type: 'COMMISSION_EARNED',
+    }).exec();
+
+    for (const entry of ledgerEntries) {
+      await EarningsLedger.create({
+        userId: entry.userId,
+        type: 'COMMISSION_REVERSED',
+        amount: -Math.abs(entry.amount),
+        sourceTaskId: taskId,
+        sourceCommissionLogId: entry.sourceCommissionLogId,
+        note: reason || 'Commission reversed on task reopen',
+      });
+    }
+
+    await Task.findByIdAndUpdate(taskId, {
+      $set: { commissionEarned: null, companyEarning: null },
+    });
+
+    console.log(`[COMMISSION-REVERSE] Reversed ${ledgerEntries.length} ledger entries for task ${taskId}`);
+    return ledgerEntries.length;
+  } catch (err) {
+    console.error(`[COMMISSION-REVERSE] Failed for task ${taskId}:`, err.message);
+    return 0;
+  }
+}
+
 router.use(authenticateJWT);
 router.use(requireAdmin);
 
@@ -515,7 +546,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
         const emailResult = await emailService.sendWalletUpdate(recipientEmail, {
           amount: updatedRequest.amount,
           description: `Recharge approved${updatedRequest.paymentReference ? ` (Ref: ${updatedRequest.paymentReference})` : ''}`,
-          newBalance: wallet.balance
+          newBalance: (wallet.walletCredits || 0) + (wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > new Date() ? (wallet.subscriptionCredits || 0) : 0)
         });
         
         if (emailResult.success) {
@@ -537,7 +568,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
       paymentReference: updatedRequest.paymentReference || '',
       status: updatedRequest.status,
       reviewedBy: adminId,
-      walletBalance: wallet.balance,
+      walletBalance: (wallet.walletCredits || 0) + (wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > new Date() ? (wallet.subscriptionCredits || 0) : 0),
       transactionId: transaction._id.toString(),
       invoiceId: invoice?._id?.toString() || null,
       invoiceNumber: invoice?.invoiceNumber || null,
@@ -1379,7 +1410,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
         if (currentProgress >= 100 && task.status !== 'COMPLETED') {
           task.status = 'COMPLETED';
           // COMMISSION CALCULATION: When auto-completed via progress
-          if (!task.commissionEarned) {
+          if (task.commissionEarned === null || task.commissionEarned === undefined) {
             const validAssignedUsers = (task.assignedUsers || []).filter(u => u.userId && u.percentage > 0);
 
             if (validAssignedUsers.length > 0) {
@@ -1852,7 +1883,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
     const crossedCompletion = (oldProgress < 100 && newProgress >= 100) || (oldStatus !== 'COMPLETED' && newStatus === 'COMPLETED');
     
     // COMMISSION CALCULATION: When task is completed, calculate commission
-    if (crossedCompletion && !task.commissionEarned) {
+    if (crossedCompletion && (task.commissionEarned === null || task.commissionEarned === undefined)) {
       const validAssignedUsers = (task.assignedUsers || []).filter(u => u.userId && u.percentage > 0);
 
       if (validAssignedUsers.length > 0) {
@@ -2344,6 +2375,11 @@ router.patch('/tasks/:taskId/reopen', async (req, res) => {
     // Only allow reopening if task is completed or cancelled
     if (task.status !== 'COMPLETED' && task.status !== 'CANCELLED') {
       return res.status(400).json({ error: 'Only completed or cancelled tasks can be reopened' });
+    }
+
+    // Reverse commission if it was earned
+    if (task.commissionEarned && task.commissionEarned > 0) {
+      await reverseCommissionForTask(task._id, 'Task reopened');
     }
 
     // Reopen the task by setting status back to IN_PROGRESS or PENDING
@@ -3131,7 +3167,13 @@ router.get('/reports/overview', async (req, res) => {
     const totalClients = await User.countDocuments({ role: ROLES.CLIENT, isDeleted: { $ne: true } }).exec();
     const activeTasks = await Task.countDocuments({ status: { $in: ['ACTIVE', 'IN_PROGRESS'] }, isListedInPlans: { $ne: true } }).exec();
     const pendingRecharges = await RechargeRequest.countDocuments({ status: 'PENDING' }).exec();
-    const totalCredits = await Wallet.aggregate([{ $group: { _id: null, total: { $sum: '$balance' } } }]);
+    // Use dual-pool calculation instead of legacy balance
+    const nowForCredits = new Date();
+    const allWallets = await Wallet.find({}).exec();
+    const totalCredits = allWallets.reduce((sum, w) => {
+      const subNotExpired = w.subscriptionExpiresAt && new Date(w.subscriptionExpiresAt) > nowForCredits;
+      return sum + (w.walletCredits || 0) + (subNotExpired ? (w.subscriptionCredits || 0) : 0);
+    }, 0);
     
     // Additional meaningful stats
     const pendingApprovals = await Task.countDocuments({ status: 'PENDING_APPROVAL', isListedInPlans: { $ne: true } }).exec();
@@ -6891,6 +6933,8 @@ router.patch('/settings', async (req, res) => {
         logoUrl: settings.logoUrl,
         phoneNumber: settings.phoneNumber,
         websiteUrl: settings.websiteUrl,
+        whatsappNumber: settings.whatsappNumber || '',
+        socialLinks: settings.socialLinks || {},
         updatedAt: settings.updatedAt,
       },
     });
@@ -7706,9 +7750,22 @@ router.post('/earnings/redeem-approve', async (req, res) => {
     } catch (txErr) {
       console.warn('[EARNINGS-REDEEM] Transaction not supported — running in fallback mode');
 
-      // Fallback: sequential (with idempotency check on request status)
-      const freshRequest = await EarningsRedeemRequest.findById(requestId);
-      if (freshRequest.status !== 'PENDING') {
+      // ATOMIC STATUS LOCK: prevent double-approval race condition
+      const lockedRequest = await EarningsRedeemRequest.findOneAndUpdate(
+        { _id: requestId, status: 'PENDING' },
+        {
+          $set: {
+            status: newStatus,
+            payoutMethod,
+            transactionReference: transactionReference || null,
+            adminNote: adminNote || '',
+            approvedByAdminId: adminId,
+          },
+        },
+        { new: true }
+      );
+
+      if (!lockedRequest) {
         return res.status(400).json({ error: 'Request was already processed.' });
       }
 
@@ -7726,7 +7783,7 @@ router.post('/earnings/redeem-approve', async (req, res) => {
       if (payoutMethod === 'WALLET') {
         let wallet = await Wallet.findOne({ clientId: request.userId });
         if (!wallet) {
-          wallet = await Wallet.create({ clientId: request.userId, balance: 0 });
+          wallet = await Wallet.create({ clientId: request.userId, balance: 0, walletCredits: 0, subscriptionCredits: 0 });
         }
         await Wallet.findByIdAndUpdate(wallet._id, { $inc: { walletCredits: request.requestedAmount } });
         await WalletTransaction.create({
@@ -7738,14 +7795,10 @@ router.post('/earnings/redeem-approve', async (req, res) => {
         });
       }
 
-      // 3. Update request
-      freshRequest.status = newStatus;
-      freshRequest.payoutMethod = payoutMethod;
-      freshRequest.transactionReference = transactionReference || null;
-      freshRequest.adminNote = adminNote || '';
-      freshRequest.approvedByAdminId = adminId;
-      freshRequest.relatedLedgerEntryIds = ledgerEntryIds;
-      await freshRequest.save();
+      // 3. Link ledger entries to request (status already set atomically above)
+      await EarningsRedeemRequest.findByIdAndUpdate(requestId, {
+        $set: { relatedLedgerEntryIds: ledgerEntryIds },
+      });
     }
 
     // Compute new balance

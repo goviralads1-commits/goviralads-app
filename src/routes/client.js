@@ -1191,6 +1191,18 @@ router.post('/tasks/purchase', async (req, res) => {
       return res.status(400).json({ error: 'templateId is required' });
     }
 
+    // Idempotency: prevent duplicate purchase within 30 seconds
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+    const recentTemplatePurchase = await Task.findOne({
+      clientId,
+      templateId,
+      status: TASK_STATUS.PENDING,
+      createdAt: { $gte: thirtySecondsAgo },
+    }).exec();
+    if (recentTemplatePurchase) {
+      return res.status(409).json({ error: 'Duplicate purchase detected. Please wait a moment.' });
+    }
+
     // Prepare task options with additional fields
     const taskOptions = {
       priority: priority || 'Medium',  // Default to Medium
@@ -1547,6 +1559,18 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       }
     }
 
+    // 5b. Idempotency: prevent duplicate purchase within 30 seconds
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+    const recentPurchase = await Task.findOne({
+      clientId,
+      planId: plan._id,
+      status: TASK_STATUS.PENDING_APPROVAL,
+      createdAt: { $gte: thirtySecondsAgo },
+    }).exec();
+    if (recentPurchase) {
+      return res.status(409).json({ error: 'Duplicate purchase detected. Please wait a moment.' });
+    }
+
     // 6. Determine price
     const price = plan.offerPrice || plan.creditCost || 0;
 
@@ -1578,7 +1602,7 @@ router.post('/plans/:planId/purchase', async (req, res) => {
     if (subDeduct > 0) incUpdate.subscriptionCredits = -subDeduct;
     if (walletDeduct > 0) incUpdate.walletCredits = -walletDeduct;
 
-    await Wallet.findByIdAndUpdate(wallet._id, { $inc: incUpdate });
+    const updatedWallet = await Wallet.findByIdAndUpdate(wallet._id, { $inc: incUpdate }, { new: true });
 
     // Create wallet transaction
     await WalletTransaction.create({
@@ -1637,7 +1661,7 @@ router.post('/plans/:planId/purchase', async (req, res) => {
         status: newTask.status,
         creditsUsed: newTask.creditsUsed,
       },
-      walletBalance: wallet.balance,
+      walletBalance: (updatedWallet.walletCredits || 0) + (updatedWallet.subscriptionExpiresAt && new Date(updatedWallet.subscriptionExpiresAt) > new Date() ? (updatedWallet.subscriptionCredits || 0) : 0),
     });
   } catch (err) {
     console.error('Plan purchase error:', err);

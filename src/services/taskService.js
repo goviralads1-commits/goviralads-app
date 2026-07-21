@@ -27,19 +27,33 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
     throw new Error('Client wallet not found');
   }
 
-  // Validate sufficient balance
-  if (wallet.balance < template.creditCost) {
+  // HYBRID CREDIT DEDUCTION: subscriptionCredits first, then walletCredits
+  const now = new Date();
+  const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
+  const availableSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
+  const availableWalletCredits = wallet.walletCredits || 0;
+  const totalAvailable = availableSubCredits + availableWalletCredits;
+
+  if (totalAvailable < template.creditCost) {
     throw new Error('Insufficient balance');
   }
 
-  // Sequential operations (no transaction - MongoDB free tier doesn't support it)
+  const subDeduct = Math.min(availableSubCredits, template.creditCost);
+  const remainingAfterSub = template.creditCost - subDeduct;
+  const walletDeduct = Math.min(availableWalletCredits, remainingAfterSub);
+
   let newBalance, transaction, task;
   
   try {
-    // Deduct wallet balance
-    wallet.balance -= template.creditCost;
-    await wallet.save();
-    newBalance = wallet.balance;
+    // Deduct from dual-pool system (NOT legacy balance)
+    const incUpdate = {};
+    if (subDeduct > 0) incUpdate.subscriptionCredits = -subDeduct;
+    if (walletDeduct > 0) incUpdate.walletCredits = -walletDeduct;
+    await Wallet.findByIdAndUpdate(wallet._id, { $inc: incUpdate });
+
+    const updatedWallet = await Wallet.findById(wallet._id);
+    const updatedSubNotExpired = updatedWallet.subscriptionExpiresAt && new Date(updatedWallet.subscriptionExpiresAt) > now;
+    newBalance = (updatedSubNotExpired ? (updatedWallet.subscriptionCredits || 0) : 0) + (updatedWallet.walletCredits || 0);
 
     // Create Task entry
     task = await Task.create({ 
@@ -67,14 +81,14 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
       description: `Purchased task: ${template.name}`,
       referenceId: task._id,
     });
-
-    // --- Billing Hook removed (module not available) ---
   } catch (err) {
     console.error('Purchase task partial error:', err.message);
     if (!task) {
       // Rollback wallet if task creation failed
-      wallet.balance += template.creditCost;
-      await wallet.save();
+      const rollbackInc = {};
+      if (subDeduct > 0) rollbackInc.subscriptionCredits = subDeduct;
+      if (walletDeduct > 0) rollbackInc.walletCredits = walletDeduct;
+      await Wallet.findByIdAndUpdate(wallet._id, { $inc: rollbackInc });
       throw err;
     }
   }
@@ -97,7 +111,14 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
   if (!wallet) {
     throw new Error('Client wallet not found');
   }
-  console.log('Step 2: Wallet found, balance:', wallet.balance);
+  // HYBRID CREDIT DEDUCTION: subscriptionCredits first, then walletCredits
+  const now = new Date();
+  const subNotExpired = wallet.subscriptionExpiresAt && new Date(wallet.subscriptionExpiresAt) > now;
+  const availableSubCredits = subNotExpired ? (wallet.subscriptionCredits || 0) : 0;
+  const availableWalletCredits = wallet.walletCredits || 0;
+  const totalAvailable = availableSubCredits + availableWalletCredits;
+
+  console.log('Step 2: Wallet found, walletCredits:', availableWalletCredits, 'subscriptionCredits:', availableSubCredits);
 
   // TASK PRICING RULE: Determine final charge amount
   const finalChargeAmount = (taskDetails.offerPrice && taskDetails.offerPrice > 0) 
@@ -109,20 +130,27 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
   console.log('Offer Price:', taskDetails.offerPrice || 'not set');
   console.log('Final Wallet Deduction:', finalChargeAmount);
 
-  // Validate sufficient balance
-  if (wallet.balance < finalChargeAmount) {
+  if (totalAvailable < finalChargeAmount) {
     throw new Error('Insufficient balance');
   }
   console.log('Step 3: Balance check passed');
 
-  // Sequential operations (no transaction - MongoDB free tier doesn't support it)
+  const subDeduct = Math.min(availableSubCredits, finalChargeAmount);
+  const remainingAfterSub = finalChargeAmount - subDeduct;
+  const walletDeduct = Math.min(availableWalletCredits, remainingAfterSub);
+
   let newBalance, transaction, task;
   
   try {
-    // Step 4: Deduct wallet balance
-    wallet.balance -= finalChargeAmount;
-    await wallet.save();
-    newBalance = wallet.balance;
+    // Step 4: Deduct from dual-pool system (NOT legacy balance)
+    const incUpdate = {};
+    if (subDeduct > 0) incUpdate.subscriptionCredits = -subDeduct;
+    if (walletDeduct > 0) incUpdate.walletCredits = -walletDeduct;
+    await Wallet.findByIdAndUpdate(wallet._id, { $inc: incUpdate });
+
+    const updatedWallet = await Wallet.findById(wallet._id);
+    const updatedSubNotExpired = updatedWallet.subscriptionExpiresAt && new Date(updatedWallet.subscriptionExpiresAt) > now;
+    newBalance = (updatedSubNotExpired ? (updatedWallet.subscriptionCredits || 0) : 0) + (updatedWallet.walletCredits || 0);
     console.log('Step 4: Wallet deducted, new balance:', newBalance);
 
     // Step 5: Create Task entry
@@ -189,8 +217,10 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
     console.error('Task assign partial error:', err.message);
     if (!task) {
       // Rollback wallet if task creation failed
-      wallet.balance += finalChargeAmount;
-      await wallet.save();
+      const rollbackInc = {};
+      if (subDeduct > 0) rollbackInc.subscriptionCredits = subDeduct;
+      if (walletDeduct > 0) rollbackInc.walletCredits = walletDeduct;
+      await Wallet.findByIdAndUpdate(wallet._id, { $inc: rollbackInc });
       throw err;
     }
   }

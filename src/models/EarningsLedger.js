@@ -10,7 +10,7 @@ const earningsLedgerSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['COMMISSION_EARNED', 'ADMIN_BONUS', 'ADMIN_DEDUCT', 'REDEEM_TO_WALLET', 'EXTERNAL_PAYOUT', 'ADMIN_CORRECTION'],
+      enum: ['COMMISSION_EARNED', 'COMMISSION_REVERSED', 'ADMIN_BONUS', 'ADMIN_DEDUCT', 'REDEEM_TO_WALLET', 'EXTERNAL_PAYOUT', 'ADMIN_CORRECTION'],
       required: true,
     },
     amount: {

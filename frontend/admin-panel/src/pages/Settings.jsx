@@ -14,6 +14,8 @@ const Settings = () => {
     logoUrl: '',
     phoneNumber: '',
     websiteUrl: '',
+    whatsappNumber: '',
+    socialLinks: { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
   });
 
   useEffect(() => {
@@ -40,6 +42,14 @@ const Settings = () => {
         logoUrl: res.data.settings.logoUrl || '',
         phoneNumber: res.data.settings.phoneNumber || '',
         websiteUrl: res.data.settings.websiteUrl || '',
+        whatsappNumber: res.data.settings.whatsappNumber || '',
+        socialLinks: {
+          facebook: res.data.settings.socialLinks?.facebook || '',
+          instagram: res.data.settings.socialLinks?.instagram || '',
+          twitter: res.data.settings.socialLinks?.twitter || '',
+          linkedin: res.data.settings.socialLinks?.linkedin || '',
+          youtube: res.data.settings.socialLinks?.youtube || '',
+        },
       });
     } catch (err) {
       setToast({ type: 'error', message: 'Failed to load settings' });
@@ -62,6 +72,10 @@ const Settings = () => {
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSocialChange = (platform, value) => {
+    setFormData(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, [platform]: value } }));
   };
 
   if (loading) {
@@ -243,7 +257,7 @@ const Settings = () => {
           </div>
 
           {/* Website URL */}
-          <div style={{ marginBottom: '32px' }}>
+          <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
               Website URL
             </label>
@@ -258,6 +272,57 @@ const Settings = () => {
                 outline: 'none', boxSizing: 'border-box'
               }}
             />
+          </div>
+
+          {/* WhatsApp Number */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
+              WhatsApp Number
+            </label>
+            <input
+              type="tel"
+              value={formData.whatsappNumber}
+              onChange={(e) => handleChange('whatsappNumber', e.target.value)}
+              placeholder="+91 98765 43210"
+              style={{
+                width: '100%', padding: '14px 16px', fontSize: '14px',
+                border: '2px solid #e2e8f0', borderRadius: '12px',
+                outline: 'none', boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          {/* Social Links */}
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '12px' }}>
+              Social Media Links
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              {[
+                { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/yourpage' },
+                { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/yourhandle' },
+                { key: 'twitter', label: 'Twitter / X', placeholder: 'https://twitter.com/yourhandle' },
+                { key: 'linkedin', label: 'LinkedIn', placeholder: 'https://linkedin.com/company/yourcompany' },
+                { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@yourchannel' },
+              ].map(social => (
+                <div key={social.key}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>
+                    {social.label}
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.socialLinks[social.key]}
+                    onChange={(e) => handleSocialChange(social.key, e.target.value)}
+                    placeholder={social.placeholder}
+                    style={{
+                      width: '100%', padding: '12px 14px', fontSize: '13px',
+                      border: '2px solid #e2e8f0', borderRadius: '10px',
+                      outline: 'none', boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Save Button */}

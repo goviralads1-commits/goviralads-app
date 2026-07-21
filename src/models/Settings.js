@@ -47,6 +47,18 @@ const settingsSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    whatsappNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    socialLinks: {
+      facebook: { type: String, trim: true, default: '' },
+      instagram: { type: String, trim: true, default: '' },
+      twitter: { type: String, trim: true, default: '' },
+      linkedin: { type: String, trim: true, default: '' },
+      youtube: { type: String, trim: true, default: '' },
+    },
   },
   {
     timestamps: true,
