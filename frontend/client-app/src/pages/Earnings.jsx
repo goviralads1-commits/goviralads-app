@@ -56,7 +56,7 @@ const Earnings = () => {
         </div>
 
         {/* Date Filters */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'flex-end' }}>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>From</label>
             <input
@@ -75,6 +75,14 @@ const Earnings = () => {
               style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }}
             />
           </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => { setStartDate(''); setEndDate(''); }}
+              style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', color: '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Earnings List */}
