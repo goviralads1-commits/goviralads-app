@@ -43,7 +43,7 @@ const Clients = () => {
     try {
       await api.post(`/admin/wallets/${selectedClient._id}/adjust`, {
         amount: parseFloat(adjustmentAmount),
-        reason: adjustmentReason
+        description: adjustmentReason
       });
       
       // Refresh data after successful adjustment
