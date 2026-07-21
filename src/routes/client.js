@@ -19,7 +19,7 @@ const pdfService = require('../services/pdfService');
 const User = require('../models/User');
 const OfficeConfig = require('../models/OfficeConfig');
 const { hashPassword, verifyPassword } = require('../services/passwordService');
-const { purchaseTaskFromTemplate, updateTaskProgressAutomatically } = require('../services/taskService');
+const { purchaseTaskFromTemplate, updateTaskProgressAutomatically, getClientTeamAssignedUsers } = require('../services/taskService');
 const { getClientWalletSummary, getClientTaskSummary, getClientRecentActivity } = require('../services/reportingService');
 const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsRead, createNotification, getUnreadCount, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
 const { authenticateJWT } = require('../middleware/auth');
@@ -1615,6 +1615,9 @@ router.post('/plans/:planId/purchase', async (req, res) => {
     });
 
     // 9. Clone task for client (DO NOT MODIFY ORIGINAL)
+    // Auto-populate assignedUsers from client's team
+    const teamAssignedUsers = await getClientTeamAssignedUsers(clientId);
+
     const newTask = await Task.create({
       title: plan.title,
       description: plan.description,
@@ -1650,7 +1653,9 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       milestones: plan.milestones || [], // Copy milestones
       autoCompletionCap: plan.autoCompletionCap || 100,
       // CONTENT REQUIREMENT CONTROL (Phase 2 Step 4)
-      requireClientContent: plan.requireClientContent || false
+      requireClientContent: plan.requireClientContent || false,
+      // Auto-populate from client's assigned team
+      ...(teamAssignedUsers.length > 0 ? { assignedUsers: teamAssignedUsers } : {}),
     });
 
     return res.status(201).json({

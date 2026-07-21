@@ -3,7 +3,37 @@ const Wallet = require('../models/Wallet');
 const { WalletTransaction, TRANSACTION_TYPES } = require('../models/WalletTransaction');
 const TaskTemplate = require('../models/TaskTemplate');
 const User = require('../models/User');
+const { Employee, EMPLOYEE_STATUS } = require('../models/Employee');
+const { ClientEmployeeAssignment, ASSIGNMENT_STATUS } = require('../models/ClientEmployeeAssignment');
 const progressService = require('./progressService');
+
+/**
+ * Fetch client's assigned team and convert to task.assignedUsers format.
+ * Returns array of { userId, percentage } from active employee assignments.
+ * Only includes employees that have a linked userId (User account).
+ */
+async function getClientTeamAssignedUsers(clientId) {
+  try {
+    const assignments = await ClientEmployeeAssignment.find({
+      clientId,
+      status: ASSIGNMENT_STATUS.ACTIVE,
+    }).populate('employeeId').exec();
+
+    const assignedUsers = [];
+    for (const assignment of assignments) {
+      const emp = assignment.employeeId;
+      if (!emp || !emp.userId) continue; // Skip employees without linked User accounts
+      assignedUsers.push({
+        userId: emp.userId,
+        percentage: (assignment.commissionSettings?.enabled ? Number(assignment.commissionSettings.percentage) || 0 : 0),
+      });
+    }
+    return assignedUsers;
+  } catch (err) {
+    console.error('getClientTeamAssignedUsers error:', err.message);
+    return [];
+  }
+}
 
 async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) {
   // Validate client exists
@@ -55,6 +85,9 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
     const updatedSubNotExpired = updatedWallet.subscriptionExpiresAt && new Date(updatedWallet.subscriptionExpiresAt) > now;
     newBalance = (updatedSubNotExpired ? (updatedWallet.subscriptionCredits || 0) : 0) + (updatedWallet.walletCredits || 0);
 
+    // Auto-populate assignedUsers from client's team
+    const teamAssignedUsers = await getClientTeamAssignedUsers(clientId);
+
     // Create Task entry
     task = await Task.create({ 
       clientId,
@@ -71,6 +104,8 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
       internalNotes: taskOptions.internalNotes || '',
       progressMode: taskOptions.progressMode || 'AUTO',
       progress: taskOptions.progress || 0,
+      // Auto-populate from client's assigned team
+      ...(teamAssignedUsers.length > 0 ? { assignedUsers: teamAssignedUsers } : {}),
     });
 
     // Create WalletTransaction entry
@@ -153,6 +188,16 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
     newBalance = (updatedSubNotExpired ? (updatedWallet.subscriptionCredits || 0) : 0) + (updatedWallet.walletCredits || 0);
     console.log('Step 4: Wallet deducted, new balance:', newBalance);
 
+    // Step 4.5: Auto-populate assignedUsers from client's team if not explicitly provided
+    let resolvedAssignedUsers = taskDetails.assignedUsers;
+    if (!resolvedAssignedUsers || !Array.isArray(resolvedAssignedUsers) || resolvedAssignedUsers.length === 0) {
+      const teamUsers = await getClientTeamAssignedUsers(clientId);
+      if (teamUsers.length > 0) {
+        resolvedAssignedUsers = teamUsers;
+        console.log('Step 4.5: Auto-populated assignedUsers from client team:', teamUsers.length, 'members');
+      }
+    }
+
     // Step 5: Create Task entry
     task = await Task.create({ 
       clientId,
@@ -189,7 +234,7 @@ async function assignTaskToClient(adminId, clientId, taskDetails) {
       commissionType: taskDetails.commissionType || 'percentage',
       commissionValue: taskDetails.commissionValue || 0,
       // MULTI-ASSIGNMENT & COMMISSION ROLE TEMPLATES
-      ...(taskDetails.assignedUsers ? { assignedUsers: taskDetails.assignedUsers } : {}),
+      ...(resolvedAssignedUsers && resolvedAssignedUsers.length > 0 ? { assignedUsers: resolvedAssignedUsers } : {}),
       ...(taskDetails.defaultCommissionRoles ? { defaultCommissionRoles: taskDetails.defaultCommissionRoles } : {}),
     });
     console.log('Step 5: Task created:', task._id.toString());
@@ -293,4 +338,5 @@ module.exports = {
   assignTaskToClient,
   updateTaskProgressAutomatically,
   calculateProgressFromTimeline,
+  getClientTeamAssignedUsers,
 };

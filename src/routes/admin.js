@@ -7,7 +7,7 @@ const { Task, TASK_STATUS } = require('../models/Task');
 const { Category } = require('../models/Category');
 const TaskTemplate = require('../models/TaskTemplate');
 const Role = require('../models/Role');
-const { assignTaskToClient, updateTaskProgressAutomatically } = require('../services/taskService');
+const { assignTaskToClient, updateTaskProgressAutomatically, getClientTeamAssignedUsers } = require('../services/taskService');
 const progressService = require('../services/progressService');
 const { getSystemOverview, getCreditFlowByPeriod, getTopSpenders, getTaskAnalyticsByTemplate, getTaskAnalyticsByStatus, getClientWalletSummary, getClientTaskSummary, getClientRecentActivity } = require('../services/reportingService');
 const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsRead, createNotification, getUnreadCount, NOTIFICATION_TYPES, ENTITY_TYPES } = require('../services/notificationService');
@@ -3482,6 +3482,12 @@ router.post('/orders/:orderId/approve', async (req, res) => {
     // Create tasks for each item in the order
     const createdTaskIds = [];
     
+    // Auto-populate assignedUsers from client's team (if not provided in request)
+    let orderTeamAssignedUsers = [];
+    if (!reqAssignedUsers || !Array.isArray(reqAssignedUsers) || reqAssignedUsers.length === 0) {
+      orderTeamAssignedUsers = await getClientTeamAssignedUsers(order.clientId);
+    }
+    
     for (const item of order.items) {
       // Create task(s) for this item based on quantity
       for (let i = 0; i < item.quantity; i++) {
@@ -3510,6 +3516,8 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           ...(item.planSnapshot?.defaultCommissionRoles?.length ? { defaultCommissionRoles: item.planSnapshot.defaultCommissionRoles } : {}),
           // Phase 2: pass through from approve request body (highest priority)
           ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
+          // Phase 3: auto-populate from client's assigned team (fallback)
+          ...(!reqAssignedUsers?.length && orderTeamAssignedUsers.length > 0 ? { assignedUsers: orderTeamAssignedUsers } : {}),
         };
         
         const task = await Task.create([taskData], { session });
