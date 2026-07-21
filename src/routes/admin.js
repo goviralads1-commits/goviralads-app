@@ -857,7 +857,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       planName: updatedRequest.planName,
       totalCredits: creditsToAdd,
       status: updatedRequest.status,
-      walletBalance: Number(updatedWallet.walletCredits) || 0,
+      walletBalance: (Number(updatedWallet.walletCredits) || 0) + (Number(updatedWallet.subscriptionCredits) || 0),
       subscriptionCredits: updatedWallet.subscriptionCredits,
       expiresAt: updatedWallet.subscriptionExpiresAt,
     });
@@ -2302,8 +2302,8 @@ router.post('/tasks/assign', async (req, res) => {
         title: result.task.title,
         status: result.task.status
       },
-      walletBalance: result.walletBalance,
-      transactionId: result.transactionId,
+      walletBalance: result.newBalance,
+      transactionId: result.transaction?._id?.toString() || null,
     });
 
   } catch (err) {
