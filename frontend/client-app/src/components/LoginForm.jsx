@@ -10,26 +10,35 @@ const LoginForm = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [branding, setBranding] = useState({ appName: 'Go Viral Ads', tagline: 'Your productivity partner', logoUrl: '', accentColor: '#6366f1' });
+  const [socialLinks, setSocialLinks] = useState({ facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' });
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Try to fetch public branding settings
-    const fetchBranding = async () => {
+    // Fetch public branding and agency info
+    const fetchData = async () => {
       try {
-        const res = await api.get('/public/branding');
-        if (res.data) {
+        const [brandRes, agencyRes] = await Promise.all([
+          api.get('/public/branding'),
+          api.get('/public/agency-info').catch(() => ({ data: {} })),
+        ]);
+        if (brandRes.data) {
           setBranding({
-            appName: res.data.appName || 'Go Viral Ads',
-            tagline: res.data.tagline || 'Your productivity partner',
-            logoUrl: res.data.logoUrl || '',
-            accentColor: res.data.accentColor || '#6366f1',
+            appName: brandRes.data.appName || 'Go Viral Ads',
+            tagline: brandRes.data.tagline || 'Your productivity partner',
+            logoUrl: brandRes.data.logoUrl || '',
+            accentColor: brandRes.data.accentColor || '#6366f1',
           });
+        }
+        if (agencyRes.data) {
+          setSocialLinks(agencyRes.data.socialLinks || {});
+          setWhatsappNumber(agencyRes.data.whatsappNumber || '');
         }
       } catch (err) {
         // Silent fail - use defaults
       }
     };
-    fetchBranding();
+    fetchData();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -401,6 +410,23 @@ const LoginForm = () => {
           <span style={{ color: '#cbd5e1' }}>•</span>
           <a href="/legal/contact-us" style={{ color: '#94a3b8', textDecoration: 'none' }}>Contact</a>
         </div>
+
+        {/* Social Media Links */}
+        {Object.values(socialLinks).some(v => v) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '14px',
+            marginTop: '16px',
+          }}>
+            {socialLinks.facebook && <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="Facebook">📘</a>}
+            {socialLinks.instagram && <a href={socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="Instagram">📷</a>}
+            {socialLinks.youtube && <a href={socialLinks.youtube} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="YouTube">▶️</a>}
+            {socialLinks.linkedin && <a href={socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="LinkedIn">💼</a>}
+            {socialLinks.twitter && <a href={socialLinks.twitter} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="X / Twitter">🐦</a>}
+            {whatsappNumber && <a href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="WhatsApp">💬</a>}
+          </div>
+        )}
       </div>
 
       <style>{`

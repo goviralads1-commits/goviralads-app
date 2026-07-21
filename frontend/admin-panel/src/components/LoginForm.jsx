@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login, savePermissions } from '../services/authService';
 import api from '../services/api';
@@ -11,6 +11,8 @@ const LoginForm = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const brandingCtx = useBranding();
+  const [socialLinks, setSocialLinks] = useState({ facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' });
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const branding = {
     appName: brandingCtx.appName || 'Go Viral Ads',
     tagline: brandingCtx.tagline || 'Admin Portal',
@@ -18,6 +20,21 @@ const LoginForm = () => {
     accentColor: brandingCtx.accentColor || '#6366f1'
   };
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchAgencyInfo = async () => {
+      try {
+        const res = await api.get('/public/agency-info');
+        if (res.data) {
+          setSocialLinks(res.data.socialLinks || {});
+          setWhatsappNumber(res.data.whatsappNumber || '');
+        }
+      } catch (err) {
+        // Silent fail
+      }
+    };
+    fetchAgencyInfo();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -398,6 +415,23 @@ const LoginForm = () => {
           <span style={{ color: '#cbd5e1' }}>•</span>
           <a href="https://goviralads.com/legal/contact-us" style={{ color: '#94a3b8', textDecoration: 'none' }}>Contact</a>
         </div>
+
+        {/* Social Media Links */}
+        {Object.values(socialLinks).some(v => v) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '14px',
+            marginTop: '16px',
+          }}>
+            {socialLinks.facebook && <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="Facebook">📘</a>}
+            {socialLinks.instagram && <a href={socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="Instagram">📷</a>}
+            {socialLinks.youtube && <a href={socialLinks.youtube} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="YouTube">▶️</a>}
+            {socialLinks.linkedin && <a href={socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="LinkedIn">💼</a>}
+            {socialLinks.twitter && <a href={socialLinks.twitter} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="X / Twitter">🐦</a>}
+            {whatsappNumber && <a href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '20px', textDecoration: 'none' }} title="WhatsApp">💬</a>}
+          </div>
+        )}
       </div>
 
       <style>{`
