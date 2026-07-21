@@ -2346,7 +2346,7 @@ const TaskDetail = () => {
 
                 <div style={{ backgroundColor: '#f0fdf4', borderRadius: '14px', padding: '16px', border: '1px solid #bbf7d0' }}>
                   <p style={{ fontSize: '12px', color: '#166534', margin: '0 0 8px 0', fontWeight: '500' }}>Credits Charged</p>
-                  <p style={{ fontSize: '28px', fontWeight: '800', color: '#15803d', margin: 0 }}>₹{task.creditCost || task.creditsUsed || 0}</p>
+                  <p style={{ fontSize: '28px', fontWeight: '800', color: '#15803d', margin: 0 }}>{task.creditCost || task.creditsUsed || 0} credits</p>
                 </div>
 
                 <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px', marginBottom: 0 }}>

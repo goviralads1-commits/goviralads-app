@@ -88,7 +88,7 @@ const Clients = () => {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
         <div style={{ marginBottom: '32px' }}>
           <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>User Manager</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Manage all registered users and their wallet balances</p>
+          <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Manage all registered users and their credit balances</p>
         </div>
 
         {/* Wallet Adjustment Form */}
@@ -179,7 +179,7 @@ const Clients = () => {
               {/* Balance */}
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Wallet Balance
+                  Available Credits
                 </div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: '#22c55e' }}>
                   {wallet.balance.toFixed(2)} <span style={{ fontSize: '16px', fontWeight: '500', color: '#64748b' }}>credits</span>

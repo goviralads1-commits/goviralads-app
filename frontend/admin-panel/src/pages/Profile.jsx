@@ -1542,7 +1542,7 @@ const Profile = () => {
                 {/* Stats Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                   <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wallet Balance</div>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</div>
                     <div style={{ fontSize: '32px', fontWeight: '800', color: '#22c55e', marginBottom: '4px' }}>{userStats?.walletBalance || 0}</div>
                     <div style={{ fontSize: '13px', color: '#64748b' }}>credits</div>
                   </div>

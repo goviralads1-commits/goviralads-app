@@ -1509,7 +1509,7 @@ const TaskDetail = () => {
                     <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Credits Used</span>
                     <span style={{ fontSize: '12px', color: '#15803d' }}>Deducted from wallet</span>
                   </div>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>₹{task.creditsUsed || task.creditCost || 0}</span>
+                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>{task.creditsUsed || task.creditCost || 0} credits</span>
                 </div>
               )}
 
@@ -1519,10 +1519,10 @@ const TaskDetail = () => {
                   <div>
                     <span style={{ fontSize: '14px', color: '#92400e', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Offer Price</span>
                     {task.originalPrice && (
-                      <span style={{ fontSize: '12px', color: '#a16207', textDecoration: 'line-through' }}>₹{task.originalPrice}</span>
+                      <span style={{ fontSize: '12px', color: '#a16207', textDecoration: 'line-through' }}>{task.originalPrice} credits</span>
                     )}
                   </div>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>₹{task.offerPrice}</span>
+                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>{task.offerPrice} credits</span>
                 </div>
               )}
             </div>
@@ -1565,7 +1565,7 @@ const TaskDetail = () => {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <span style={{ fontSize: '14px', color: '#64748b' }}>Credits Used</span>
-                <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>₹{receipt.creditsUsed?.toFixed(2)}</span>
+                <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>{receipt.creditsUsed?.toFixed(2)} credits</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '14px', color: '#64748b' }}>Date</span>

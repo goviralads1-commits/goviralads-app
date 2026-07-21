@@ -588,7 +588,7 @@ const Plans = () => {
                             borderRadius: '20px', backdropFilter: 'blur(8px)', position: 'relative', zIndex: 2
                           }}>
                             <span style={{ fontSize: '16px', fontWeight: '800', color: '#ffffff' }}>
-                              ₹{plan.offerPrice || plan.creditCost}
+                              {plan.offerPrice || plan.creditCost} credits
                             </span>
                           </div>
                         )}
@@ -700,23 +700,23 @@ const Plans = () => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>
-                              ₹{plan.offerPrice}
+                              {plan.offerPrice} credits
                             </span>
                             {plan.creditCost && plan.offerPrice < plan.creditCost && (
                               <span style={{ fontSize: '14px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>
-                                ₹{plan.creditCost}
+                                {plan.creditCost} credits
                               </span>
                             )}
                           </div>
                           {saveAmount > 0 && (
                             <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600' }}>
-                              Save ₹{saveAmount}
+                              Save {saveAmount} credits
                             </span>
                           )}
                         </div>
                       ) : plan.showCreditsToClient !== false ? (
                         <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>
-                          ₹{plan.creditCost || 0}
+                          {plan.creditCost || 0} credits
                         </span>
                       ) : null}
                     </div>

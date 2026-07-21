@@ -233,7 +233,7 @@ const templates = {
   
   // Wallet Update
   walletUpdate: (data) => ({
-    subject: `Wallet ${data.amount > 0 ? 'Credit' : 'Debit'}: ₹${Math.abs(data.amount)}`,
+    subject: `Wallet ${data.amount > 0 ? 'Credit' : 'Debit'}: ${Math.abs(data.amount)} credits`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -246,12 +246,12 @@ const templates = {
           <div style="padding: 32px;">
             <div style="text-align: center; margin: 0 0 24px;">
               <p style="font-size: 40px; font-weight: 800; color: ${data.amount > 0 ? '#22c55e' : '#ef4444'}; margin: 0;">
-                ${data.amount > 0 ? '+' : ''}₹${data.amount}
+                ${data.amount > 0 ? '+' : ''}${data.amount} credits
               </p>
               <p style="color: #64748b; font-size: 14px; margin: 8px 0 0;">${data.description || 'Transaction'}</p>
             </div>
             <div style="background: #f8fafc; border-radius: 12px; padding: 16px;">
-              <p style="color: #475569; font-size: 14px; margin: 0;"><strong>New Balance:</strong> ₹${data.newBalance}</p>
+              <p style="color: #475569; font-size: 14px; margin: 0;"><strong>New Balance:</strong> ${data.newBalance} credits</p>
             </div>
           </div>
         </div>

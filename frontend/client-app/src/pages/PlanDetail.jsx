@@ -309,11 +309,11 @@ const PlanDetail = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                   {plan.creditCost && plan.offerPrice < plan.creditCost && (
                     <span style={{ fontSize: '22px', color: '#adb5bd', textDecoration: 'line-through', fontWeight: '500' }}>
-                      ₹{plan.creditCost}
+                      {plan.creditCost} credits
                     </span>
                   )}
                   <span style={{ fontSize: '40px', fontWeight: '800', color: '#28a745' }}>
-                    ₹{plan.offerPrice}
+                    {plan.offerPrice} credits
                   </span>
                   {hasDiscount && (
                     <span style={{ 
@@ -326,13 +326,13 @@ const PlanDetail = () => {
                 </div>
                 {saveAmount > 0 && (
                   <span style={{ fontSize: '14px', color: '#16a34a', fontWeight: '600' }}>
-                    You save ₹{saveAmount}
+                    You save {saveAmount} credits
                   </span>
                 )}
               </div>
             ) : plan.showCreditsToClient !== false ? (
               <span style={{ fontSize: '40px', fontWeight: '800', color: '#28a745' }}>
-                ₹{plan.creditCost || 0}
+                {plan.creditCost || 0} credits
               </span>
             ) : null}
           </div>
@@ -362,7 +362,7 @@ const PlanDetail = () => {
         <div style={{ maxWidth: '680px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '2px' }}>Total Price</div>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>₹{displayPrice}</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>{displayPrice} credits</div>
           </div>
           {addedToCart || isInCart(plan._id || plan.id || planId) ? (
             <button

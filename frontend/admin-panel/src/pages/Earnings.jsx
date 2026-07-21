@@ -129,8 +129,8 @@ const Earnings = () => {
       setToast({ 
         type: 'success', 
         message: dryRun 
-          ? `Dry run: Would create ${res.data.created} entries (₹${res.data.totalCreatedAmount})`
-          : `Migration complete: Created ${res.data.created} entries (₹${res.data.totalCreatedAmount})`
+          ? `Dry run: Would create ${res.data.created} entries (${res.data.totalCreatedAmount} credits)`
+          : `Migration complete: Created ${res.data.created} entries (${res.data.totalCreatedAmount} credits)`
       });
       // Refresh data after live migration
       if (!dryRun) {
@@ -155,7 +155,7 @@ const Earnings = () => {
         amount: Number(adjAmount),
         note: adjNote,
       });
-      setToast({ type: 'success', message: `Adjustment created. New balance: \u20b9${res.data.newBalance}` });
+      setToast({ type: 'success', message: `Adjustment created. New balance: ${res.data.newBalance} credits` });
       setShowAdjustModal(false);
       setAdjUserId(''); setAdjAmount(''); setAdjNote('');
       if (view === 'ledger') fetchLedger();
@@ -211,15 +211,15 @@ const Earnings = () => {
                   <div><span style={{ color: '#64748b' }}>Total Commissions:</span> <strong>{backfillResult.totalCommissions}</strong></div>
                   <div><span style={{ color: '#64748b' }}>Already Existed:</span> <strong>{backfillResult.skipped}</strong></div>
                   <div><span style={{ color: '#64748b' }}>{backfillResult.mode === 'dry-run' ? 'Would Create:' : 'Created:'}</span> <strong style={{ color: '#16a34a' }}>{backfillResult.created}</strong></div>
-                  <div><span style={{ color: '#64748b' }}>Amount:</span> <strong style={{ color: '#16a34a' }}>₹{backfillResult.totalCreatedAmount.toLocaleString('en-IN')}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Amount:</span> <strong style={{ color: '#16a34a' }}>{backfillResult.totalCreatedAmount.toLocaleString('en-IN')} credits</strong></div>
                   <div><span style={{ color: '#64748b' }}>Errors:</span> <strong style={{ color: backfillResult.errors > 0 ? '#dc2626' : '#16a34a' }}>{backfillResult.errors}</strong></div>
                 </div>
                 {backfillResult.verificationSample && (
                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #fcd34d' }}>
                     <strong>Verification Sample:</strong><br />
                     User: {backfillResult.verificationSample.userId}<br />
-                    CommissionLog: ₹{backfillResult.verificationSample.commissionLogTotal} ({backfillResult.verificationSample.commissionLogEntries} entries)<br />
-                    EarningsLedger: ₹{backfillResult.verificationSample.earningsLedgerBalance} ({backfillResult.verificationSample.earningsLedgerEntries} entries)<br />
+                    CommissionLog: {backfillResult.verificationSample.commissionLogTotal} credits ({backfillResult.verificationSample.commissionLogEntries} entries)<br />
+                    EarningsLedger: {backfillResult.verificationSample.earningsLedgerBalance} credits ({backfillResult.verificationSample.earningsLedgerEntries} entries)<br />
                     Match: {backfillResult.verificationSample.matches ? '✅ YES' : '❌ NO'}
                   </div>
                 )}
@@ -268,7 +268,7 @@ const Earnings = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 6px 0', fontWeight: '600' }}>Total Earned</p>
-            <p style={{ fontSize: '24px', fontWeight: '800', color: '#16a34a', margin: 0 }}>₹{overallTotal.toLocaleString('en-IN')}</p>
+            <p style={{ fontSize: '24px', fontWeight: '800', color: '#16a34a', margin: 0 }}>{overallTotal.toLocaleString('en-IN')} credits</p>
           </div>
           <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 6px 0', fontWeight: '600' }}>Tasks with Commission</p>
@@ -345,7 +345,7 @@ const Earnings = () => {
                     <tr key={u.userId} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '12px 16px', fontWeight: '500', color: '#0f172a' }}>{u.userIdentifier}</td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', color: '#64748b' }}>{u.taskCount}</td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>₹{u.totalAmount.toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>{u.totalAmount.toLocaleString('en-IN')} credits</td>
                     </tr>
                   ))}
                 </tbody>
@@ -373,10 +373,10 @@ const Earnings = () => {
                     <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '12px 16px', fontWeight: '500', color: '#0f172a' }}>{l.userIdentifier || 'Unknown'}</td>
                       <td style={{ padding: '12px 16px', color: '#475569', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.taskTitle || '-'}</td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>{String.fromCharCode(8377)}{(l.amount || 0).toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>{(l.amount || 0).toLocaleString('en-IN')} credits</td>
                       <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                         <span style={{ fontSize: '11px', backgroundColor: '#f0fdf4', color: '#15803d', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
-                          {l.commissionType === 'percentage' ? `${l.commissionValue}%` : `${String.fromCharCode(8377)}${l.commissionValue}`}
+                          {l.commissionType === 'percentage' ? `${l.commissionValue}%` : `Flat ${l.commissionValue} credits`}
                         </span>
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>
@@ -417,7 +417,7 @@ const Earnings = () => {
                           <tr key={u.userId} style={{ borderBottom: '1px solid #f1f5f9' }}>
                             <td style={{ padding: '10px 16px', fontWeight: '500', color: '#0f172a' }}>{u.userIdentifier}</td>
                             <td style={{ padding: '10px 16px', textAlign: 'right', color: '#64748b' }}>{u.entries}</td>
-                            <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>{String.fromCharCode(8377)}{u.balance.toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>{u.balance.toLocaleString('en-IN')} credits</td>
                           </tr>
                         ))}
                       </tbody>
@@ -449,7 +449,7 @@ const Earnings = () => {
                               {e.type.replace('_', ' ')}
                             </span>
                           </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: e.amount >= 0 ? '#16a34a' : '#dc2626' }}>{e.amount >= 0 ? '+' : ''}{String.fromCharCode(8377)}{Math.abs(e.amount).toLocaleString('en-IN')}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: e.amount >= 0 ? '#16a34a' : '#dc2626' }}>{e.amount >= 0 ? '+' : ''}{Math.abs(e.amount).toLocaleString('en-IN')} credits</td>
                           <td style={{ padding: '12px 16px', color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note || '-'}</td>
                           <td style={{ padding: '12px 16px', textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>{e.createdAt ? new Date(e.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}</td>
                         </tr>

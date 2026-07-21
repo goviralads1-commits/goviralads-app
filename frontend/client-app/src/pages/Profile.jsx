@@ -569,7 +569,7 @@ const Profile = () => {
           <div>
             {/* Balance Card */}
             <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '24px', padding: '28px', marginBottom: '20px', color: '#fff' }}>
-              <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>Current Balance</p>
+              <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '8px' }}>Available Credits</p>
               {walletLoading ? (
                 <div style={{ width: '150px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
               ) : (

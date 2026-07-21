@@ -682,7 +682,7 @@ const Plans = () => {
                             borderRadius: '20px', backdropFilter: 'blur(8px)', position: 'relative', zIndex: 2
                           }}>
                             <span style={{ fontSize: '16px', fontWeight: '700', color: '#ffffff' }}>
-                              ₹{plan.offerPrice || plan.creditCost}
+                              {plan.offerPrice || plan.creditCost} credits
                             </span>
                           </div>
                         </div>
@@ -751,11 +751,11 @@ const Plans = () => {
                       <div style={{ marginBottom: '14px' }}>
                         {plan.offerPrice ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>₹{plan.offerPrice}</span>
-                            <span style={{ fontSize: '14px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>₹{plan.creditCost}</span>
+                            <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>{plan.offerPrice} credits</span>
+                            <span style={{ fontSize: '14px', color: '#94a3b8', textDecoration: 'line-through', fontWeight: '500' }}>{plan.creditCost} credits</span>
                           </div>
                         ) : (
-                          <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>₹{plan.creditCost || 0}</span>
+                          <span style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>{plan.creditCost || 0} credits</span>
                         )}
                       </div>
                       
@@ -891,11 +891,11 @@ const Plans = () => {
               {/* Pricing */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Base Price (₹) *</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Base Price (Credits) *</label>
                   <input type="number" value={formData.creditCost} onChange={(e) => handleInputChange('creditCost', e.target.value)} placeholder="0" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Offer Price (₹)</label>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Offer Price (Credits)</label>
                   <input type="number" value={formData.offerPrice} onChange={(e) => handleInputChange('offerPrice', e.target.value)} placeholder="Sale price" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
                 </div>
               </div>
@@ -1099,7 +1099,7 @@ const Plans = () => {
               <div style={{ backgroundColor: '#f8fafc', borderRadius: '16px', padding: '18px', marginBottom: '24px' }}>
                 <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Button Preview</p>
                 <button disabled style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff', fontSize: '15px', fontWeight: '600', borderRadius: '14px', border: 'none' }}>
-                  Buy Now • ₹{formData.offerPrice || formData.creditCost || 0}
+                  Buy Now • {formData.offerPrice || formData.creditCost || 0} credits
                 </button>
               </div>
 

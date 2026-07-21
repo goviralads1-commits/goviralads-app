@@ -489,7 +489,7 @@ const Dashboard = () => {
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>💵</span>
                 </div>
-                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.commissions?.totalPaid || 0).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{(analytics.commissions?.totalPaid || 0).toLocaleString('en-IN')} credits</p>
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Commission Paid</p>
                 <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>Costs: ₹{(analytics.costs?.totalAllCosts || 0).toLocaleString('en-IN')}</p>
                 <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
@@ -533,7 +533,7 @@ const Dashboard = () => {
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 }}>₹{(item.value || 0).toLocaleString('en-IN')}</p>
+                        <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{item.type === 'order' || item.type === 'task' ? `${(item.value || 0).toLocaleString('en-IN')} credits` : `₹${(item.value || 0).toLocaleString('en-IN')}`}</p>
                         <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{item.date ? new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'}</p>
                       </div>
                     </div>
@@ -564,8 +564,8 @@ const Dashboard = () => {
                           <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
                             <td style={{ padding: '6px 4px', fontSize: '12px', fontWeight: '500', color: '#334155' }}>{c.identifier}</td>
                             <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>₹{(c.totalRecharge || 0).toLocaleString('en-IN')}</td>
-                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#3b82f6' }}>₹{(c.totalSpend || 0).toLocaleString('en-IN')}</td>
-                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#f59e0b' }}>₹{(c.totalCommission || 0).toLocaleString('en-IN')}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#3b82f6' }}>{(c.totalSpend || 0).toLocaleString('en-IN')} credits</td>
+                            <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: '#f59e0b' }}>{(c.totalCommission || 0).toLocaleString('en-IN')} credits</td>
                             <td style={{ textAlign: 'right', padding: '6px 4px', fontSize: '12px', color: (c.profit || 0) >= 0 ? '#22c55e' : '#ef4444', fontWeight: '600' }}>₹{(c.profit || 0).toLocaleString('en-IN')}</td>
                           </tr>
                         ))}
@@ -635,7 +635,7 @@ const Dashboard = () => {
                           </p>
                         </div>
                         <p style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e', margin: 0 }}>
-                          ₹{(item.amount || item.cost || 0).toLocaleString('en-IN')}
+                          {drillModal.type === 'revenue' ? `₹${(item.amount || item.cost || 0).toLocaleString('en-IN')}` : `${(item.amount || item.cost || 0).toLocaleString('en-IN')} credits`}
                         </p>
                       </div>
                     ))}
@@ -656,7 +656,7 @@ const Dashboard = () => {
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>💎</span>
                 </div>
-                <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>₹{(commissionData?.overallTotal || 0).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>{(commissionData?.overallTotal || 0).toLocaleString('en-IN')} credits</p>
                 <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Revenue</p>
               </div>
             )}
@@ -665,7 +665,7 @@ const Dashboard = () => {
               <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '16px' }}>💵</span>
               </div>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#10b981', margin: '0 0 2px 0' }}>₹{(commissionData?.overallTotal || 0).toLocaleString('en-IN')}</p>
+              <p style={{ fontSize: '22px', fontWeight: '800', color: '#10b981', margin: '0 0 2px 0' }}>{(commissionData?.overallTotal || 0).toLocaleString('en-IN')} credits</p>
               <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{commissionData?.isMainAdmin ? 'Commission Paid' : 'Your Earnings'}</p>
             </div>
             {/* Company Profit — main admin only */}
@@ -674,7 +674,7 @@ const Dashboard = () => {
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>🏢</span>
                 </div>
-                <p style={{ fontSize: '22px', fontWeight: '800', color: '#3b82f6', margin: '0 0 2px 0' }}>₹{Math.max(0, (commissionData?.overallTotal || 0)).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '22px', fontWeight: '800', color: '#3b82f6', margin: '0 0 2px 0' }}>{Math.max(0, (commissionData?.overallTotal || 0)).toLocaleString('en-IN')} credits</p>
                 <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Company Profit</p>
               </div>
             )}
@@ -707,7 +707,7 @@ const Dashboard = () => {
                       <tr key={log?.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                         {commissionData?.isMainAdmin && <td style={{ padding: '8px 6px', fontSize: '13px', fontWeight: '500', color: '#334155' }}>{log?.userIdentifier || 'Unknown'}</td>}
                         <td style={{ padding: '8px 6px', fontSize: '13px', color: '#475569', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log?.taskTitle || 'N/A'}</td>
-                        <td style={{ textAlign: 'right', padding: '8px 6px', fontSize: '13px', fontWeight: '600', color: '#10b981' }}>₹{(log?.amount || 0).toLocaleString('en-IN')}</td>
+                        <td style={{ textAlign: 'right', padding: '8px 6px', fontSize: '13px', fontWeight: '600', color: '#10b981' }}>{(log?.amount || 0).toLocaleString('en-IN')} credits</td>
                         <td style={{ textAlign: 'right', padding: '8px 6px', fontSize: '12px', color: '#94a3b8' }}>{log?.createdAt ? new Date(log.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'}</td>
                       </tr>
                     ))}
@@ -859,7 +859,7 @@ const Dashboard = () => {
                 <span style={{ fontSize: '16px' }}>💎</span>
               </div>
             </div>
-            <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>₹{dashboardData?.totalCredits || 0}</p>
+            <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{dashboardData?.totalCredits || 0} credits</p>
             <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Total Credits</p>
           </div>
         </div>
@@ -915,7 +915,7 @@ const Dashboard = () => {
                     {/* Purchase Date */}
                     <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                     {/* Price */}
-                    <span style={{ fontSize: '15px', fontWeight: '700', color: '#22c55e' }}>₹{order.creditCost}</span>
+                    <span style={{ fontSize: '15px', fontWeight: '700', color: '#22c55e' }}>{order.creditCost} credits</span>
                     {/* Actions */}
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                       <button
@@ -1058,7 +1058,7 @@ const Dashboard = () => {
                 </div>
                 <div style={{ padding: '12px' }}>
                   <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px 0' }}>{plan.title}</p>
-                  <p style={{ fontSize: '16px', fontWeight: '800', color: '#22c55e', margin: 0 }}>₹{plan.creditCost || plan.offerPrice || 0}</p>
+                  <p style={{ fontSize: '16px', fontWeight: '800', color: '#22c55e', margin: 0 }}>{plan.creditCost || plan.offerPrice || 0} credits</p>
                 </div>
               </div>
             ))}

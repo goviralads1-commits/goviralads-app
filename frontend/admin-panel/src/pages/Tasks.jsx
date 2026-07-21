@@ -717,7 +717,7 @@ const Tasks = () => {
                             ID: {task.clientIdentifier || task.clientId?.slice(-6) || 'N/A'}
                           </p>
                         </div>
-                        <span style={{fontSize: '18px', fontWeight: '800', color: '#6366f1'}}>₹{task.creditCost}</span>
+                        <span style={{fontSize: '18px', fontWeight: '800', color: '#6366f1'}}>{task.creditCost} credits</span>
                       </div>
                     </div>
                   </div>
@@ -1232,7 +1232,7 @@ const Tasks = () => {
 
                 {/* Row 5: Price + Priority */}
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px'}}>
-                  <span style={{fontSize: '20px', fontWeight: '700', color: '#111827'}}>₹{task.creditCost || 0}</span>
+                  <span style={{fontSize: '20px', fontWeight: '700', color: '#111827'}}>{task.creditCost || 0} credits</span>
                   <span style={{
                     ...getPriorityStyle(priority),
                     padding: '4px 10px',
@@ -1552,7 +1552,7 @@ const Tasks = () => {
                         <option value="">Select a client...</option>
                         {clients.map(client => (
                           <option key={client.id || client._id} value={client.id || client._id}>
-                            {client.name || client.email} (Balance: ₹{client.walletBalance || 0})
+                            {client.name || client.email} (Balance: {client.walletBalance || 0} credits)
                           </option>
                         ))}
                       </select>
@@ -1567,14 +1567,13 @@ const Tasks = () => {
                     {/* Original Amount */}
                     <div style={{marginBottom: '16px'}}>
                       <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Original Amount <span style={{color: '#ef4444'}}>*</span></label>
-                      <p style={{fontSize: '12px', color: '#64748b', marginBottom: '10px'}}>Base price • Default wallet deduction</p>
+                      <p style={{fontSize: '12px', color: '#64748b', marginBottom: '10px'}}>Base credits • Default wallet deduction</p>
                       <div style={{position: 'relative'}}>
-                        <span style={{position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '16px', fontWeight: '600'}}>₹</span>
                         <input
                           type="number"
                           value={formData.creditCost}
                           onChange={(e) => handleInputChange('creditCost', parseInt(e.target.value) || 0)}
-                          style={{width: '100%', padding: '14px 16px 14px 40px', fontSize: '16px', fontWeight: '600', border: formErrors.creditCost ? '2px solid #ef4444' : '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
+                          style={{width: '100%', padding: '14px 16px', fontSize: '16px', fontWeight: '600', border: formErrors.creditCost ? '2px solid #ef4444' : '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
                         />
                       </div>
                       {formErrors.creditCost && <p style={{fontSize: '12px', color: '#ef4444', marginTop: '6px', margin: 0}}>{formErrors.creditCost}</p>}
@@ -1597,18 +1596,17 @@ const Tasks = () => {
                         <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Offer Price <span style={{fontSize: '11px', color: '#64748b', fontWeight: '400'}}>(Optional)</span></label>
                         <p style={{fontSize: '12px', color: '#92400e', marginBottom: '10px'}}>If set and {'>'} 0, wallet will be charged at this amount</p>
                         <div style={{position: 'relative'}}>
-                          <span style={{position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '16px', fontWeight: '600'}}>₹</span>
                           <input
                             type="number"
                             value={formData.offerPrice || ''}
                             onChange={(e) => handleInputChange('offerPrice', e.target.value ? parseInt(e.target.value) : '')}
                             placeholder="Leave empty to use Original Amount"
-                            style={{width: '100%', padding: '14px 16px 14px 40px', fontSize: '16px', fontWeight: '600', border: '2px solid #fbbf24', borderRadius: '10px', backgroundColor: '#fefce8', boxSizing: 'border-box', outline: 'none'}}
+                            style={{width: '100%', padding: '14px 16px', fontSize: '16px', fontWeight: '600', border: '2px solid #fbbf24', borderRadius: '10px', backgroundColor: '#fefce8', boxSizing: 'border-box', outline: 'none'}}
                           />
                         </div>
                         {formData.offerPrice && formData.offerPrice > 0 && (
                           <div style={{marginTop: '12px', padding: '10px 14px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #fbbf24'}}>
-                            <p style={{fontSize: '12px', color: '#92400e', margin: 0, fontWeight: '600'}}>✓ Wallet will be charged ₹{formData.offerPrice} (Offer Price)</p>
+                            <p style={{fontSize: '12px', color: '#92400e', margin: 0, fontWeight: '600'}}>✓ Wallet will be charged {formData.offerPrice} credits (Offer Price)</p>
                           </div>
                         )}
                         <button
@@ -1646,19 +1644,19 @@ const Tasks = () => {
                         <div style={{marginTop: '16px', padding: '16px', backgroundColor: insufficient ? '#fef2f2' : '#f0fdf4', borderRadius: '10px', border: insufficient ? '1px solid #fecaca' : '1px solid #bbf7d0'}}>
                           <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
                             <span style={{fontSize: '13px', color: '#64748b'}}>Current Balance</span>
-                            <span style={{fontSize: '14px', fontWeight: '600', color: '#334155'}}>₹{balance}</span>
+                            <span style={{fontSize: '14px', fontWeight: '600', color: '#334155'}}>{balance} credits</span>
                           </div>
                           <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
                             <span style={{fontSize: '13px', color: '#64748b'}}>Wallet Deduction</span>
-                            <span style={{fontSize: '14px', fontWeight: '600', color: '#ef4444'}}>- ₹{actualCharge}</span>
+                            <span style={{fontSize: '14px', fontWeight: '600', color: '#ef4444'}}>- {actualCharge} credits</span>
                           </div>
                           <div style={{borderTop: '1px dashed #cbd5e1', paddingTop: '8px', display: 'flex', justifyContent: 'space-between'}}>
                             <span style={{fontSize: '13px', fontWeight: '600', color: insufficient ? '#dc2626' : '#15803d'}}>After Creation</span>
-                            <span style={{fontSize: '16px', fontWeight: '700', color: insufficient ? '#dc2626' : '#15803d'}}>₹{remaining}</span>
+                            <span style={{fontSize: '16px', fontWeight: '700', color: insufficient ? '#dc2626' : '#15803d'}}>{remaining} credits</span>
                           </div>
                           {insufficient && (
                             <div style={{marginTop: '10px', padding: '10px', backgroundColor: '#fee2e2', borderRadius: '8px'}}>
-                              <p style={{fontSize: '12px', color: '#dc2626', margin: 0, fontWeight: '600'}}>⚠️ Insufficient credits! Client needs ₹{Math.abs(remaining)} more.</p>
+                              <p style={{fontSize: '12px', color: '#dc2626', margin: 0, fontWeight: '600'}}>⚠️ Insufficient credits! Client needs {Math.abs(remaining)} more credits.</p>
                             </div>
                           )}
                         </div>
@@ -2012,7 +2010,7 @@ const Tasks = () => {
                     {/* Commission Value */}
                     <div>
                       <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>
-                        {formData.commissionType === 'percentage' ? 'Commission (%)' : 'Commission Amount (₹)'}
+                        {formData.commissionType === 'percentage' ? 'Commission (%)' : 'Commission Amount (credits)'}
                       </label>
                       <input
                         type="number"
@@ -2030,7 +2028,7 @@ const Tasks = () => {
                   {formData.commissionValue > 0 && formData.creditCost > 0 && (
                     <div style={{marginTop: '16px', padding: '12px 16px', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #86efac'}}>
                       <span style={{fontSize: '13px', color: '#166534', fontWeight: '500'}}>
-                        💵 Estimated Commission: ₹{formData.commissionType === 'percentage' ? Math.round((Number(formData.creditCost) * Number(formData.commissionValue)) / 100) : Number(formData.commissionValue)}
+                        💵 Estimated Commission: {formData.commissionType === 'percentage' ? Math.round((Number(formData.creditCost) * Number(formData.commissionValue)) / 100) : Number(formData.commissionValue)} credits
                       </span>
                     </div>
                   )}
@@ -2227,29 +2225,27 @@ const Tasks = () => {
                     <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
                       {/* Original Price */}
                       <div>
-                        <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Base Price <span style={{color: '#ef4444'}}>*</span></label>
+                        <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Base Price (Credits) <span style={{color: '#ef4444'}}>*</span></label>
                         <div style={{position: 'relative'}}>
-                          <span style={{position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '16px', fontWeight: '600'}}>₹</span>
                           <input
                             type="number"
                             value={formData.creditCost}
                             onChange={(e) => handleInputChange('creditCost', parseInt(e.target.value) || 0)}
-                            style={{width: '100%', padding: '14px 16px 14px 40px', fontSize: '16px', fontWeight: '600', border: formErrors.creditCost ? '2px solid #ef4444' : '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
+                            style={{width: '100%', padding: '14px 16px', fontSize: '16px', fontWeight: '600', border: formErrors.creditCost ? '2px solid #ef4444' : '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
                           />
                         </div>
                       </div>
 
                       {/* Offer Price */}
                       <div>
-                        <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Offer Price (Optional)</label>
+                        <label style={{display: 'block', fontSize: '13px', fontWeight: '600', color: '#0f172a', marginBottom: '8px'}}>Offer Price (Credits) (Optional)</label>
                         <div style={{position: 'relative'}}>
-                          <span style={{position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '16px', fontWeight: '600'}}>₹</span>
                           <input
                             type="number"
                             value={formData.offerPrice}
                             onChange={(e) => handleInputChange('offerPrice', parseInt(e.target.value) || '')}
                             placeholder="Sale price"
-                            style={{width: '100%', padding: '14px 16px 14px 40px', fontSize: '16px', fontWeight: '600', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
+                            style={{width: '100%', padding: '14px 16px', fontSize: '16px', fontWeight: '600', border: '2px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#ffffff', boxSizing: 'border-box', outline: 'none'}}
                           />
                         </div>
                       </div>
@@ -2602,8 +2598,8 @@ const Tasks = () => {
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Wallet Paid Amount</label>
-                    <p style={{ fontSize: '20px', fontWeight: '800', color: '#10b981', marginTop: '4px' }}>₹{approvalModal.task.creditsUsed || approvalModal.task.creditCost}</p>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Credits Charged</label>
+                    <p style={{ fontSize: '20px', fontWeight: '800', color: '#10b981', marginTop: '4px' }}>{approvalModal.task.creditsUsed || approvalModal.task.creditCost} credits</p>
                   </div>
 
                   {approvalModal.task.featureImage && (
@@ -2717,7 +2713,7 @@ const Tasks = () => {
               {showRejectConfirm ? (
                 <div>
                   <p style={{ fontSize: '14px', fontWeight: '600', color: '#dc2626', marginBottom: '12px' }}>
-                    Are you sure you want to reject this task? The client will be refunded ₹{approvalModal.task?.creditsUsed || approvalModal.task?.creditCost || 0}.
+                    Are you sure you want to reject this task? The client will be refunded {approvalModal.task?.creditsUsed || approvalModal.task?.creditCost || 0} credits.
                   </p>
                   <textarea
                     value={rejectReason}

@@ -151,7 +151,7 @@ router.post('/wallet/recharge', async (req, res) => {
           recipientId: mainAdmin,
           type: NOTIFICATION_TYPES.RECHARGE_REQUEST_SUBMITTED,
           title: 'New Recharge Request',
-          message: `Client ${req.user.identifier} submitted a recharge request for ${amount} credits.`,
+          message: `Client ${req.user.identifier} submitted a recharge request for ₹${amount}.`,
           relatedEntity: {
             entityType: ENTITY_TYPES.RECHARGE_REQUEST,
             entityId: rechargeRequest._id,
@@ -3462,7 +3462,7 @@ router.post('/purchase-cart', async (req, res) => {
           recipientId: admin._id,  // FIXED: was 'userId'
           type: NOTIFICATION_TYPES.NEW_ORDER,
           title: 'New Order Received',
-          message: `New order ${order.orderId} from client (${orderItems.length} item(s), ₹${totalPrice})`,
+          message: `New order ${order.orderId} from client (${orderItems.length} item(s), ${totalPrice} credits)`,
           relatedEntity: {  // FIXED: was flat entityType/entityId
             entityType: ENTITY_TYPES.ORDER,
             entityId: order._id,
@@ -3475,7 +3475,7 @@ router.post('/purchase-cart', async (req, res) => {
       console.log('[PUSH TRIGGER] NEW_ORDER - order._id:', order._id);
       await pushNotificationService.sendToRole('admin', {
         title: 'New Order Received',
-        body: `New order ${order.orderId} (${orderItems.length} item(s), ₹${totalPrice})`
+        body: `New order ${order.orderId} (${orderItems.length} item(s), ${totalPrice} credits)`
       }, {
         type: 'order_event',
         orderId: String(order._id),
@@ -3930,7 +3930,7 @@ router.post('/earnings/redeem-request', async (req, res) => {
     const currentBalance = agg?.balance || 0;
 
     if (amount > currentBalance) {
-      return res.status(400).json({ error: `Insufficient balance. Your current earnings balance is ₹${currentBalance}.` });
+      return res.status(400).json({ error: `Insufficient balance. Your current earnings balance is ${currentBalance} credits.` });
     }
 
     // 5. Check for existing PENDING request

@@ -136,7 +136,7 @@ const EarningsLedger = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 4px 0', fontWeight: '600' }}>Available Balance</p>
-              <p style={{ fontSize: '28px', fontWeight: '800', color: '#166534', margin: 0 }}>{'\u20b9'}{balance.toLocaleString()}</p>
+              <p style={{ fontSize: '28px', fontWeight: '800', color: '#166534', margin: 0 }}>{balance.toLocaleString()} credits</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: '24px', margin: '0 0 4px 0' }}>{'\uD83D\uDCB0'}</p>
@@ -244,7 +244,7 @@ const EarningsLedger = () => {
                           {typeLabels[entry.type] || entry.type}
                         </span>
                         <span style={{ fontSize: '15px', fontWeight: '700', color: entry.amount >= 0 ? '#16a34a' : '#dc2626' }}>
-                          {entry.amount >= 0 ? '+' : ''}{'\u20b9'}{Math.abs(entry.amount).toLocaleString()}
+                          {entry.amount >= 0 ? '+' : ''}{Math.abs(entry.amount).toLocaleString()} credits
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -314,7 +314,7 @@ const EarningsLedger = () => {
             <div style={{ width: '40px', height: '4px', backgroundColor: '#e2e8f0', borderRadius: '2px', margin: '0 auto 20px' }} />
             <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0' }}>Redeem Earnings</h3>
             <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0' }}>
-              Balance: {'\u20b9'}{balance.toLocaleString()} | Min: {'\u20b9'}{config?.minimumRedeemAmount || 0} | Max: {'\u20b9'}{config?.maximumRedeemAmount || 0}
+              Balance: {balance.toLocaleString()} credits | Min: ₹{config?.minimumRedeemAmount || 0} | Max: ₹{config?.maximumRedeemAmount || 0}
             </p>
 
             <div style={{ marginBottom: '16px' }}>

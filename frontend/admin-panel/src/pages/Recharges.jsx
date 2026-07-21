@@ -106,7 +106,7 @@ const Recharges = () => {
                   {actionType === 'approve' ? 'Approve' : 'Reject'} Recharge Request
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Request from {selectedRequest.client.email} for {selectedRequest.amount.toFixed(2)} credits
+                  Request from {selectedRequest.client.email} for ₹{selectedRequest.amount.toFixed(2)}
                 </p>
                 <div className="mt-5">
                   <form onSubmit={handleActionSubmit} className="space-y-4">
@@ -189,7 +189,7 @@ const Recharges = () => {
                         {request.clientIdentifier}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {request.amount.toFixed(2)} credits
+                        ₹{request.amount.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(request.createdAt).toLocaleDateString()}
@@ -264,7 +264,7 @@ const Recharges = () => {
                         {request.clientIdentifier}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {request.amount.toFixed(2)} credits
+                        ₹{request.amount.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(request.createdAt).toLocaleDateString()}

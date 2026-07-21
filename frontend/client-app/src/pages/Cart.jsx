@@ -231,11 +231,11 @@ const Cart = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
                         {item.originalPrice && item.originalPrice > item.price && (
                           <span style={{ fontSize: '13px', color: '#adb5bd', textDecoration: 'line-through', marginRight: '8px' }}>
-                            ₹{item.originalPrice}
+                            {item.originalPrice} credits
                           </span>
                         )}
                         <span style={{ fontSize: '16px', fontWeight: '700', color: '#28a745' }}>
-                          ₹{item.price}
+                          {item.price} credits
                         </span>
                       </div>
                       {/* Quantity Controls */}
@@ -269,7 +269,7 @@ const Cart = () => {
                     {/* Per-item subtotal */}
                     {(item.quantity || 1) > 1 && (
                       <p style={{ fontSize: '13px', fontWeight: '600', color: '#6c757d', margin: '6px 0 0 0' }}>
-                        Subtotal: ₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}
+                        Subtotal: {((item.price || 0) * (item.quantity || 1)).toLocaleString()} credits
                       </p>
                     )}
                   </div>
@@ -298,10 +298,10 @@ const Cart = () => {
                 border: '1px solid #fecaca', marginBottom: '20px'
               }}>
                 <p style={{ margin: 0, fontSize: '14px', color: '#dc2626', fontWeight: '600' }}>
-                  ⚠️ Insufficient wallet balance
+                  ⚠️ Insufficient credits
                 </p>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#ef4444' }}>
-                  You need ₹{(cartTotal - walletBalance).toLocaleString()} more to complete this purchase
+                  You need {(cartTotal - walletBalance).toLocaleString()} more credits to complete this purchase
                 </p>
                 <button 
                   onClick={() => navigate('/wallet')} 
@@ -318,21 +318,21 @@ const Cart = () => {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <span style={{ color: '#6c757d' }}>Items ({cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0)})</span>
-                <span style={{ fontWeight: '600', color: '#1a1a2e' }}>₹{cartTotal.toLocaleString()}</span>
+                <span style={{ fontWeight: '600', color: '#1a1a2e' }}>{cartTotal.toLocaleString()} credits</span>
               </div>
               
               {walletBalance !== null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <span style={{ color: '#6c757d' }}>Wallet Balance</span>
+                  <span style={{ color: '#6c757d' }}>Available Credits</span>
                   <span style={{ fontWeight: '600', color: walletBalance >= cartTotal ? '#28a745' : '#dc3545' }}>
-                    ₹{walletBalance.toLocaleString()}
+                    {walletBalance.toLocaleString()} credits
                   </span>
                 </div>
               )}
 
               <div style={{ borderTop: '2px solid #f1f3f5', paddingTop: '16px', marginTop: '16px', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '18px', fontWeight: '700', color: '#1a1a2e' }}>Total</span>
-                <span style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>₹{cartTotal.toLocaleString()}</span>
+                <span style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>{cartTotal.toLocaleString()} credits</span>
               </div>
             </div>
           </>
@@ -350,7 +350,7 @@ const Cart = () => {
           <div style={{ maxWidth: '680px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '2px' }}>Total ({cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0)} items)</div>
-              <div style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>₹{cartTotal.toLocaleString()}</div>
+              <div style={{ fontSize: '24px', fontWeight: '800', color: '#28a745' }}>{cartTotal.toLocaleString()} credits</div>
             </div>
             <button
               onClick={handleProceedToCheckout}
@@ -392,12 +392,12 @@ const Cart = () => {
               {modalItems.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e9ecef' }}>
                   <span style={{ fontSize: '14px', color: '#1a1a2e', fontWeight: '500' }}>{item.title} {(item.quantity || 1) > 1 ? `×${item.quantity}` : ''}</span>
-                  <span style={{ fontSize: '14px', color: '#28a745', fontWeight: '600' }}>₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}</span>
+                  <span style={{ fontSize: '14px', color: '#28a745', fontWeight: '600' }}>{((item.price || 0) * (item.quantity || 1)).toLocaleString()} credits</span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', marginTop: '8px' }}>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: '#1a1a2e' }}>Total</span>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: '#28a745' }}>₹{cartTotal.toLocaleString()}</span>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: '#28a745' }}>{cartTotal.toLocaleString()} credits</span>
               </div>
             </div>
 

@@ -319,7 +319,7 @@ const Wallet = () => {
           overflow: 'hidden'
         }}>
           <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px'}}>
-            <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: 0}}>Total Credits</p>
+            <p style={{fontSize: '14px', fontWeight: '500', opacity: 0.9, margin: 0}}>Available Credits</p>
             <span 
               title="Subscription credits expire monthly. Wallet credits never expire."
               style={{cursor: 'help', opacity: 0.7, fontSize: '14px'}}
@@ -354,10 +354,10 @@ const Wallet = () => {
             {/* Wallet Credits Row */}
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
               <div>
-                <p style={{fontSize: '13px', fontWeight: '600', color: '#86efac', margin: 0}}>Wallet Balance</p>
+                <p style={{fontSize: '13px', fontWeight: '600', color: '#86efac', margin: 0}}>Permanent Credits</p>
                 <p style={{fontSize: '11px', color: '#bbf7d0', margin: '2px 0 0 0'}}>No expiry</p>
               </div>
-              <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>₹{(walletData?.walletCredits || 0).toFixed(2)}</span>
+              <span style={{fontSize: '18px', fontWeight: '700', color: '#86efac'}}>{(walletData?.walletCredits || 0).toFixed(2)} credits</span>
             </div>
           </div>
 
@@ -1039,7 +1039,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            Transactions
+            Credit Transactions
           </button>
           <button
             onClick={() => setActiveTab('recharge')}
@@ -1133,7 +1133,7 @@ const Wallet = () => {
                               +{tx.credits} credits
                             </p>
                           )}
-                          {/* Show credits if amount=0 and credits!=0, otherwise show ₹ amount */}
+                          {/* Show credits for non-recharge transactions, ₹ for recharge payments */}
                           {tx.amount === 0 && tx.credits !== 0 ? (
                             <p style={{
                               fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
@@ -1143,7 +1143,7 @@ const Wallet = () => {
                             }}>
                               {tx.credits > 0 ? '+' : ''}{tx.credits} credits
                             </p>
-                          ) : (
+                          ) : type.includes('RECHARGE') ? (
                             <p style={{
                               fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
                               fontWeight: '700',
@@ -1151,6 +1151,15 @@ const Wallet = () => {
                               margin: 0
                             }}>
                               {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount)}
+                            </p>
+                          ) : (
+                            <p style={{
+                              fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
+                              fontWeight: '700',
+                              color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                              margin: 0
+                            }}>
+                              {tx.amount > 0 ? '+' : ''}{tx.amount} credits
                             </p>
                           )}
                         </div>
@@ -1327,7 +1336,7 @@ const Wallet = () => {
             zIndex: 90,
             boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
           }}>
-            <h3 style={{fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px 0'}}>Add Money to Wallet</h3>
+            <h3 style={{fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px 0'}}>Recharge Wallet</h3>
             <div style={{marginBottom: '16px'}}>
               <label style={{display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px'}}>
                 Amount (₹)

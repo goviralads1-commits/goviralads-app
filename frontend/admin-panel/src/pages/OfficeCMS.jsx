@@ -416,7 +416,7 @@ const OfficeCMS = () => {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{plan.title}</p>
-                            <p style={{ fontSize: '13px', color: '#22c55e', fontWeight: '700', margin: '2px 0 0 0' }}>₹{plan.offerPrice || plan.creditCost || 0}</p>
+                            <p style={{ fontSize: '13px', color: '#22c55e', fontWeight: '700', margin: '2px 0 0 0' }}>{plan.offerPrice || plan.creditCost || 0} credits</p>
                           </div>
                           <div style={{ width: '24px', height: '24px', borderRadius: '8px', border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`, backgroundColor: isSelected ? '#6366f1' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             {isSelected && <span style={{ color: '#fff', fontSize: '14px' }}>✓</span>}

@@ -234,8 +234,8 @@ const Dashboard = () => {
           <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '14px 16px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 3px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wallet Balance</p>
-                <p style={{ fontSize: '26px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>₹{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'}</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 3px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</p>
+                <p style={{ fontSize: '26px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span></p>
               </div>
               <button onClick={() => navigate('/wallet')} style={{ padding: '9px 16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 + Add Credits
@@ -250,8 +250,8 @@ const Dashboard = () => {
                   </div>
                 )}
                 <div>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Wallet</p>
-                  <p style={{ fontSize: '14px', fontWeight: '700', color: '#86efac', margin: 0 }}>₹{(walletData.walletCredits || 0).toLocaleString()}</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Credits Wallet</p>
+                  <p style={{ fontSize: '14px', fontWeight: '700', color: '#86efac', margin: 0 }}>{(walletData.walletCredits || 0).toLocaleString()} credits</p>
                 </div>
               </div>
             )}
@@ -403,7 +403,7 @@ const Dashboard = () => {
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <p style={{ fontSize: '12px', color: '#d97706', margin: 0 }}>Waiting for admin approval</p>
                   </div>
-                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#92400e', backgroundColor: '#fef3c7', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}>₹{task.creditsUsed || task.creditCost || 0}</span>
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#92400e', backgroundColor: '#fef3c7', padding: '4px 10px', borderRadius: '8px', flexShrink: 0 }}>{task.creditsUsed || task.creditCost || 0} credits</span>
                 </div>
               </div>
             ))}
@@ -420,7 +420,7 @@ const Dashboard = () => {
             </div>
             <div>
               <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 2px 0', fontWeight: '600' }}>Total Earned</p>
-              <p style={{ fontSize: '20px', fontWeight: '800', color: '#166534', margin: 0 }}>₹{(commissionData.overallTotal || 0).toLocaleString()}</p>
+              <p style={{ fontSize: '20px', fontWeight: '800', color: '#166534', margin: 0 }}>{(commissionData.overallTotal || 0).toLocaleString()} credits</p>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -489,7 +489,7 @@ const Dashboard = () => {
                   </div>
                   <div style={{ padding: '10px 12px 12px' }}>
                     <p style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', margin: '0 0 4px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.title}</p>
-                    <p style={{ fontSize: '15px', fontWeight: '800', color: '#16a34a', margin: 0 }}>₹{plan.offerPrice || plan.creditCost || 0}</p>
+                    <p style={{ fontSize: '15px', fontWeight: '800', color: '#16a34a', margin: 0 }}>{plan.offerPrice || plan.creditCost || 0} credits</p>
                   </div>
                 </div>
               );

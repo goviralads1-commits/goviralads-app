@@ -359,7 +359,7 @@ const Tasks = () => {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                   }}>
                     <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Credits Used</span>
-                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>₹{task.creditsUsed || task.creditCost || 0}</span>
+                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>{task.creditsUsed || task.creditCost || 0} credits</span>
                   </div>
                 )}
 

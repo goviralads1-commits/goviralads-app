@@ -411,7 +411,7 @@ const Wallet = () => {
                       {wallet.clientIdentifier}
                     </p>
                     <p style={{fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: 0}}>
-                      ₹{wallet.balance.toFixed(2)}
+                      {wallet.balance.toFixed(2)} credits
                     </p>
                   </div>
                 ))}
@@ -454,7 +454,7 @@ const Wallet = () => {
                       {clientWallet.clientIdentifier}
                     </h2>
                     <p style={{fontSize: '32px', fontWeight: '800', color: '#0f172a', margin: 0}}>
-                      ₹{clientWallet.balance.toFixed(2)}
+                      {clientWallet.balance.toFixed(2)} credits
                     </p>
                   </div>
                   <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
@@ -527,7 +527,7 @@ const Wallet = () => {
                           flexShrink: 0,
                           marginLeft: '12px'
                         }}>
-                          {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}
+                          {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)} credits
                         </span>
                       </div>
                     ))}

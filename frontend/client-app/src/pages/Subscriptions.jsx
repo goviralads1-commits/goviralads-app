@@ -276,16 +276,16 @@ const Subscriptions = () => {
                               fontSize: '16px', color: '#999', textDecoration: 'line-through',
                               marginRight: '8px', fontWeight: '500'
                             }}>
-                              ₹{sub.totalPrice}
+                              {sub.totalPrice} credits
                             </span>
                           )}
                           <span style={{ fontSize: '28px', fontWeight: '700', color: '#f59e0b' }}>
-                            ₹{sub.offerPrice}
+                            {sub.offerPrice} credits
                           </span>
                         </div>
                       ) : (
                         <span style={{ fontSize: '28px', fontWeight: '700', color: '#15803d' }}>
-                          ₹{sub.totalPrice || 0}
+                          {sub.totalPrice || 0} credits
                         </span>
                       )}
                     </div>

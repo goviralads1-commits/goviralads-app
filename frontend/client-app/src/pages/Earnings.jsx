@@ -46,7 +46,7 @@ const Earnings = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 4px 0', fontWeight: '600' }}>Total Earned</p>
-              <p style={{ fontSize: '28px', fontWeight: '800', color: '#166534', margin: 0 }}>₹{overallTotal.toLocaleString()}</p>
+              <p style={{ fontSize: '28px', fontWeight: '800', color: '#166534', margin: 0 }}>{overallTotal.toLocaleString()} credits</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: '24px', margin: '0 0 4px 0' }}>💰</p>
@@ -95,12 +95,12 @@ const Earnings = () => {
               <div key={log.id} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0, flex: 1, paddingRight: '12px' }}>{log.taskTitle || 'Task'}</p>
-                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#16a34a', flexShrink: 0 }}>+₹{(log.amount || 0).toLocaleString()}</span>
+                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#16a34a', flexShrink: 0 }}>+{(log.amount || 0).toLocaleString()} credits</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   {log.commissionType && (
                     <span style={{ fontSize: '11px', backgroundColor: '#f0fdf4', color: '#15803d', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
-                      {log.commissionType === 'percentage' ? `${log.commissionValue}%` : `Flat ₹${log.commissionValue}`}
+                      {log.commissionType === 'percentage' ? `${log.commissionValue}%` : `Flat ${log.commissionValue} credits`}
                     </span>
                   )}
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>

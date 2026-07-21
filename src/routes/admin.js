@@ -486,7 +486,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
         recipientId: updatedRequest.clientId,
         type: NOTIFICATION_TYPES.RECHARGE_APPROVED,
         title: 'Recharge Approved',
-        message: `Your recharge request for ${updatedRequest.amount} credits has been approved.`,
+        message: `Your recharge request for ₹${updatedRequest.amount} has been approved.`,
         relatedEntity: {
           entityType: ENTITY_TYPES.RECHARGE_REQUEST,
           entityId: updatedRequest._id,
@@ -593,7 +593,7 @@ router.post('/recharge-requests/:id/reject', async (req, res) => {
         recipientId: updatedRequest.clientId,
         type: NOTIFICATION_TYPES.RECHARGE_REJECTED,
         title: 'Recharge Rejected',
-        message: `Your recharge request for ${updatedRequest.amount} credits has been rejected.`,
+        message: `Your recharge request for ₹${updatedRequest.amount} has been rejected.`,
         relatedEntity: {
           entityType: ENTITY_TYPES.RECHARGE_REQUEST,
           entityId: updatedRequest._id,
@@ -2589,7 +2589,7 @@ router.post('/tasks/:taskId/reject', async (req, res) => {
         recipientId: task.clientId,
         type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
         title: 'Task Rejected',
-        message: `Your task "${task.title}" has been rejected. ${refundAmount > 0 ? `₹${refundAmount} has been refunded to your wallet.` : ''} ${reason ? `Reason: ${reason}` : ''}`,
+        message: `Your task "${task.title}" has been rejected. ${refundAmount > 0 ? `${refundAmount} credits have been refunded to your wallet.` : ''} ${reason ? `Reason: ${reason}` : ''}`,
         relatedEntity: {
           entityType: ENTITY_TYPES.TASK,
           entityId: task._id,
@@ -3584,7 +3584,7 @@ router.post('/orders/:orderId/reject', async (req, res) => {
         recipientId: order.clientId,
         type: NOTIFICATION_TYPES.ORDER_REJECTED || 'ORDER_REJECTED',
         title: 'Order Rejected',
-        message: `Your order ${order.orderId} was rejected. ₹${order.totalAmount} has been refunded to your wallet.${reason ? ' Reason: ' + reason : ''}`,
+        message: `Your order ${order.orderId} was rejected. ${order.totalAmount} credits have been refunded to your wallet.${reason ? ' Reason: ' + reason : ''}`,
         relatedEntity: {
           entityType: ENTITY_TYPES.ORDER || 'ORDER',
           entityId: order._id,
@@ -3596,7 +3596,7 @@ router.post('/orders/:orderId/reject', async (req, res) => {
       console.log('[PUSH TRIGGER] ORDER_REJECTED - order._id:', order._id, 'clientId:', order.clientId);
       await pushNotificationService.sendToUser(order.clientId, {
         title: 'Order Rejected',
-        body: `Your order ${order.orderId} was rejected. ₹${order.totalAmount} refunded.${reason ? ' Reason: ' + reason : ''}`
+        body: `Your order ${order.orderId} was rejected. ${order.totalAmount} credits refunded.${reason ? ' Reason: ' + reason : ''}`
       }, {
         type: 'order_event',
         orderId: String(order._id),
@@ -3609,7 +3609,7 @@ router.post('/orders/:orderId/reject', async (req, res) => {
     
     return res.status(200).json({
       success: true,
-      message: `Order rejected and ₹${order.totalAmount} refunded.`,
+      message: `Order rejected and ${order.totalAmount} credits refunded.`,
       order: {
         orderId: order.orderId,
         orderStatus: order.orderStatus,
@@ -7652,7 +7652,7 @@ router.post('/earnings/redeem-approve', async (req, res) => {
     const currentBalance = agg?.balance || 0;
 
     if (request.requestedAmount > currentBalance) {
-      return res.status(400).json({ error: `Insufficient earnings balance. Current: \u20b9${currentBalance}, Requested: \u20b9${request.requestedAmount}.` });
+      return res.status(400).json({ error: `Insufficient earnings balance. Current: ${currentBalance} credits, Requested: \u20b9${request.requestedAmount}.` });
     }
 
     const ledgerType = payoutMethod === 'WALLET' ? 'REDEEM_TO_WALLET' : 'EXTERNAL_PAYOUT';
