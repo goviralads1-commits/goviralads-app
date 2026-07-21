@@ -276,6 +276,7 @@ const reminderScheduler = require('./services/reminderScheduler');
 const { Task } = require('./models/Task');
 const User = require('./models/User');
 const LegalPage = require('./models/LegalPage');
+const Settings = require('./models/Settings');
 const UserSubscription = require('./models/UserSubscription');
 const Notification = require('./models/Notification');
 const { createNotification, NOTIFICATION_TYPES } = require('./services/notificationService');
@@ -366,6 +367,25 @@ app.get('/public/branding', async (_req, res) => {
       accentColor: '#6366f1',
       secondaryColor: '#22c55e',
     });
+  }
+});
+
+// Public agency contact info endpoint (no auth required)
+app.get('/public/agency-info', async (_req, res) => {
+  try {
+    const settings = await Settings.getSettings();
+    res.json({
+      agencyName: settings.agencyName || '',
+      agencyAddress: settings.agencyAddress || '',
+      supportEmail: settings.supportEmail || '',
+      phoneNumber: settings.phoneNumber || '',
+      whatsappNumber: settings.whatsappNumber || '',
+      websiteUrl: settings.websiteUrl || '',
+      logoUrl: settings.logoUrl || '',
+      socialLinks: settings.socialLinks || {},
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch agency info' });
   }
 });
 
