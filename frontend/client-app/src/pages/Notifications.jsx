@@ -9,6 +9,14 @@ const Notifications = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -34,8 +42,10 @@ const Notifications = () => {
       setNotifications(notifications.map(n => 
         n.id === notificationId ? { ...n, isRead: true, readAt: new Date().toISOString() } : n
       ));
+      setToast({ type: 'success', message: 'Marked as read' });
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
+      setToast({ type: 'error', message: 'Failed to mark as read' });
     }
   };
 
@@ -43,8 +53,10 @@ const Notifications = () => {
     try {
       await api.patch('/client/notifications/read-all');
       setNotifications(notifications.map(n => ({ ...n, isRead: true, readAt: new Date().toISOString() })));
+      setToast({ type: 'success', message: 'All notifications marked as read' });
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
+      setToast({ type: 'error', message: 'Failed to mark all as read' });
     }
   };
 
@@ -269,6 +281,17 @@ const Notifications = () => {
           )}
         </div>
       </div>
+
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: '20px', right: '20px', padding: '12px 20px',
+          backgroundColor: toast.type === 'error' ? '#ef4444' : '#10b981',
+          color: '#fff', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000
+        }}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 };

@@ -61,17 +61,19 @@ async function validateWalletBalance(walletId) {
     throw new Error('Wallet not found');
   }
 
-  if (wallet.balance < 0) {
-    throw new Error(`Wallet ${walletId} has negative balance: ${wallet.balance}`);
+  const totalCredits = (wallet.walletCredits || 0) + (wallet.subscriptionCredits || 0);
+
+  if (totalCredits < 0) {
+    throw new Error(`Wallet ${walletId} has negative balance: ${totalCredits}`);
   }
 
   const transactions = await WalletTransaction.find({ walletId }).exec();
   
   const calculatedBalance = transactions.reduce((sum, t) => sum + t.amount, 0);
 
-  if (Math.abs(calculatedBalance - wallet.balance) > 0.01) {
+  if (Math.abs(calculatedBalance - totalCredits) > 0.01) {
     throw new Error(
-      `Wallet ${walletId} balance mismatch: stored=${wallet.balance}, calculated=${calculatedBalance}`
+      `Wallet ${walletId} balance mismatch: stored=${totalCredits}, calculated=${calculatedBalance}`
     );
   }
 
