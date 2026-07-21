@@ -1586,7 +1586,48 @@ const Profile = () => {
                 {/* Tab Content */}
                 {activeUserTab === 'overview' && (
                   <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                    <div style={{ fontSize: '14px', color: '#64748b', textAlign: 'center', padding: '40px 0' }}>All key metrics displayed above</div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px' }}>Account Information</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Name</div>
+                        <div style={{ fontSize: '14px', color: '#0f172a' }}>{userDetail?.name || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Email</div>
+                        <div style={{ fontSize: '14px', color: '#0f172a' }}>{userDetail?.email || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Phone</div>
+                        <div style={{ fontSize: '14px', color: '#0f172a' }}>{userDetail?.phone || userDetail?.profile?.phone || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Joined</div>
+                        <div style={{ fontSize: '14px', color: '#0f172a' }}>{userDetail?.createdAt ? new Date(userDetail.createdAt).toLocaleDateString() : 'N/A'}</div>
+                      </div>
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px' }}>Activity Summary</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+                      <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: '#3b82f6' }}>{userTasks.length}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Total Tasks</div>
+                      </div>
+                      <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: '#22c55e' }}>{userWallet.balance}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Wallet Balance</div>
+                      </div>
+                      <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: '#6366f1' }}>{userPurchases.length}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Purchases</div>
+                      </div>
+                      <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: '#f59e0b' }}>{userResponses.length}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Responses</div>
+                      </div>
+                      <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: '#8b5cf6' }}>{userWallet.transactions?.length || 0}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Transactions</div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
