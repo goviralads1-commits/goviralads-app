@@ -9,7 +9,7 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [branding, setBranding] = useState({ appName: 'TaskFlow Pro', tagline: 'Your productivity partner', logoUrl: '', accentColor: '#6366f1' });
+  const [branding, setBranding] = useState({ appName: 'Go Viral Ads', tagline: 'Your productivity partner', logoUrl: '', accentColor: '#6366f1' });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,7 +19,7 @@ const LoginForm = () => {
         const res = await api.get('/public/branding');
         if (res.data) {
           setBranding({
-            appName: res.data.appName || 'TaskFlow Pro',
+            appName: res.data.appName || 'Go Viral Ads',
             tagline: res.data.tagline || 'Your productivity partner',
             logoUrl: res.data.logoUrl || '',
             accentColor: res.data.accentColor || '#6366f1',
@@ -375,8 +375,21 @@ const LoginForm = () => {
           color: '#94a3b8',
           marginTop: '24px'
         }}>
-          {branding.appName || 'TaskFlow Pro'} • Client Portal
+          {branding.appName || 'Go Viral Ads'} • Client Portal
         </p>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '16px',
+          marginTop: '8px',
+          fontSize: '12px',
+        }}>
+          <a href="/legal/privacy-policy" style={{ color: '#94a3b8', textDecoration: 'none' }}>Privacy Policy</a>
+          <span style={{ color: '#cbd5e1' }}>•</span>
+          <a href="/legal/terms-of-service" style={{ color: '#94a3b8', textDecoration: 'none' }}>Terms of Service</a>
+          <span style={{ color: '#cbd5e1' }}>•</span>
+          <a href="/legal/contact-us" style={{ color: '#94a3b8', textDecoration: 'none' }}>Contact</a>
+        </div>
       </div>
 
       <style>{`

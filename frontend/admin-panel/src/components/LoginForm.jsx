@@ -385,6 +385,19 @@ const LoginForm = () => {
         }}>
           Secure Admin Access • {branding.appName || 'Go Viral Ads'}
         </p>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '16px',
+          marginTop: '8px',
+          fontSize: '12px',
+        }}>
+          <a href="https://goviralads.com/legal/privacy-policy" style={{ color: '#94a3b8', textDecoration: 'none' }}>Privacy Policy</a>
+          <span style={{ color: '#cbd5e1' }}>•</span>
+          <a href="https://goviralads.com/legal/terms-of-service" style={{ color: '#94a3b8', textDecoration: 'none' }}>Terms of Service</a>
+          <span style={{ color: '#cbd5e1' }}>•</span>
+          <a href="https://goviralads.com/legal/contact-us" style={{ color: '#94a3b8', textDecoration: 'none' }}>Contact</a>
+        </div>
       </div>
 
       <style>{`

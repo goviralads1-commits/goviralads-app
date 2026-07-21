@@ -113,7 +113,18 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  if (!isLoggedIn) {
+  // Direct localStorage check as backup (context may be stale after same-tab login)
+  const tokenExists = !!localStorage.getItem('token');
+  let storedRole = null;
+  try {
+    const storedUser = localStorage.getItem('user');
+    storedRole = storedUser ? JSON.parse(storedUser)?.role : null;
+  } catch (e) {
+    storedRole = null;
+  }
+  const actuallyLoggedIn = isLoggedIn || tokenExists;
+
+  if (!actuallyLoggedIn) {
     // Store intended URL for redirect after login
     const intendedUrl = location.pathname + location.search;
     console.log('[ProtectedRoute] ========== NOT LOGGED IN ==========');
@@ -125,8 +136,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(userRole)) {
-    console.log('[ProtectedRoute] Role mismatch:', userRole, 'not in', allowedRoles);
+  if (allowedRoles && !allowedRoles.includes(userRole || storedRole)) {
+    console.log('[ProtectedRoute] Role mismatch:', userRole || storedRole, 'not in', allowedRoles);
     return <Navigate to="/unauthorized" replace />;
   }
 
