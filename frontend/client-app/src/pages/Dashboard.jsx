@@ -238,7 +238,7 @@ const Dashboard = () => {
                 <p style={{ fontSize: '26px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span></p>
               </div>
               <button onClick={() => navigate('/wallet')} style={{ padding: '9px 16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                + Add Credits
+                Recharge Wallet
               </button>
             </div>
             {walletData && (walletData.subscriptionCredits > 0 || walletData.walletCredits > 0) && (
@@ -413,7 +413,7 @@ const Dashboard = () => {
 
         {/* EARNINGS STRIP — Boost banner */}
         {commissionData.overallTaskCount > 0 && (
-        <div onClick={() => navigate('/earnings')} style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', borderRadius: '16px', padding: '16px 20px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', cursor: 'pointer' }}>
+        <div onClick={() => navigate('/earnings-ledger')} style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', borderRadius: '16px', padding: '16px 20px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ fontSize: '18px' }}>💰</span>

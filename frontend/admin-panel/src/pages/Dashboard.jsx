@@ -657,7 +657,7 @@ const Dashboard = () => {
                   <span style={{ fontSize: '16px' }}>💎</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>{(commissionData?.overallTotal || 0).toLocaleString('en-IN')} credits</p>
-                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Revenue</p>
+                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Commission</p>
               </div>
             )}
             {/* Commission Paid */}
@@ -674,7 +674,7 @@ const Dashboard = () => {
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>🏢</span>
                 </div>
-                <p style={{ fontSize: '22px', fontWeight: '800', color: '#3b82f6', margin: '0 0 2px 0' }}>{Math.max(0, (commissionData?.overallTotal || 0)).toLocaleString('en-IN')} credits</p>
+                <p style={{ fontSize: '22px', fontWeight: '800', color: '#3b82f6', margin: '0 0 2px 0' }}>{analytics ? `₹${Math.max(0, (analytics.profit?.netProfit || 0)).toLocaleString('en-IN')}` : '—'}</p>
                 <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Company Profit</p>
               </div>
             )}

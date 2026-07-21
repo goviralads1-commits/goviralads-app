@@ -73,6 +73,14 @@ const Orders = () => {
     }
   }, [initialOrderId, orders]);
 
+  // Auto-hide toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Approve order
   const handleApprove = async () => {
     if (!selectedOrder) return;
@@ -575,8 +583,6 @@ const Orders = () => {
         </div>
       )}
 
-      {/* Auto-hide toast */}
-      {toast && setTimeout(() => setToast(null), 4000) && null}
     </div>
   );
 };
