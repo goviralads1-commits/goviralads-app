@@ -50,6 +50,10 @@ const Dashboard = () => {
   const [rejectingOrderId, setRejectingOrderId] = useState(null);
   const [rejectLoading, setRejectLoading] = useState(false);
 
+  // Pending client registrations
+  const [pendingClients, setPendingClients] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
   const handleRejectOrder = async (orderId) => {
     if (!confirm('Are you sure you want to reject this order? The client will be refunded.')) return;
     
@@ -63,6 +67,27 @@ const Dashboard = () => {
     } finally {
       setRejectLoading(false);
       setRejectingOrderId(null);
+    }
+  };
+
+  const handleApproveClient = async (clientId) => {
+    try {
+      await api.post(`/admin/pending-clients/${clientId}/approve`);
+      showToast('success', 'Client approved successfully');
+      fetchData();
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to approve client');
+    }
+  };
+
+  const handleRejectClient = async (clientId) => {
+    if (!confirm('Reject this registration? The account will be disabled.')) return;
+    try {
+      await api.post(`/admin/pending-clients/${clientId}/reject`);
+      showToast('success', 'Client registration rejected');
+      fetchData();
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to reject client');
     }
   };
 
@@ -121,7 +146,7 @@ const Dashboard = () => {
   const fetchData = useCallback(async () => {
     try {
       const params = buildFilterParams();
-      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes] = await Promise.all([
+      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes, pendingRes] = await Promise.all([
         api.get('/admin/reports/overview'),
         api.get('/admin/notices'),
         api.get('/admin/clients'),
@@ -129,12 +154,14 @@ const Dashboard = () => {
         api.get('/admin/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/admin/commissions', { params }).catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
         api.get('/admin/analytics', { params }).catch(() => ({ data: null })),
+        api.get('/admin/pending-clients').catch(() => ({ data: { clients: [] } })),
       ]);
       setDashboardData(overviewRes.data);
       setNotices(noticesRes.data.notices || []);
       setClients(clientsRes.data.clients || []);
       setPlans(plansRes.data.plans || []);
       setTasks(tasksRes.data.tasks || []);
+      setPendingClients(pendingRes.data?.clients || []);
       const cd = commissionsRes.data || {};
       setCommissionData({
         overallTotal: cd.overallTotal || 0,
@@ -1079,6 +1106,7 @@ const Dashboard = () => {
             { id: 'updates', label: 'Updates', icon: '🔄', count: updates.length },
             { id: 'requirements', label: 'Requirements', icon: '📋', count: requirements.length },
             { id: 'promotions', label: 'Promotions', icon: '🎁', count: promotions.length },
+            { id: 'pending', label: 'Pending Clients', icon: '⏳', count: pendingClients.length },
           ].map(tab => (
             <button
               key={tab.id}
@@ -1267,6 +1295,90 @@ const Dashboard = () => {
                         <button onClick={() => handleEditNotice(notice)} style={{ padding: '8px', backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '8px', border: 'none', cursor: 'pointer' }} title="Edit">✏️</button>
                         <button onClick={() => handleToggleActive(notice)} style={{ padding: '8px', backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: '8px', border: 'none', cursor: 'pointer' }} title={notice.isActive ? 'Deactivate' : 'Activate'}>{notice.isActive ? '🟢' : '🔴'}</button>
                         <button onClick={() => handleDeleteNotice(notice.id)} style={{ padding: '8px', backgroundColor: '#fef2f2', borderRadius: '8px', border: 'none', cursor: 'pointer', color: '#dc2626' }} title="Delete">🗑</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PENDING CLIENT REGISTRATIONS */}
+        {activeSection === 'pending' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <span style={{ fontSize: '20px' }}>⏳</span>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Client Registrations</h3>
+            </div>
+            {pendingClients.length === 0 ? (
+              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '40px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '40px', marginBottom: '12px' }}>✅</div>
+                <p style={{ color: '#64748b', margin: 0 }}>No pending registrations</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {pendingClients.map(client => (
+                  <div key={client.id} style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #fef3c7', borderLeft: '4px solid #f59e0b' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                      {/* Avatar */}
+                      <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ color: '#fff', fontSize: '20px', fontWeight: '700' }}>
+                          {client.name?.charAt(0)?.toUpperCase() || '?'}
+                        </span>
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <div style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>
+                          {client.name || 'Unknown'}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', fontSize: '13px', color: '#64748b' }}>
+                          <span>✉️ {client.email}</span>
+                          {client.company && <span>🏢 {client.company}</span>}
+                          {client.phone && <span>📞 {client.phone}</span>}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                          Registered: {new Date(client.registeredAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <button
+                          onClick={() => handleApproveClient(client.id)}
+                          style={{
+                            padding: '10px 20px',
+                            backgroundColor: '#16a34a',
+                            color: '#fff',
+                            borderRadius: '10px',
+                            border: 'none',
+                            fontWeight: '600',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          ✓ Approve
+                        </button>
+                        <button
+                          onClick={() => handleRejectClient(client.id)}
+                          style={{
+                            padding: '10px 20px',
+                            backgroundColor: '#fef2f2',
+                            color: '#dc2626',
+                            borderRadius: '10px',
+                            border: '1px solid #fecaca',
+                            fontWeight: '600',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          ✕ Reject
+                        </button>
                       </div>
                     </div>
                   </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { login } from '../services/authService';
 import api from '../services/api';
 
@@ -371,9 +371,20 @@ const LoginForm = () => {
         {/* Footer Text */}
         <p style={{
           textAlign: 'center',
+          fontSize: '14px',
+          color: '#64748b',
+          marginTop: '20px'
+        }}>
+          Don't have an account?{' '}
+          <Link to="/register" style={{ color: accentColor, fontWeight: '600', textDecoration: 'none' }}>
+            Sign Up
+          </Link>
+        </p>
+        <p style={{
+          textAlign: 'center',
           fontSize: '13px',
           color: '#94a3b8',
-          marginTop: '24px'
+          marginTop: '12px'
         }}>
           {branding.appName || 'Go Viral Ads'} • Client Portal
         </p>

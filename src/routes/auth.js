@@ -1,9 +1,57 @@
 const express = require('express');
 const User = require('../models/User');
-const { verifyPassword } = require('../services/passwordService');
+const { verifyPassword, hashPassword } = require('../services/passwordService');
 const { signAuthToken } = require('../services/jwtService');
 
 const router = express.Router();
+
+// POST /auth/register - Public client self-registration
+router.post('/register', async (req, res) => {
+  try {
+    const { name, company, email, phone, password } = req.body || {};
+
+    // Validation
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ identifier: cleanEmail, isDeleted: { $ne: true } });
+    if (existingUser) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    // Create user with PENDING_APPROVAL status
+    const passwordHash = await hashPassword(password);
+    const user = await User.create({
+      identifier: cleanEmail,
+      passwordHash,
+      role: 'CLIENT',
+      status: 'PENDING_APPROVAL',
+      profile: {
+        name: name.trim(),
+        phone: phone?.trim() || '',
+        company: company?.trim() || '',
+      },
+    });
+
+    console.log(`[REGISTER] New client registration: ${cleanEmail} (ID: ${user._id})`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful. Your account is awaiting admin approval.',
+      userId: user._id,
+    });
+  } catch (err) {
+    console.error('[REGISTER] Error:', err.message);
+    res.status(500).json({ error: 'Registration failed. Please try again.' });
+  }
+});
 
 router.post('/login', async (req, res) => {
   console.log('==================== LOGIN HIT ====================');
@@ -41,6 +89,11 @@ router.post('/login', async (req, res) => {
     }
 
     console.log('[LOGIN] ✓ User found - Role:', user.role, 'Status:', user.status);
+
+    if (user.status === 'PENDING_APPROVAL') {
+      console.log('[LOGIN] ❌ Account pending approval');
+      return res.status(403).json({ error: 'Your account is awaiting admin approval.', pendingApproval: true });
+    }
 
     if (user.status !== 'ACTIVE') {
       console.log('[LOGIN] ❌ Account disabled');

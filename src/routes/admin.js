@@ -8187,4 +8187,88 @@ router.patch('/push-preference', async (req, res) => {
   }
 });
 
+// ==================== PENDING CLIENT REGISTRATIONS ====================
+
+// GET /admin/pending-clients - List pending client registrations
+router.get('/pending-clients', async (req, res) => {
+  try {
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
+    const pendingClients = await User.find({
+      role: 'CLIENT',
+      status: 'PENDING_APPROVAL',
+      isDeleted: { $ne: true },
+    }).select('identifier profile createdAt').sort({ createdAt: -1 });
+
+    return res.json({
+      clients: pendingClients.map(u => ({
+        id: u._id,
+        email: u.identifier,
+        name: u.profile?.name || '',
+        company: u.profile?.company || '',
+        phone: u.profile?.phone || '',
+        registeredAt: u.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('[PENDING] List error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch pending registrations' });
+  }
+});
+
+// POST /admin/pending-clients/:clientId/approve - Approve a pending client
+router.post('/pending-clients/:clientId/approve', async (req, res) => {
+  try {
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
+    const client = await User.findById(req.params.clientId);
+    if (!client || client.role !== 'CLIENT') {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    if (client.status !== 'PENDING_APPROVAL') {
+      return res.status(400).json({ error: 'Client is not pending approval' });
+    }
+
+    client.status = 'ACTIVE';
+    await client.save();
+
+    console.log(`[PENDING] Approved client: ${client.identifier} by admin ${req.user.id}`);
+    return res.json({ success: true, message: 'Client approved successfully' });
+  } catch (err) {
+    console.error('[PENDING] Approve error:', err.message);
+    return res.status(500).json({ error: 'Failed to approve client' });
+  }
+});
+
+// POST /admin/pending-clients/:clientId/reject - Reject a pending client
+router.post('/pending-clients/:clientId/reject', async (req, res) => {
+  try {
+    const _caller = await User.findById(req.user.id).populate('customRole');
+    if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+
+    const client = await User.findById(req.params.clientId);
+    if (!client || client.role !== 'CLIENT') {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    if (client.status !== 'PENDING_APPROVAL') {
+      return res.status(400).json({ error: 'Client is not pending approval' });
+    }
+
+    // Soft delete the rejected client
+    client.status = 'DISABLED';
+    client.isDeleted = true;
+    client.deletedAt = new Date();
+    client.originalIdentifier = client.identifier;
+    await client.save();
+
+    console.log(`[PENDING] Rejected client: ${client.identifier} by admin ${req.user.id}`);
+    return res.json({ success: true, message: 'Client rejected successfully' });
+  } catch (err) {
+    console.error('[PENDING] Reject error:', err.message);
+    return res.status(500).json({ error: 'Failed to reject client' });
+  }
+});
+
 module.exports = router;

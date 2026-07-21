@@ -21,6 +21,7 @@ import TicketDetail from './pages/TicketDetail';
 import Support from './pages/Support';
 import Notifications from './pages/Notifications';
 import LegalPage from './pages/LegalPage';
+import Register from './pages/Register';
 import Earnings from './pages/Earnings';
 import EarningsLedgerPage from './pages/EarningsLedger';
 import NotFound from './pages/NotFound';
@@ -239,6 +240,7 @@ const AppShell = () => {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginForm />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/legal/:slug" element={<LegalPage />} />
             
             {/* Protected CLIENT Routes */}
