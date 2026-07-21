@@ -385,7 +385,7 @@ const Wallet = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            💳 Add Money
+            💳 Recharge Wallet
           </button>
 
           {/* View Plans Button - Always show, even with active subscription */}
@@ -468,7 +468,7 @@ const Wallet = () => {
                   transition: 'all 0.2s ease'
                 }}
               >
-                📦 {activeSection === 'subscription' ? 'Hide Plans' : 'Buy Plan'}
+                📦 {activeSection === 'subscription' ? 'Hide Plans' : 'Buy Credits'}
               </button>
             );
           })()}
@@ -1190,7 +1190,7 @@ const Wallet = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  + Add Money
+                  + Recharge Wallet
                 </button>
               </div>
               {rechargeRequests.length === 0 ? (
