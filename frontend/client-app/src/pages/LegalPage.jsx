@@ -81,6 +81,39 @@ const LegalPage = () => {
     );
   }
 
+  // Replace TaskFlowPro placeholder content with dynamic agency info values
+  const processedContent = (() => {
+    let content = page?.content || '';
+    if (agencyInfo && content) {
+      if (agencyInfo.agencyName) {
+        content = content.replace(/TaskFlowPro/gi, agencyInfo.agencyName);
+      }
+      if (agencyInfo.supportEmail) {
+        content = content.replace(/[a-zA-Z0-9._%+-]+@taskflowpro\.com/gi, agencyInfo.supportEmail);
+      }
+      if (agencyInfo.agencyAddress) {
+        content = content.replace(/\[Your Business Address\]/gi, agencyInfo.agencyAddress);
+        content = content.replace(/\[Your Address\]/gi, agencyInfo.agencyAddress);
+        content = content.replace(/\[Address\]/gi, agencyInfo.agencyAddress);
+      }
+      if (agencyInfo.phoneNumber) {
+        content = content.replace(/\[Your Phone[^\]]*\]/gi, agencyInfo.phoneNumber);
+        content = content.replace(/\[Phone[^\]]*\]/gi, agencyInfo.phoneNumber);
+      }
+      if (agencyInfo.whatsappNumber) {
+        content = content.replace(/\[Your WhatsApp[^\]]*\]/gi, agencyInfo.whatsappNumber);
+        content = content.replace(/\[WhatsApp[^\]]*\]/gi, agencyInfo.whatsappNumber);
+      }
+      if (agencyInfo.websiteUrl) {
+        content = content.replace(/https?:\/\/[^\s"'<]*taskflowpro\.com[^\s"'<]*/gi, agencyInfo.websiteUrl);
+      }
+      // Clean up any remaining bracket placeholders
+      content = content.replace(/\[Your [^\]]*\]/gi, '');
+      content = content.replace(/\[Placeholder[^\]]*\]/gi, '');
+    }
+    return content;
+  })();
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -95,7 +128,7 @@ const LegalPage = () => {
         <article style={styles.article}>
           <div 
             style={styles.content}
-            dangerouslySetInnerHTML={{ __html: page?.content || '' }}
+            dangerouslySetInnerHTML={{ __html: processedContent }}
           />
           
           {page?.lastUpdated && (
