@@ -11,6 +11,8 @@ const progressService = require('./progressService');
  * Fetch client's assigned team and convert to task.assignedUsers format.
  * Returns array of { userId, percentage } from active employee assignments.
  * Only includes employees that have a linked userId (User account).
+ * 
+ * COMMISSION SOURCE OF TRUTH: Employee.commissionSettings (not assignment)
  */
 async function getClientTeamAssignedUsers(clientId) {
   try {
@@ -23,9 +25,12 @@ async function getClientTeamAssignedUsers(clientId) {
     for (const assignment of assignments) {
       const emp = assignment.employeeId;
       if (!emp || !emp.userId) continue; // Skip employees without linked User accounts
+      // COMMISSION FROM EMPLOYEE MODEL (single source of truth)
+      const commissionEnabled = emp.commissionSettings?.enabled || false;
+      const commissionPercentage = commissionEnabled ? (Number(emp.commissionSettings?.percentage) || 0) : 0;
       assignedUsers.push({
         userId: emp.userId,
-        percentage: (assignment.commissionSettings?.enabled ? Number(assignment.commissionSettings.percentage) || 0 : 0),
+        percentage: commissionPercentage,
       });
     }
     return assignedUsers;

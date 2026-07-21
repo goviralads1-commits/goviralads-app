@@ -41,13 +41,17 @@ function serializeEmployee(employee) {
 
 function serializeAssignment(assignment) {
   const employee = assignment.employeeId;
+  // COMMISSION SOURCE OF TRUTH: Employee model (not assignment)
+  const employeeCommission = employee?.commissionSettings || { enabled: false, percentage: 0, notes: '' };
   return {
     id: assignment._id.toString(),
     clientId: assignment.clientId.toString(),
     employee: employee && employee._id ? serializeEmployee(employee) : { id: assignment.employeeId.toString() },
-    role: assignment.role,
+    // Role from Employee.defaultRole (single source of truth)
+    role: employee?.defaultRole || assignment.role,
     status: assignment.status,
-    commissionSettings: assignment.commissionSettings || { enabled: false, percentage: 0, notes: '' },
+    // Commission from Employee.commissionSettings (single source of truth)
+    commissionSettings: employeeCommission,
     assignedBy: assignment.assignedBy ? assignment.assignedBy.toString() : null,
     assignedAt: assignment.assignedAt,
     removedBy: assignment.removedBy ? assignment.removedBy.toString() : null,
@@ -216,7 +220,7 @@ router.get('/clients/:clientId/assignments', async (req, res) => {
 router.post('/clients/:clientId/assignments', async (req, res) => {
   try {
     const { clientId } = req.params;
-    const { employeeId, role, commissionSettings, notes } = req.body || {};
+    const { employeeId, notes } = req.body || {};
 
     const client = await User.findById(clientId).exec();
     if (!client || client.role !== ROLES.CLIENT || client.isDeleted) {
@@ -232,16 +236,14 @@ router.post('/clients/:clientId/assignments', async (req, res) => {
       return res.status(404).json({ error: 'Employee not found' });
     }
 
-    const assignmentRole = role || employee.defaultRole;
-    if (!Object.values(EMPLOYEE_ROLES).includes(assignmentRole)) {
-      return res.status(400).json({ error: 'Invalid assignment role' });
-    }
+    // Use Employee's defaultRole - no separate role configuration needed
+    const assignmentRole = employee.defaultRole;
 
+    // Create assignment - commission comes from Employee model (single source of truth)
     const assignment = await ClientEmployeeAssignment.create({
       clientId,
       employeeId,
-      role: assignmentRole,
-      commissionSettings: normalizeCommissionSettings(commissionSettings),
+      role: assignmentRole, // Stored for backward compatibility, but role is read from Employee
       notes: notes ? notes.trim() : '',
       assignedBy: req.user.id,
     });
@@ -250,7 +252,7 @@ router.post('/clients/:clientId/assignments', async (req, res) => {
     return res.status(201).json({ assignment: serializeAssignment(assignment) });
   } catch (err) {
     if (err && err.code === 11000) {
-      return res.status(400).json({ error: 'Employee is already assigned to this client with this role' });
+      return res.status(400).json({ error: 'Employee is already assigned to this client' });
     }
     return res.status(500).json({ error: 'Failed to assign employee to client' });
   }
@@ -259,7 +261,7 @@ router.post('/clients/:clientId/assignments', async (req, res) => {
 router.patch('/clients/:clientId/assignments/:assignmentId', async (req, res) => {
   try {
     const { clientId, assignmentId } = req.params;
-    const { role, commissionSettings, notes } = req.body || {};
+    const { notes } = req.body || {};
 
     const assignment = await ClientEmployeeAssignment.findOne({
       _id: assignmentId,
@@ -271,15 +273,8 @@ router.patch('/clients/:clientId/assignments/:assignmentId', async (req, res) =>
       return res.status(404).json({ error: 'Employee assignment not found' });
     }
 
-    if (role !== undefined) {
-      if (!Object.values(EMPLOYEE_ROLES).includes(role)) {
-        return res.status(400).json({ error: 'Invalid assignment role' });
-      }
-      assignment.role = role;
-    }
-    if (commissionSettings !== undefined) {
-      assignment.commissionSettings = normalizeCommissionSettings(commissionSettings);
-    }
+    // Only notes can be updated on the assignment
+    // Role and commission come from Employee model (single source of truth)
     if (notes !== undefined) {
       assignment.notes = notes ? notes.trim() : '';
     }
@@ -288,9 +283,6 @@ router.patch('/clients/:clientId/assignments/:assignmentId', async (req, res) =>
     await assignment.populate('employeeId');
     return res.status(200).json({ assignment: serializeAssignment(assignment) });
   } catch (err) {
-    if (err && err.code === 11000) {
-      return res.status(400).json({ error: 'Employee is already assigned to this client with this role' });
-    }
     return res.status(500).json({ error: 'Failed to update employee assignment' });
   }
 });

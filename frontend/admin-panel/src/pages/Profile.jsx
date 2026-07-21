@@ -82,7 +82,7 @@ const Profile = () => {
   const [employeeAssignmentsLoading, setEmployeeAssignmentsLoading] = useState(false);
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
-  const [roleAssignments, setRoleAssignments] = useState({}); // { roleKey: { employeeId, commissionEnabled, commissionPercentage, assignmentId } }
+  const [roleAssignments, setRoleAssignments] = useState({}); // { roleKey: { employeeId, assignmentId } }
   const [roleSaving, setRoleSaving] = useState({}); // { roleKey: true/false }
 
   // Push notification state
@@ -281,8 +281,6 @@ const Profile = () => {
         if (a.role && a.status === 'ACTIVE') {
           roleMap[a.role] = {
             employeeId: a.employee?.id || '',
-            commissionEnabled: a.commissionSettings?.enabled || false,
-            commissionPercentage: a.commissionSettings?.percentage || 0,
             assignmentId: a.id,
           };
         }
@@ -314,32 +312,12 @@ const Profile = () => {
     }
   };
 
-  const handleRoleAssignment = async (roleKey, employeeId, commissionEnabled, commissionPercentage) => {
+  const handleRoleAssignment = async (roleKey, employeeId) => {
     if (!selectedUser) return;
     const currentAssignment = roleAssignments[roleKey];
     
-    // If same employee already assigned, just update commission
+    // If same employee already assigned, do nothing
     if (currentAssignment && currentAssignment.employeeId === employeeId) {
-      try {
-        setRoleSaving(prev => ({ ...prev, [roleKey]: true }));
-        await api.patch(`/admin/employees/clients/${selectedUser.id}/assignments/${currentAssignment.assignmentId}`, {
-          commissionSettings: {
-            enabled: commissionEnabled,
-            percentage: Number(commissionPercentage) || 0,
-          },
-        });
-        // Update local state
-        setRoleAssignments(prev => ({
-          ...prev,
-          [roleKey]: { ...prev[roleKey], commissionEnabled, commissionPercentage }
-        }));
-        showToast('Commission updated');
-        fetchEmployeeAssignments(selectedUser.id);
-      } catch (err) {
-        showToast(err.response?.data?.error || 'Failed to update commission', 'error');
-      } finally {
-        setRoleSaving(prev => ({ ...prev, [roleKey]: false }));
-      }
       return;
     }
     
@@ -372,14 +350,9 @@ const Profile = () => {
       if (currentAssignment?.assignmentId) {
         await api.delete(`/admin/employees/clients/${selectedUser.id}/assignments/${currentAssignment.assignmentId}`);
       }
-      // Create new assignment
+      // Create new assignment - commission comes from Employee model
       const res = await api.post(`/admin/employees/clients/${selectedUser.id}/assignments`, {
         employeeId,
-        role: roleKey,
-        commissionSettings: {
-          enabled: commissionEnabled,
-          percentage: Number(commissionPercentage) || 0,
-        },
       });
       // Update local state
       const newAssignment = res.data.assignment;
@@ -387,8 +360,6 @@ const Profile = () => {
         ...prev,
         [roleKey]: {
           employeeId,
-          commissionEnabled,
-          commissionPercentage,
           assignmentId: newAssignment?.id || '',
         }
       }));
@@ -401,15 +372,7 @@ const Profile = () => {
     }
   };
 
-  const updateRoleCommission = (roleKey, field, value) => {
-    setRoleAssignments(prev => ({
-      ...prev,
-      [roleKey]: {
-        ...prev[roleKey],
-        [field]: field === 'commissionPercentage' ? (value === '' ? '' : Number(value) || 0) : value,
-      }
-    }));
-  };
+
 
   const handleSelectUser = (user) => {
     setSelectedUser(user);
@@ -1851,11 +1814,11 @@ const Profile = () => {
                   </div>
                 )}
 
-                {/* Employees Tab - Role-Based Assignment */}
+                {/* Employees Tab - Simplified Role-Based Assignment */}
                 {activeUserTab === 'employees' && (
                   <div>
                     <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px' }}>Assigned Team</h3>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px' }}>Select an employee for each role. New tasks will auto-assign to the selected team member.</p>
+                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px' }}>Select an employee for each role. Commission is inherited from the employee's default settings.</p>
 
                     {employeeAssignmentsLoading ? (
                       <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -1872,6 +1835,9 @@ const Profile = () => {
                           
                           // Get employees with this role
                           const employeesForRole = availableEmployees.filter(emp => emp.defaultRole === roleKey);
+                          
+                          // Get selected employee info
+                          const selectedEmp = assignment.employeeId ? employeesForRole.find(e => e.id === assignment.employeeId) : null;
                           
                           return (
                             <div key={roleKey} style={{
@@ -1914,11 +1880,9 @@ const Profile = () => {
                                     [roleKey]: {
                                       ...prev[roleKey],
                                       employeeId: newEmployeeId,
-                                      commissionEnabled: prev[roleKey]?.commissionEnabled || false,
-                                      commissionPercentage: prev[roleKey]?.commissionPercentage || 0,
                                     }
                                   }));
-                                  handleRoleAssignment(roleKey, newEmployeeId, assignment.commissionEnabled || false, assignment.commissionPercentage || 0);
+                                  handleRoleAssignment(roleKey, newEmployeeId);
                                 }}
                                 disabled={isSaving}
                                 style={{
@@ -1931,66 +1895,29 @@ const Profile = () => {
                                   backgroundColor: isSaving ? '#f8fafc' : '#ffffff',
                                   cursor: isSaving ? 'not-allowed' : 'pointer',
                                   boxSizing: 'border-box',
-                                  marginBottom: assignment.employeeId ? '14px' : '0'
                                 }}
                                 onFocus={(e) => e.target.style.borderColor = '#6366f1'}
                                 onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                               >
                                 <option value="">Select {roleName.toLowerCase()}...</option>
-                                {employeesForRole.map(emp => (
-                                  <option key={emp.id} value={emp.id}>
-                                    {emp.name} ({emp.identifier})
-                                  </option>
-                                ))}
+                                {employeesForRole.map(emp => {
+                                  const commission = emp.commissionSettings?.enabled ? `${emp.commissionSettings.percentage}%` : 'No commission';
+                                  return (
+                                    <option key={emp.id} value={emp.id}>
+                                      {emp.name} • {commission}
+                                    </option>
+                                  );
+                                })}
                               </select>
 
-                              {/* Commission Controls (only show when employee is selected) */}
-                              {assignment.employeeId && (
-                                <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: assignment.commissionEnabled ? '10px' : '0' }}>
-                                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#334155' }}>Commission</label>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: '#64748b' }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={assignment.commissionEnabled || false}
-                                        onChange={e => {
-                                          const enabled = e.target.checked;
-                                          updateRoleCommission(roleKey, 'commissionEnabled', enabled);
-                                          handleRoleAssignment(roleKey, assignment.employeeId, enabled, assignment.commissionPercentage || 0);
-                                        }}
-                                        disabled={isSaving}
-                                        style={{ width: '14px', height: '14px', cursor: 'pointer', accentColor: '#6366f1' }}
-                                      />
-                                      Enable
-                                    </label>
+                              {/* Selected Employee Info */}
+                              {selectedEmp && (
+                                <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Assigned Employee</div>
+                                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{selectedEmp.name}</div>
+                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                    {roleName} • {selectedEmp.commissionSettings?.enabled ? `${selectedEmp.commissionSettings.percentage}% commission` : 'No commission'}
                                   </div>
-                                  {assignment.commissionEnabled && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={assignment.commissionPercentage || 0}
-                                        onChange={e => updateRoleCommission(roleKey, 'commissionPercentage', e.target.value)}
-                                        onBlur={(e) => {
-                                          e.target.style.borderColor = '#e2e8f0';
-                                          handleRoleAssignment(roleKey, assignment.employeeId, assignment.commissionEnabled, assignment.commissionPercentage || 0);
-                                        }}
-                                        disabled={isSaving}
-                                        style={{
-                                          width: '70px',
-                                          padding: '8px 10px',
-                                          borderRadius: '8px',
-                                          border: '2px solid #e2e8f0',
-                                          fontSize: '13px',
-                                          outline: 'none',
-                                          boxSizing: 'border-box'
-                                        }}
-                                        onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-                                      />
-                                      <span style={{ fontSize: '12px', color: '#64748b' }}>%</span>
-                                    </div>
-                                  )}
                                 </div>
                               )}
 
