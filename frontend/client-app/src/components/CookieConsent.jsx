@@ -6,6 +6,19 @@ const CookieConsent = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Inject animation keyframes once
+    if (!document.querySelector('#cookie-consent-styles')) {
+      const styleSheet = document.createElement('style');
+      styleSheet.id = 'cookie-consent-styles';
+      styleSheet.textContent = `
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `;
+      document.head.appendChild(styleSheet);
+    }
+
     // Check if user has already consented
     const hasConsented = localStorage.getItem('cookieConsent');
     if (!hasConsented) {
@@ -190,24 +203,5 @@ const styles = {
     transition: 'all 0.2s ease',
   },
 };
-
-// Add keyframes for animation
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-`;
-if (!document.querySelector('#cookie-consent-styles')) {
-  styleSheet.id = 'cookie-consent-styles';
-  document.head.appendChild(styleSheet);
-}
 
 export default CookieConsent;

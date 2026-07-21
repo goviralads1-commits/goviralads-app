@@ -99,7 +99,7 @@ const LegalPage = () => {
           <span style={styles.footerSeparator}>•</span>
           <a href="/legal/contact-us" style={styles.footerLink}>Contact</a>
         </div>
-        <p style={styles.footerCopyright}>© {new Date().getFullYear()} TaskFlow Pro. All rights reserved.</p>
+        <p style={styles.footerCopyright}>© {new Date().getFullYear()} Go Viral Ads. All rights reserved.</p>
       </footer>
     </div>
   );

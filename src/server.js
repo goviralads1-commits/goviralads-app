@@ -267,6 +267,7 @@ const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/client');
 const adminRoutes = require('./routes/admin');
 const adminSubscriptionRoutes = require('./routes/adminSubscriptions');
+const adminEmployeeRoutes = require('./routes/adminEmployees');
 
 // Import task service for automatic progress updates
 const { updateTaskProgressAutomatically, calculateProgressFromTimeline } = require('./services/taskService');
@@ -291,6 +292,7 @@ app.use('/auth', authRoutes);
 app.use('/client', clientRoutes);
 app.use('/admin', adminRoutes);
 app.use('/admin/subscriptions', adminSubscriptionRoutes);
+app.use('/admin/employees', adminEmployeeRoutes);
 
 // Initialize default legal pages
 async function ensureLegalPages() {
