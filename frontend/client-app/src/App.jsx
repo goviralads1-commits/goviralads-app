@@ -44,23 +44,33 @@ const AuthProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    // Small delay to ensure localStorage is fully hydrated (important for new window/tab)
     const initAuth = () => {
-      const token = localStorage.getItem('token');
-      const loggedIn = !!token;
-      const role = getUserRole();
-      
-      console.log('[Auth] Initializing auth state:', { hasToken: loggedIn, role });
-      
-      setAuthState({
-        isReady: true,
-        isLoggedIn: loggedIn,
-        userRole: role
-      });
+      try {
+        const token = localStorage.getItem('token');
+        const loggedIn = !!token;
+        const role = getUserRole();
+        
+        console.log('[Auth] Initializing auth state:', { hasToken: loggedIn, role });
+        
+        setAuthState({
+          isReady: true,
+          isLoggedIn: loggedIn,
+          userRole: role
+        });
+      } catch (err) {
+        console.error('[Auth] Init error (non-fatal):', err.message);
+        // Safety: always mark ready even if localStorage fails
+        setAuthState({ isReady: true, isLoggedIn: false, userRole: null });
+      }
     };
 
     // Check immediately
     initAuth();
+    
+    // Safety net: force isReady=true after 3s if not already set
+    const safety = setTimeout(() => {
+      setAuthState(prev => prev.isReady ? prev : { isReady: true, isLoggedIn: false, userRole: null });
+    }, 3000);
     
     // Also listen for storage changes (when another tab logs in/out)
     const handleStorageChange = (e) => {
@@ -71,7 +81,10 @@ const AuthProvider = ({ children }) => {
     };
     
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      clearTimeout(safety);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   return (
@@ -202,36 +215,8 @@ const NotificationClickHandler = () => {
   return null;
 };
 
-// App shell that gates all rendering behind auth readiness
+// App shell — renders Router immediately so public routes (login) are never blocked
 const AppShell = () => {
-  const { isReady } = useAuth();
-
-  if (!isReady) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            border: '4px solid rgba(255,255,255,0.3)',
-            borderTopColor: '#fff',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            margin: '0 auto 20px'
-          }} />
-          <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '15px', fontWeight: '500', margin: 0 }}>Loading...</p>
-        </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
   return (
     <CartProvider>
       <Router>

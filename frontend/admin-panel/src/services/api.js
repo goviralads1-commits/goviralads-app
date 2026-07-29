@@ -1,10 +1,10 @@
 import axios from 'axios';
 
 // API Base URL - MUST be set in environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.goviralads.com';
 
-if (!API_BASE_URL) {
-  throw new Error('VITE_API_URL is not defined. Set it in .env file.');
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[API] VITE_API_URL not set, using default:', API_BASE_URL);
 }
 
 console.log('[API CONFIG] Base URL:', API_BASE_URL);
