@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import api from '../services/api';
@@ -21,6 +21,7 @@ const Tasks = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all'); // all | last7 | thisMonth | pending | completed
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -37,6 +38,39 @@ const Tasks = () => {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  // Filter definitions
+  const filters = [
+    { key: 'all', label: 'All Tasks' },
+    { key: 'last7', label: 'Last 7 Days' },
+    { key: 'thisMonth', label: 'This Month' },
+    { key: 'pending', label: 'Pending' },
+    { key: 'completed', label: 'Completed' },
+  ];
+
+  // Filtered tasks based on active filter
+  const filteredTasks = useMemo(() => {
+    const now = new Date();
+    switch (activeFilter) {
+      case 'last7': {
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(now.getDate() - 7);
+        return tasks.filter(t => new Date(t.createdAt) >= sevenDaysAgo);
+      }
+      case 'thisMonth': {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        return tasks.filter(t => new Date(t.createdAt) >= monthStart);
+      }
+      case 'pending':
+        return tasks.filter(t => t.status === 'PENDING' || t.status === 'PENDING_APPROVAL');
+      case 'completed':
+        return tasks.filter(t => t.status === 'COMPLETED');
+      default:
+        return tasks;
+    }
+  }, [tasks, activeFilter]);
+
+  const totalFiltered = filteredTasks.length;
 
   // Human-readable status (hide internal codes)
   const getHumanStatus = (status) => {
@@ -167,24 +201,57 @@ const Tasks = () => {
       
       <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px 20px', paddingBottom: '120px' }}>
         {/* Page Title */}
-        <div style={{ marginBottom: '28px' }}>
+        <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#1a1a1a', margin: 0, letterSpacing: '-0.02em' }}>
             My Tasks
           </h1>
           <p style={{ fontSize: '14px', color: '#999', margin: '8px 0 0 0' }}>
-            {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+            {totalFiltered} task{totalFiltered !== 1 ? 's' : ''}{activeFilter !== 'all' ? ` (${tasks.length} total)` : ''}
           </p>
+        </div>
+
+        {/* Filter Tabs */}
+        <div style={{
+          display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto',
+          paddingBottom: '4px', WebkitOverflowScrolling: 'touch'
+        }}>
+          {filters.map(f => {
+            const isActive = activeFilter === f.key;
+            const count = f.key === 'all' ? tasks.length :
+              f.key === 'last7' ? tasks.filter(t => new Date(t.createdAt) >= new Date(Date.now() - 7*86400000)).length :
+              f.key === 'thisMonth' ? tasks.filter(t => { const d = new Date(t.createdAt); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length :
+              f.key === 'pending' ? tasks.filter(t => t.status === 'PENDING' || t.status === 'PENDING_APPROVAL').length :
+              tasks.filter(t => t.status === 'COMPLETED').length;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setActiveFilter(f.key)}
+                style={{
+                  padding: '8px 16px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
+                  border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                  backgroundColor: isActive ? '#1a1a1a' : '#f1f1f1',
+                  color: isActive ? '#fff' : '#666',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {f.label} ({count})
+              </button>
+            );
+          })}
         </div>
 
         {/* Task Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {tasks.map((task) => {
+          {filteredTasks.map((task, index) => {
             const progress = task.progress || 0;
             const progressColor = getProgressColor(task);
             const activeMilestone = getActiveMilestone(task.milestones, progress);
             const isOverachieving = progress > 100;
 
             const isPendingApproval = task.status === 'PENDING_APPROVAL';
+
+            const position = index + 1;
+            const positionLabel = `${String(position).padStart(2, '0')} of ${totalFiltered}`;
 
             return (
               <div
@@ -194,7 +261,8 @@ const Tasks = () => {
                   backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden',
                   boxShadow: '0 2px 12px rgba(0,0,0,0.04)', cursor: 'pointer',
                   transition: 'all 0.2s ease',
-                  border: isPendingApproval ? '2px solid #6366f1' : 'none'
+                  border: isPendingApproval ? '2px solid #6366f1' : 'none',
+                  position: 'relative'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
@@ -205,6 +273,17 @@ const Tasks = () => {
                   e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.04)';
                 }}
               >
+                {/* Position Badge */}
+                <div style={{
+                  position: 'absolute', top: '12px', right: '12px',
+                  padding: '4px 10px', borderRadius: '100px',
+                  backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                  fontSize: '11px', fontWeight: '700', color: '#fff',
+                  letterSpacing: '0.02em', zIndex: 2
+                }}>
+                  {positionLabel}
+                </div>
+
                 {/* Thumbnail/Feature Image with Gradient Fallback */}
                 {task.featureImage ? (
                   <div style={{ position: 'relative', height: '100px', overflow: 'hidden' }}>
@@ -385,6 +464,22 @@ const Tasks = () => {
             );
           })}
         </div>
+
+        {/* Empty filter result */}
+        {totalFiltered === 0 && tasks.length > 0 && (
+          <div style={{
+            textAlign: 'center', padding: '48px 24px',
+            backgroundColor: '#fff', borderRadius: '24px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
+          }}>
+            <p style={{ fontSize: '16px', fontWeight: '600', color: '#1a1a1a', margin: '0 0 8px 0' }}>
+              No tasks match this filter
+            </p>
+            <p style={{ fontSize: '14px', color: '#999', margin: 0 }}>
+              Try selecting a different filter above
+            </p>
+          </div>
+        )}
       </div>
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
