@@ -82,8 +82,10 @@ const Profile = () => {
   const [employeeAssignmentsLoading, setEmployeeAssignmentsLoading] = useState(false);
   const [availableEmployees, setAvailableEmployees] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
-  const [roleAssignments, setRoleAssignments] = useState({}); // { roleKey: { employeeId, assignmentId } }
+  const [roleAssignments, setRoleAssignments] = useState({}); // { roleKey: [{ employeeId, assignmentId, employee }] }
   const [roleSaving, setRoleSaving] = useState({}); // { roleKey: true/false }
+  const [addingEmployeeForRole, setAddingEmployeeForRole] = useState(null); // roleKey being added
+  const [newEmployeeSelection, setNewEmployeeSelection] = useState({}); // { roleKey: employeeId }
 
   // Push notification state
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -275,14 +277,18 @@ const Profile = () => {
       const res = await api.get(`/admin/employees/clients/${clientId}/assignments`);
       const assignments = res.data.assignments || [];
       setEmployeeAssignments(assignments);
-      // Build roleAssignments map from existing assignments
+      // Build roleAssignments map: { roleKey: [{ employeeId, assignmentId, employee }] }
       const roleMap = {};
       assignments.forEach(a => {
         if (a.role && a.status === 'ACTIVE') {
-          roleMap[a.role] = {
+          if (!roleMap[a.role]) {
+            roleMap[a.role] = [];
+          }
+          roleMap[a.role].push({
             employeeId: a.employee?.id || '',
             assignmentId: a.id,
-          };
+            employee: a.employee,
+          });
         }
       });
       setRoleAssignments(roleMap);
@@ -314,42 +320,22 @@ const Profile = () => {
 
   const handleRoleAssignment = async (roleKey, employeeId) => {
     if (!selectedUser) return;
-    const currentAssignment = roleAssignments[roleKey];
+    const currentAssignments = roleAssignments[roleKey] || [];
     
-    // If same employee already assigned, do nothing
-    if (currentAssignment && currentAssignment.employeeId === employeeId) {
+    // If no employee selected, do nothing (use remove function instead)
+    if (!employeeId) {
       return;
     }
     
-    // If no employee selected, remove assignment
-    if (!employeeId) {
-      if (currentAssignment?.assignmentId) {
-        try {
-          setRoleSaving(prev => ({ ...prev, [roleKey]: true }));
-          await api.delete(`/admin/employees/clients/${selectedUser.id}/assignments/${currentAssignment.assignmentId}`);
-          setRoleAssignments(prev => {
-            const next = { ...prev };
-            delete next[roleKey];
-            return next;
-          });
-          showToast('Employee unassigned');
-          fetchEmployeeAssignments(selectedUser.id);
-        } catch (err) {
-          showToast(err.response?.data?.error || 'Failed to unassign', 'error');
-        } finally {
-          setRoleSaving(prev => ({ ...prev, [roleKey]: false }));
-        }
-      }
+    // Check if this employee is already assigned to this role
+    if (currentAssignments.some(a => a.employeeId === employeeId)) {
+      showToast('Employee already assigned to this role', 'error');
       return;
     }
     
     // Assign new employee to role
     try {
       setRoleSaving(prev => ({ ...prev, [roleKey]: true }));
-      // If there's an existing assignment for this role, remove it first
-      if (currentAssignment?.assignmentId) {
-        await api.delete(`/admin/employees/clients/${selectedUser.id}/assignments/${currentAssignment.assignmentId}`);
-      }
       // Create new assignment - commission comes from Employee model
       const res = await api.post(`/admin/employees/clients/${selectedUser.id}/assignments`, {
         employeeId,
@@ -358,15 +344,40 @@ const Profile = () => {
       const newAssignment = res.data.assignment;
       setRoleAssignments(prev => ({
         ...prev,
-        [roleKey]: {
-          employeeId,
-          assignmentId: newAssignment?.id || '',
-        }
+        [roleKey]: [
+          ...(prev[roleKey] || []),
+          {
+            employeeId,
+            assignmentId: newAssignment?.id || '',
+            employee: newAssignment?.employee,
+          }
+        ]
       }));
       showToast('Employee assigned');
+      setAddingEmployeeForRole(null);
+      setNewEmployeeSelection(prev => ({ ...prev, [roleKey]: '' }));
       fetchEmployeeAssignments(selectedUser.id);
     } catch (err) {
       showToast(err.response?.data?.error || 'Failed to assign employee', 'error');
+    } finally {
+      setRoleSaving(prev => ({ ...prev, [roleKey]: false }));
+    }
+  };
+
+  const handleRemoveEmployeeFromRole = async (roleKey, assignmentId) => {
+    if (!selectedUser) return;
+    
+    try {
+      setRoleSaving(prev => ({ ...prev, [roleKey]: true }));
+      await api.delete(`/admin/employees/clients/${selectedUser.id}/assignments/${assignmentId}`);
+      setRoleAssignments(prev => ({
+        ...prev,
+        [roleKey]: (prev[roleKey] || []).filter(a => a.assignmentId !== assignmentId)
+      }));
+      showToast('Employee unassigned');
+      fetchEmployeeAssignments(selectedUser.id);
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to unassign employee', 'error');
     } finally {
       setRoleSaving(prev => ({ ...prev, [roleKey]: false }));
     }
@@ -389,6 +400,8 @@ const Profile = () => {
     setActiveUserTab('overview');
     setEmployeeAssignments([]);
     setRoleAssignments({});
+    setAddingEmployeeForRole(null);
+    setNewEmployeeSelection({});
   };
 
   const showToast = (message, type = 'success') => {
@@ -1814,11 +1827,11 @@ const Profile = () => {
                   </div>
                 )}
 
-                {/* Employees Tab - Simplified Role-Based Assignment */}
+                {/* Employees Tab - Multi-Employee Role-Based Assignment */}
                 {activeUserTab === 'employees' && (
                   <div>
                     <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px' }}>Assigned Team</h3>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px' }}>Select an employee for each role. Commission is inherited from the employee's default settings.</p>
+                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px' }}>Assign multiple employees to each role. Commission is inherited from each employee's default settings.</p>
 
                     {employeeAssignmentsLoading ? (
                       <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
@@ -1826,18 +1839,18 @@ const Profile = () => {
                         <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Loading team...</p>
                       </div>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
                         {availableRoles.map(role => {
                           const roleKey = role.key;
                           const roleName = role.value.replace(/_/g, ' ');
-                          const assignment = roleAssignments[roleKey] || {};
+                          const assignments = roleAssignments[roleKey] || [];
                           const isSaving = roleSaving[roleKey] || false;
+                          const isAdding = addingEmployeeForRole === roleKey;
                           
-                          // Get employees with this role
+                          // Get employees with this role who are not already assigned
                           const employeesForRole = availableEmployees.filter(emp => emp.defaultRole === roleKey);
-                          
-                          // Get selected employee info
-                          const selectedEmp = assignment.employeeId ? employeesForRole.find(e => e.id === assignment.employeeId) : null;
+                          const assignedEmployeeIds = assignments.map(a => a.employeeId);
+                          const availableForAssignment = employeesForRole.filter(emp => !assignedEmployeeIds.includes(emp.id));
                           
                           return (
                             <div key={roleKey} style={{
@@ -1845,85 +1858,171 @@ const Profile = () => {
                               borderRadius: '16px',
                               padding: '20px',
                               boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                              border: assignment.employeeId ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                              border: assignments.length > 0 ? '2px solid #6366f1' : '1px solid #e2e8f0',
                               transition: 'all 0.2s'
                             }}>
                               {/* Role Header */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                                <div style={{
-                                  width: '36px',
-                                  height: '36px',
-                                  borderRadius: '10px',
-                                  background: assignment.employeeId ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#f1f5f9',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0
-                                }}>
-                                  <span style={{ fontSize: '16px' }}>{assignment.employeeId ? '✓' : '👤'}</span>
-                                </div>
-                                <div>
-                                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{roleName}</div>
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    {employeesForRole.length} {employeesForRole.length === 1 ? 'employee' : 'employees'} available
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    background: assignments.length > 0 ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#f1f5f9',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}>
+                                    <span style={{ fontSize: '16px' }}>{assignments.length > 0 ? '✓' : '👤'}</span>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{roleName}</div>
+                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                      {assignments.length} {assignments.length === 1 ? 'assigned' : 'assigned'} • {employeesForRole.length} available
+                                    </div>
                                   </div>
                                 </div>
+                                {assignments.length > 0 && (
+                                  <button
+                                    onClick={() => setAddingEmployeeForRole(isAdding ? null : roleKey)}
+                                    disabled={isSaving || availableForAssignment.length === 0}
+                                    style={{
+                                      padding: '6px 12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid #e2e8f0',
+                                      backgroundColor: isAdding ? '#f1f5f9' : '#fff',
+                                      fontSize: '12px',
+                                      fontWeight: '600',
+                                      color: '#6366f1',
+                                      cursor: isSaving || availableForAssignment.length === 0 ? 'not-allowed' : 'pointer',
+                                      opacity: isSaving || availableForAssignment.length === 0 ? 0.5 : 1,
+                                    }}
+                                  >
+                                    {isAdding ? 'Cancel' : '+ Add'}
+                                  </button>
+                                )}
                               </div>
 
-                              {/* Employee Selector */}
-                              <select
-                                value={assignment.employeeId || ''}
-                                onChange={e => {
-                                  const newEmployeeId = e.target.value;
-                                  setRoleAssignments(prev => ({
-                                    ...prev,
-                                    [roleKey]: {
-                                      ...prev[roleKey],
-                                      employeeId: newEmployeeId,
-                                    }
-                                  }));
-                                  handleRoleAssignment(roleKey, newEmployeeId);
-                                }}
-                                disabled={isSaving}
-                                style={{
-                                  width: '100%',
-                                  padding: '12px 14px',
-                                  borderRadius: '10px',
-                                  border: '2px solid #e2e8f0',
-                                  fontSize: '14px',
-                                  outline: 'none',
-                                  backgroundColor: isSaving ? '#f8fafc' : '#ffffff',
-                                  cursor: isSaving ? 'not-allowed' : 'pointer',
-                                  boxSizing: 'border-box',
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-                                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                              >
-                                <option value="">Select {roleName.toLowerCase()}...</option>
-                                {employeesForRole.map(emp => {
-                                  const commission = emp.commissionSettings?.enabled ? `${emp.commissionSettings.percentage}%` : 'No commission';
-                                  return (
-                                    <option key={emp.id} value={emp.id}>
-                                      {emp.name} • {commission}
-                                    </option>
-                                  );
-                                })}
-                              </select>
-
-                              {/* Selected Employee Info */}
-                              {selectedEmp && (
-                                <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Assigned Employee</div>
-                                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{selectedEmp.name}</div>
-                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                    {roleName} • {selectedEmp.commissionSettings?.enabled ? `${selectedEmp.commissionSettings.percentage}% commission` : 'No commission'}
-                                  </div>
+                              {/* Assigned Employees List */}
+                              {assignments.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: isAdding ? '12px' : '0' }}>
+                                  {assignments.map((assignment) => {
+                                    const emp = assignment.employee || availableEmployees.find(e => e.id === assignment.employeeId);
+                                    if (!emp) return null;
+                                    const commission = emp.commissionSettings?.enabled ? `${emp.commissionSettings.percentage}%` : 'No commission';
+                                    return (
+                                      <div key={assignment.assignmentId} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '10px 12px',
+                                        backgroundColor: '#f8fafc',
+                                        borderRadius: '10px',
+                                        border: '1px solid #e2e8f0'
+                                      }}>
+                                        <div style={{ flex: 1 }}>
+                                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{emp.name}</div>
+                                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                            {roleName} • {commission}
+                                          </div>
+                                        </div>
+                                        <button
+                                          onClick={() => handleRemoveEmployeeFromRole(roleKey, assignment.assignmentId)}
+                                          disabled={isSaving}
+                                          style={{
+                                            padding: '4px 8px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #fecaca',
+                                            backgroundColor: '#fff',
+                                            fontSize: '11px',
+                                            fontWeight: '500',
+                                            color: '#dc2626',
+                                            cursor: isSaving ? 'not-allowed' : 'pointer',
+                                            opacity: isSaving ? 0.5 : 1,
+                                          }}
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
 
-                              {/* Saving indicator */}
-                              {isSaving && (
-                                <div style={{ marginTop: '10px', fontSize: '11px', color: '#6366f1', fontWeight: '500' }}>Saving...</div>
+                              {/* Add Employee Selector */}
+                              {(isAdding || assignments.length === 0) && (
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <select
+                                    value={newEmployeeSelection[roleKey] || ''}
+                                    onChange={e => setNewEmployeeSelection(prev => ({ ...prev, [roleKey]: e.target.value }))}
+                                    disabled={isSaving}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px 12px',
+                                      borderRadius: '10px',
+                                      border: '2px solid #e2e8f0',
+                                      fontSize: '13px',
+                                      outline: 'none',
+                                      backgroundColor: isSaving ? '#f8fafc' : '#ffffff',
+                                      cursor: isSaving ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                                    onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                                  >
+                                    <option value="">Select employee...</option>
+                                    {availableForAssignment.map(emp => {
+                                      const commission = emp.commissionSettings?.enabled ? `${emp.commissionSettings.percentage}%` : 'No commission';
+                                      return (
+                                        <option key={emp.id} value={emp.id}>
+                                          {emp.name} • {commission}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                  <button
+                                    onClick={() => {
+                                      const selectedId = newEmployeeSelection[roleKey];
+                                      if (selectedId) {
+                                        handleRoleAssignment(roleKey, selectedId);
+                                      }
+                                    }}
+                                    disabled={isSaving || !newEmployeeSelection[roleKey]}
+                                    style={{
+                                      padding: '10px 16px',
+                                      borderRadius: '10px',
+                                      border: 'none',
+                                      backgroundColor: '#6366f1',
+                                      color: '#fff',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      cursor: isSaving || !newEmployeeSelection[roleKey] ? 'not-allowed' : 'pointer',
+                                      opacity: isSaving || !newEmployeeSelection[roleKey] ? 0.5 : 1,
+                                    }}
+                                  >
+                                    {isSaving ? '...' : 'Assign'}
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Empty state */}
+                              {assignments.length === 0 && !isAdding && (
+                                <button
+                                  onClick={() => setAddingEmployeeForRole(roleKey)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    borderRadius: '10px',
+                                    border: '2px dashed #e2e8f0',
+                                    backgroundColor: 'transparent',
+                                    fontSize: '13px',
+                                    fontWeight: '500',
+                                    color: '#94a3b8',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  + Assign {roleName.toLowerCase()}
+                                </button>
                               )}
                             </div>
                           );
