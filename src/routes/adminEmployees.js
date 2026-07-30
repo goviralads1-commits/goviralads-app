@@ -71,6 +71,42 @@ router.get('/roles', (_req, res) => {
   });
 });
 
+// GET /available-users - Get Users not linked to any Employee
+// MUST be before /:employeeId to avoid route matching conflict
+router.get('/available-users', async (req, res) => {
+  try {
+    // Get all Users (any role)
+    const allUsers = await User.find({
+      isDeleted: { $ne: true },
+    }).select('_id identifier profile.name profile.company status role').exec();
+
+    // Get all Employees with linked Users
+    const linkedUserIds = await Employee.find({
+      userId: { $exists: true, $ne: null },
+      isDeleted: { $ne: true },
+    }).select('userId').exec();
+
+    const linkedUserIdSet = new Set(linkedUserIds.map(e => e.userId?.toString()).filter(Boolean));
+
+    // Filter out already-linked Users
+    const availableUsers = allUsers
+      .filter(u => !linkedUserIdSet.has(u._id.toString()))
+      .map(u => ({
+        id: u._id.toString(),
+        identifier: u.identifier,
+        name: u.profile?.name || '',
+        company: u.profile?.company || '',
+        status: u.status,
+        role: u.role,
+      }));
+
+    return res.status(200).json({ users: availableUsers });
+  } catch (err) {
+    console.error('[AVAILABLE USERS] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch available users' });
+  }
+});
+
 // GET /:employeeId - Get single employee detail
 router.get('/:employeeId', async (req, res) => {
   try {
@@ -385,41 +421,6 @@ router.delete('/clients/:clientId/assignments/:assignmentId', async (req, res) =
     return res.status(200).json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to remove employee assignment' });
-  }
-});
-
-// GET /admin/employees/available-users - Get Users not linked to any Employee
-router.get('/available-users', async (req, res) => {
-  try {
-    // Get all Users (any role)
-    const allUsers = await User.find({
-      isDeleted: { $ne: true },
-    }).select('_id identifier profile.name profile.company status role').exec();
-
-    // Get all Employees with linked Users
-    const linkedUserIds = await Employee.find({
-      userId: { $exists: true, $ne: null },
-      isDeleted: { $ne: true },
-    }).select('userId').exec();
-
-    const linkedUserIdSet = new Set(linkedUserIds.map(e => e.userId?.toString()).filter(Boolean));
-
-    // Filter out already-linked Users
-    const availableUsers = allUsers
-      .filter(u => !linkedUserIdSet.has(u._id.toString()))
-      .map(u => ({
-        id: u._id.toString(),
-        identifier: u.identifier,
-        name: u.profile?.name || '',
-        company: u.profile?.company || '',
-        status: u.status,
-        role: u.role,
-      }));
-
-    return res.status(200).json({ users: availableUsers });
-  } catch (err) {
-    console.error('[AVAILABLE USERS] Error:', err.message);
-    return res.status(500).json({ error: 'Failed to fetch available users' });
   }
 });
 
