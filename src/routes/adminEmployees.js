@@ -71,6 +71,55 @@ router.get('/roles', (_req, res) => {
   });
 });
 
+// GET /:employeeId - Get single employee detail
+router.get('/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const employee = await Employee.findOne({ _id: employeeId, isDeleted: { $ne: true } }).exec();
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    return res.status(200).json({ employee: serializeEmployee(employee) });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to retrieve employee' });
+  }
+});
+
+// GET /:employeeId/assignments - Get clients assigned to this employee
+router.get('/:employeeId/assignments', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const employee = await Employee.findOne({ _id: employeeId, isDeleted: { $ne: true } }).exec();
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const assignments = await ClientEmployeeAssignment.find({
+      employeeId,
+      status: ASSIGNMENT_STATUS.ACTIVE,
+    })
+      .populate('clientId', 'identifier name profile')
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return res.status(200).json({
+      employee: serializeEmployee(employee),
+      assignments: assignments.map(a => ({
+        id: a._id.toString(),
+        clientId: a.clientId?._id?.toString() || a.clientId?.toString(),
+        clientName: a.clientId?.profile?.name || a.clientId?.name || a.clientId?.identifier || 'Unknown',
+        clientIdentifier: a.clientId?.identifier || '',
+        role: a.role,
+        status: a.status,
+        assignedAt: a.assignedAt,
+        notes: a.notes || '',
+      })),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to retrieve employee assignments' });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const { status, role, search } = req.query;
@@ -135,7 +184,7 @@ router.post('/', async (req, res) => {
 router.patch('/:employeeId', async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { name, phone, defaultRole, status, commissionSettings, notes } = req.body || {};
+    const { name, phone, defaultRole, status, commissionSettings, notes, userId } = req.body || {};
 
     const employee = await Employee.findOne({ _id: employeeId, isDeleted: { $ne: true } }).exec();
     if (!employee) {
@@ -149,12 +198,39 @@ router.patch('/:employeeId', async (req, res) => {
       return res.status(400).json({ error: 'Invalid employee status' });
     }
 
+    // Validate userId if provided
+    if (userId !== undefined && userId !== null && userId !== '') {
+      const user = await User.findById(userId).exec();
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Check if User is already linked to another Employee
+      const existingLink = await Employee.findOne({
+        userId: userId,
+        _id: { $ne: employeeId },
+        isDeleted: { $ne: true },
+      }).exec();
+
+      if (existingLink) {
+        return res.status(400).json({
+          error: 'This User is already linked to another Employee',
+          linkedTo: {
+            id: existingLink._id.toString(),
+            name: existingLink.name,
+            identifier: existingLink.identifier,
+          },
+        });
+      }
+    }
+
     if (name !== undefined) employee.name = name.trim();
     if (phone !== undefined) employee.phone = phone ? phone.trim() : '';
     if (defaultRole !== undefined) employee.defaultRole = defaultRole;
     if (status !== undefined) employee.status = status;
     if (commissionSettings !== undefined) employee.commissionSettings = normalizeCommissionSettings(commissionSettings);
     if (notes !== undefined) employee.notes = notes ? notes.trim() : '';
+    if (userId !== undefined) employee.userId = userId || null;
 
     await employee.save();
     return res.status(200).json({ employee: serializeEmployee(employee) });
@@ -309,6 +385,41 @@ router.delete('/clients/:clientId/assignments/:assignmentId', async (req, res) =
     return res.status(200).json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to remove employee assignment' });
+  }
+});
+
+// GET /admin/employees/available-users - Get Users not linked to any Employee
+router.get('/available-users', async (req, res) => {
+  try {
+    // Get all Users (any role)
+    const allUsers = await User.find({
+      isDeleted: { $ne: true },
+    }).select('_id identifier profile.name profile.company status role').exec();
+
+    // Get all Employees with linked Users
+    const linkedUserIds = await Employee.find({
+      userId: { $exists: true, $ne: null },
+      isDeleted: { $ne: true },
+    }).select('userId').exec();
+
+    const linkedUserIdSet = new Set(linkedUserIds.map(e => e.userId?.toString()).filter(Boolean));
+
+    // Filter out already-linked Users
+    const availableUsers = allUsers
+      .filter(u => !linkedUserIdSet.has(u._id.toString()))
+      .map(u => ({
+        id: u._id.toString(),
+        identifier: u.identifier,
+        name: u.profile?.name || '',
+        company: u.profile?.company || '',
+        status: u.status,
+        role: u.role,
+      }));
+
+    return res.status(200).json({ users: availableUsers });
+  } catch (err) {
+    console.error('[AVAILABLE USERS] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch available users' });
   }
 });
 

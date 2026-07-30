@@ -8,6 +8,7 @@ const Employees = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [roles, setRoles] = useState([]);
+  const [availableUsers, setAvailableUsers] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     identifier: '',
@@ -16,6 +17,7 @@ const Employees = () => {
     commissionEnabled: false,
     commissionPercentage: 0,
     notes: '',
+    userId: '',
   });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -23,6 +25,7 @@ const Employees = () => {
   useEffect(() => {
     fetchEmployees();
     fetchRoles();
+    fetchAvailableUsers();
   }, []);
 
   const fetchEmployees = async () => {
@@ -46,6 +49,15 @@ const Employees = () => {
     }
   };
 
+  const fetchAvailableUsers = async () => {
+    try {
+      const res = await api.get('/admin/employees/available-users');
+      setAvailableUsers(res.data.users || []);
+    } catch (err) {
+      console.error('Failed to fetch available users', err);
+    }
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
@@ -60,6 +72,7 @@ const Employees = () => {
       commissionEnabled: false,
       commissionPercentage: 0,
       notes: '',
+      userId: '',
     });
     setEditingEmployee(null);
     setShowCreateModal(true);
@@ -74,6 +87,7 @@ const Employees = () => {
       commissionEnabled: emp.commissionSettings?.enabled || false,
       commissionPercentage: emp.commissionSettings?.percentage || 0,
       notes: emp.notes || '',
+      userId: emp.userId || '',
     });
     setEditingEmployee(emp);
     setShowCreateModal(true);
@@ -101,6 +115,7 @@ const Employees = () => {
           percentage: Number(formData.commissionPercentage) || 0,
         },
         notes: formData.notes.trim(),
+        userId: formData.userId || null,
       };
 
       if (editingEmployee) {
@@ -112,6 +127,7 @@ const Employees = () => {
       }
       setShowCreateModal(false);
       fetchEmployees();
+      fetchAvailableUsers();
     } catch (err) {
       showToast(err.response?.data?.error || 'Failed to save employee', 'error');
     } finally {
@@ -436,6 +452,37 @@ const Employees = () => {
                       <span style={{ fontSize: '14px', color: '#64748b' }}>% per task</span>
                     </div>
                   )}
+                </div>
+
+                {/* Linked User Account */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>
+                    Linked User Account
+                  </label>
+                  <select
+                    value={formData.userId}
+                    onChange={e => setFormData({ ...formData, userId: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '2px solid #e2e8f0',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      backgroundColor: '#fff',
+                    }}
+                  >
+                    <option value="">-- No User Linked --</option>
+                    {availableUsers.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name || user.identifier} ({user.identifier})
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '6px 0 0' }}>
+                    Link an existing User account to enable commission tracking for this Employee
+                  </p>
                 </div>
 
                 {/* Notes */}
