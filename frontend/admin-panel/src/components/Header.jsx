@@ -424,11 +424,11 @@ const Header = ({ title }) => {
         bottom: 0,
         left: 0,
         right: 0,
-        height: '70px',
+        height: '72px',
         paddingBottom: 'env(safe-area-inset-bottom)',
         zIndex: 50
       }}>
-        {/* Sculpted Navigation Shape - one continuous molded component */}
+        {/* Smooth raised center - one continuous premium component */}
         <svg
           style={{
             position: 'absolute',
@@ -436,43 +436,36 @@ const Header = ({ title }) => {
             left: 0,
             right: 0,
             width: '100%',
-            height: '70px'
+            height: '72px'
           }}
-          viewBox="0 0 500 70"
+          viewBox="0 0 500 72"
           preserveAspectRatio="none"
         >
-          {/* Base white navigation rectangle */}
-          <rect x="0" y="15" width="500" height="55" fill="rgba(255,255,255,0.98)" />
-          {/* Raised top bump - always visible */}
-          <path
-            d="M 150,15 Q 200,12 250,8 Q 300,12 350,15 Z"
-            fill="rgba(255,255,255,0.98)"
-            style={{
-              filter: 'drop-shadow(0 -1px 10px rgba(0, 0, 0, 0.03))'
-            }}
-          />
-          {/* Purple raised top bump - only visible when Tasks is active */}
-          {location.pathname === '/tasks' || location.pathname.startsWith('/tasks/') ? (
-            <path
-              d="M 150,15 Q 200,12 250,8 Q 300,12 350,15 Z"
-              fill="url(#purpleGradient)"
-              style={{
-                filter: 'drop-shadow(0 -2px 12px rgba(99, 102, 241, 0.25))'
-              }}
-            />
-          ) : null}
           <defs>
-            <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#6366f1" />
-              <stop offset="100%" stopColor="#8b5cf6" />
-            </linearGradient>
+            <filter id="baseShadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="6" />
+              <feOffset dx="0" dy="-1" result="offsetblur" />
+              <feComponentTransfer>
+                <feFuncA type="linear" slope="0.14" />
+              </feComponentTransfer>
+              <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
+          {/* Navigation with smooth raised center */}
+          <path
+            d="M 0,16 L 0,72 L 500,72 L 500,16 Q 450,16 425,15.5 Q 400,15 375,14 Q 350,13 325,11.5 Q 300,10 275,9 Q 250,8 225,9 Q 200,10 175,11.5 Q 150,13 125,14 Q 100,15 75,15.5 Q 50,16 0,16 Z"
+            fill="rgba(255,255,255,0.98)"
+            filter="url(#baseShadow)"
+          />
         </svg>
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          height: '70px',
+          height: '72px',
           maxWidth: '500px',
           margin: '0 auto',
           padding: '0 16px',
@@ -499,23 +492,23 @@ const Header = ({ title }) => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
-                  height: '62px',
+                  gap: '7px',
+                  height: '64px',
                   textDecoration: 'none',
                   WebkitTapHighlightColor: 'transparent',
                   position: 'relative',
-                  padding: '5px 0 7px 0',
+                  padding: isHeroTab ? '4px 0 8px 0' : '5px 0 7px 0',
                   borderRadius: '14px',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  transform: 'translateY(0)'
+                  transform: isHeroTab ? 'translateY(-1px)' : 'translateY(0)'
                 }}
               >
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: isHeroTab ? '44px' : '38px',
-                  height: isHeroTab ? '44px' : '38px',
+                  width: isHeroTab ? '42px' : '38px',
+                  height: isHeroTab ? '42px' : '38px',
                   borderRadius: '11px',
                   background: 'transparent',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -524,7 +517,7 @@ const Header = ({ title }) => {
                     style={{
                       width: isHeroTab ? '23px' : '21px',
                       height: isHeroTab ? '23px' : '21px',
-                      color: isHeroTab ? (isActive ? '#ffffff' : '#6B7280') : (isActive ? '#6366f1' : '#9CA3AF'),
+                      color: isActive ? '#6366f1' : (isHeroTab ? '#6B7280' : '#9CA3AF'),
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       strokeWidth: isActive ? '2.25' : '2'
                     }}
@@ -536,11 +529,11 @@ const Header = ({ title }) => {
                   </svg>
                 </div>
                 <span style={{
-                  fontSize: '10.5px',
+                  fontSize: '11px',
                   fontWeight: isActive ? '600' : '500',
                   color: isActive ? '#6366f1' : '#6B7280',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  letterSpacing: '0.01em',
+                  letterSpacing: '0.02em',
                   lineHeight: 1
                 }}>
                   {item.label}
