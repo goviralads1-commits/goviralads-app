@@ -441,18 +441,20 @@ const Header = ({ title }) => {
           viewBox="0 0 500 70"
           preserveAspectRatio="none"
         >
-          {/* Base white navigation shape */}
+          {/* Base white navigation rectangle */}
+          <rect x="0" y="15" width="500" height="55" fill="rgba(255,255,255,0.98)" />
+          {/* Raised top bump - always visible */}
           <path
-            d="M 0,15 L 0,70 L 500,70 L 500,15 Q 400,15 350,12 Q 300,9 250,8 Q 200,9 150,12 Q 100,15 0,15 Z"
+            d="M 150,15 Q 200,12 250,8 Q 300,12 350,15 Z"
             fill="rgba(255,255,255,0.98)"
             style={{
               filter: 'drop-shadow(0 -1px 10px rgba(0, 0, 0, 0.03))'
             }}
           />
-          {/* Purple raised center section - only visible when Tasks is active */}
+          {/* Purple raised top bump - only visible when Tasks is active */}
           {location.pathname === '/tasks' || location.pathname.startsWith('/tasks/') ? (
             <path
-              d="M 150,12 Q 200,9 250,8 Q 300,9 350,12 L 350,70 L 150,70 Z"
+              d="M 150,15 Q 200,12 250,8 Q 300,12 350,15 Z"
               fill="url(#purpleGradient)"
               style={{
                 filter: 'drop-shadow(0 -2px 12px rgba(99, 102, 241, 0.25))'
