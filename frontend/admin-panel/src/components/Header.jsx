@@ -433,6 +433,19 @@ const Header = ({ title }) => {
         zIndex: 50,
         boxShadow: '0 -1px 10px rgba(0, 0, 0, 0.03)'
       }}>
+        {/* Center Dome/Notch - rises from navigation bar */}
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '80px',
+          height: '12px',
+          background: 'rgba(255,255,255,0.98)',
+          borderRadius: '12px 12px 0 0',
+          boxShadow: '0 -1px 10px rgba(0, 0, 0, 0.03)',
+          zIndex: -1
+        }} />
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
@@ -440,7 +453,8 @@ const Header = ({ title }) => {
           height: '70px',
           maxWidth: '500px',
           margin: '0 auto',
-          padding: '0 16px'
+          padding: '0 16px',
+          position: 'relative'
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
@@ -467,10 +481,10 @@ const Header = ({ title }) => {
                   textDecoration: 'none',
                   WebkitTapHighlightColor: 'transparent',
                   position: 'relative',
-                  padding: '5px 0 7px 0',
+                  padding: isHeroTab ? '3px 0 7px 0' : '5px 0 7px 0',
                   borderRadius: '14px',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  transform: 'translateY(0)'
+                  transform: isHeroTab ? 'translateY(-4px)' : 'translateY(0)'
                 }}
               >
                 <div style={{
@@ -480,9 +494,8 @@ const Header = ({ title }) => {
                   width: isHeroTab ? '44px' : '38px',
                   height: isHeroTab ? '44px' : '38px',
                   borderRadius: isHeroTab ? '50%' : '11px',
-                  background: isHeroTab ? (isActive ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#ffffff') : 'transparent',
-                  border: isHeroTab && !isActive ? '1.5px solid #E5E7EB' : 'none',
-                  boxShadow: isHeroTab ? (isActive ? '0 3px 12px rgba(99, 102, 241, 0.24)' : '0 1px 4px rgba(0, 0, 0, 0.04)') : 'none',
+                  background: isHeroTab ? (isActive ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent') : 'transparent',
+                  boxShadow: isHeroTab && isActive ? '0 3px 12px rgba(99, 102, 241, 0.24)' : 'none',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                   <svg
