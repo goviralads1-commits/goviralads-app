@@ -312,7 +312,7 @@ const EmployeeDetail = () => {
                     onClick={async () => {
                       if (!window.confirm('Unlink User from this Employee?')) return;
                       try {
-                        await api.patch(`/admin/employees/${employeeId}/unlink-user`);
+                        await api.patch(`/admin/employees/${employeeId}`, { userId: null });
                         showToast('User unlinked successfully');
                         fetchEmployee();
                       } catch (err) {
@@ -345,7 +345,7 @@ const EmployeeDetail = () => {
                       const userId = prompt('Enter User ID to link (find it in Users page):');
                       if (!userId || !userId.trim()) return;
                       try {
-                        await api.patch(`/admin/employees/${employeeId}/link-user`, { userId: userId.trim() });
+                        await api.patch(`/admin/employees/${employeeId}`, { userId: userId.trim() });
                         showToast('User linked successfully');
                         fetchEmployee();
                       } catch (err) {
