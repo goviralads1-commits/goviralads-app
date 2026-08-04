@@ -440,7 +440,7 @@ const Header = ({ title }) => {
           height: '64px',
           maxWidth: '500px',
           margin: '0 auto',
-          padding: '0 8px'
+          padding: '0 12px'
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
@@ -460,30 +460,44 @@ const Header = ({ title }) => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '4px',
+                  gap: '6px',
                   height: '56px',
                   textDecoration: 'none',
-                  WebkitTapHighlightColor: 'transparent'
+                  WebkitTapHighlightColor: 'transparent',
+                  position: 'relative'
                 }}
               >
-                <svg
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    color: isActive ? '#6366f1' : '#9ca3af',
-                    transition: 'color 0.15s ease'
-                  }}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                </svg>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '10px',
+                  backgroundColor: isActive ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <svg
+                    style={{
+                      width: '22px',
+                      height: '22px',
+                      color: isActive ? '#6366f1' : '#9ca3af',
+                      transition: 'all 0.2s ease',
+                      strokeWidth: isActive ? '2.25' : '2'
+                    }}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                  </svg>
+                </div>
                 <span style={{
                   fontSize: '11px',
-                  fontWeight: '600',
+                  fontWeight: isActive ? '600' : '500',
                   color: isActive ? '#6366f1' : '#6b7280',
-                  transition: 'color 0.15s ease'
+                  transition: 'all 0.2s ease',
+                  letterSpacing: '0.01em'
                 }}>
                   {item.label}
                 </span>

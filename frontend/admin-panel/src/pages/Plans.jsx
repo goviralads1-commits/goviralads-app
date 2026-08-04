@@ -342,17 +342,17 @@ const Plans = () => {
             onClick={() => setSelectedCategory('ALL')}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              padding: '16px 10px', margin: '6px 8px', borderRadius: '16px',
+              padding: '18px 12px', margin: '8px', borderRadius: '18px',
               cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               background: selectedCategory === 'ALL' ? 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)' : 'transparent',
               boxShadow: selectedCategory === 'ALL' ? '0 4px 16px rgba(59, 130, 246, 0.15), inset 0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none'
             }}
           >
             <div style={{ 
-              width: '52px', height: '52px', borderRadius: '16px',
+              width: '56px', height: '56px', borderRadius: '18px',
               background: selectedCategory === 'ALL' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: '8px', transition: 'all 0.25s',
+              marginBottom: '10px', transition: 'all 0.25s',
               boxShadow: selectedCategory === 'ALL' ? '0 6px 20px rgba(59, 130, 246, 0.35)' : '0 2px 8px rgba(0,0,0,0.04)'
             }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={selectedCategory === 'ALL' ? '#fff' : '#64748b'} strokeWidth="2">
@@ -365,7 +365,7 @@ const Plans = () => {
               lineHeight: 1.2, letterSpacing: '0.01em'
             }}>All</span>
             <span style={{ 
-              fontSize: '10px', fontWeight: '700', marginTop: '3px',
+              fontSize: '10px', fontWeight: '700', marginTop: '4px',
               color: selectedCategory === 'ALL' ? '#3b82f6' : '#94a3b8',
               backgroundColor: selectedCategory === 'ALL' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(0,0,0,0.04)',
               padding: '2px 8px', borderRadius: '10px'
@@ -387,17 +387,17 @@ const Plans = () => {
                 onClick={() => setSelectedCategory(catId)}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  padding: '16px 10px', margin: '6px 8px', borderRadius: '16px',
+                  padding: '18px 12px', margin: '8px', borderRadius: '18px',
                   cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                   backgroundColor: isSelected ? `${themeColor}12` : 'transparent',
                   boxShadow: isSelected ? `0 4px 16px ${themeColor}20, inset 0 0 0 2px ${themeColor}30` : 'none'
                 }}
               >
                 <div style={{ 
-                  width: '52px', height: '52px', borderRadius: '16px',
+                  width: '56px', height: '56px', borderRadius: '18px',
                   backgroundColor: isSelected ? themeColor : '#f1f5f9',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: '8px', overflow: 'hidden', transition: 'all 0.25s',
+                  marginBottom: '10px', overflow: 'hidden', transition: 'all 0.25s',
                   boxShadow: isSelected ? `0 6px 20px ${themeColor}40` : '0 2px 8px rgba(0,0,0,0.04)',
                   border: cat.image && !isSelected ? '2px solid #e2e8f0' : 'none'
                 }}>
