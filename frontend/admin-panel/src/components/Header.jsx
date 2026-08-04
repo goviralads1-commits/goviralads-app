@@ -424,23 +424,23 @@ const Header = ({ title }) => {
         bottom: 0,
         left: 0,
         right: 0,
-        height: '72px',
-        backgroundColor: 'rgba(255,255,255,0.99)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderTop: '1px solid rgba(229, 231, 235, 0.5)',
+        height: '70px',
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        backdropFilter: 'blur(28px)',
+        WebkitBackdropFilter: 'blur(28px)',
+        borderTop: '1px solid rgba(229, 231, 235, 0.6)',
         paddingBottom: 'env(safe-area-inset-bottom)',
         zIndex: 50,
-        boxShadow: '0 -1px 12px rgba(0, 0, 0, 0.04)'
+        boxShadow: '0 -1px 10px rgba(0, 0, 0, 0.03)'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          height: '72px',
-          maxWidth: '520px',
+          height: '70px',
+          maxWidth: '500px',
           margin: '0 auto',
-          padding: '0 20px'
+          padding: '0 16px'
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
@@ -462,35 +462,35 @@ const Header = ({ title }) => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: isHeroTab ? '6px' : '6px',
-                  height: '64px',
+                  gap: '6px',
+                  height: '62px',
                   textDecoration: 'none',
                   WebkitTapHighlightColor: 'transparent',
                   position: 'relative',
-                  padding: isHeroTab ? '4px 0 8px 0' : '6px 0 8px 0',
-                  borderRadius: '16px',
-                  transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-                  transform: isHeroTab ? 'translateY(-6px)' : 'translateY(0)'
+                  padding: '5px 0 7px 0',
+                  borderRadius: '14px',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transform: 'translateY(0)'
                 }}
               >
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: isHeroTab ? '46px' : '40px',
-                  height: isHeroTab ? '46px' : '40px',
-                  borderRadius: isHeroTab ? '50%' : '12px',
-                  background: isHeroTab ? (isActive ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#F3F4F6') : 'transparent',
-                  border: isHeroTab && !isActive ? '1.5px solid #D1D5DB' : 'none',
-                  boxShadow: isHeroTab && isActive ? '0 4px 14px rgba(99, 102, 241, 0.28)' : 'none',
-                  transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)'
+                  width: isHeroTab ? '44px' : '38px',
+                  height: isHeroTab ? '44px' : '38px',
+                  borderRadius: isHeroTab ? '50%' : '11px',
+                  background: isHeroTab ? (isActive ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#ffffff') : 'transparent',
+                  border: isHeroTab && !isActive ? '1.5px solid #E5E7EB' : 'none',
+                  boxShadow: isHeroTab ? (isActive ? '0 3px 12px rgba(99, 102, 241, 0.24)' : '0 1px 4px rgba(0, 0, 0, 0.04)') : 'none',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                   <svg
                     style={{
-                      width: isHeroTab ? '24px' : '22px',
-                      height: isHeroTab ? '24px' : '22px',
+                      width: isHeroTab ? '23px' : '21px',
+                      height: isHeroTab ? '23px' : '21px',
                       color: isHeroTab ? (isActive ? '#ffffff' : '#6B7280') : (isActive ? '#6366f1' : '#9CA3AF'),
-                      transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       strokeWidth: isActive ? '2.25' : '2'
                     }}
                     fill="none"
@@ -501,10 +501,10 @@ const Header = ({ title }) => {
                   </svg>
                 </div>
                 <span style={{
-                  fontSize: '11px',
+                  fontSize: '10.5px',
                   fontWeight: isActive ? '600' : '500',
                   color: isActive ? '#6366f1' : '#6B7280',
-                  transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   letterSpacing: '0.01em',
                   lineHeight: 1
                 }}>
