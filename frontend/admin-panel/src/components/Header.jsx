@@ -424,23 +424,23 @@ const Header = ({ title }) => {
         bottom: 0,
         left: 0,
         right: 0,
-        height: '64px',
+        height: '68px',
         backgroundColor: 'rgba(255,255,255,0.98)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(0,0,0,0.06)',
+        borderTop: '1px solid rgba(99, 102, 241, 0.08)',
         paddingBottom: 'env(safe-area-inset-bottom)',
         zIndex: 50,
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.06)'
+        boxShadow: '0 -2px 16px rgba(99, 102, 241, 0.06)'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          height: '64px',
+          height: '68px',
           maxWidth: '500px',
           margin: '0 auto',
-          padding: '0 12px'
+          padding: '0 16px'
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
@@ -460,29 +460,32 @@ const Header = ({ title }) => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
-                  height: '56px',
+                  gap: '8px',
+                  height: '60px',
                   textDecoration: 'none',
                   WebkitTapHighlightColor: 'transparent',
-                  position: 'relative'
+                  position: 'relative',
+                  padding: '8px 4px',
+                  borderRadius: '12px',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
               >
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '10px',
-                  backgroundColor: isActive ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                  transition: 'all 0.2s ease'
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '12px',
+                  backgroundColor: isActive ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                   <svg
                     style={{
-                      width: '22px',
-                      height: '22px',
+                      width: '24px',
+                      height: '24px',
                       color: isActive ? '#6366f1' : '#9ca3af',
-                      transition: 'all 0.2s ease',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       strokeWidth: isActive ? '2.25' : '2'
                     }}
                     fill="none"
@@ -496,8 +499,9 @@ const Header = ({ title }) => {
                   fontSize: '11px',
                   fontWeight: isActive ? '600' : '500',
                   color: isActive ? '#6366f1' : '#6b7280',
-                  transition: 'all 0.2s ease',
-                  letterSpacing: '0.01em'
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  letterSpacing: '0.02em',
+                  lineHeight: 1
                 }}>
                   {item.label}
                 </span>
