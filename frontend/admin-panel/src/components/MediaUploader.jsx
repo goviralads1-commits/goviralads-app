@@ -145,10 +145,20 @@ const MediaUploader = ({
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
+      console.log('[MediaUploader] Upload response:', res.data);
+      
       if (res.data.url) {
+        // Prepend API base URL if the returned URL is relative
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.goviralads.com';
+        const fullImageUrl = res.data.url.startsWith('http') 
+          ? res.data.url 
+          : `${API_BASE_URL}${res.data.url}`;
+        
+        console.log('[MediaUploader] Full image URL:', fullImageUrl);
+        
         const newItem = {
           type: 'image',
-          url: res.data.url
+          url: fullImageUrl
         };
         onChange([...media, newItem]);
         setMediaType('image');

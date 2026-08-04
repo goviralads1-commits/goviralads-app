@@ -204,8 +204,18 @@ const PlanDetail = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
+      console.log('[PlanDetail] Upload response:', res.data);
+      
       if (res.data.url) {
-        handleMediaChange(index, 'url', res.data.url);
+        // Prepend API base URL if the returned URL is relative
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.goviralads.com';
+        const fullImageUrl = res.data.url.startsWith('http') 
+          ? res.data.url 
+          : `${API_BASE_URL}${res.data.url}`;
+        
+        console.log('[PlanDetail] Full image URL:', fullImageUrl);
+        
+        handleMediaChange(index, 'url', fullImageUrl);
         setToast({ type: 'success', message: 'Image uploaded successfully' });
         setTimeout(() => setToast(null), 3000);
       }
