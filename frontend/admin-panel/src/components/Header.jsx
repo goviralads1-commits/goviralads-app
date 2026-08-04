@@ -445,11 +445,13 @@ const Header = ({ title }) => {
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
             { path: '/wallet', label: 'Wallet', icon: 'M21 12V7H5a2 2 0 010-4h14v4M3 5v14a2 2 0 002 2h16v-5M18 12a2 2 0 000 4h4v-4h-4z' },
-            { path: '/tasks', label: 'Tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+            { path: '/tasks', label: 'Tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', isHero: true },
             { path: '/plans', label: 'Plans', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
             { path: '/support', label: 'Support', icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' }
           ].map((item) => {
             const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            const isHeroTab = item.isHero === true;
+            
             return (
               <Link
                 key={item.path}
@@ -460,31 +462,33 @@ const Header = ({ title }) => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
+                  gap: isHeroTab && isActive ? '10px' : '8px',
                   height: '60px',
                   textDecoration: 'none',
                   WebkitTapHighlightColor: 'transparent',
                   position: 'relative',
-                  padding: '8px 4px',
+                  padding: isHeroTab && isActive ? '6px 4px 10px 4px' : '8px 4px',
                   borderRadius: '12px',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transform: isHeroTab && isActive ? 'translateY(-7px)' : 'translateY(0)'
                 }}
               >
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '12px',
-                  backgroundColor: isActive ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                  width: isHeroTab && isActive ? '44px' : '36px',
+                  height: isHeroTab && isActive ? '44px' : '36px',
+                  borderRadius: isHeroTab && isActive ? '50%' : '12px',
+                  background: isHeroTab && isActive ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent',
+                  boxShadow: isHeroTab && isActive ? '0 4px 12px rgba(99, 102, 241, 0.25)' : 'none',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                   <svg
                     style={{
-                      width: '24px',
-                      height: '24px',
-                      color: isActive ? '#6366f1' : '#9ca3af',
+                      width: isHeroTab && isActive ? '26px' : '24px',
+                      height: isHeroTab && isActive ? '26px' : '24px',
+                      color: isHeroTab && isActive ? '#ffffff' : (isActive ? '#6366f1' : '#9ca3af'),
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       strokeWidth: isActive ? '2.25' : '2'
                     }}
