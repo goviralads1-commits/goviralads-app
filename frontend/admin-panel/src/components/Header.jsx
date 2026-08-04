@@ -441,6 +441,7 @@ const Header = ({ title }) => {
           viewBox="0 0 500 70"
           preserveAspectRatio="none"
         >
+          {/* Base white navigation shape */}
           <path
             d="M 0,15 L 0,70 L 500,70 L 500,15 Q 400,15 350,12 Q 300,9 250,8 Q 200,9 150,12 Q 100,15 0,15 Z"
             fill="rgba(255,255,255,0.98)"
@@ -448,6 +449,22 @@ const Header = ({ title }) => {
               filter: 'drop-shadow(0 -1px 10px rgba(0, 0, 0, 0.03))'
             }}
           />
+          {/* Purple raised center section - only visible when Tasks is active */}
+          {location.pathname === '/tasks' || location.pathname.startsWith('/tasks/') ? (
+            <path
+              d="M 150,12 Q 200,9 250,8 Q 300,9 350,12 L 350,70 L 150,70 Z"
+              fill="url(#purpleGradient)"
+              style={{
+                filter: 'drop-shadow(0 -2px 12px rgba(99, 102, 241, 0.25))'
+              }}
+            />
+          ) : null}
+          <defs>
+            <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="100%" stopColor="#8b5cf6" />
+            </linearGradient>
+          </defs>
         </svg>
         <div style={{
           display: 'flex',
@@ -505,10 +522,9 @@ const Header = ({ title }) => {
                     style={{
                       width: isHeroTab ? '23px' : '21px',
                       height: isHeroTab ? '23px' : '21px',
-                      color: isHeroTab ? (isActive ? '#6366f1' : '#6B7280') : (isActive ? '#6366f1' : '#9CA3AF'),
+                      color: isHeroTab ? (isActive ? '#ffffff' : '#6B7280') : (isActive ? '#6366f1' : '#9CA3AF'),
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      strokeWidth: isActive ? '2.25' : '2',
-                      filter: isHeroTab && isActive ? 'drop-shadow(0 2px 8px rgba(99, 102, 241, 0.3))' : 'none'
+                      strokeWidth: isActive ? '2.25' : '2'
                     }}
                     fill="none"
                     stroke="currentColor"
