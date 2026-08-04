@@ -425,14 +425,30 @@ const Header = ({ title }) => {
         left: 0,
         right: 0,
         height: '70px',
-        backgroundColor: 'rgba(255,255,255,0.98)',
-        backdropFilter: 'blur(28px)',
-        WebkitBackdropFilter: 'blur(28px)',
-        borderTop: '1px solid rgba(229, 231, 235, 0.6)',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        zIndex: 50,
-        boxShadow: '0 -1px 10px rgba(0, 0, 0, 0.03)'
+        zIndex: 50
       }}>
+        {/* Sculpted Navigation Shape - one continuous molded component */}
+        <svg
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            width: '100%',
+            height: '70px'
+          }}
+          viewBox="0 0 500 70"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M 0,15 L 0,70 L 500,70 L 500,15 Q 400,15 350,12 Q 300,9 250,8 Q 200,9 150,12 Q 100,15 0,15 Z"
+            fill="rgba(255,255,255,0.98)"
+            style={{
+              filter: 'drop-shadow(0 -1px 10px rgba(0, 0, 0, 0.03))'
+            }}
+          />
+        </svg>
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
@@ -441,7 +457,8 @@ const Header = ({ title }) => {
           maxWidth: '500px',
           margin: '0 auto',
           padding: '0 16px',
-          position: 'relative'
+          position: 'relative',
+          zIndex: 1
         }}>
           {[
             { path: '/dashboard', label: 'Office', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
@@ -480,19 +497,18 @@ const Header = ({ title }) => {
                   justifyContent: 'center',
                   width: isHeroTab ? '44px' : '38px',
                   height: isHeroTab ? '44px' : '38px',
-                  borderRadius: isHeroTab ? '50%' : '11px',
-                  background: isHeroTab ? (isActive ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : '#ffffff') : 'transparent',
-                  border: isHeroTab && !isActive ? '1.5px solid #E5E7EB' : 'none',
-                  boxShadow: isHeroTab ? (isActive ? '0 3px 12px rgba(99, 102, 241, 0.24)' : '0 1px 3px rgba(0, 0, 0, 0.04)') : 'none',
+                  borderRadius: '11px',
+                  background: 'transparent',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                   <svg
                     style={{
                       width: isHeroTab ? '23px' : '21px',
                       height: isHeroTab ? '23px' : '21px',
-                      color: isHeroTab ? (isActive ? '#ffffff' : '#6B7280') : (isActive ? '#6366f1' : '#9CA3AF'),
+                      color: isHeroTab ? (isActive ? '#6366f1' : '#6B7280') : (isActive ? '#6366f1' : '#9CA3AF'),
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      strokeWidth: isActive ? '2.25' : '2'
+                      strokeWidth: isActive ? '2.25' : '2',
+                      filter: isHeroTab && isActive ? 'drop-shadow(0 2px 8px rgba(99, 102, 241, 0.3))' : 'none'
                     }}
                     fill="none"
                     stroke="currentColor"
