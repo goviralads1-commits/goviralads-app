@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 
 const Clients = () => {
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showAdjustForm, setShowAdjustForm] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [adjustmentAmount, setAdjustmentAmount] = useState('');
-  const [adjustmentReason, setAdjustmentReason] = useState('');
-  const [adjustmentSubmitting, setAdjustmentSubmitting] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createUserData, setCreateUserData] = useState({ identifier: '', password: '', confirmPassword: '', name: '', phone: '', company: '' });
+  const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -23,10 +22,9 @@ const Clients = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await api.get('/admin/wallets');
-        setClients(response.data);
+        const response = await api.get('/admin/users?role=CLIENT&limit=100');
+        setClients(response.data.users || []);
       } catch (err) {
-        setError('Failed to load clients data');
         console.error('Clients error:', err);
       } finally {
         setLoading(false);
@@ -36,29 +34,43 @@ const Clients = () => {
     fetchData();
   }, []);
 
-  const handleAdjustmentSubmit = async (e) => {
-    e.preventDefault();
-    setAdjustmentSubmitting(true);
-    
+  const showToast = (message, type = 'success') => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleCreateClient = async () => {
+    if (!createUserData.identifier.trim()) {
+      showToast('Email is required', 'error');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createUserData.identifier.trim())) {
+      showToast('Please enter a valid email', 'error');
+      return;
+    }
+    if (!createUserData.password || createUserData.password.length < 6) {
+      showToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+    if (createUserData.password !== createUserData.confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
     try {
-      await api.post(`/admin/wallets/${selectedClient._id}/adjust`, {
-        amount: parseFloat(adjustmentAmount),
-        description: adjustmentReason
-      });
-      
-      // Refresh data after successful adjustment
-      const response = await api.get('/admin/wallets');
-      setClients(response.data);
-      setSelectedClient(null);
-      setAdjustmentAmount('');
-      setAdjustmentReason('');
-      setShowAdjustForm(false);
-      setToast({ type: 'success', message: 'Wallet adjusted successfully' });
+      setCreating(true);
+      const { confirmPassword, ...userData } = createUserData;
+      await api.post('/admin/users', { ...userData, role: 'CLIENT' });
+      showToast('Client created successfully');
+      setShowCreateModal(false);
+      setCreateUserData({ identifier: '', password: '', confirmPassword: '', name: '', phone: '', company: '' });
+      // Refresh list
+      const response = await api.get('/admin/users?role=CLIENT&limit=100');
+      setClients(response.data.users || []);
     } catch (err) {
-      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to adjust wallet' });
-      console.error('Adjustment error:', err);
+      showToast(err.response?.data?.error || 'Failed to create client', 'error');
     } finally {
-      setAdjustmentSubmitting(false);
+      setCreating(false);
     }
   };
 
@@ -70,21 +82,8 @@ const Clients = () => {
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTop: '4px solid #6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }}></div>
-              <div style={{ marginTop: '16px', fontSize: '14px', color: '#64748b' }}>Loading users...</div>
+              <div style={{ marginTop: '16px', fontSize: '14px', color: '#64748b' }}>Loading clients...</div>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-        <Header />
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
-          <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '16px', color: '#dc2626' }}>
-            {error}
           </div>
         </div>
       </div>
@@ -95,148 +94,169 @@ const Clients = () => {
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Header />
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>User Manager</h1>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Manage all registered users and their credit balances</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <div>
+            <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>Clients</h1>
+            <p style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>Manage your clients and their teams</p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '12px 24px', borderRadius: '12px', border: 'none',
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+            }}
+          >
+            + Add Client
+          </button>
         </div>
 
-        {/* Wallet Adjustment Form */}
-        {showAdjustForm && selectedClient && (
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: '0 0 20px 0' }}>Adjust Wallet for {selectedClient.clientIdentifier}</h3>
-            <form onSubmit={handleAdjustmentSubmit}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#334155', marginBottom: '8px' }}>
-                  Amount (credits)
-                </label>
-                <input
-                  type="number"
-                  value={adjustmentAmount}
-                  onChange={(e) => setAdjustmentAmount(e.target.value)}
-                  min="0"
-                  step="0.01"
-                  required
-                  style={{ width: '100%', padding: '10px 14px', fontSize: '14px', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none', transition: 'border 0.2s' }}
-                  onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-                  onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
-                />
-              </div>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#334155', marginBottom: '8px' }}>
-                  Reason
-                </label>
-                <input
-                  type="text"
-                  value={adjustmentReason}
-                  onChange={(e) => setAdjustmentReason(e.target.value)}
-                  required
-                  style={{ width: '100%', padding: '10px 14px', fontSize: '14px', border: '1px solid #cbd5e1', borderRadius: '8px', outline: 'none', transition: 'border 0.2s' }}
-                  onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-                  onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAdjustForm(false);
-                    setSelectedClient(null);
-                  }}
-                  style={{ padding: '10px 20px', fontSize: '14px', fontWeight: '500', color: '#475569', backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={adjustmentSubmitting}
-                  style={{ padding: '10px 20px', fontSize: '14px', fontWeight: '500', color: '#ffffff', backgroundColor: adjustmentSubmitting ? '#94a3b8' : '#6366f1', border: 'none', borderRadius: '8px', cursor: adjustmentSubmitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
-                  onMouseEnter={(e) => !adjustmentSubmitting && (e.target.style.backgroundColor = '#4f46e5')}
-                  onMouseLeave={(e) => !adjustmentSubmitting && (e.target.style.backgroundColor = '#6366f1')}
-                >
-                  {adjustmentSubmitting ? 'Adjusting...' : 'Adjust Wallet'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
         {/* Clients Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
-          {clients.wallets?.map((wallet) => (
-            <div key={wallet.clientId} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0', transition: 'all 0.2s', cursor: 'pointer' }}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+          {clients.map((client) => (
+            <div
+              key={client.id}
+              onClick={() => navigate(`/clients/${client.id}`)}
+              style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0', transition: 'all 0.2s', cursor: 'pointer' }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-                e.currentTarget.style.borderColor = '#cbd5e1';
+                e.currentTarget.style.borderColor = '#6366f1';
+                e.currentTarget.style.transform = 'translateY(-2px)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
                 e.currentTarget.style.borderColor = '#e2e8f0';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              {/* User Info */}
-              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                <div style={{ fontSize: '16px', fontWeight: '600', color: '#0f172a', marginBottom: '6px' }}>
-                  {wallet.clientIdentifier}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0' }}>{client.name || client.identifier}</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>{client.identifier}</p>
                 </div>
-                <div style={{ fontSize: '13px', color: '#64748b' }}>
-                  ID: {wallet.clientId}
-                </div>
+                <span style={{
+                  padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
+                  backgroundColor: client.status === 'ACTIVE' ? '#dcfce7' : '#fee2e2',
+                  color: client.status === 'ACTIVE' ? '#166534' : '#991b1b',
+                }}>
+                  {client.status}
+                </span>
               </div>
 
-              {/* Balance */}
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ fontSize: '12px', fontWeight: '500', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Available Credits
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#22c55e' }}>
-                  {wallet.balance.toFixed(2)} <span style={{ fontSize: '16px', fontWeight: '500', color: '#64748b' }}>credits</span>
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Status
-                  </div>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                    Active
+                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Joined</div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>
+                    {new Date(client.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </div>
                 </div>
                 <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Joined
-                  </div>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                    {new Date(wallet.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                  </div>
+                  <div style={{ fontSize: '11px', fontWeight: '500', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>View</div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#6366f1' }}>Details →</div>
                 </div>
               </div>
-
-              {/* Action Button */}
-              <button
-                onClick={() => {
-                  setSelectedClient(wallet);
-                  setShowAdjustForm(true);
-                }}
-                style={{ width: '100%', padding: '12px', fontSize: '14px', fontWeight: '500', color: '#ffffff', backgroundColor: '#6366f1', border: 'none', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#4f46e5'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#6366f1'}
-              >
-                Adjust Wallet
-              </button>
             </div>
           ))}
         </div>
 
-        {clients.wallets?.length === 0 && (
+        {clients.length === 0 && (
           <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '16px', color: '#64748b' }}>No clients found</div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#0f172a', margin: '0 0 8px' }}>No Clients Yet</h3>
+            <p style={{ color: '#64748b', margin: '0 0 20px' }}>Create your first client to get started</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              + Add First Client
+            </button>
           </div>
         )}
       </div>
+
+      {/* Create Client Modal */}
+      {showCreateModal && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCreateModal(false); }}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '16px' }}
+        >
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 20px' }}>Add New Client</h2>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>Email *</label>
+                <input
+                  type="email"
+                  value={createUserData.identifier}
+                  onChange={e => setCreateUserData({ ...createUserData, identifier: e.target.value })}
+                  placeholder="client@example.com"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={e => e.target.style.borderColor = '#6366f1'}
+                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>Name</label>
+                <input
+                  type="text"
+                  value={createUserData.name}
+                  onChange={e => setCreateUserData({ ...createUserData, name: e.target.value })}
+                  placeholder="Client name"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>Password *</label>
+                <input
+                  type="password"
+                  value={createUserData.password}
+                  onChange={e => setCreateUserData({ ...createUserData, password: e.target.value })}
+                  placeholder="Min 6 characters"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>Confirm Password *</label>
+                <input
+                  type="password"
+                  value={createUserData.confirmPassword}
+                  onChange={e => setCreateUserData({ ...createUserData, confirmPassword: e.target.value })}
+                  placeholder="Re-enter password"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>Phone</label>
+                <input
+                  type="tel"
+                  value={createUserData.phone}
+                  onChange={e => setCreateUserData({ ...createUserData, phone: e.target.value })}
+                  placeholder="+91 9876543210"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateClient}
+                disabled={creating}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.7 : 1 }}
+              >
+                {creating ? 'Creating...' : 'Create Client'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div style={{
@@ -249,6 +269,8 @@ const Clients = () => {
           {toast.message}
         </div>
       )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

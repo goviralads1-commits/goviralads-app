@@ -27,6 +27,7 @@ const PlanDetail = () => {
   const [defaultCostBreakdown, setDefaultCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [adminUsers, setAdminUsers] = useState([]);
   const [clientUsers, setClientUsers] = useState([]);
+  const [employees, setEmployees] = useState([]); // Employee records for Default Team
 
   const [formData, setFormData] = useState({
     title: '',
@@ -60,13 +61,14 @@ const PlanDetail = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [planRes, categoriesRes, usersRes, adminUsersRes, clientUsersRes, designRes] = await Promise.all([
+      const [planRes, categoriesRes, usersRes, adminUsersRes, clientUsersRes, designRes, employeesRes] = await Promise.all([
         api.get(`/admin/tasks/${planId}`),
         api.get('/admin/categories').catch(() => ({ data: { categories: [] } })),
         api.get('/admin/users').catch(() => ({ data: { users: [] } })),
         api.get('/admin/users?role=ADMIN,EMPLOYEE').catch(() => ({ data: { users: [] } })),
         api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } })),
         api.get('/admin/designation-options').catch(() => ({ data: { designations: [] } })),
+        api.get('/admin/employees').catch(() => ({ data: { employees: [] } })),
       ]);
       
       const planData = planRes.data.task;
@@ -84,10 +86,11 @@ const PlanDetail = () => {
       setAdminUsers((adminUsersRes.data.users || []).filter(u => u.role !== 'CLIENT'));
       setClientUsers(clientUsersRes.data.users || []);
       setDesignationOptions(designRes.data.designations || []);
+      setEmployees(employeesRes.data.employees || []);
       
       // Load default commission setup
       setDefaultAssignedUsers((planData.defaultAssignedUsers || []).map(m => ({ userId: m.userId?._id || m.userId || '', percentage: m.percentage || 0 })));
-      setDefaultCommissionRoles((planData.defaultCommissionRoles || []).map(r => ({ role: r.role || '', percentage: r.percentage || 0 })));
+      setDefaultCommissionRoles((planData.defaultCommissionRoles || []).map(r => ({ role: r.role || '', employeeId: r.employeeId || '', percentage: r.percentage || 0 })));
       setDefaultCostBreakdown(planData.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 });
       
       // Extract allowedClients IDs from populated data
@@ -175,9 +178,47 @@ const PlanDetail = () => {
     setMediaChanged(true);
   };
 
+  const handleImageUpload = async (index, file) => {
+    if (!file) return;
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setToast({ type: 'error', message: 'Invalid file type. Only JPG, PNG, WebP allowed.' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setToast({ type: 'error', message: 'File too large. Maximum 5MB allowed.' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const res = await api.post('/upload/plan-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (res.data.url) {
+        handleMediaChange(index, 'url', res.data.url);
+        setToast({ type: 'success', message: 'Image uploaded successfully' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setToast({ type: 'error', message: 'Upload failed: ' + (err.response?.data?.error || err.message) });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
   // Default Commission Roles handlers
   const addCommissionRole = () => {
-    setDefaultCommissionRoles(prev => [...prev, { role: '', percentage: 0 }]);
+    setDefaultCommissionRoles(prev => [...prev, { role: '', employeeId: '', percentage: 0 }]);
     setHasChanges(true);
   };
   const removeCommissionRole = (idx) => {
@@ -229,6 +270,15 @@ const PlanDetail = () => {
         customInputPlaceholder: formData.customInputPlaceholder || '',
         // Default Commission Setup
         defaultCommissionRoles: defaultCommissionRoles.filter(r => r.role && r.role.trim() && r.percentage > 0),
+        defaultAssignedUsers: defaultCommissionRoles
+          .filter(r => r.employeeId && r.percentage > 0)
+          .map(r => {
+            const emp = employees.find(e => e.id === r.employeeId);
+            return {
+              userId: emp?.userId || null,
+              percentage: r.percentage,
+            };
+          }),
         defaultCostBreakdown: defaultCostBreakdown,
       };
       
@@ -416,7 +466,43 @@ const PlanDetail = () => {
                       <option value="image">Image</option>
                       <option value="video">Video</option>
                     </select>
-                    <input type="text" placeholder="Paste URL..." value={media.url} onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                    {media.type === 'image' ? (
+                      <>
+                        <input 
+                          type="file" 
+                          accept="image/jpeg,image/png,image/webp" 
+                          onChange={(e) => handleImageUpload(idx, e.target.files[0])} 
+                          style={{ display: 'none' }} 
+                          id={`file-upload-${idx}`}
+                        />
+                        <label 
+                          htmlFor={`file-upload-${idx}`}
+                          style={{ 
+                            display: 'block', 
+                            width: '100%', 
+                            padding: '8px', 
+                            fontSize: '13px', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '6px', 
+                            textAlign: 'center', 
+                            backgroundColor: '#f8fafc', 
+                            cursor: 'pointer',
+                            marginBottom: '4px'
+                          }}
+                        >
+                          {media.url ? '🔄 Replace' : '📤 Upload Image'}
+                        </label>
+                        <input 
+                          type="text" 
+                          placeholder="Or paste URL..." 
+                          value={media.url} 
+                          onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} 
+                          style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px' }} 
+                        />
+                      </>
+                    ) : (
+                      <input type="text" placeholder="Paste URL..." value={media.url} onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                    )}
                   </div>
                 </div>
               ))}
@@ -737,39 +823,65 @@ const PlanDetail = () => {
           {/* DEFAULT COMMISSION SETUP */}
           <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '2px solid #e2e8f0' }}>
             <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Splits</h4>
-            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Define commission roles and percentages. Actual members are assigned during task management.</p>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Define commission roles and assign Employees. When a client purchases this plan, the team will be copied to the task.</p>
             
             {/* Commission Roles */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Commission Roles</label>
-              {defaultCommissionRoles.map((entry, idx) => (
-                <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
-                  <select
-                    value={entry.role}
-                    onChange={(e) => updateCommissionRole(idx, 'role', e.target.value)}
-                    style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                  >
-                    <option value="">Select role...</option>
-                    {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  <input
-                    type="number"
-                    value={entry.percentage}
-                    onChange={(e) => updateCommissionRole(idx, 'percentage', e.target.value)}
-                    placeholder="%"
-                    min="0"
-                    max="100"
-                    style={{ flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
-                  />
-                  <button type="button" onClick={() => removeCommissionRole(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
-                </div>
-              ))}
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team</label>
+              {defaultCommissionRoles.map((entry, idx) => {
+                const selectedEmployee = employees.find(e => e.id === entry.employeeId);
+                const hasLinkedUser = selectedEmployee?.userId;
+                return (
+                  <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center', padding: '12px', backgroundColor: '#fff', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
+                    {/* Role */}
+                    <select
+                      value={entry.role}
+                      onChange={(e) => updateCommissionRole(idx, 'role', e.target.value)}
+                      style={{ flex: '1 1 30%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                    >
+                      <option value="">Select role...</option>
+                      {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    {/* Employee */}
+                    <select
+                      value={entry.employeeId || ''}
+                      onChange={(e) => updateCommissionRole(idx, 'employeeId', e.target.value)}
+                      style={{ flex: '1 1 40%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                    >
+                      <option value="">Select employee...</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} {emp.userId ? '✓' : '⚠️'}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Percentage */}
+                    <input
+                      type="number"
+                      value={entry.percentage}
+                      onChange={(e) => updateCommissionRole(idx, 'percentage', e.target.value)}
+                      placeholder="%"
+                      min="0"
+                      max="100"
+                      style={{ flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
+                    />
+                    {/* Remove Button */}
+                    <button type="button" onClick={() => removeCommissionRole(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                    {/* Warning if no linked User */}
+                    {entry.employeeId && !hasLinkedUser && (
+                      <div style={{ width: '100%', padding: '8px 12px', backgroundColor: '#fef3c7', borderRadius: '6px', fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                        ⚠️ This Employee has no linked User account. Commission cannot be credited until a User is linked.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {defaultCommissionRoles.length > 0 && (
                 <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: commissionRolesTotal > 100 ? '#dc2626' : '#16a34a' }}>
                   Total: {commissionRolesTotal}% {commissionRolesTotal > 100 && '⚠️ Exceeds 100%'}
                 </div>
               )}
-              <button type="button" onClick={addCommissionRole} disabled={commissionRolesTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Commission Role</button>
+              <button type="button" onClick={addCommissionRole} disabled={commissionRolesTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
             </div>
 
             {/* Cost Breakdown */}

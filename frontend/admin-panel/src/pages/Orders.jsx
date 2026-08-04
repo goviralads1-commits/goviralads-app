@@ -471,6 +471,43 @@ const Orders = () => {
                 </div>
               </div>
 
+              {/* Linked Tasks */}
+              {selectedOrder.taskIds && selectedOrder.taskIds.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#64748b', margin: '0 0 12px' }}>
+                    Linked Tasks ({selectedOrder.taskIds.length})
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {selectedOrder.taskIds.map((taskId, idx) => (
+                      <div 
+                        key={taskId || idx}
+                        onClick={() => navigate(`/tasks/${taskId}`)}
+                        style={{
+                          backgroundColor: '#f0f5ff', borderRadius: '10px', padding: '12px 16px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          cursor: 'pointer', border: '1px solid #e0e7ff', transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#e0e7ff';
+                          e.currentTarget.style.borderColor = '#6366f1';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f0f5ff';
+                          e.currentTarget.style.borderColor = '#e0e7ff';
+                        }}
+                      >
+                        <span style={{ fontSize: '13px', fontWeight: '500', color: '#0f172a' }}>
+                          Task #{idx + 1}
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: '600' }}>
+                          View →
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Rejection Reason if rejected */}
               {selectedOrder.orderStatus === 'REJECTED' && selectedOrder.rejectionReason && (
                 <div style={{

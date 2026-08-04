@@ -147,6 +147,27 @@ const chatUpload = multer({
   }
 });
 
+// Plan image upload (local storage)
+const planUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = path.join(__dirname, '..', 'uploads', 'plans');
+      if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+      cb(null, uniqueName);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Invalid file type. Only jpg, png, webp allowed.'));
+  }
+});
+
 // ============== IMAGE UPLOAD ENDPOINT ==============
 const { authenticateJWT } = require('./middleware/auth');
 app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), async (req, res) => {
@@ -172,6 +193,21 @@ app.post('/upload/chat', authenticateJWT, chatUpload.array('images', 5), async (
     return res.status(200).json({ urls });
   } catch (err) {
     console.error('[UPLOAD] Error:', err.message);
+    return res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+});
+
+// ============== PLAN IMAGE UPLOAD ENDPOINT ==============
+app.post('/upload/plan-image', authenticateJWT, planUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const url = `/uploads/plans/${req.file.filename}`;
+    return res.status(200).json({ url });
+  } catch (err) {
+    console.error('[PLAN UPLOAD] Error:', err.message);
     return res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });

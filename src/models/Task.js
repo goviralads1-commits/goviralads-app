@@ -491,6 +491,7 @@ const taskSchema = new mongoose.Schema(
     }],
     defaultCommissionRoles: [{
       role: { type: String, trim: true },
+      employeeId: { type: String, trim: true }, // Employee ID (not ObjectId, stored as string)
       percentage: { type: Number, min: 0, max: 100, default: 0 },
     }],
     defaultCostBreakdown: {

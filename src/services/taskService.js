@@ -90,8 +90,13 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
     const updatedSubNotExpired = updatedWallet.subscriptionExpiresAt && new Date(updatedWallet.subscriptionExpiresAt) > now;
     newBalance = (updatedSubNotExpired ? (updatedWallet.subscriptionCredits || 0) : 0) + (updatedWallet.walletCredits || 0);
 
-    // Auto-populate assignedUsers from client's team
-    const teamAssignedUsers = await getClientTeamAssignedUsers(clientId);
+    // Copy Plan's Default Team as snapshot (no fallback to client team)
+    const taskAssignedUsers = (template.defaultAssignedUsers || [])
+      .filter(u => u.userId && u.percentage > 0)
+      .map(u => ({
+        userId: u.userId,
+        percentage: u.percentage,
+      }));
 
     // Create Task entry
     task = await Task.create({ 
@@ -109,8 +114,8 @@ async function purchaseTaskFromTemplate(clientId, templateId, taskOptions = {}) 
       internalNotes: taskOptions.internalNotes || '',
       progressMode: taskOptions.progressMode || 'AUTO',
       progress: taskOptions.progress || 0,
-      // Auto-populate from client's assigned team
-      ...(teamAssignedUsers.length > 0 ? { assignedUsers: teamAssignedUsers } : {}),
+      // Copy from Plan's Default Team (snapshot)
+      ...(taskAssignedUsers.length > 0 ? { assignedUsers: taskAssignedUsers } : {}),
     });
 
     // Create WalletTransaction entry

@@ -36,11 +36,25 @@ const Earnings = () => {
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillResult, setBackfillResult] = useState(null);
 
+  // Redeem requests state
+  const [redeemRequests, setRedeemRequests] = useState([]);
+  const [redeemLoading, setRedeemLoading] = useState(false);
+  const [redeemStatusFilter, setRedeemStatusFilter] = useState('PENDING');
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [payoutMethod, setPayoutMethod] = useState('WALLET');
+  const [txRef, setTxRef] = useState('');
+  const [adminNote, setAdminNote] = useState('');
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectNote, setRejectNote] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [pendingRedeemCount, setPendingRedeemCount] = useState(0);
+
   // Filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedUser, setSelectedUser] = useState('');
-  const [view, setView] = useState('summary'); // 'summary' | 'logs' | 'ledger'
+  const [view, setView] = useState('summary'); // 'summary' | 'logs' | 'ledger' | 'redeems'
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -89,6 +103,7 @@ const Earnings = () => {
 
   useEffect(() => {
     if (view === 'ledger') fetchLedger();
+    if (view === 'redeems') fetchRedeemRequests();
   }, [view, fetchLedger]);
 
   // Fetch earnings config
@@ -163,6 +178,90 @@ const Earnings = () => {
       setToast({ type: 'error', message: err.response?.data?.error || 'Failed to create adjustment.' });
     } finally {
       setAdjLoading(false);
+    }
+  };
+
+  // Fetch redeem requests
+  const fetchRedeemRequests = useCallback(async () => {
+    setRedeemLoading(true);
+    try {
+      const params = {};
+      if (redeemStatusFilter) params.status = redeemStatusFilter;
+      const res = await api.get('/admin/earnings/redeem-requests', { params });
+      setRedeemRequests(res.data?.requests || []);
+    } catch (err) {
+      console.error('Failed to fetch redeem requests:', err);
+    } finally {
+      setRedeemLoading(false);
+    }
+  }, [redeemStatusFilter]);
+
+  const fetchPendingRedeemCount = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/earnings/redeem-requests', { params: { status: 'PENDING' } });
+      setPendingRedeemCount((res.data?.requests || []).length);
+    } catch (err) { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingRedeemCount();
+  }, [fetchPendingRedeemCount]);
+
+  const openApprove = (req) => {
+    setSelectedRequest(req);
+    setPayoutMethod('WALLET');
+    setTxRef('');
+    setAdminNote('');
+    setShowApproveModal(true);
+  };
+
+  const openReject = (req) => {
+    setSelectedRequest(req);
+    setRejectNote('');
+    setShowRejectModal(true);
+  };
+
+  const handleApprove = async () => {
+    if (!selectedRequest) return;
+    if (payoutMethod === 'EXTERNAL' && !txRef.trim()) {
+      setToast({ type: 'error', message: 'Transaction reference required for external payout.' });
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await api.post('/admin/earnings/redeem-approve', {
+        requestId: selectedRequest.id,
+        payoutMethod,
+        transactionReference: txRef.trim() || undefined,
+        adminNote: adminNote.trim() || undefined,
+      });
+      setToast({ type: 'success', message: `Request approved via ${payoutMethod}.` });
+      setShowApproveModal(false);
+      fetchRedeemRequests();
+      fetchPendingRedeemCount();
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Approval failed.' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedRequest) return;
+    setActionLoading(true);
+    try {
+      await api.post('/admin/earnings/redeem-reject', {
+        requestId: selectedRequest.id,
+        adminNote: rejectNote.trim() || undefined,
+      });
+      setToast({ type: 'success', message: 'Request rejected.' });
+      setShowRejectModal(false);
+      fetchRedeemRequests();
+      fetchPendingRedeemCount();
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.error || 'Rejection failed.' });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -303,7 +402,10 @@ const Earnings = () => {
             <button onClick={() => setView('summary')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'summary' ? '2px solid #6366f1' : '1px solid #e2e8f0', backgroundColor: view === 'summary' ? '#eef2ff' : '#fff', color: view === 'summary' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>By User</button>
             <button onClick={() => setView('logs')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'logs' ? '2px solid #6366f1' : '1px solid #e2e8f0', backgroundColor: view === 'logs' ? '#eef2ff' : '#fff', color: view === 'logs' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>All Logs</button>
             <button onClick={() => setView('ledger')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'ledger' ? '2px solid #22c55e' : '1px solid #e2e8f0', backgroundColor: view === 'ledger' ? '#f0fdf4' : '#fff', color: view === 'ledger' ? '#16a34a' : '#64748b', cursor: 'pointer' }}>Ledger</button>
-            <Link to="/earnings-redeems" style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#fff', color: '#7c3aed', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }}>Redeems</Link>
+            <button onClick={() => setView('redeems')} style={{ padding: '8px 14px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: view === 'redeems' ? '2px solid #7c3aed' : '1px solid #e2e8f0', backgroundColor: view === 'redeems' ? '#faf5ff' : '#fff', color: view === 'redeems' ? '#7c3aed' : '#64748b', cursor: 'pointer', position: 'relative' }}>
+              Redeems
+              {pendingRedeemCount > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pendingRedeemCount}</span>}
+            </button>
           </div>
           {view === 'ledger' && (
             <select value={ledgerTypeFilter} onChange={(e) => setLedgerTypeFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
@@ -388,6 +490,93 @@ const Earnings = () => {
               </table>
             </div>
           </div>
+        ) : view === 'redeems' ? (
+          /* Redeem Requests View */
+          redeemLoading ? (
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <div style={{ width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+              <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Loading redeem requests...</p>
+            </div>
+          ) : (
+            <>
+              {/* Redeem Status Filter */}
+              <div style={{ marginBottom: '16px' }}>
+                <select value={redeemStatusFilter} onChange={(e) => setRedeemStatusFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', minWidth: '160px' }}>
+                  <option value="PENDING">Pending</option>
+                  <option value="">All</option>
+                  <option value="APPROVED_WALLET">Approved (Wallet)</option>
+                  <option value="APPROVED_EXTERNAL">Approved (External)</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+              </div>
+              <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#475569' }}>User</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#475569' }}>Amount</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '600', color: '#475569' }}>Status</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '600', color: '#475569' }}>Method</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#475569' }}>Note / Ref</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '600', color: '#475569' }}>Date</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '600', color: '#475569' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {redeemRequests.length === 0 ? (
+                        <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No redeem requests found.</td></tr>
+                      ) : redeemRequests.map((req) => {
+                        const statusColors = {
+                          PENDING: { bg: '#fef3c7', text: '#92400e', label: 'Pending' },
+                          APPROVED_WALLET: { bg: '#dcfce7', text: '#166534', label: 'Approved (Wallet)' },
+                          APPROVED_EXTERNAL: { bg: '#dbeafe', text: '#1e40af', label: 'Approved (External)' },
+                          REJECTED: { bg: '#fee2e2', text: '#991b1b', label: 'Rejected' },
+                        };
+                        const sc = statusColors[req.status] || { bg: '#f1f5f9', text: '#475569', label: req.status };
+                        return (
+                          <tr key={req.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '12px 16px', fontWeight: '500', color: '#0f172a' }}>
+                              {req.userIdentifier}
+                              {req.userEmail && <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8' }}>{req.userEmail}</span>}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>
+                              {'\u20b9'}{req.requestedAmount?.toLocaleString('en-IN')}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              <span style={{ fontSize: '11px', backgroundColor: sc.bg, color: sc.text, padding: '3px 10px', borderRadius: '6px', fontWeight: '600' }}>
+                                {sc.label}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+                              {req.payoutMethod || '-'}
+                            </td>
+                            <td style={{ padding: '12px 16px', color: '#64748b', fontSize: '12px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {req.transactionReference && <span>Ref: {req.transactionReference} </span>}
+                              {req.adminNote || '-'}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'right', color: '#94a3b8', fontSize: '12px' }}>
+                              {new Date(req.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              {req.status === 'PENDING' ? (
+                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                                  <button onClick={() => openApprove(req)} style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '6px', border: 'none', backgroundColor: '#16a34a', color: '#fff', cursor: 'pointer' }}>Approve</button>
+                                  <button onClick={() => openReject(req)} style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '6px', border: 'none', backgroundColor: '#ef4444', color: '#fff', cursor: 'pointer' }}>Reject</button>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{req.approvedByAdmin || '-'}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )
         ) : (
           /* Ledger View */
           ledgerLoading ? (
@@ -493,6 +682,63 @@ const Earnings = () => {
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button onClick={() => setShowAdjustModal(false)} style={{ flex: 1, padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={handleAdjust} disabled={adjLoading || !adjUserId || !adjAmount} style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '10px', backgroundColor: '#6366f1', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer', opacity: adjLoading ? 0.6 : 1 }}>{adjLoading ? 'Saving...' : 'Submit'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Approve Redeem Modal */}
+        {showApproveModal && selectedRequest && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '460px', margin: '20px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0' }}>Approve Redeem</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0' }}>
+                {selectedRequest.userIdentifier} — {'\u20b9'}{selectedRequest.requestedAmount?.toLocaleString('en-IN')}
+              </p>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>Payout Method</label>
+                <select value={payoutMethod} onChange={(e) => setPayoutMethod(e.target.value)} style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }}>
+                  <option value="WALLET">Credit to Wallet</option>
+                  <option value="EXTERNAL">External Payout</option>
+                </select>
+              </div>
+              {payoutMethod === 'EXTERNAL' && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>Transaction Reference *</label>
+                  <input type="text" value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder="e.g. UTR / NEFT ref" style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+                </div>
+              )}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>Admin Note (optional)</label>
+                <input type="text" value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Optional note" style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button onClick={() => setShowApproveModal(false)} style={{ flex: 1, padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleApprove} disabled={actionLoading} style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '10px', backgroundColor: '#16a34a', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                  {actionLoading ? 'Processing...' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Redeem Modal */}
+        {showRejectModal && selectedRequest && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '420px', margin: '20px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 6px 0', color: '#dc2626' }}>Reject Redeem</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0' }}>
+                {selectedRequest.userIdentifier} — {'\u20b9'}{selectedRequest.requestedAmount?.toLocaleString('en-IN')}
+              </p>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '4px' }}>Reason (optional)</label>
+                <input type="text" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Reason for rejection" style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button onClick={() => setShowRejectModal(false)} style={{ flex: 1, padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleReject} disabled={actionLoading} style={{ flex: 1, padding: '12px', border: 'none', borderRadius: '10px', backgroundColor: '#ef4444', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer', opacity: actionLoading ? 0.6 : 1 }}>
+                  {actionLoading ? 'Processing...' : 'Reject'}
+                </button>
               </div>
             </div>
           </div>

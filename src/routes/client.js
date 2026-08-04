@@ -1615,8 +1615,13 @@ router.post('/plans/:planId/purchase', async (req, res) => {
     });
 
     // 9. Clone task for client (DO NOT MODIFY ORIGINAL)
-    // Auto-populate assignedUsers from client's team
-    const teamAssignedUsers = await getClientTeamAssignedUsers(clientId);
+    // Copy Plan's Default Team as snapshot (no fallback to client team)
+    const teamAssignedUsers = (plan.defaultAssignedUsers || [])
+      .filter(u => u.userId && u.percentage > 0)
+      .map(u => ({
+        userId: u.userId,
+        percentage: u.percentage,
+      }));
 
     const newTask = await Task.create({
       title: plan.title,

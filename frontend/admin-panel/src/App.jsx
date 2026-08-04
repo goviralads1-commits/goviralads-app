@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
+import ClientDetail from './pages/ClientDetail';
 import Recharges from './pages/Recharges';
 import Tasks from './pages/Tasks';
 import Reports from './pages/Reports';
@@ -29,6 +30,7 @@ import Support from './pages/Support';
 import Earnings from './pages/Earnings';
 import EarningsRedeems from './pages/EarningsRedeems';
 import Employees from './pages/Employees';
+import EmployeeDetail from './pages/EmployeeDetail';
 import LegalPages from './pages/LegalPages';
 import NotFound from './pages/NotFound';
 
@@ -428,6 +430,11 @@ const App = () => {
               <Clients />
             </ProtectedRoute>
           } />
+          <Route path="/clients/:clientId" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <ClientDetail />
+            </ProtectedRoute>
+          } />
           <Route path="/recharges" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Recharges />
@@ -536,6 +543,11 @@ const App = () => {
           <Route path="/employees" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Employees />
+            </ProtectedRoute>
+          } />
+          <Route path="/employees/:employeeId" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <EmployeeDetail />
             </ProtectedRoute>
           } />
           <Route path="/legal-pages" element={
