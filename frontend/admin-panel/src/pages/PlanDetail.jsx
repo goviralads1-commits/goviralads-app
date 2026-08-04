@@ -487,18 +487,11 @@ const PlanDetail = () => {
                             textAlign: 'center', 
                             backgroundColor: '#f8fafc', 
                             cursor: 'pointer',
-                            marginBottom: '4px'
+                            marginBottom: '0'
                           }}
                         >
                           {media.url ? '🔄 Replace' : '📤 Upload Image'}
                         </label>
-                        <input 
-                          type="text" 
-                          placeholder="Or paste URL..." 
-                          value={media.url} 
-                          onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} 
-                          style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px' }} 
-                        />
                       </>
                     ) : (
                       <input type="text" placeholder="Paste URL..." value={media.url} onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />

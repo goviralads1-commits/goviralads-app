@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
+import api from '../services/api';
 
 /**
  * MediaUploader Component
  * 
- * A clean URL-based media uploader with:
- * - Drag/drop URL support
- * - Paste URL detection
+ * A clean media uploader with:
+ * - File upload for images (mobile gallery + desktop file picker)
+ * - URL input for videos
  * - Image/Video preview
  * - Validation before adding
  */
@@ -20,7 +21,9 @@ const MediaUploader = ({
   const [isValidating, setIsValidating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Detect if URL is video
   const detectMediaType = (url) => {
@@ -112,6 +115,50 @@ const MediaUploader = ({
   const handleRemove = (index) => {
     const updated = media.filter((_, i) => i !== index);
     onChange(updated);
+  };
+
+  // Handle image file upload
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Only JPG, PNG, WebP allowed.');
+      return;
+    }
+    
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large. Maximum 5MB allowed.');
+      return;
+    }
+    
+    setUploading(true);
+    setError('');
+    
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const res = await api.post('/upload/plan-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (res.data.url) {
+        const newItem = {
+          type: 'image',
+          url: res.data.url
+        };
+        onChange([...media, newItem]);
+        setMediaType('image');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError('Upload failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Get YouTube thumbnail
@@ -236,151 +283,255 @@ const MediaUploader = ({
           backgroundColor: '#fafbfc',
           transition: 'all 0.2s'
         }}>
-          {/* URL Input */}
-          <div style={{ marginBottom: '12px' }}>
-            <input
-              ref={inputRef}
-              type="text"
-              value={urlInput}
-              onChange={handleUrlChange}
-              onPaste={handlePaste}
-              placeholder="Paste image or video URL here..."
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                fontSize: '14px',
-                border: '2px solid #e2e8f0',
-                borderRadius: '10px',
-                outline: 'none',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-              onBlur={handleBlur}
-            />
-          </div>
+          {/* Hidden file input for image upload */}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            ref={fileInputRef}
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) handleFileUpload(file);
+              e.target.value = ''; // Reset input
+            }}
+            style={{ display: 'none' }}
+          />
 
-          {/* Preview Section */}
-          {(previewUrl || isValidating) && (
-            <div style={{
-              marginBottom: '12px',
-              padding: '12px',
-              backgroundColor: '#fff',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0'
-            }}>
-              {isValidating ? (
-                <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
-                  <span style={{ animation: 'pulse 1s infinite' }}>Validating image...</span>
-                </div>
-              ) : mediaType === 'image' ? (
-                <img 
-                  src={previewUrl} 
-                  alt="Preview" 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '150px', 
-                    borderRadius: '8px',
-                    display: 'block',
-                    margin: '0 auto'
-                  }}
-                />
-              ) : (
-                <div style={{
+          {/* Image Upload Mode */}
+          {mediaType === 'image' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: uploading ? '#94a3b8' : '#6366f1',
+                  background: uploading ? '#f1f5f9' : '#fff',
+                  border: '2px solid',
+                  borderColor: uploading ? '#e2e8f0' : '#6366f1',
+                  borderRadius: '10px',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '8px'
-                }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #7c3aed, #5b21b6)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
-                      <polygon points="5,3 19,12 5,21" />
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {uploading ? (
+                  <>
+                    <span style={{ animation: 'pulse 1s infinite' }}>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px 0' }}>Video URL detected</p>
-                    <p style={{ fontSize: '11px', color: '#64748b', margin: 0, wordBreak: 'break-all' }}>{previewUrl.slice(0, 50)}...</p>
-                  </div>
+                    <span>Upload Image</span>
+                  </>
+                )}
+              </button>
+              <p style={{ 
+                fontSize: '11px', 
+                color: '#94a3b8', 
+                margin: '10px 0 0 0',
+                textAlign: 'center'
+              }}>
+                JPG, PNG, WebP • Max 5MB
+              </p>
+            </>
+          ) : (
+            /* Video URL Mode */
+            <>
+              <div style={{ marginBottom: '12px' }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={urlInput}
+                  onChange={handleUrlChange}
+                  onPaste={handlePaste}
+                  placeholder="Paste video URL here..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    fontSize: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '10px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                  onBlur={handleBlur}
+                />
+              </div>
+
+              {/* Preview Section */}
+              {(previewUrl || isValidating) && (
+                <div style={{
+                  marginBottom: '12px',
+                  padding: '12px',
+                  backgroundColor: '#fff',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  {isValidating ? (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                      <span style={{ animation: 'pulse 1s infinite' }}>Validating image...</span>
+                    </div>
+                  ) : mediaType === 'image' ? (
+                    <img 
+                      src={previewUrl} 
+                      alt="Preview" 
+                      style={{ 
+                        maxWidth: '100%', 
+                        maxHeight: '150px', 
+                        borderRadius: '8px',
+                        display: 'block',
+                        margin: '0 auto'
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '8px'
+                    }}>
+                      <div style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '8px',
+                        background: 'linear-gradient(135deg, #7c3aed, #5b21b6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+                          <polygon points="5,3 19,12 5,21" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: '0 0 2px 0' }}>Video URL detected</p>
+                        <p style={{ fontSize: '11px', color: '#64748b', margin: 0, wordBreak: 'break-all' }}>{previewUrl.slice(0, 50)}...</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Error Message */}
+              {error && (
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#ef4444', 
+                  margin: '0 0 12px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span>⚠️</span> {error}
+                </p>
+              )}
+
+              {/* Type Selector + Add Button */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {allowVideo && (
+                  <select
+                    value={mediaType}
+                    onChange={(e) => setMediaType(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '8px',
+                      backgroundColor: '#fff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="image">🖼️ Image</option>
+                    <option value="video">🎬 Video</option>
+                  </select>
+                )}
+                
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={!urlInput || isValidating}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: (!urlInput || isValidating) ? '#94a3b8' : '#fff',
+                    background: (!urlInput || isValidating) 
+                      ? '#e2e8f0' 
+                      : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: (!urlInput || isValidating) ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  + Add Video
+                </button>
+              </div>
+
+              {/* Helper text */}
+              <p style={{ 
+                fontSize: '11px', 
+                color: '#94a3b8', 
+                margin: '10px 0 0 0',
+                textAlign: 'center'
+              }}>
+                {media.length}/{maxItems} items • Supports YouTube, Vimeo, MP4
+              </p>
+            </>
+          )}
+
+          {/* Type Selector (only show when in image mode for switching to video) */}
+          {mediaType === 'image' && allowVideo && (
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setMediaType('video')}
+                style={{
+                  fontSize: '12px',
+                  color: '#6366f1',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                or add video URL instead
+              </button>
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <p style={{ 
-              fontSize: '12px', 
-              color: '#ef4444', 
-              margin: '0 0 12px 0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <span>⚠️</span> {error}
-            </p>
-          )}
-
-          {/* Type Selector + Add Button */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {allowVideo && (
-              <select
-                value={mediaType}
-                onChange={(e) => setMediaType(e.target.value)}
+          {/* Type Selector (only show when in video mode for switching to image) */}
+          {mediaType === 'video' && allowVideo && (
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setMediaType('image')}
                 style={{
-                  padding: '10px 14px',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  border: '2px solid #e2e8f0',
-                  borderRadius: '8px',
-                  backgroundColor: '#fff',
-                  cursor: 'pointer'
+                  fontSize: '12px',
+                  color: '#6366f1',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
                 }}
               >
-                <option value="image">🖼️ Image</option>
-                <option value="video">🎬 Video</option>
-              </select>
-            )}
-            
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={!urlInput || isValidating}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                fontSize: '13px',
-                fontWeight: '600',
-                color: (!urlInput || isValidating) ? '#94a3b8' : '#fff',
-                background: (!urlInput || isValidating) 
-                  ? '#e2e8f0' 
-                  : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: (!urlInput || isValidating) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              + Add {mediaType === 'video' ? 'Video' : 'Image'}
-            </button>
-          </div>
-
-          {/* Helper text */}
-          <p style={{ 
-            fontSize: '11px', 
-            color: '#94a3b8', 
-            margin: '10px 0 0 0',
-            textAlign: 'center'
-          }}>
-            {media.length}/{maxItems} items • Supports direct URLs, YouTube, Vimeo
-          </p>
+                or upload image instead
+              </button>
+            </div>
+          )}
         </div>
       )}
 
