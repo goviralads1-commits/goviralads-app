@@ -42,6 +42,7 @@ const TaskDetail = () => {
   const [sendingApproval, setSendingApproval] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [clientUsers, setClientUsers] = useState([]);
+  const [employees, setEmployees] = useState([]);
   
   // Discussion state (Phase 6)
   const [messageText, setMessageText] = useState('');
@@ -229,6 +230,7 @@ const TaskDetail = () => {
   useEffect(() => {
     api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
     api.get('/admin/assignable-clients').then(res => setClientUsers(res.data.users || [])).catch(() => {});
+    api.get('/admin/employees?status=ACTIVE&linkedToUser=true').then(res => setEmployees(res.data.employees || [])).catch(() => {});
   }, []);
 
   // Load more (older) messages for pagination
@@ -1755,8 +1757,8 @@ const TaskDetail = () => {
                   {commissionRoleTemplates.length > 0 ? (
                     <>
                       {commissionRoleTemplates.map((tpl, idx) => {
-                        const matchingUsers = clientUsers.filter(u =>
-                          u.designation?.trim().toLowerCase() === tpl.role?.trim().toLowerCase()
+                        const matchingUsers = employees.filter(u =>
+                          u.defaultRole === tpl.role?.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')
                         );
                         return (
                           <div key={idx} style={{ marginBottom: '12px', padding: '12px', backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -1771,12 +1773,12 @@ const TaskDetail = () => {
                               style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: task?.status === 'COMPLETED' ? '#f1f5f9' : '#fff', boxSizing: 'border-box' }}
                             >
                               <option value="">Select {tpl.role}...</option>
-                              {matchingUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === assignedUsers[idx]?.userId).map(u => (
-                                <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
+                              {matchingUsers.filter(u => !assignedUserIds.includes(u.userId) || u.userId === assignedUsers[idx]?.userId).map(u => (
+                                <option key={u.id} value={u.userId}>{u.name}</option>
                               ))}
                             </select>
                             {matchingUsers.length === 0 && (
-                              <p style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px', marginBottom: 0 }}>⚠️ No users with designation "{tpl.role}" found</p>
+                              <p style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px', marginBottom: 0 }}>⚠️ No linked employees with role "{tpl.role}" found</p>
                             )}
                           </div>
                         );
@@ -1799,8 +1801,8 @@ const TaskDetail = () => {
                         style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: task?.status === 'COMPLETED' ? '#f1f5f9' : '#fff', boxSizing: 'border-box' }}
                       >
                         <option value="">Select user...</option>
-                        {clientUsers.filter(u => !assignedUserIds.includes(u.id) || u.id === member.userId).map(u => (
-                          <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
+                        {employees.filter(u => !assignedUserIds.includes(u.userId) || u.userId === member.userId).map(u => (
+                          <option key={u.id} value={u.userId}>{u.name}</option>
                         ))}
                       </select>
                       <input
