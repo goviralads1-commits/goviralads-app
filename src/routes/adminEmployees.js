@@ -75,9 +75,10 @@ router.get('/roles', (_req, res) => {
 // MUST be before /:employeeId to avoid route matching conflict
 router.get('/available-users', async (req, res) => {
   try {
-    // Get all Users (any role)
+    // Get all CLIENT Users only (Employees must be goviralads.com users)
     const allUsers = await User.find({
       isDeleted: { $ne: true },
+      role: ROLES.CLIENT,
     }).select('_id identifier profile.name profile.company status role').exec();
 
     // Get all Employees with linked Users
@@ -198,6 +199,9 @@ router.post('/', async (req, res) => {
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
+      if (user.role !== ROLES.CLIENT) {
+        return res.status(400).json({ error: 'Only CLIENT users can be linked to an Employee' });
+      }
       const existingLink = await Employee.findOne({
         userId: userId,
         isDeleted: { $ne: true },
@@ -257,6 +261,9 @@ router.patch('/:employeeId', async (req, res) => {
       const user = await User.findById(userId).exec();
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
+      }
+      if (user.role !== ROLES.CLIENT) {
+        return res.status(400).json({ error: 'Only CLIENT users can be linked to an Employee' });
       }
 
       // Check if User is already linked to another Employee
