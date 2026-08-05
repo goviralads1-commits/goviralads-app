@@ -194,7 +194,6 @@ router.post('/', async (req, res) => {
 
     const existing = await Employee.findOne({
       identifier: identifier.trim().toLowerCase(),
-      isDeleted: { $ne: true },
     }).exec();
 
     if (existing) {
