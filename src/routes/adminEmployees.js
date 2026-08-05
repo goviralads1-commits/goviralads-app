@@ -180,7 +180,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, identifier, phone, defaultRole, commissionSettings, notes } = req.body || {};
+    const { name, identifier, phone, defaultRole, commissionSettings, notes, userId } = req.body || {};
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Employee name is required' });
@@ -190,6 +190,24 @@ router.post('/', async (req, res) => {
     }
     if (defaultRole && !Object.values(EMPLOYEE_ROLES).includes(defaultRole)) {
       return res.status(400).json({ error: 'Invalid employee role' });
+    }
+
+    // Validate userId if provided
+    if (userId !== undefined && userId !== null && userId !== '') {
+      const user = await User.findById(userId).exec();
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const existingLink = await Employee.findOne({
+        userId: userId,
+        isDeleted: { $ne: true },
+      }).exec();
+      if (existingLink) {
+        return res.status(400).json({
+          error: 'This User is already linked to another Employee',
+          linkedTo: { id: existingLink._id.toString(), name: existingLink.name, identifier: existingLink.identifier },
+        });
+      }
     }
 
     const existing = await Employee.findOne({
@@ -208,6 +226,7 @@ router.post('/', async (req, res) => {
       commissionSettings: normalizeCommissionSettings(commissionSettings),
       notes: notes ? notes.trim() : '',
       createdBy: req.user.id,
+      userId: (userId !== undefined && userId !== null && userId !== '') ? userId : null,
     });
 
     return res.status(201).json({ employee: serializeEmployee(employee) });
