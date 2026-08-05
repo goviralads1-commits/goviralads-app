@@ -87,6 +87,9 @@ router.get('/available-users', async (req, res) => {
       isDeleted: { $ne: true },
     }).select('userId').exec();
 
+    // DIAGNOSTIC: Show which Employees have linked Users
+    console.log('[DIAG available-users] linkedUserIds raw:', linkedUserIds.map(e => ({ empId: e._id.toString(), userId: e.userId?.toString() })));
+
     const linkedUserIdSet = new Set(linkedUserIds.map(e => e.userId?.toString()).filter(Boolean));
 
     // Filter out already-linked Users
@@ -173,7 +176,16 @@ router.get('/', async (req, res) => {
     }
 
     const employees = await Employee.find(filter).sort({ name: 1 }).exec();
-    return res.status(200).json({ employees: employees.map(serializeEmployee) });
+    // DIAGNOSTIC: Log raw userId from MongoDB before serialization
+    employees.forEach(emp => {
+      console.log('[DIAG GET /] _id:', emp._id.toString(), '| userId (raw):', emp.userId, '| userId type:', typeof emp.userId, '| userId is ObjectId:', emp.userId && emp.userId._id ? 'yes' : 'no');
+    });
+    const serialized = employees.map(serializeEmployee);
+    // DIAGNOSTIC: Log serialized userId
+    serialized.forEach(s => {
+      console.log('[DIAG GET /] serialized id:', s.id, '| serialized userId:', s.userId);
+    });
+    return res.status(200).json({ employees: serialized });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to retrieve employees' });
   }
@@ -291,9 +303,23 @@ router.patch('/:employeeId', async (req, res) => {
     if (status !== undefined) employee.status = status;
     if (commissionSettings !== undefined) employee.commissionSettings = normalizeCommissionSettings(commissionSettings);
     if (notes !== undefined) employee.notes = notes ? notes.trim() : '';
+    // DIAGNOSTIC: Log PATCH inputs
+    console.log('[DIAG PATCH] employeeId from URL:', employeeId);
+    console.log('[DIAG PATCH] req.body.userId:', userId);
+    console.log('[DIAG PATCH] employee.userId BEFORE assignment:', employee.userId);
+
     if (userId !== undefined) employee.userId = userId || null;
 
+    console.log('[DIAG PATCH] employee.userId AFTER assignment:', employee.userId);
+
     await employee.save();
+
+    console.log('[DIAG PATCH] employee.userId AFTER save():', employee.userId);
+
+    // DIAGNOSTIC: Verify directly from MongoDB
+    const verify = await Employee.findById(employee._id).lean();
+    console.log('[DIAG PATCH] MongoDB verify _id:', verify._id.toString(), '| verify.userId:', verify.userId);
+
     return res.status(200).json({ employee: serializeEmployee(employee) });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to update employee' });
