@@ -105,7 +105,7 @@ if (cloudinaryConfigured) {
 }
 
 // Helper: upload a single file buffer to Cloudinary, returns secure_url
-const uploadBufferToCloudinary = (buffer) => {
+const uploadBufferToCloudinary = (buffer, folder = 'goviralads/chat') => {
   return new Promise((resolve, reject) => {
     if (!cloudinaryConfigured) {
       return reject(new Error('Cloudinary not configured - missing env vars'));
@@ -113,7 +113,7 @@ const uploadBufferToCloudinary = (buffer) => {
     
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: 'goviralads/chat',
+        folder: folder,
         resource_type: 'image',
       },
       (error, result) => {
@@ -147,19 +147,9 @@ const chatUpload = multer({
   }
 });
 
-// Plan image upload (local storage)
+// Plan image upload (Cloudinary storage)
 const planUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadPath = path.join(__dirname, '..', 'uploads', 'plans');
-      if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-      cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-      const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
-      cb(null, uniqueName);
-    }
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -204,7 +194,7 @@ app.post('/upload/plan-image', authenticateJWT, planUpload.single('image'), asyn
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
-    const url = `/uploads/plans/${req.file.filename}`;
+    const url = await uploadBufferToCloudinary(req.file.buffer, 'goviralads/plans');
     return res.status(200).json({ url });
   } catch (err) {
     console.error('[PLAN UPLOAD] Error:', err.message);
