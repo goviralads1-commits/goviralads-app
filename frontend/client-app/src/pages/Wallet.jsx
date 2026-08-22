@@ -1307,6 +1307,9 @@ const Wallet = () => {
                         <p style={{fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0'}}>
                           ₹{req.amount?.toFixed(2) || '0.00'}
                         </p>
+                        <p style={{fontSize: '11px', color: '#6366f1', fontWeight: '500', margin: '0 0 2px 0'}}>
+                          {req.type === 'SUBSCRIPTION' ? `Subscription — ${req.planName || 'Credit Plan'}` : 'Wallet Recharge'}
+                        </p>
                         <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
                           {new Date(req.createdAt).toLocaleString('en-IN', {
                             day: '2-digit', month: 'short', year: 'numeric',

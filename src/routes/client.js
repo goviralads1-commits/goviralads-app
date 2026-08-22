@@ -449,20 +449,39 @@ router.get('/wallet/recharge-requests', async (req, res) => {
   try {
     const clientId = req.user.id;
 
-    const requests = await RechargeRequest.find({ clientId })
-      .sort({ createdAt: -1 })
-      .exec();
+    // Fetch both Recharge and Subscription requests for unified payment history
+    const [rechargeRequests, subscriptionRequests] = await Promise.all([
+      RechargeRequest.find({ clientId }).sort({ createdAt: -1 }).lean().exec(),
+      SubscriptionRequest.find({ clientId }).sort({ createdAt: -1 }).lean().exec(),
+    ]);
 
-    return res.status(200).json({
-      requests: requests.map((r) => ({
-        id: r._id.toString(),
-        amount: r.amount,
-        paymentReference: r.paymentReference,
-        status: r.status,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-      })),
-    });
+    // Normalize to same shape and merge
+    const normalizedRecharges = rechargeRequests.map((r) => ({
+      type: 'RECHARGE',
+      id: r._id.toString(),
+      amount: r.amount,
+      paymentReference: r.paymentReference,
+      status: r.status,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+
+    const normalizedSubscriptions = subscriptionRequests.map((r) => ({
+      type: 'SUBSCRIPTION',
+      id: r._id.toString(),
+      amount: r.finalPrice,          // Actual ₹ paid (NOT credits)
+      paymentReference: r.transactionId || '',
+      planName: r.planName,
+      status: r.status,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+
+    // Merge and sort by createdAt descending
+    const allRequests = [...normalizedRecharges, ...normalizedSubscriptions]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return res.status(200).json({ requests: allRequests });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to retrieve recharge requests' });
   }
