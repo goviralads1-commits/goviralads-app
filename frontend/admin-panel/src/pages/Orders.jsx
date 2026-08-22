@@ -71,6 +71,17 @@ const Orders = () => {
     fetchOrders();
   }, [fetchOrders]);
 
+  // Helper: extract plan default commission recipients from order
+  const getPlanDefaults = (order) => {
+    const defaults = order?.items?.[0]?.planSnapshot?.defaultAssignedUsers || [];
+    return defaults
+      .filter(u => u.userId && u.percentage > 0)
+      .map(u => ({
+        userId: typeof u.userId === 'object' ? (u.userId?._id || u.userId?.id || '') : (u.userId || ''),
+        percentage: u.percentage || 0,
+      }));
+  };
+
   // Open order detail if orderId is in URL
   useEffect(() => {
     if (initialOrderId && orders.length > 0) {
@@ -78,7 +89,7 @@ const Orders = () => {
       if (order) {
         setSelectedOrder(order);
         setShowDetailModal(true);
-        setApprovalTeam([]);
+        setApprovalTeam(getPlanDefaults(order));
       }
     }
   }, [initialOrderId, orders]);
@@ -96,11 +107,11 @@ const Orders = () => {
     if (!selectedOrder) return;
     setActionLoading(true);
     try {
-      const payload = {};
       const validTeam = approvalTeam.filter(u => u.userId && u.percentage > 0);
-      if (validTeam.length > 0) {
-        payload.assignedUsers = validTeam.map(u => ({ userId: u.userId, percentage: u.percentage }));
-      }
+      const payload = {
+        commissionReviewed: true,
+        assignedUsers: validTeam.map(u => ({ userId: u.userId, percentage: u.percentage })),
+      };
       const res = await api.post(`/admin/orders/${selectedOrder.id || selectedOrder._id}/approve`, payload);
       setToast({ type: 'success', message: res.data.message || 'Order approved successfully!' });
       setShowDetailModal(false);
@@ -138,7 +149,7 @@ const Orders = () => {
   const openOrderDetail = (order) => {
     setSelectedOrder(order);
     setShowDetailModal(true);
-    setApprovalTeam([]);
+    setApprovalTeam(getPlanDefaults(order));
   };
 
   const formatDate = (dateStr) => {

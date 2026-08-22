@@ -3516,7 +3516,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
   
   try {
     const { orderId } = req.params;
-    const { assignedTo, assignedUsers: reqAssignedUsers } = req.body || {};
+    const { assignedTo, assignedUsers: reqAssignedUsers, commissionReviewed } = req.body || {};
     const adminId = req.user.id;
     
     const order = await Order.findById(orderId).session(session);
@@ -3533,9 +3533,9 @@ router.post('/orders/:orderId/approve', async (req, res) => {
     // Create tasks for each item in the order
     const createdTaskIds = [];
     
-    // Auto-populate assignedUsers from client's team (if not provided in request)
+    // Auto-populate assignedUsers from client's team (if not provided in request and not reviewed by admin)
     let orderTeamAssignedUsers = [];
-    if (!reqAssignedUsers || !Array.isArray(reqAssignedUsers) || reqAssignedUsers.length === 0) {
+    if (!commissionReviewed && (!reqAssignedUsers || !Array.isArray(reqAssignedUsers) || reqAssignedUsers.length === 0)) {
       orderTeamAssignedUsers = await getClientTeamAssignedUsers(order.clientId);
     }
     
@@ -3559,16 +3559,19 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           customInputLabel: item.planSnapshot?.customInputLabel || '',
           clientInputs: item.inputs && item.inputs[i] ? [item.inputs[i]] : [],
           assignedTo: assignedTo || null,
-          // Phase 1: pass through if present in planSnapshot
-          ...(item.planSnapshot?.defaultAssignedUsers?.length ? { assignedUsers: item.planSnapshot.defaultAssignedUsers } : {}),
+          // Commission recipients: Admin-reviewed takes absolute priority
+          ...(commissionReviewed
+            ? { assignedUsers: Array.isArray(reqAssignedUsers) ? reqAssignedUsers : [] }
+            : {
+                // Backward compat: Plan defaults → Employee team fallback
+                ...(item.planSnapshot?.defaultAssignedUsers?.length ? { assignedUsers: item.planSnapshot.defaultAssignedUsers } : {}),
+                ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
+                ...(!reqAssignedUsers?.length && !item.planSnapshot?.defaultAssignedUsers?.length && orderTeamAssignedUsers.length > 0 ? { assignedUsers: orderTeamAssignedUsers } : {}),
+              }),
+          // Cost breakdown and commission roles (always pass through from plan snapshot)
           ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
-          // Plan defaults: inherit defaultCostBreakdown and commission role templates from plan
           ...(item.planSnapshot?.defaultCostBreakdown ? { costBreakdown: item.planSnapshot.defaultCostBreakdown } : {}),
           ...(item.planSnapshot?.defaultCommissionRoles?.length ? { defaultCommissionRoles: item.planSnapshot.defaultCommissionRoles } : {}),
-          // Phase 2: pass through from approve request body (highest priority)
-          ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
-          // Phase 3: auto-populate from client's assigned team (fallback ONLY if Phase 1 & 2 are empty)
-          ...(!reqAssignedUsers?.length && !item.planSnapshot?.defaultAssignedUsers?.length && orderTeamAssignedUsers.length > 0 ? { assignedUsers: orderTeamAssignedUsers } : {}),
         };
         
         const task = await Task.create([taskData], { session });

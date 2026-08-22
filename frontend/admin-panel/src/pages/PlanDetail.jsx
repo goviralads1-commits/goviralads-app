@@ -68,7 +68,7 @@ const PlanDetail = () => {
         api.get('/admin/users?role=ADMIN,EMPLOYEE').catch(() => ({ data: { users: [] } })),
         api.get('/admin/assignable-clients').catch(() => ({ data: { users: [] } })),
         api.get('/admin/designation-options').catch(() => ({ data: { designations: [] } })),
-        api.get('/admin/employees').catch(() => ({ data: { employees: [] } })),
+        api.get('/admin/employees?linkedToUser=true').catch(() => ({ data: { employees: [] } })),
       ]);
       
       const planData = planRes.data.task;
@@ -226,7 +226,7 @@ const PlanDetail = () => {
     }
   };
 
-  // Default Commission Roles handlers
+  // Default Commission Roles handlers (legacy - read only)
   const addCommissionRole = () => {
     setDefaultCommissionRoles(prev => [...prev, { role: '', employeeId: '', percentage: 0 }]);
     setHasChanges(true);
@@ -240,6 +240,21 @@ const PlanDetail = () => {
     setHasChanges(true);
   };
   const commissionRolesTotal = defaultCommissionRoles.reduce((sum, r) => sum + (Number(r.percentage) || 0), 0);
+
+  // Default Assigned Users handlers (direct CLIENT User selection - primary)
+  const addDefaultMember = () => {
+    setDefaultAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
+    setHasChanges(true);
+  };
+  const removeDefaultMember = (idx) => {
+    setDefaultAssignedUsers(prev => prev.filter((_, i) => i !== idx));
+    setHasChanges(true);
+  };
+  const updateDefaultMember = (idx, field, value) => {
+    setDefaultAssignedUsers(prev => prev.map((m, i) => i === idx ? { ...m, [field]: field === 'percentage' ? Math.max(0, Math.min(100, Number(value) || 0)) : value } : m));
+    setHasChanges(true);
+  };
+  const defaultMembersTotal = defaultAssignedUsers.reduce((sum, m) => sum + (Number(m.percentage) || 0), 0);
 
   const handleSave = async () => {
     if (!formData.title.trim()) {
@@ -280,15 +295,7 @@ const PlanDetail = () => {
         customInputPlaceholder: formData.customInputPlaceholder || '',
         // Default Commission Setup
         defaultCommissionRoles: defaultCommissionRoles.filter(r => r.role && r.role.trim() && r.percentage > 0),
-        defaultAssignedUsers: defaultCommissionRoles
-          .filter(r => r.employeeId && r.percentage > 0)
-          .map(r => {
-            const emp = employees.find(e => e.id === r.employeeId);
-            return {
-              userId: emp?.userId || null,
-              percentage: r.percentage,
-            };
-          }),
+        defaultAssignedUsers: defaultAssignedUsers.filter(u => u.userId && u.percentage > 0),
         defaultCostBreakdown: defaultCostBreakdown,
       };
       
@@ -824,67 +831,46 @@ const PlanDetail = () => {
           </div>
 
           {/* DEFAULT COMMISSION SETUP */}
-          <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '2px solid #e2e8f0' }}>
+          <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#fffbeb', borderRadius: '14px', border: '2px solid #fde68a' }}>
             <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Splits</h4>
-            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>Define commission roles and assign Employees. When a client purchases this plan, the team will be copied to the task.</p>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', margin: '0 0 16px' }}>These defaults auto-apply to tasks created from this plan when orders are approved.</p>
             
-            {/* Commission Roles */}
+            {/* Default Commission Recipients (direct CLIENT Users) */}
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team</label>
-              {defaultCommissionRoles.map((entry, idx) => {
-                const selectedEmployee = employees.find(e => e.id === entry.employeeId);
-                const hasLinkedUser = selectedEmployee?.userId;
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team Members</label>
+              {defaultAssignedUsers.map((member, idx) => {
+                const selectedUserIds = defaultAssignedUsers.map(m => m.userId).filter(Boolean);
                 return (
                   <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px', alignItems: 'center', padding: '12px', backgroundColor: '#fff', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
-                    {/* Role */}
                     <select
-                      value={entry.role}
-                      onChange={(e) => updateCommissionRole(idx, 'role', e.target.value)}
-                      style={{ flex: '1 1 30%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                      value={member.userId}
+                      onChange={(e) => updateDefaultMember(idx, 'userId', e.target.value)}
+                      style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
                     >
-                      <option value="">Select role...</option>
-                      {designationOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    {/* Employee */}
-                    <select
-                      value={entry.employeeId || ''}
-                      onChange={(e) => updateCommissionRole(idx, 'employeeId', e.target.value)}
-                      style={{ flex: '1 1 40%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                    >
-                      <option value="">Select employee...</option>
-                      {employees.map(emp => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name} {emp.userId ? '✓' : '⚠️'}
-                        </option>
+                      <option value="">Select user...</option>
+                      {clientUsers.filter(u => !selectedUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                        <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
                       ))}
                     </select>
-                    {/* Percentage */}
                     <input
                       type="number"
-                      value={entry.percentage}
-                      onChange={(e) => updateCommissionRole(idx, 'percentage', e.target.value)}
+                      value={member.percentage}
+                      onChange={(e) => updateDefaultMember(idx, 'percentage', e.target.value)}
                       placeholder="%"
                       min="0"
                       max="100"
-                      style={{ flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
+                      style={{ flex: '0 0 70px', width: '70px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
                     />
-                    {/* Remove Button */}
-                    <button type="button" onClick={() => removeCommissionRole(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
-                    {/* Warning if no linked User */}
-                    {entry.employeeId && !hasLinkedUser && (
-                      <div style={{ width: '100%', padding: '8px 12px', backgroundColor: '#fef3c7', borderRadius: '6px', fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
-                        ⚠️ This Employee has no linked User account. Commission cannot be credited until a User is linked.
-                      </div>
-                    )}
+                    <button type="button" onClick={() => removeDefaultMember(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
                   </div>
                 );
               })}
-              {defaultCommissionRoles.length > 0 && (
-                <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: commissionRolesTotal > 100 ? '#dc2626' : '#16a34a' }}>
-                  Total: {commissionRolesTotal}% {commissionRolesTotal > 100 && '⚠️ Exceeds 100%'}
+              {defaultAssignedUsers.length > 0 && (
+                <div style={{ marginBottom: '10px', fontSize: '12px', fontWeight: '600', color: defaultMembersTotal > 100 ? '#dc2626' : '#16a34a' }}>
+                  Total: {defaultMembersTotal}% {defaultMembersTotal > 100 && '⚠️ Exceeds 100%'}
                 </div>
               )}
-              <button type="button" onClick={addCommissionRole} disabled={commissionRolesTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
+              <button type="button" onClick={addDefaultMember} disabled={defaultMembersTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Team Member</button>
             </div>
 
             {/* Cost Breakdown */}
@@ -906,9 +892,9 @@ const PlanDetail = () => {
               </div>
             </div>
             
-            {defaultCommissionRoles.length > 0 && (
+            {defaultAssignedUsers.length > 0 && (
               <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#eff6ff', borderRadius: '8px', fontSize: '11px', color: '#3b82f6' }}>
-                ℹ️ These roles define commission percentages only. Actual users are assigned during task management.
+                ℹ️ When a client purchases this plan, these users will be pre-filled as commission recipients during order approval.
               </div>
             )}
           </div>
