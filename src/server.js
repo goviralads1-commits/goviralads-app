@@ -566,6 +566,23 @@ function startSubscriptionReminderJob() {
         end:   new Date(targetDate.getTime() + 30 * 60 * 60 * 1000), // +30h
       });
 
+      // Helper: resolve placeholders in custom message templates
+      // Unknown placeholders remain as harmless plain text (no code execution)
+      const resolvePlaceholders = (template, values) => {
+        if (!template || typeof template !== 'string') return template;
+        return template
+          .replace(/\[CLIENT_NAME\]/g, values.clientName || 'Valued Client')
+          .replace(/\[PLAN_NAME\]/g, values.planName || 'Your Plan')
+          .replace(/\[EXPIRY_DATE\]/g, values.expiryDate || 'soon')
+          .replace(/\[CREDITS\]/g, values.credits || '0')
+          .replace(/\[DAYS\]/g, String(values.days ?? ''))
+          .replace(/\[RENEW_URL\]/g, values.renewUrl || '');
+      };
+
+      // Existing renewal URL — same as used in notificationService.js
+      const clientUrl = process.env.CLIENT_URL || 'https://goviralads.com';
+      const renewUrl = clientUrl + '/wallet?scrollToSubscription=true';
+
       // 2. BEFORE-EXPIRY reminders
       if (config.beforeExpiry && config.beforeExpiry.enabled && Array.isArray(config.beforeExpiry.days)) {
         for (const days of config.beforeExpiry.days) {
@@ -604,12 +621,48 @@ function startSubscriptionReminderJob() {
                 day: '2-digit', month: 'short', year: 'numeric',
               });
 
-              const title = days === 0
-                ? 'Your plan expires today'
-                : `Your plan expires in ${days} day${days !== 1 ? 's' : ''}`;
-              const message = days === 0
-                ? `Your plan "${userSub.planName}" expires today. Renew now to avoid interruption.`
-                : `Your plan "${userSub.planName}" expires in ${days} day${days !== 1 ? 's' : ''} (${expiryDateStr}). Renew now to continue uninterrupted service.`;
+              // Build placeholder values for custom message resolution
+              const clientDoc = await User.findById(wallet.clientId).select('identifier email').lean().exec();
+              const clientName = clientDoc ? (clientDoc.identifier || clientDoc.email || 'Valued Client') : 'Valued Client';
+              const placeholderVals = {
+                clientName,
+                planName: userSub.planName || 'Your Plan',
+                expiryDate: expiryDateStr,
+                credits: String(userSub.creditsRemaining ?? wallet.subscriptionCredits ?? 0),
+                days,
+                renewUrl,
+              };
+
+              // Read custom message templates (if admin configured them)
+              const customMsg = (config.messages && config.messages.beforeExpiry) || {};
+
+              // Resolve title: custom template or hardcoded production default
+              let title;
+              if (customMsg.inAppTitle) {
+                title = resolvePlaceholders(customMsg.inAppTitle, placeholderVals);
+              } else if (days === 0) {
+                title = 'Your plan expires today';
+              } else {
+                title = `Your plan expires in ${days} day${days !== 1 ? 's' : ''}`;
+              }
+
+              // Resolve message: custom template or hardcoded production default
+              let message;
+              if (customMsg.inAppMessage) {
+                message = resolvePlaceholders(customMsg.inAppMessage, placeholderVals);
+              } else if (days === 0) {
+                message = `Your plan "${userSub.planName}" expires today. Renew now to avoid interruption.`;
+              } else {
+                message = `Your plan "${userSub.planName}" expires in ${days} day${days !== 1 ? 's' : ''} (${expiryDateStr}). Renew now to continue uninterrupted service.`;
+              }
+
+              // Resolve custom email subject/body (passed through to notificationService)
+              const customEmailSubject = customMsg.emailSubject
+                ? resolvePlaceholders(customMsg.emailSubject, placeholderVals)
+                : undefined;
+              const customEmailBody = customMsg.emailBody
+                ? resolvePlaceholders(customMsg.emailBody, placeholderVals)
+                : undefined;
 
               // Determine channel
               let channel = 'BOTH';
@@ -625,6 +678,12 @@ function startSubscriptionReminderJob() {
                   type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
                   relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
                   notifyByEmail: emailEnabled,
+                  // Fix existing data gap: pass real values for email template
+                  planName: userSub.planName,
+                  expiryDate: expiryDateStr,
+                  // Custom email overrides (undefined = use existing defaults)
+                  customEmailSubject,
+                  customEmailBody,
                 });
               }
 
@@ -691,12 +750,48 @@ function startSubscriptionReminderJob() {
                 day: '2-digit', month: 'short', year: 'numeric',
               });
 
-              const title = days === 0
-                ? 'Your plan has expired'
-                : `Your plan expired ${days} day${days !== 1 ? 's' : ''} ago`;
-              const message = days === 0
-                ? `Your plan "${userSub.planName}" has expired (${expiryDateStr}). Renew now to restore your credits.`
-                : `Your plan "${userSub.planName}" expired ${days} day${days !== 1 ? 's' : ''} ago (${expiryDateStr}). Renew now to restore your credits.`;
+              // Build placeholder values for custom message resolution
+              const clientDoc = await User.findById(wallet.clientId).select('identifier email').lean().exec();
+              const clientName = clientDoc ? (clientDoc.identifier || clientDoc.email || 'Valued Client') : 'Valued Client';
+              const placeholderVals = {
+                clientName,
+                planName: userSub.planName || 'Your Plan',
+                expiryDate: expiryDateStr,
+                credits: String(userSub.creditsRemaining ?? wallet.subscriptionCredits ?? 0),
+                days,
+                renewUrl,
+              };
+
+              // Read custom message templates (if admin configured them)
+              const customMsg = (config.messages && config.messages.afterExpiry) || {};
+
+              // Resolve title: custom template or hardcoded production default
+              let title;
+              if (customMsg.inAppTitle) {
+                title = resolvePlaceholders(customMsg.inAppTitle, placeholderVals);
+              } else if (days === 0) {
+                title = 'Your plan has expired';
+              } else {
+                title = `Your plan expired ${days} day${days !== 1 ? 's' : ''} ago`;
+              }
+
+              // Resolve message: custom template or hardcoded production default
+              let message;
+              if (customMsg.inAppMessage) {
+                message = resolvePlaceholders(customMsg.inAppMessage, placeholderVals);
+              } else if (days === 0) {
+                message = `Your plan "${userSub.planName}" has expired (${expiryDateStr}). Renew now to restore your credits.`;
+              } else {
+                message = `Your plan "${userSub.planName}" expired ${days} day${days !== 1 ? 's' : ''} ago (${expiryDateStr}). Renew now to restore your credits.`;
+              }
+
+              // Resolve custom email subject/body (passed through to notificationService)
+              const customEmailSubject = customMsg.emailSubject
+                ? resolvePlaceholders(customMsg.emailSubject, placeholderVals)
+                : undefined;
+              const customEmailBody = customMsg.emailBody
+                ? resolvePlaceholders(customMsg.emailBody, placeholderVals)
+                : undefined;
 
               let channel = 'BOTH';
               if (!inAppEnabled && emailEnabled) channel = 'EMAIL';
@@ -710,6 +805,12 @@ function startSubscriptionReminderJob() {
                   type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
                   relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
                   notifyByEmail: emailEnabled,
+                  // Fix existing data gap: pass real values for email template
+                  planName: userSub.planName,
+                  expiryDate: expiryDateStr,
+                  // Custom email overrides (undefined = use existing defaults)
+                  customEmailSubject,
+                  customEmailBody,
                 });
               }
 

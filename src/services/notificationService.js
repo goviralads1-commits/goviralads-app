@@ -2,6 +2,13 @@ const Notification = require('../models/Notification');
 const emailService = require('./emailService');
 const User = require('../models/User');
 
+// Safely escape user/admin text before inserting into HTML email templates
+const escapeHtml = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+};
+
 const NOTIFICATION_TYPES = Object.freeze({
   RECHARGE_REQUEST_SUBMITTED: 'RECHARGE_REQUEST_SUBMITTED',
   RECHARGE_APPROVED: 'RECHARGE_APPROVED',
@@ -87,9 +94,9 @@ async function markAllNotificationsAsRead(userId) {
 }
 
 async function createNotification(notificationData) {
-  const { notifyByEmail = false, ...notifData } = notificationData;
+  const { notifyByEmail = false, customEmailSubject, customEmailBody, ...notifData } = notificationData;
   
-  // Create notification in database
+  // Create notification in database (without custom email fields — they don't belong in DB)
   const notification = await Notification.create(notifData);
   
   // Log email trigger decision
@@ -98,7 +105,8 @@ async function createNotification(notificationData) {
   // Trigger email if requested (async, non-blocking)
   if (notifyByEmail && notifData.recipientId) {
     console.log(`[NOTIF EMAIL] Email trigger requested for ${notifData.type} to recipient ${notifData.recipientId}`);
-    triggerNotificationEmail(notifData).catch(err => {
+    // Pass custom email overrides through to the email handler
+    triggerNotificationEmail({ ...notifData, customEmailSubject, customEmailBody }).catch(err => {
       console.error('[NOTIF EMAIL] Error sending email (non-fatal):', err.message);
     });
   } else if (notifyByEmail && !notifData.recipientId) {
@@ -347,9 +355,16 @@ async function triggerNotificationEmail(notifData) {
       const renewUrl = (dashboardUrl + '/wallet?scrollToSubscription=true');
       const expiryDate = notifData.expiryDate || 'soon';
       const planName = notifData.planName || 'Your subscription';
+      // Use custom email subject if admin configured one, else existing production default
+      const emailSubject = notifData.customEmailSubject || '⏳ Your Plan is Expiring Soon — Go Viral Ads';
+      // Use custom email body text if admin configured one, else use notifData.message (existing behavior)
+      const emailBodyText = notifData.customEmailBody || notifData.message || 'Renew your plan now to continue uninterrupted service.';
+      // Escape custom/admin text to prevent HTML injection in email template
+      const safeEmailSubject = escapeHtml(emailSubject);
+      const safeEmailBodyText = escapeHtml(emailBodyText);
       await emailService.send({
         to: recipientEmail,
-        subject: `⏳ Your Plan is Expiring Soon — Go Viral Ads`,
+        subject: safeEmailSubject,
         html: `
           <!DOCTYPE html>
           <html>
@@ -365,7 +380,7 @@ async function triggerNotificationEmail(notifData) {
                   <p style="color: #92400e; font-size: 15px; font-weight: 600; margin: 0 0 6px;">${planName}</p>
                   <p style="color: #92400e; font-size: 14px; margin: 0;">Expires: ${expiryDate}</p>
                 </div>
-                <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${notifData.message || 'Renew your plan now to continue uninterrupted service.'}</p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${safeEmailBodyText}</p>
                 <a href="${renewUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
                   🔄 Renew Plan
                 </a>
