@@ -73,6 +73,23 @@ const settingsSchema = new mongoose.Schema(
       },
       inAppEnabled: { type: Boolean, default: true },
       emailEnabled: { type: Boolean, default: true },
+
+      // Customizable message templates (all optional — fallback to hardcoded defaults)
+      // Supported placeholders: [CLIENT_NAME] [PLAN_NAME] [EXPIRY_DATE] [CREDITS] [DAYS] [RENEW_URL]
+      messages: {
+        beforeExpiry: {
+          inAppTitle:   { type: String, trim: true, default: undefined },
+          inAppMessage: { type: String, trim: true, default: undefined },
+          emailSubject: { type: String, trim: true, default: undefined },
+          emailBody:    { type: String, trim: true, default: undefined },
+        },
+        afterExpiry: {
+          inAppTitle:   { type: String, trim: true, default: undefined },
+          inAppMessage: { type: String, trim: true, default: undefined },
+          emailSubject: { type: String, trim: true, default: undefined },
+          emailBody:    { type: String, trim: true, default: undefined },
+        },
+      },
     },
   },
   {

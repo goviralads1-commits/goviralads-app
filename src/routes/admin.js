@@ -7091,6 +7091,25 @@ router.patch('/settings', async (req, res) => {
           )].sort((a, b) => a - b);
         }
       }
+      // Customizable message templates (all optional strings)
+      if (subscriptionReminders.messages && typeof subscriptionReminders.messages === 'object') {
+        updates.subscriptionReminders.messages = {};
+        const msgFields = ['inAppTitle', 'inAppMessage', 'emailSubject', 'emailBody'];
+        for (const direction of ['beforeExpiry', 'afterExpiry']) {
+          if (subscriptionReminders.messages[direction] && typeof subscriptionReminders.messages[direction] === 'object') {
+            updates.subscriptionReminders.messages[direction] = {};
+            for (const field of msgFields) {
+              const val = subscriptionReminders.messages[direction][field];
+              if (typeof val === 'string' && val.trim().length > 0) {
+                updates.subscriptionReminders.messages[direction][field] = val.trim().slice(0, 500);
+              } else {
+                // Empty/cleared field → remove (scheduler falls back to production default)
+                updates.subscriptionReminders.messages[direction][field] = undefined;
+              }
+            }
+          }
+        }
+      }
     }
     
     const settings = await Settings.updateSettings(updates);

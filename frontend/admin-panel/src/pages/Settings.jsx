@@ -22,8 +22,13 @@ const Settings = () => {
       afterExpiry: { enabled: true, days: [1, 3, 7] },
       inAppEnabled: true,
       emailEnabled: true,
+      messages: {
+        beforeExpiry: { inAppTitle: '', inAppMessage: '', emailSubject: '', emailBody: '' },
+        afterExpiry: { inAppTitle: '', inAppMessage: '', emailSubject: '', emailBody: '' },
+      },
     },
   });
+  const [previewModal, setPreviewModal] = useState(null); // { direction, type } e.g. { direction: 'before', type: 'inapp' }
 
   useEffect(() => {
     fetchSettings();
@@ -57,12 +62,18 @@ const Settings = () => {
           linkedin: res.data.settings.socialLinks?.linkedin || '',
           youtube: res.data.settings.socialLinks?.youtube || '',
         },
-        subscriptionReminders: res.data.settings.subscriptionReminders || {
-          enabled: true,
-          beforeExpiry: { enabled: true, days: [7, 3, 1] },
-          afterExpiry: { enabled: true, days: [1, 3, 7] },
-          inAppEnabled: true,
-          emailEnabled: true,
+        subscriptionReminders: {
+          ...(res.data.settings.subscriptionReminders || {
+            enabled: true,
+            beforeExpiry: { enabled: true, days: [7, 3, 1] },
+            afterExpiry: { enabled: true, days: [1, 3, 7] },
+            inAppEnabled: true,
+            emailEnabled: true,
+          }),
+          messages: {
+            beforeExpiry: { inAppTitle: '', inAppMessage: '', emailSubject: '', emailBody: '', ...(res.data.settings.subscriptionReminders?.messages?.beforeExpiry || {}) },
+            afterExpiry: { inAppTitle: '', inAppMessage: '', emailSubject: '', emailBody: '', ...(res.data.settings.subscriptionReminders?.messages?.afterExpiry || {}) },
+          },
         },
       });
     } catch (err) {
@@ -90,6 +101,49 @@ const Settings = () => {
 
   const handleSocialChange = (platform, value) => {
     setFormData(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, [platform]: value } }));
+  };
+
+  // Helper: update a message template field
+  const handleMsgChange = (direction, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      subscriptionReminders: {
+        ...prev.subscriptionReminders,
+        messages: {
+          ...prev.subscriptionReminders.messages,
+          [direction]: { ...prev.subscriptionReminders.messages[direction], [field]: value },
+        },
+      },
+    }));
+  };
+
+  // Default message templates (exact existing production text)
+  const DEFAULT_MESSAGES = {
+    before: {
+      inAppTitle_0: 'Your plan expires today',
+      inAppTitle: 'Your plan expires in [DAYS] day(s)',
+      inAppMessage_0: 'Your plan "[PLAN_NAME]" expires today. Renew now to avoid interruption.',
+      inAppMessage: 'Your plan "[PLAN_NAME]" expires in [DAYS] day(s) ([EXPIRY_DATE]). Renew now to continue uninterrupted service.',
+      emailSubject: '\u23f3 Your Plan is Expiring Soon \u2014 Go Viral Ads',
+      emailBody: 'Your plan "[PLAN_NAME]" expires in [DAYS] day(s) ([EXPIRY_DATE]). Renew now to continue uninterrupted service.',
+    },
+    after: {
+      inAppTitle_0: 'Your plan has expired',
+      inAppTitle: 'Your plan expired [DAYS] day(s) ago',
+      inAppMessage_0: 'Your plan "[PLAN_NAME]" has expired ([EXPIRY_DATE]). Renew now to restore your credits.',
+      inAppMessage: 'Your plan "[PLAN_NAME]" expired [DAYS] day(s) ago ([EXPIRY_DATE]). Renew now to restore your credits.',
+      emailSubject: '\u23f3 Your Plan is Expiring Soon \u2014 Go Viral Ads',
+      emailBody: 'Your plan "[PLAN_NAME]" expired [DAYS] day(s) ago ([EXPIRY_DATE]). Renew now to restore your credits.',
+    },
+  };
+
+  // Sample data for preview
+  const SAMPLE = { clientName: 'Rahul', planName: 'Pro 25K', expiryDate: '30 Aug 2026', credits: '25,000', days: '7', renewUrl: 'https://goviralads.com/wallet?scrollToSubscription=true' };
+  const resolvePreview = (tpl) => {
+    if (!tpl) return '';
+    return tpl.replace(/\[CLIENT_NAME\]/g, SAMPLE.clientName).replace(/\[PLAN_NAME\]/g, SAMPLE.planName)
+      .replace(/\[EXPIRY_DATE\]/g, SAMPLE.expiryDate).replace(/\[CREDITS\]/g, SAMPLE.credits)
+      .replace(/\[DAYS\]/g, SAMPLE.days).replace(/\[RENEW_URL\]/g, SAMPLE.renewUrl);
   };
 
   if (loading) {
@@ -494,6 +548,70 @@ const Settings = () => {
                     <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Email Reminders</span>
                   </label>
                 </div>
+
+                {/* Message Templates */}
+                <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e9d5ff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#6b21a8' }}>Message Templates</span>
+                    <span style={{ fontSize: '10px', color: '#94a3b8' }}>Custom text is optional — leave empty to use defaults</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '14px', padding: '8px 10px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                    <strong>Placeholders:</strong> [CLIENT_NAME] [PLAN_NAME] [EXPIRY_DATE] [CREDITS] [DAYS] [RENEW_URL]
+                  </div>
+
+                  {['before', 'after'].map(dir => {
+                    const dirKey = dir === 'before' ? 'beforeExpiry' : 'afterExpiry';
+                    const msgs = formData.subscriptionReminders.messages?.[dirKey] || {};
+                    const defaults = DEFAULT_MESSAGES[dir];
+                    return (
+                      <div key={dir} style={{ marginBottom: dir === 'before' ? '16px' : '0' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px' }}>
+                          {dir === 'before' ? 'Before Expiry' : 'After Expiry'} Messages
+                        </div>
+                        {[
+                          { field: 'inAppTitle', label: 'In-App Title', rows: 1 },
+                          { field: 'inAppMessage', label: 'In-App Message', rows: 2 },
+                          { field: 'emailSubject', label: 'Email Subject', rows: 1 },
+                          { field: 'emailBody', label: 'Email Body Text', rows: 3 },
+                        ].map(({ field, label, rows }) => {
+                          const val = msgs[field] || '';
+                          const isDefault = !val;
+                          return (
+                            <div key={field} style={{ marginBottom: '10px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569' }}>
+                                  {label}
+                                  {isDefault && <span style={{ color: '#94a3b8', fontWeight: '400', marginLeft: '6px' }}>(using default)</span>}
+                                </label>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <button type="button" onClick={() => setPreviewModal({ direction: dir, field, label })}
+                                    style={{ fontSize: '10px', padding: '2px 8px', background: '#ede9fe', color: '#6b21a8', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>
+                                    Preview
+                                  </button>
+                                  {!isDefault && (
+                                    <button type="button" onClick={() => handleMsgChange(dirKey, field, '')}
+                                      style={{ fontSize: '10px', padding: '2px 8px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>
+                                      Reset
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {rows === 1 ? (
+                                <input type="text" value={val} onChange={(e) => handleMsgChange(dirKey, field, e.target.value)}
+                                  placeholder={defaults[field]}
+                                  style={{ width: '100%', padding: '8px 10px', fontSize: '12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }} />
+                              ) : (
+                                <textarea value={val} onChange={(e) => handleMsgChange(dirKey, field, e.target.value)}
+                                  placeholder={defaults[field]} rows={rows}
+                                  style={{ width: '100%', padding: '8px 10px', fontSize: '12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
               </>
             )}
           </div>
@@ -533,6 +651,70 @@ const Settings = () => {
         </div>
       </div>
       
+      {/* Preview Modal */}
+      {previewModal && (() => {
+        const { direction, field, label } = previewModal;
+        const dirKey = direction === 'before' ? 'beforeExpiry' : 'afterExpiry';
+        const customVal = formData.subscriptionReminders.messages?.[dirKey]?.[field] || '';
+        const defaultVal = DEFAULT_MESSAGES[direction][field] || '';
+        const displayVal = customVal || defaultVal;
+        const rendered = resolvePreview(displayVal);
+        const isEmail = field.startsWith('email');
+        return (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}
+            onClick={() => setPreviewModal(null)}>
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', maxWidth: '480px', width: '90%', maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+              onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+                  Preview: {label} ({direction === 'before' ? 'Before Expiry' : 'After Expiry'})
+                </h3>
+                <button type="button" onClick={() => setPreviewModal(null)}
+                  style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}>
+                  ✕
+                </button>
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>
+                Sample: Client=Rahul, Plan=Pro 25K, Expiry=30 Aug 2026, Credits=25,000, Days=7
+              </div>
+              {!customVal && (
+                <div style={{ fontSize: '11px', color: '#f59e0b', marginBottom: '10px', fontWeight: '600' }}>
+                  Showing DEFAULT text (no custom text configured)
+                </div>
+              )}
+              {isEmail && field === 'emailSubject' ? (
+                <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '10px', fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                  {rendered}
+                </div>
+              ) : isEmail && field === 'emailBody' ? (
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', padding: '16px', textAlign: 'center' }}>
+                    <span style={{ color: '#fff', fontSize: '16px', fontWeight: '700' }}>⏳ Plan Expiring Soon</span>
+                  </div>
+                  <div style={{ padding: '16px' }}>
+                    <div style={{ background: '#fef3c7', borderRadius: '8px', padding: '10px', marginBottom: '12px' }}>
+                      <p style={{ color: '#92400e', fontSize: '13px', fontWeight: '600', margin: '0 0 4px' }}>Pro 25K</p>
+                      <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>Expires: 30 Aug 2026</p>
+                    </div>
+                    <p style={{ color: '#475569', fontSize: '13px', lineHeight: 1.6, margin: '0 0 12px' }}>{rendered}</p>
+                    <div style={{ display: 'inline-block', padding: '8px 20px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', borderRadius: '8px', fontWeight: '700', fontSize: '13px' }}>🔄 Renew Plan</div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: '14px 16px', backgroundColor: '#f0f9ff', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                  <p style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px' }}>
+                    {field === 'inAppTitle' ? rendered : (resolvePreview(formData.subscriptionReminders.messages?.[dirKey]?.inAppTitle) || DEFAULT_MESSAGES[direction].inAppTitle)}
+                  </p>
+                  <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: 1.5 }}>
+                    {field === 'inAppMessage' ? rendered : (resolvePreview(formData.subscriptionReminders.messages?.[dirKey]?.inAppMessage) || DEFAULT_MESSAGES[direction].inAppMessage)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
