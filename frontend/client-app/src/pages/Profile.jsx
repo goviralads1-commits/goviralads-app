@@ -126,7 +126,7 @@ const Profile = () => {
     if (activeTab === 'support' && tickets.length === 0) {
       fetchTickets();
     }
-  }, [activeTab, activityFetched]);
+  }, [activeTab, activityFetched, tickets.length]);
 
   // Fetch tickets
   const fetchTickets = async () => {

@@ -628,8 +628,8 @@ const Plans = () => {
                     {/* Media Dots */}
                     {mediaArray.length > 1 && viewMode === 'grid' && (
                       <div style={{ 
-                        position: 'absolute', bottom: '12px', left: '50%', 
-                        transform: 'translateX(-50%)', display: 'flex', gap: '6px' 
+                        position: 'absolute', bottom: '8px', left: '50%', 
+                        transform: 'translateX(-50%)', display: 'flex', gap: '2px'
                       }}>
                         {mediaArray.map((_, idx) => (
                           <button
@@ -639,12 +639,19 @@ const Plans = () => {
                               setActiveMediaIndex(prev => ({ ...prev, [plan.id]: idx })); 
                             }}
                             style={{
-                              width: '8px', height: '8px', borderRadius: '50%', border: 'none', cursor: 'pointer',
+                              width: '24px', height: '24px', border: 'none', cursor: 'pointer',
+                              background: 'transparent', padding: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              WebkitTapHighlightColor: 'transparent',
+                            }}
+                          >
+                            <span style={{
+                              display: 'block', width: '8px', height: '8px', borderRadius: '50%',
                               backgroundColor: idx === currentMediaIdx ? '#fff' : 'rgba(255,255,255,0.5)',
                               boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                              transition: 'all 0.2s'
-                            }}
-                          />
+                              transition: 'all 0.2s',
+                            }} />
+                          </button>
                         ))}
                       </div>
                     )}

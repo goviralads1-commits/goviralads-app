@@ -93,14 +93,14 @@ const LoginForm = () => {
       console.log('[CLIENT LOGIN] ========== REDIRECT ==========');
       console.log('[CLIENT LOGIN] intendedUrl was:', intendedUrl || 'NONE');
       console.log('[CLIENT LOGIN] Final redirect target:', targetUrl);
-      console.log('[CLIENT LOGIN] Will redirect in 300ms...');
+      console.log('[CLIENT LOGIN] Will redirect in 50ms...');
       console.log('[CLIENT LOGIN] ================================');
       
-      // Delay redirect for mobile localStorage sync
+      // Minimal delay — localStorage writes are synchronous, no need to wait 300ms
       setTimeout(() => {
         console.log('[CLIENT LOGIN] Executing redirect now');
         navigate(targetUrl);
-      }, 300);
+      }, 50);
     } catch (err) {
       console.error('[CLIENT LOGIN] ❌ Error:', err.message);
       console.error('[CLIENT LOGIN] Error details:', err);

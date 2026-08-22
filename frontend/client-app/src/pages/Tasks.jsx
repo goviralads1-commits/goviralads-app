@@ -72,6 +72,21 @@ const Tasks = () => {
 
   const totalFiltered = filteredTasks.length;
 
+  // Memoized filter counts — avoid recalculating on every render
+  const filterCounts = useMemo(() => {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return {
+      all: tasks.length,
+      last7: tasks.filter(t => new Date(t.createdAt) >= sevenDaysAgo).length,
+      thisMonth: tasks.filter(t => new Date(t.createdAt) >= monthStart).length,
+      pending: tasks.filter(t => t.status === 'PENDING' || t.status === 'PENDING_APPROVAL').length,
+      completed: tasks.filter(t => t.status === 'COMPLETED').length,
+    };
+  }, [tasks]);
+
   // Human-readable status (hide internal codes)
   const getHumanStatus = (status) => {
     const labels = {
@@ -217,11 +232,7 @@ const Tasks = () => {
         }}>
           {filters.map(f => {
             const isActive = activeFilter === f.key;
-            const count = f.key === 'all' ? tasks.length :
-              f.key === 'last7' ? tasks.filter(t => new Date(t.createdAt) >= new Date(Date.now() - 7*86400000)).length :
-              f.key === 'thisMonth' ? tasks.filter(t => { const d = new Date(t.createdAt); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length :
-              f.key === 'pending' ? tasks.filter(t => t.status === 'PENDING' || t.status === 'PENDING_APPROVAL').length :
-              tasks.filter(t => t.status === 'COMPLETED').length;
+            const count = filterCounts[f.key] ?? 0;
             return (
               <button
                 key={f.key}
@@ -316,8 +327,19 @@ const Tasks = () => {
                   fontSize: '18px', fontWeight: '600', color: '#1a1a1a', margin: '0 0 12px 0',
                   lineHeight: 1.4, letterSpacing: '-0.01em'
                 }}>
-                  {task.title} {isPendingApproval && <span style={{fontSize: '14px', verticalAlign: 'middle'}}>⏳</span>}
+                  {task.title} {isPendingApproval && <span style={{fontSize: '14px', verticalAlign: 'middle'}}>\u23F3</span>}
                 </h3>
+                {/* Commission-only badge */}
+                {task.isAssignedUser && (
+                  <span style={{
+                    display: 'inline-block', marginBottom: '10px', padding: '3px 10px',
+                    fontSize: '10px', fontWeight: '700', borderRadius: '6px',
+                    backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+                    letterSpacing: '0.02em', textTransform: 'uppercase'
+                  }}>
+                    {'\uD83D\uDCB0 Commission'}
+                  </span>
+                )}
 
                 {isPendingApproval && (
                   <p style={{ fontSize: '12px', color: '#6366f1', fontWeight: '600', margin: '-8px 0 12px 0' }}>

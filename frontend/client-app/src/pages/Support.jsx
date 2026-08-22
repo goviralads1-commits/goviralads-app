@@ -45,7 +45,7 @@ const Support = () => {
     selectedTaskRef.current = selectedTask;
   }, [selectedTask]);
 
-  // Polling: fetch only messages every 4s when a chat is open
+  // Polling: fetch messages every 3s when a chat is open — visibility-aware
   useEffect(() => {
     if (!activeTaskId) {
       if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
@@ -64,8 +64,30 @@ const Support = () => {
         }
       } catch (_) { /* silent poll failure */ }
     };
-    pollingRef.current = setInterval(poll, 3000);
-    return () => { clearInterval(pollingRef.current); pollingRef.current = null; };
+    
+    // Only poll when the tab is visible to save bandwidth
+    let intervalId = null;
+    const startPolling = () => {
+      if (intervalId) return;
+      poll(); // Immediate poll on start
+      intervalId = setInterval(poll, 3000);
+      pollingRef.current = intervalId;
+    };
+    const stopPolling = () => {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; pollingRef.current = null; }
+    };
+    
+    if (document.visibilityState === 'visible') startPolling();
+    
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => { stopPolling(); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [activeTaskId]);
 
   // Extract taskId from URL or sessionStorage on mount

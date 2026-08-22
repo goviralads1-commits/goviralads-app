@@ -43,61 +43,58 @@ const Wallet = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Required: wallet and recharge requests must succeed
-        const walletResponse = await api.get('/client/wallet');
-        const requestsResponse = await api.get('/client/wallet/recharge-requests');
+        // Run ALL requests in parallel — critical and optional together
+        const [walletResult, requestsResult, invoicesResult, plansResult, subResult, pendingResult, couponResult] = await Promise.allSettled([
+          api.get('/client/wallet'),
+          api.get('/client/wallet/recharge-requests'),
+          api.get('/client/invoices').catch(() => null),
+          api.get('/client/credit-plans').catch(() => null),
+          api.get('/client/my-subscription').catch(() => null),
+          api.get('/client/subscription-requests').catch(() => null),
+          api.get('/client/coupons').catch(() => null),
+        ]);
         
-        // Optional: invoices endpoint
-        let invoicesData = [];
-        try {
-          const invoicesResponse = await api.get('/client/invoices');
-          invoicesData = invoicesResponse.data.invoices || [];
-        } catch (invoiceErr) {
-          // Silently ignore if billing route not implemented
-          console.log('[Wallet] Invoices endpoint not available');
+        // Critical: wallet data (must succeed)
+        if (walletResult.status === 'fulfilled') {
+          setWalletData(walletResult.value.data);
+        } else {
+          throw new Error('Failed to load wallet data');
+        }
+        
+        // Critical: recharge requests (must succeed)
+        if (requestsResult.status === 'fulfilled') {
+          setRechargeRequests(requestsResult.value.data.requests || []);
+        } else {
+          throw new Error('Failed to load recharge requests');
+        }
+        
+        // Optional: invoices
+        if (invoicesResult.status === 'fulfilled' && invoicesResult.value?.data) {
+          setInvoices(invoicesResult.value.data.invoices || []);
         }
         
         // Optional: credit plans
-        let plansData = [];
-        try {
-          const plansResponse = await api.get('/client/credit-plans');
-          plansData = plansResponse.data.plans || [];
-        } catch (planErr) {
-          console.log('[Wallet] Credit plans endpoint not available');
-        }
-
-        // Optional: active subscription
-        try {
-          const subResponse = await api.get('/client/my-subscription');
-          setSubscription(subResponse.data.subscription || null);
-          if (!subResponse.data.subscription && subResponse.data.recentExpired) {
-            setExpiredSubscription(subResponse.data.recentExpired);
-          }
-        } catch (subErr) {
-          console.log('[Wallet] Subscription endpoint not available');
-        }
-
-        // Optional: pending subscription requests
-        try {
-          const pendingRes = await api.get('/client/subscription-requests');
-          setPendingSubscriptionRequests(pendingRes.data.requests?.filter(r => r.status === 'PENDING') || []);
-        } catch (pendingErr) {
-          console.log('[Wallet] Subscription requests endpoint not available');
-        }
-
-        // Optional: available coupons for validation
-        try {
-          const couponRes = await api.get('/client/coupons');
-          const coupons = couponRes.data.coupons || [];
-          setAvailableCoupons(coupons);
-        } catch (couponErr) {
-          console.log('[Wallet] Coupons endpoint not available');
+        if (plansResult.status === 'fulfilled' && plansResult.value?.data) {
+          setCreditPlans(plansResult.value.data.plans || []);
         }
         
-        setWalletData(walletResponse.data);
-        setRechargeRequests(requestsResponse.data.requests || []);
-        setInvoices(invoicesData);
-        setCreditPlans(plansData);
+        // Optional: active subscription
+        if (subResult.status === 'fulfilled' && subResult.value?.data) {
+          setSubscription(subResult.value.data.subscription || null);
+          if (!subResult.value.data.subscription && subResult.value.data.recentExpired) {
+            setExpiredSubscription(subResult.value.data.recentExpired);
+          }
+        }
+        
+        // Optional: pending subscription requests
+        if (pendingResult.status === 'fulfilled' && pendingResult.value?.data) {
+          setPendingSubscriptionRequests(pendingResult.value.data.requests?.filter(r => r.status === 'PENDING') || []);
+        }
+        
+        // Optional: available coupons
+        if (couponResult.status === 'fulfilled' && couponResult.value?.data) {
+          setAvailableCoupons(couponResult.value.data.coupons || []);
+        }
       } catch (err) {
         setError('Failed to load wallet data');
       } finally {

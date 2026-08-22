@@ -100,12 +100,57 @@ const Header = ({ title }) => {
     }
   }, [playNotificationSound]);
 
+  const fetchBranding = useCallback(async () => {
+    try {
+      // Use sessionStorage cache to avoid redundant API calls on every page navigation
+      const cached = sessionStorage.getItem('clientBranding');
+      if (cached) {
+        try {
+          setBranding(JSON.parse(cached));
+          return;
+        } catch (_) { /* invalid cache, fetch fresh */ }
+      }
+      const res = await api.get('/public/branding');
+      if (res.data) {
+        const brandingData = {
+          appName: res.data.appName || 'Client Portal',
+          logoUrl: res.data.logoUrl || '',
+          accentColor: res.data.accentColor || '#22c55e'
+        };
+        setBranding(brandingData);
+        try { sessionStorage.setItem('clientBranding', JSON.stringify(brandingData)); } catch (_) {}
+      }
+    } catch (err) {
+      // Silent fail - use defaults
+    }
+  }, []);
+
   useEffect(() => {
     fetchNotifications();
     fetchBranding();
     
-    // Polling: Refresh notifications every 30 seconds
-    const pollInterval = setInterval(fetchNotifications, 30000);
+    // Visibility-aware polling: pause when tab is hidden to save bandwidth and battery
+    let pollInterval = null;
+    const startPolling = () => {
+      if (pollInterval) return;
+      pollInterval = setInterval(fetchNotifications, 30000);
+    };
+    const stopPolling = () => {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+    };
+    
+    // Start polling only if page is visible
+    if (document.visibilityState === 'visible') startPolling();
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications(); // Immediate fetch on tab focus
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false);
@@ -116,25 +161,11 @@ const Header = ({ title }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('mousedown', handleClickOutside);
-      clearInterval(pollInterval);
     };
-  }, [fetchNotifications]);
-
-  const fetchBranding = async () => {
-    try {
-      const res = await api.get('/public/branding');
-      if (res.data) {
-        setBranding({
-          appName: res.data.appName || 'Client Portal',
-          logoUrl: res.data.logoUrl || '',
-          accentColor: res.data.accentColor || '#22c55e'
-        });
-      }
-    } catch (err) {
-      // Silent fail - use defaults
-    }
-  };
+  }, [fetchNotifications, fetchBranding]);
 
   const handleLogout = () => {
     logout();
