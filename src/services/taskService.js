@@ -25,9 +25,16 @@ async function getClientTeamAssignedUsers(clientId) {
     for (const assignment of assignments) {
       const emp = assignment.employeeId;
       if (!emp || !emp.userId) continue; // Skip employees without linked User accounts
-      // COMMISSION FROM EMPLOYEE MODEL (single source of truth)
-      const commissionEnabled = emp.commissionSettings?.enabled || false;
-      const commissionPercentage = commissionEnabled ? (Number(emp.commissionSettings?.percentage) || 0) : 0;
+      // Commission priority: assignment-level override > Employee default
+      const assignmentOverride = assignment.commissionSettings;
+      let commissionEnabled, commissionPercentage;
+      if (assignmentOverride?.enabled) {
+        commissionEnabled = true;
+        commissionPercentage = Number(assignmentOverride.percentage) || 0;
+      } else {
+        commissionEnabled = emp.commissionSettings?.enabled || false;
+        commissionPercentage = commissionEnabled ? (Number(emp.commissionSettings?.percentage) || 0) : 0;
+      }
       assignedUsers.push({
         userId: emp.userId,
         percentage: commissionPercentage,

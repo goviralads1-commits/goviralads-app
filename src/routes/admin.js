@@ -3560,7 +3560,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           clientInputs: item.inputs && item.inputs[i] ? [item.inputs[i]] : [],
           assignedTo: assignedTo || null,
           // Phase 1: pass through if present in planSnapshot
-          ...(item.planSnapshot?.assignedUsers?.length ? { assignedUsers: item.planSnapshot.assignedUsers } : {}),
+          ...(item.planSnapshot?.defaultAssignedUsers?.length ? { assignedUsers: item.planSnapshot.defaultAssignedUsers } : {}),
           ...(item.planSnapshot?.costBreakdown ? { costBreakdown: item.planSnapshot.costBreakdown } : {}),
           // Plan defaults: inherit defaultCostBreakdown and commission role templates from plan
           ...(item.planSnapshot?.defaultCostBreakdown ? { costBreakdown: item.planSnapshot.defaultCostBreakdown } : {}),
