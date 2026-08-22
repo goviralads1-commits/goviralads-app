@@ -30,6 +30,7 @@ const pushNotificationService = require('../services/pushNotificationService');
 const EarningsLedger = require('../models/EarningsLedger');
 const EarningsConfig = require('../models/EarningsConfig');
 const EarningsRedeemRequest = require('../models/EarningsRedeemRequest');
+const { computeCreditDelta } = require('../utils/transactionHelpers');
 
 const router = express.Router();
 
@@ -66,19 +67,33 @@ router.get('/wallet', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
 
-    const transactions = await WalletTransaction.find({ 
+    // Build query filter
+    const queryFilter = {
       walletId: wallet._id,
       isHidden: { $ne: true }  // Don't show hidden admin adjustments
-    })
+    };
+
+    // Optional date filtering (applied at database level before pagination)
+    if (req.query.dateFrom || req.query.dateTo) {
+      queryFilter.createdAt = {};
+      if (req.query.dateFrom) {
+        queryFilter.createdAt.$gte = new Date(req.query.dateFrom);
+      }
+      if (req.query.dateTo) {
+        // Inclusive end: set to end of day (23:59:59.999)
+        const endDate = new Date(req.query.dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        queryFilter.createdAt.$lte = endDate;
+      }
+    }
+
+    const transactions = await WalletTransaction.find(queryFilter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .exec();
 
-    const totalTransactions = await WalletTransaction.countDocuments({ 
-      walletId: wallet._id,
-      isHidden: { $ne: true }
-    }).exec();
+    const totalTransactions = await WalletTransaction.countDocuments(queryFilter).exec();
 
     return res.status(200).json({
       balance: totalCredits, // totalCredits for backward compatibility
@@ -91,6 +106,7 @@ router.get('/wallet', async (req, res) => {
         type: t.type,
         amount: t.amount,
         credits: t.credits || 0,
+        creditDelta: computeCreditDelta(t),
         description: t.description,
         createdAt: t.createdAt,
       })),

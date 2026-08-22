@@ -32,6 +32,11 @@ const Wallet = () => {
   const [subModalPlan, setSubModalPlan] = useState(null);
   const [subTransactionId, setSubTransactionId] = useState('');
   const [subTransactionError, setSubTransactionError] = useState('');
+  // Date filter state
+  const [txDateFilter, setTxDateFilter] = useState('all'); // 'all' | 'today' | '7' | '15' | '30' | 'custom'
+  const [txCustomFrom, setTxCustomFrom] = useState('');
+  const [txCustomTo, setTxCustomTo] = useState('');
+  const [txLoading, setTxLoading] = useState(false);
   const subscriptionRef = useRef(null);
   const addCreditRef = useRef(null);
 
@@ -102,6 +107,64 @@ const Wallet = () => {
 
     fetchData();
   }, []);
+
+  // Fetch transactions with optional date filter
+  const fetchTransactions = async (dateFrom, dateTo) => {
+    setTxLoading(true);
+    try {
+      const params = {};
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      const res = await api.get('/client/wallet', { params });
+      setWalletData(prev => ({
+        ...prev,
+        transactions: res.data.transactions,
+        pagination: res.data.pagination,
+      }));
+    } catch (err) {
+      console.error('[Wallet] Failed to fetch filtered transactions');
+    } finally {
+      setTxLoading(false);
+    }
+  };
+
+  // Handle date filter change
+  const handleDateFilterChange = (filter) => {
+    setTxDateFilter(filter);
+    if (filter === 'all') {
+      fetchTransactions();
+    } else if (filter === 'custom') {
+      // Wait for user to select dates
+      if (txCustomFrom && txCustomTo) {
+        fetchTransactions(txCustomFrom, txCustomTo);
+      }
+    } else {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      let fromDate = today;
+      if (filter === '7') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 6);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (filter === '15') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 14);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (filter === '30') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 29);
+        fromDate = d.toISOString().split('T')[0];
+      }
+      fetchTransactions(fromDate, today);
+    }
+  };
+
+  // Handle custom date range apply
+  const handleCustomDateApply = () => {
+    if (txCustomFrom && txCustomTo) {
+      fetchTransactions(txCustomFrom, txCustomTo);
+    }
+  };
 
   // Safety: always clear coupon field on mount — never pre-filled
   useEffect(() => {
@@ -1075,26 +1138,92 @@ const Wallet = () => {
           {/* Transaction History Tab */}
           {activeTab === 'transactions' && (
             <>
-              {(!walletData?.transactions || walletData.transactions.length === 0) ? (
-                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No transactions yet</p>
+              {/* Date Filter */}
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', alignItems: 'center'}}>
+                <select
+                  value={txDateFilter}
+                  onChange={e => handleDateFilterChange(e.target.value)}
+                  style={{
+                    padding: '7px 12px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    color: '#334155',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'auto',
+                    minWidth: '130px'
+                  }}
+                >
+                  <option value="all">All Transactions</option>
+                  <option value="today">Today</option>
+                  <option value="7">Last 7 Days</option>
+                  <option value="15">Last 15 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+                {txDateFilter === 'custom' && (
+                  <div style={{display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap'}}>
+                    <input
+                      type="date"
+                      value={txCustomFrom}
+                      onChange={e => setTxCustomFrom(e.target.value)}
+                      style={{padding: '6px 8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0'}}
+                    />
+                    <span style={{fontSize: '12px', color: '#94a3b8'}}>to</span>
+                    <input
+                      type="date"
+                      value={txCustomTo}
+                      onChange={e => setTxCustomTo(e.target.value)}
+                      style={{padding: '6px 8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #e2e8f0'}}
+                    />
+                    <button
+                      onClick={handleCustomDateApply}
+                      style={{
+                        padding: '6px 12px', fontSize: '12px', fontWeight: '600',
+                        borderRadius: '8px', border: 'none', cursor: 'pointer',
+                        backgroundColor: '#6366f1', color: '#fff'
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {txLoading ? (
+                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>Loading...</p>
+              ) : (!walletData?.transactions || walletData.transactions.length === 0) ? (
+                <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0', margin: 0}}>No transactions found</p>
               ) : (
                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                   {walletData.transactions.map((tx, idx) => {
-                    const type = tx.type?.toUpperCase() || '';
-                    const isSubscription = type.includes('SUBSCRIPTION');
-                    
+                    const delta = typeof tx.creditDelta === 'number' ? tx.creditDelta : 0;
+                    const isPositive = delta > 0;
+                    const isZero = delta === 0;
+
                     // Determine label based on type
                     const getLabel = () => {
-                      if (isSubscription) return 'Plan Purchase';
-                      if (type.includes('DEDUCT') || type.includes('SPEND')) return 'Task Deduction';
-                      if (type.includes('REFUND')) return 'Refund';
-                      if (type.includes('MANUAL') && tx.amount < 0) return 'Manual Deduct';
-                      if (type.includes('MANUAL') && tx.amount > 0) return 'Manual Credit';
-                      if (type.includes('CREDIT') || type.includes('RECHARGE')) return 'Recharge Credit';
-                      if (tx.amount > 0) return 'Credit';
-                      return tx.description || 'Deduction';
+                      const type = tx.type?.toUpperCase() || '';
+                      switch (type) {
+                        case 'RECHARGE_APPROVED':     return 'Wallet Recharge';
+                        case 'SUBSCRIPTION_PURCHASE': return 'Buy Credits';
+                        case 'ORDER_PAYMENT':         return 'Order Payment';
+                        case 'ORDER_REFUND':          return 'Order Refund';
+                        case 'REFUND':                return 'Refund';
+                        case 'PLAN_PURCHASE':         return 'Plan Purchase';
+                        case 'SUBSCRIPTION_DEDUCTION': return 'Subscription Usage';
+                        case 'MANUAL_CREDIT':         return 'Manual Credit';
+                        case 'MANUAL_DEBIT':          return 'Manual Deduction';
+                        case 'ADMIN_ADJUSTMENT':      return 'Admin Adjustment';
+                        case 'EARNINGS_REDEEM':       return 'Earnings Redeem';
+                        case 'SUBSCRIPTION_EXPIRED':  return 'Subscription Expired';
+                        default:                      return tx.description || 'Transaction';
+                      }
                     };
-                    
+
                     return (
                       <div key={tx.id || idx} style={{
                         display: 'flex',
@@ -1109,45 +1238,25 @@ const Wallet = () => {
                             {getLabel()}
                           </p>
                           <p style={{fontSize: '12px', color: '#94a3b8', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                            {tx.description || new Date(tx.createdAt).toLocaleString('en-IN', {
+                            {new Date(tx.createdAt).toLocaleString('en-IN', {
                               day: '2-digit', month: 'short', year: 'numeric',
                               hour: '2-digit', minute: '2-digit'
                             })}
                           </p>
                         </div>
                         <div style={{textAlign: 'right', marginLeft: '12px', flexShrink: 0}}>
-                          {isSubscription && tx.credits > 0 && (
-                            <p style={{fontSize: '14px', fontWeight: '700', color: '#10b981', margin: 0}}>
-                              +{tx.credits} credits
-                            </p>
-                          )}
-                          {/* Show credits for non-recharge transactions, ₹ for recharge payments */}
-                          {tx.amount === 0 && tx.credits !== 0 ? (
-                            <p style={{
-                              fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
-                              fontWeight: '700',
-                              color: tx.credits > 0 ? '#10b981' : '#ef4444',
-                              margin: 0
-                            }}>
-                              {tx.credits > 0 ? '+' : ''}{tx.credits} credits
-                            </p>
-                          ) : type.includes('RECHARGE') ? (
-                            <p style={{
-                              fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
-                              fontWeight: '700',
-                              color: tx.amount > 0 ? '#10b981' : '#ef4444',
-                              margin: 0
-                            }}>
-                              {tx.amount > 0 ? '+' : '−'}₹{Math.abs(tx.amount)}
+                          {isZero ? (
+                            <p style={{fontSize: '14px', fontWeight: '600', color: '#94a3b8', margin: 0}}>
+                              —
                             </p>
                           ) : (
                             <p style={{
-                              fontSize: isSubscription && tx.credits > 0 ? '12px' : '16px',
+                              fontSize: '16px',
                               fontWeight: '700',
-                              color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                              color: isPositive ? '#10b981' : '#ef4444',
                               margin: 0
                             }}>
-                              {tx.amount > 0 ? '+' : ''}{tx.amount} credits
+                              {isPositive ? '+' : ''}{delta.toLocaleString('en-IN')} credits
                             </p>
                           )}
                         </div>

@@ -38,6 +38,7 @@ const { requirePermission, ALL_PERMISSIONS } = require('../middleware/permission
 const { stripHtmlTags } = require('../utils/validators');
 const DeviceToken = require('../models/DeviceToken');
 const pushNotificationService = require('../services/pushNotificationService');
+const { computeCreditDelta } = require('../utils/transactionHelpers');
 
 const router = express.Router();
 
@@ -225,6 +226,8 @@ router.get('/wallets/:clientId', async (req, res) => {
         id: t._id.toString(),
         type: t.type,
         amount: t.amount,
+        credits: t.credits || 0,
+        creditDelta: computeCreditDelta(t),
         description: t.description,
         referenceId: t.referenceId ? t.referenceId.toString() : null,
         createdAt: t.createdAt,
@@ -4570,13 +4573,29 @@ router.get('/users/:userId/wallet', async (req, res) => {
       });
     }
 
-    const transactions = await WalletTransaction.find({ walletId: wallet._id })
+    // Build query filter
+    const queryFilter = { walletId: wallet._id };
+
+    // Optional date filtering
+    if (req.query.dateFrom || req.query.dateTo) {
+      queryFilter.createdAt = {};
+      if (req.query.dateFrom) {
+        queryFilter.createdAt.$gte = new Date(req.query.dateFrom);
+      }
+      if (req.query.dateTo) {
+        const endDate = new Date(req.query.dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        queryFilter.createdAt.$lte = endDate;
+      }
+    }
+
+    const transactions = await WalletTransaction.find(queryFilter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .exec();
 
-    const total = await WalletTransaction.countDocuments({ walletId: wallet._id }).exec();
+    const total = await WalletTransaction.countDocuments(queryFilter).exec();
 
     return res.status(200).json({
       balance: (wallet.walletCredits || 0) + (wallet.subscriptionCredits || 0),
@@ -4584,6 +4603,8 @@ router.get('/users/:userId/wallet', async (req, res) => {
         id: t._id.toString(),
         type: t.type,
         amount: t.amount,
+        credits: t.credits || 0,
+        creditDelta: computeCreditDelta(t),
         description: t.description,
         createdAt: t.createdAt,
       })),

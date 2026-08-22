@@ -502,7 +502,29 @@ const Wallet = () => {
                   <p style={{fontSize: '14px', color: '#94a3b8', textAlign: 'center', padding: '32px 0'}}>No transactions yet</p>
                 ) : (
                   <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-                    {clientWallet.transactions?.map(tx => (
+                    {clientWallet.transactions?.map(tx => {
+                      const delta = typeof tx.creditDelta === 'number' ? tx.creditDelta : 0;
+                      const isPositive = delta > 0;
+                      const isZero = delta === 0;
+                      const type = tx.type?.toUpperCase() || '';
+                      const getLabel = () => {
+                        switch (type) {
+                          case 'RECHARGE_APPROVED':     return 'Wallet Recharge';
+                          case 'SUBSCRIPTION_PURCHASE': return 'Buy Credits';
+                          case 'ORDER_PAYMENT':         return 'Order Payment';
+                          case 'ORDER_REFUND':          return 'Order Refund';
+                          case 'REFUND':                return 'Refund';
+                          case 'PLAN_PURCHASE':         return 'Plan Purchase';
+                          case 'SUBSCRIPTION_DEDUCTION': return 'Subscription Usage';
+                          case 'MANUAL_CREDIT':         return 'Manual Credit';
+                          case 'MANUAL_DEBIT':          return 'Manual Deduction';
+                          case 'ADMIN_ADJUSTMENT':      return 'Admin Adjustment';
+                          case 'EARNINGS_REDEEM':       return 'Earnings Redeem';
+                          case 'SUBSCRIPTION_EXPIRED':  return 'Subscription Expired';
+                          default:                      return tx.description || tx.type || 'Transaction';
+                        }
+                      };
+                      return (
                       <div key={tx.id} style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -513,24 +535,25 @@ const Wallet = () => {
                       }}>
                         <div style={{minWidth: 0, flex: 1}}>
                           <p style={{fontSize: '14px', fontWeight: '600', color: '#334155', margin: '0 0 4px 0', wordBreak: 'break-word'}}>
-                            {tx.description || tx.type}
+                            {getLabel()}
                           </p>
                           <p style={{fontSize: '12px', color: '#94a3b8', margin: 0}}>
                             {new Date(tx.createdAt).toLocaleString()}
-                            {tx.referenceId && <span style={{marginLeft: '8px'}}>• Task: {tx.referenceId.slice(-8)}</span>}
+                            {tx.referenceId && <span style={{marginLeft: '8px'}}>• Ref: {tx.referenceId.slice(-8)}</span>}
                           </p>
                         </div>
                         <span style={{
                           fontSize: '16px',
                           fontWeight: '700',
-                          color: tx.amount > 0 ? '#10b981' : '#ef4444',
+                          color: isZero ? '#94a3b8' : isPositive ? '#10b981' : '#ef4444',
                           flexShrink: 0,
                           marginLeft: '12px'
                         }}>
-                          {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)} credits
+                          {isZero ? '—' : `${isPositive ? '+' : ''}${delta.toLocaleString('en-IN')} credits`}
                         </span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
