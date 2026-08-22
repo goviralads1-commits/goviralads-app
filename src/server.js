@@ -529,65 +529,213 @@ function startSubscriptionExpiryJob() {
   console.log('Subscription expiry job started (every 60 minutes)');
 }
 
-// Send reminders for subscriptions expiring in ≤2 days
+// Configurable subscription renewal reminder job
+// Runs every 12 hours. Sends before-expiry and after-expiry reminders
+// based on admin-configured Settings.subscriptionReminders.
+// Idempotency guaranteed by ReminderLog unique reminderKey index.
 function startSubscriptionReminderJob() {
+  const { ReminderLog, REMINDER_STATUS } = require('./models/ReminderLog');
+  const Wallet = require('./models/Wallet');
+
   const sendReminders = async () => {
     try {
+      // 1. Load admin-configured reminder settings
+      const settings = await Settings.getSettings();
+      const config = settings.subscriptionReminders || {};
+
+      if (!config.enabled) {
+        console.log('[REMINDER] Subscription reminders disabled');
+        return;
+      }
+
+      const inAppEnabled = config.inAppEnabled !== false;
+      const emailEnabled = config.emailEnabled !== false;
+      if (!inAppEnabled && !emailEnabled) {
+        console.log('[REMINDER] All reminder channels disabled');
+        return;
+      }
+
       const now = new Date();
-      const in2Days = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let totalSent = 0;
 
-      // Find all active subscriptions expiring within next 2 days
-      const expiringSoon = await UserSubscription.find({
-        isActive: true,
-        expiresAt: { $gt: now, $lt: in2Days }
-      }).exec();
+      // Helper: build a ±18h calendar-day window around a target date.
+      // This ensures a 12-hourly scheduler cannot miss a date regardless of run time.
+      const buildWindow = (targetDate) => ({
+        start: new Date(targetDate.getTime() - 6 * 60 * 60 * 1000),  // -6h
+        end:   new Date(targetDate.getTime() + 30 * 60 * 60 * 1000), // +30h
+      });
 
-      if (expiringSoon.length === 0) return;
-      console.log(`[REMINDER] Found ${expiringSoon.length} subscription(s) expiring within 2 days`);
+      // 2. BEFORE-EXPIRY reminders
+      if (config.beforeExpiry && config.beforeExpiry.enabled && Array.isArray(config.beforeExpiry.days)) {
+        for (const days of config.beforeExpiry.days) {
+          if (!Number.isInteger(days) || days < 0) continue;
 
-      for (const sub of expiringSoon) {
-        try {
-          // Dedup: skip if already sent a SUBSCRIPTION_EXPIRING notification in last 23 hours
-          const alreadySent = await Notification.findOne({
-            recipientId: sub.userId,
-            type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
-            'relatedEntity.entityId': sub._id,
-            createdAt: { $gt: new Date(Date.now() - 23 * 60 * 60 * 1000) }
+          const targetDate = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+          const { start, end } = buildWindow(targetDate);
+
+          // Find wallets whose subscription expires on this target calendar day
+          const wallets = await Wallet.find({
+            subscriptionExpiresAt: { $gt: start, $lte: end },
           }).exec();
 
-          if (alreadySent) continue;
+          for (const wallet of wallets) {
+            try {
+              // Find the matching UserSubscription for reminderKey (subscriptionId)
+              const userSub = await UserSubscription.findOne({
+                userId: wallet.clientId,
+                planId: wallet.currentPlanId,
+              }).sort({ createdAt: -1 }).exec();
 
-          const daysLeft = Math.ceil((new Date(sub.expiresAt) - now) / (1000 * 60 * 60 * 24));
-          const isToday = daysLeft <= 0;
-          const expiryDateStr = new Date(sub.expiresAt).toLocaleDateString('en-IN', {
-            day: '2-digit', month: 'short', year: 'numeric'
-          });
+              if (!userSub) continue;
 
-          const title = isToday
-            ? `Your plan expires today`
-            : `Your plan is expiring in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
-          const message = isToday
-            ? `Your plan "${sub.planName}" expires today. Renew now to avoid interruption.`
-            : `Your plan "${sub.planName}" is expiring soon. Renew to continue services.`;
+              const reminderKey = `${userSub._id}-before-${days}`;
 
-          await createNotification({
-            recipientId: sub.userId,
-            title,
-            message,
-            type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
-            relatedEntity: {
-              entityType: 'SUBSCRIPTION',
-              entityId: sub._id
-            },
-            planName: sub.planName,
-            expiryDate: expiryDateStr,
-            notifyByEmail: true
-          });
+              // Idempotency: skip if already sent (persistent DB check)
+              const existing = await ReminderLog.findOne({ reminderKey }).exec();
+              if (existing) continue;
 
-          console.log(`[REMINDER] Sent expiry reminder to user ${sub.userId} for plan "${sub.planName}"`);
-        } catch (subErr) {
-          console.error(`[REMINDER] Error processing sub ${sub._id}:`, subErr.message);
+              // Authoritative check: is this subscription still the active one?
+              // If Wallet.subscriptionExpiresAt has been reset by renewal, this wallet
+              // would not match the query above. But double-check UserSubscription state.
+              if (userSub.isActive === false) continue;
+
+              const expiryDateStr = new Date(wallet.subscriptionExpiresAt).toLocaleDateString('en-IN', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              });
+
+              const title = days === 0
+                ? 'Your plan expires today'
+                : `Your plan expires in ${days} day${days !== 1 ? 's' : ''}`;
+              const message = days === 0
+                ? `Your plan "${userSub.planName}" expires today. Renew now to avoid interruption.`
+                : `Your plan "${userSub.planName}" expires in ${days} day${days !== 1 ? 's' : ''} (${expiryDateStr}). Renew now to continue uninterrupted service.`;
+
+              // Determine channel
+              let channel = 'BOTH';
+              if (!inAppEnabled && emailEnabled) channel = 'EMAIL';
+              else if (inAppEnabled && !emailEnabled) channel = 'IN_APP';
+
+              // Send via existing notification infrastructure
+              if (inAppEnabled) {
+                await createNotification({
+                  recipientId: wallet.clientId,
+                  title,
+                  message,
+                  type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+                  relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
+                  notifyByEmail: emailEnabled,
+                });
+              }
+
+              // Log for idempotency
+              await ReminderLog.create({
+                recipientId: wallet.clientId,
+                subscriptionId: userSub._id,
+                reminderKey,
+                daysOffset: days,
+                direction: 'before',
+                status: REMINDER_STATUS.SENT,
+                channel,
+                sentAt: new Date(),
+              });
+
+              totalSent++;
+              console.log(`[REMINDER] Before-expiry (${days}d) sent to ${wallet.clientId} for plan "${userSub.planName}"`);
+            } catch (subErr) {
+              if (subErr.code === 11000) {
+                // Duplicate key — scheduler race — safe to skip
+                continue;
+              }
+              console.error(`[REMINDER] Before-expiry error for wallet ${wallet._id}:`, subErr.message);
+            }
+          }
         }
+      }
+
+      // 3. AFTER-EXPIRY reminders
+      if (config.afterExpiry && config.afterExpiry.enabled && Array.isArray(config.afterExpiry.days)) {
+        for (const days of config.afterExpiry.days) {
+          if (!Number.isInteger(days) || days < 0) continue;
+
+          const targetDate = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
+          const { start, end } = buildWindow(targetDate);
+
+          // Find wallets whose subscription expired on this target calendar day
+          const wallets = await Wallet.find({
+            subscriptionExpiresAt: { $gt: start, $lte: end },
+          }).exec();
+
+          for (const wallet of wallets) {
+            try {
+              // PRIMARY PROTECTION: If the wallet's subscription has been renewed
+              // (subscriptionExpiresAt reset to a future date), this wallet would NOT
+              // match the query above. But verify UserSubscription state as backup.
+              const userSub = await UserSubscription.findOne({
+                userId: wallet.clientId,
+                planId: wallet.currentPlanId,
+              }).sort({ createdAt: -1 }).exec();
+
+              if (!userSub) continue;
+
+              // If user has an active subscription, they renewed — skip after-expiry reminders
+              if (userSub.isActive === true) continue;
+
+              const reminderKey = `${userSub._id}-after-${days}`;
+
+              // Idempotency: skip if already sent
+              const existing = await ReminderLog.findOne({ reminderKey }).exec();
+              if (existing) continue;
+
+              const expiryDateStr = new Date(wallet.subscriptionExpiresAt).toLocaleDateString('en-IN', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              });
+
+              const title = days === 0
+                ? 'Your plan has expired'
+                : `Your plan expired ${days} day${days !== 1 ? 's' : ''} ago`;
+              const message = days === 0
+                ? `Your plan "${userSub.planName}" has expired (${expiryDateStr}). Renew now to restore your credits.`
+                : `Your plan "${userSub.planName}" expired ${days} day${days !== 1 ? 's' : ''} ago (${expiryDateStr}). Renew now to restore your credits.`;
+
+              let channel = 'BOTH';
+              if (!inAppEnabled && emailEnabled) channel = 'EMAIL';
+              else if (inAppEnabled && !emailEnabled) channel = 'IN_APP';
+
+              if (inAppEnabled) {
+                await createNotification({
+                  recipientId: wallet.clientId,
+                  title,
+                  message,
+                  type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+                  relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
+                  notifyByEmail: emailEnabled,
+                });
+              }
+
+              await ReminderLog.create({
+                recipientId: wallet.clientId,
+                subscriptionId: userSub._id,
+                reminderKey,
+                daysOffset: days,
+                direction: 'after',
+                status: REMINDER_STATUS.SENT,
+                channel,
+                sentAt: new Date(),
+              });
+
+              totalSent++;
+              console.log(`[REMINDER] After-expiry (${days}d) sent to ${wallet.clientId} for plan "${userSub.planName}"`);
+            } catch (subErr) {
+              if (subErr.code === 11000) continue;
+              console.error(`[REMINDER] After-expiry error for wallet ${wallet._id}:`, subErr.message);
+            }
+          }
+        }
+      }
+
+      if (totalSent > 0) {
+        console.log(`[REMINDER] Subscription reminder cycle complete. ${totalSent} reminder(s) sent.`);
       }
     } catch (err) {
       console.error('[REMINDER] Subscription reminder job error:', err.message);
@@ -597,7 +745,7 @@ function startSubscriptionReminderJob() {
   // Run immediately on startup, then every 12 hours
   sendReminders();
   setInterval(sendReminders, 12 * 60 * 60 * 1000);
-  console.log('Subscription reminder job started (every 12 hours)');
+  console.log('Subscription reminder job started (configurable, every 12 hours)');
 }
 
 // Function to update progress for all AUTO tasks

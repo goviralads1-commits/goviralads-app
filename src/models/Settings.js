@@ -59,6 +59,21 @@ const settingsSchema = new mongoose.Schema(
       linkedin: { type: String, trim: true, default: '' },
       youtube: { type: String, trim: true, default: '' },
     },
+
+    // Subscription Renewal Reminder configuration
+    subscriptionReminders: {
+      enabled: { type: Boolean, default: true },
+      beforeExpiry: {
+        enabled: { type: Boolean, default: true },
+        days: { type: [Number], default: [7, 3, 1] },
+      },
+      afterExpiry: {
+        enabled: { type: Boolean, default: true },
+        days: { type: [Number], default: [1, 3, 7] },
+      },
+      inAppEnabled: { type: Boolean, default: true },
+      emailEnabled: { type: Boolean, default: true },
+    },
   },
   {
     timestamps: true,

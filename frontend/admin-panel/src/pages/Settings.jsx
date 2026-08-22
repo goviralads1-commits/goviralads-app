@@ -16,6 +16,13 @@ const Settings = () => {
     websiteUrl: '',
     whatsappNumber: '',
     socialLinks: { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
+    subscriptionReminders: {
+      enabled: true,
+      beforeExpiry: { enabled: true, days: [7, 3, 1] },
+      afterExpiry: { enabled: true, days: [1, 3, 7] },
+      inAppEnabled: true,
+      emailEnabled: true,
+    },
   });
 
   useEffect(() => {
@@ -49,6 +56,13 @@ const Settings = () => {
           twitter: res.data.settings.socialLinks?.twitter || '',
           linkedin: res.data.settings.socialLinks?.linkedin || '',
           youtube: res.data.settings.socialLinks?.youtube || '',
+        },
+        subscriptionReminders: res.data.settings.subscriptionReminders || {
+          enabled: true,
+          beforeExpiry: { enabled: true, days: [7, 3, 1] },
+          afterExpiry: { enabled: true, days: [1, 3, 7] },
+          inAppEnabled: true,
+          emailEnabled: true,
         },
       });
     } catch (err) {
@@ -323,6 +337,165 @@ const Settings = () => {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Subscription Reminders */}
+          <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#faf5ff', borderRadius: '16px', border: '2px solid #e9d5ff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#6b21a8', margin: 0 }}>
+                ⏳ Subscription Reminders
+              </h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: formData.subscriptionReminders.enabled ? '#15803d' : '#94a3b8' }}>
+                  {formData.subscriptionReminders.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formData.subscriptionReminders.enabled}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    subscriptionReminders: { ...prev.subscriptionReminders, enabled: e.target.checked }
+                  }))}
+                  style={{ width: '18px', height: '18px', accentColor: '#6366f1', cursor: 'pointer' }}
+                />
+              </label>
+            </div>
+
+            {formData.subscriptionReminders.enabled && (
+              <>
+                {/* Before Expiry */}
+                <div style={{ marginBottom: '16px', padding: '14px', backgroundColor: '#fff', borderRadius: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>Before Expiry</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <span style={{ fontSize: '12px', color: formData.subscriptionReminders.beforeExpiry.enabled ? '#15803d' : '#94a3b8' }}>
+                        {formData.subscriptionReminders.beforeExpiry.enabled ? 'ON' : 'OFF'}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={formData.subscriptionReminders.beforeExpiry.enabled}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          subscriptionReminders: {
+                            ...prev.subscriptionReminders,
+                            beforeExpiry: { ...prev.subscriptionReminders.beforeExpiry, enabled: e.target.checked }
+                          }
+                        }))}
+                        style={{ width: '16px', height: '16px', accentColor: '#6366f1', cursor: 'pointer' }}
+                      />
+                    </label>
+                  </div>
+                  {formData.subscriptionReminders.beforeExpiry.enabled && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '6px' }}>
+                        Reminder Days (comma-separated, e.g. 7,3,1)
+                      </label>
+                      <input
+                        type="text"
+                        value={(formData.subscriptionReminders.beforeExpiry.days || []).join(', ')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const days = raw.split(',').map(s => parseInt(s.trim(), 10)).filter(d => Number.isInteger(d) && d >= 0);
+                          setFormData(prev => ({
+                            ...prev,
+                            subscriptionReminders: {
+                              ...prev.subscriptionReminders,
+                              beforeExpiry: { ...prev.subscriptionReminders.beforeExpiry, days }
+                            }
+                          }));
+                        }}
+                        placeholder="7, 3, 1"
+                        style={{
+                          width: '100%', padding: '10px 12px', fontSize: '13px',
+                          border: '2px solid #e9d5ff', borderRadius: '8px',
+                          outline: 'none', boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* After Expiry */}
+                <div style={{ marginBottom: '16px', padding: '14px', backgroundColor: '#fff', borderRadius: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>After Expiry</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <span style={{ fontSize: '12px', color: formData.subscriptionReminders.afterExpiry.enabled ? '#15803d' : '#94a3b8' }}>
+                        {formData.subscriptionReminders.afterExpiry.enabled ? 'ON' : 'OFF'}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={formData.subscriptionReminders.afterExpiry.enabled}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          subscriptionReminders: {
+                            ...prev.subscriptionReminders,
+                            afterExpiry: { ...prev.subscriptionReminders.afterExpiry, enabled: e.target.checked }
+                          }
+                        }))}
+                        style={{ width: '16px', height: '16px', accentColor: '#6366f1', cursor: 'pointer' }}
+                      />
+                    </label>
+                  </div>
+                  {formData.subscriptionReminders.afterExpiry.enabled && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '6px' }}>
+                        Reminder Days (comma-separated, e.g. 1,3,7)
+                      </label>
+                      <input
+                        type="text"
+                        value={(formData.subscriptionReminders.afterExpiry.days || []).join(', ')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const days = raw.split(',').map(s => parseInt(s.trim(), 10)).filter(d => Number.isInteger(d) && d >= 0);
+                          setFormData(prev => ({
+                            ...prev,
+                            subscriptionReminders: {
+                              ...prev.subscriptionReminders,
+                              afterExpiry: { ...prev.subscriptionReminders.afterExpiry, days }
+                            }
+                          }));
+                        }}
+                        placeholder="1, 3, 7"
+                        style={{
+                          width: '100%', padding: '10px 12px', fontSize: '13px',
+                          border: '2px solid #e9d5ff', borderRadius: '8px',
+                          outline: 'none', boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Channel Toggles */}
+                <div style={{ display: 'flex', gap: '24px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.subscriptionReminders.inAppEnabled}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        subscriptionReminders: { ...prev.subscriptionReminders, inAppEnabled: e.target.checked }
+                      }))}
+                      style={{ width: '16px', height: '16px', accentColor: '#6366f1', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>In-App Notifications</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.subscriptionReminders.emailEnabled}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        subscriptionReminders: { ...prev.subscriptionReminders, emailEnabled: e.target.checked }
+                      }))}
+                      style={{ width: '16px', height: '16px', accentColor: '#6366f1', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Email Reminders</span>
+                  </label>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Save Button */}

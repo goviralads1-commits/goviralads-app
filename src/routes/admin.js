@@ -868,6 +868,23 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     console.log(`[SUB_REQ] Approved: ${updatedRequest.planName}, Credits: ${transaction.credits}, Invoice: ${invoice.invoiceNumber}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
+    // 6b. Cancel pending renewal reminders for this client's old subscriptions
+    // Primary protection is the Wallet.subscriptionExpiresAt reset (already done above),
+    // which prevents the reminder job from matching old dates. This is supplementary cleanup.
+    try {
+      const { ReminderLog, REMINDER_STATUS } = require('../models/ReminderLog');
+      const cancelled = await ReminderLog.updateMany(
+        { recipientId: updatedRequest.clientId, status: REMINDER_STATUS.SENT },
+        { $set: { status: REMINDER_STATUS.CANCELLED } }
+      );
+      if (cancelled.modifiedCount > 0) {
+        console.log(`[REMINDER] Cancelled ${cancelled.modifiedCount} pending reminder(s) for client ${updatedRequest.clientId} (renewed)`);
+      }
+    } catch (remErr) {
+      // Non-blocking — reminder cancellation is supplementary
+      console.error('[REMINDER] Failed to cancel old reminders:', remErr.message);
+    }
+
     // 7. Notify client
     try {
       await createNotification({
@@ -7003,6 +7020,13 @@ router.get('/settings', async (req, res) => {
         websiteUrl: settings.websiteUrl || '',
         whatsappNumber: settings.whatsappNumber || '',
         socialLinks: settings.socialLinks || { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
+        subscriptionReminders: settings.subscriptionReminders || {
+          enabled: true,
+          beforeExpiry: { enabled: true, days: [7, 3, 1] },
+          afterExpiry: { enabled: true, days: [1, 3, 7] },
+          inAppEnabled: true,
+          emailEnabled: true,
+        },
         updatedAt: settings.updatedAt,
       },
     });
@@ -7019,7 +7043,7 @@ router.patch('/settings', async (req, res) => {
     const _caller = await User.findById(req.user.id).populate('customRole');
     if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
 
-    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl, whatsappNumber, socialLinks } = req.body || {};
+    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl, whatsappNumber, socialLinks, subscriptionReminders } = req.body || {};
     
     const updates = {};
     if (agencyName !== undefined) updates.agencyName = agencyName.trim();
@@ -7038,6 +7062,36 @@ router.patch('/settings', async (req, res) => {
       if (socialLinks.linkedin !== undefined) updates.socialLinks.linkedin = String(socialLinks.linkedin || '').trim();
       if (socialLinks.youtube !== undefined) updates.socialLinks.youtube = String(socialLinks.youtube || '').trim();
     }
+
+    // Subscription Reminders configuration
+    if (subscriptionReminders !== undefined && typeof subscriptionReminders === 'object') {
+      updates.subscriptionReminders = {};
+      if (subscriptionReminders.enabled !== undefined) updates.subscriptionReminders.enabled = Boolean(subscriptionReminders.enabled);
+      if (subscriptionReminders.inAppEnabled !== undefined) updates.subscriptionReminders.inAppEnabled = Boolean(subscriptionReminders.inAppEnabled);
+      if (subscriptionReminders.emailEnabled !== undefined) updates.subscriptionReminders.emailEnabled = Boolean(subscriptionReminders.emailEnabled);
+      if (subscriptionReminders.beforeExpiry && typeof subscriptionReminders.beforeExpiry === 'object') {
+        updates.subscriptionReminders.beforeExpiry = {};
+        if (subscriptionReminders.beforeExpiry.enabled !== undefined) updates.subscriptionReminders.beforeExpiry.enabled = Boolean(subscriptionReminders.beforeExpiry.enabled);
+        if (Array.isArray(subscriptionReminders.beforeExpiry.days)) {
+          updates.subscriptionReminders.beforeExpiry.days = [...new Set(
+            subscriptionReminders.beforeExpiry.days
+              .map(d => parseInt(d, 10))
+              .filter(d => Number.isInteger(d) && d >= 0)
+          )].sort((a, b) => a - b);
+        }
+      }
+      if (subscriptionReminders.afterExpiry && typeof subscriptionReminders.afterExpiry === 'object') {
+        updates.subscriptionReminders.afterExpiry = {};
+        if (subscriptionReminders.afterExpiry.enabled !== undefined) updates.subscriptionReminders.afterExpiry.enabled = Boolean(subscriptionReminders.afterExpiry.enabled);
+        if (Array.isArray(subscriptionReminders.afterExpiry.days)) {
+          updates.subscriptionReminders.afterExpiry.days = [...new Set(
+            subscriptionReminders.afterExpiry.days
+              .map(d => parseInt(d, 10))
+              .filter(d => Number.isInteger(d) && d >= 0)
+          )].sort((a, b) => a - b);
+        }
+      }
+    }
     
     const settings = await Settings.updateSettings(updates);
     
@@ -7055,6 +7109,13 @@ router.patch('/settings', async (req, res) => {
         websiteUrl: settings.websiteUrl,
         whatsappNumber: settings.whatsappNumber || '',
         socialLinks: settings.socialLinks || {},
+        subscriptionReminders: settings.subscriptionReminders || {
+          enabled: true,
+          beforeExpiry: { enabled: true, days: [7, 3, 1] },
+          afterExpiry: { enabled: true, days: [1, 3, 7] },
+          inAppEnabled: true,
+          emailEnabled: true,
+        },
         updatedAt: settings.updatedAt,
       },
     });
