@@ -134,6 +134,7 @@ async function generateInvoicePDF(invoice) {
 
       // Check invoice type for different table layout
       const isOrderInvoice = invoice.invoiceType === 'ORDER' && invoice.items && invoice.items.length > 0;
+      const isSubscriptionInvoice = invoice.invoiceType === 'SUBSCRIPTION';
       
       const tableTop = doc.y;
       let rowY = tableTop;
@@ -176,6 +177,41 @@ async function generateInvoicePDF(invoice) {
           });
           rowY += rowHeight;
         });
+      } else if (isSubscriptionInvoice) {
+        // SUBSCRIPTION INVOICE - Credit plan purchase
+        const tableHeaders = ['Description', 'Credits', 'Payment Method', 'Reference', 'Amount'];
+        const colWidths = [170, 70, 80, 110, 65];
+        let xPos = 50;
+
+        // Table Header
+        doc.fillColor('#6366f1').rect(50, tableTop, 495, 25).fill();
+        doc.fillColor('#ffffff').fontSize(10).font('Helvetica-Bold');
+        xPos = 50;
+        tableHeaders.forEach((header, i) => {
+          doc.text(header, xPos + 5, tableTop + 7, { width: colWidths[i] - 10 });
+          xPos += colWidths[i];
+        });
+
+        // Table Row
+        rowY = tableTop + 25;
+        doc.fillColor('#f8fafc').rect(50, rowY, 495, 30).fill();
+        doc.fillColor('#0f172a').fontSize(10).font('Helvetica');
+        xPos = 50;
+        const subRequest = invoice.subscriptionRequestId;
+        const planName = subRequest?.planName || 'Credit Plan';
+        const totalCredits = subRequest?.totalCredits || 0;
+        const rowData = [
+          `Credit Plan \u2014 ${planName}`,
+          `${totalCredits.toLocaleString()} credits`,
+          invoice.paymentMethod || 'Online Transfer',
+          invoice.paymentReference || '-',
+          `${currencySymbol}${invoice.amount.toLocaleString()}`
+        ];
+        rowData.forEach((data, i) => {
+          doc.text(data, xPos + 5, rowY + 10, { width: colWidths[i] - 10 });
+          xPos += colWidths[i];
+        });
+        rowY += 30;
       } else {
         // RECHARGE INVOICE - Single row table
         const tableHeaders = ['Description', 'Payment Method', 'Reference', 'Amount'];

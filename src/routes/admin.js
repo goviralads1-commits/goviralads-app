@@ -731,113 +731,141 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
     console.log('=== SUBSCRIPTION APPROVE START ===');
     console.log('Request ID:', id);
 
-    // ATOMIC STATUS UPDATE - Status acts as lock to prevent double approval
-    console.log('[SUB_APPROVE_DEBUG] Attempting atomic update for request:', id, 'with status PENDING');
-    const updatedRequest = await SubscriptionRequest.findOneAndUpdate(
-      { _id: id, status: SUBSCRIPTION_REQUEST_STATUS.PENDING },
-      {
-        $set: {
-          status: SUBSCRIPTION_REQUEST_STATUS.APPROVED,
-          reviewedBy: adminId,
-          reviewedAt: new Date()
-        }
-      },
-      { new: true }
-    ).exec();
-
-    console.log('[SUB_APPROVE_DEBUG] Atomic update result:', updatedRequest ? 'SUCCESS - Document updated' : 'FAILED - No document matched');
-
-    if (!updatedRequest) {
-      console.log('[SUB_APPROVE_DEBUG] Request not found or already processed. Checking request...');
-      const checkRequest = await SubscriptionRequest.findById(id).exec();
-      if (checkRequest) {
-        console.log('[SUB_APPROVE_DEBUG] Request exists with status:', checkRequest.status);
-      } else {
-        console.log('[SUB_APPROVE_DEBUG] Request does not exist in database');
+    // STEP 1: Create financial invoice BEFORE any state changes
+    // If invoice creation fails, request stays PENDING → fully retryable.
+    // Duplicate check: if invoice already exists for this request, reuse it (safe retry).
+    let invoice = null;
+    const existingInvoice = await Invoice.findOne({ subscriptionRequestId: id }).exec();
+    if (existingInvoice) {
+      invoice = existingInvoice;
+      console.log('[BILLING] Invoice already exists for subscription:', invoice.invoiceNumber, '— reusing (retry path)');
+    } else {
+      // Need request + plan data for invoice — fetch before creating
+      const preCheck = await SubscriptionRequest.findById(id).exec();
+      if (!preCheck) {
+        return res.status(404).json({ error: 'Subscription request not found' });
       }
-      return res.status(400).json({ error: 'Request already processed' });
+      if (preCheck.status === SUBSCRIPTION_REQUEST_STATUS.APPROVED) {
+        return res.status(400).json({ error: 'Request already processed' });
+      }
+      if (preCheck.status !== SUBSCRIPTION_REQUEST_STATUS.PENDING) {
+        return res.status(400).json({ error: 'Request not available for processing' });
+      }
+      invoice = await billingService.createInvoiceForSubscription(preCheck, null, adminId);
+      if (!invoice) {
+        console.error('[BILLING] CRITICAL: Subscription invoice creation failed. Credits NOT granted. Request stays PENDING for retry.');
+        return res.status(500).json({
+          error: 'Invoice creation failed. Credits have NOT been granted. Please retry the approval.',
+          requestId: id,
+        });
+      }
+      console.log('[BILLING] Subscription invoice created:', invoice.invoiceNumber);
     }
 
-    console.log('[SUB_APPROVE_DEBUG] Request approved atomically, ID:', updatedRequest._id.toString());
-    console.log('[SUB_APPROVE_DEBUG] Updated request status:', updatedRequest.status);
+    // STEP 2: Atomic status update + credit grant + wallet transaction in MongoDB transaction
+    // If any step fails, ALL changes roll back — request stays PENDING for retry.
+    // Invoice (created above) is preserved for retry since it exists outside the transaction.
+    const mongoose = require('mongoose');
+    const session = await mongoose.startSession();
 
-    // Validate clientId
-    if (!updatedRequest.clientId) {
-      return res.status(400).json({ error: 'Invalid clientId in request' });
-    }
+    let updatedRequest, updatedWallet, transaction;
+    try {
+      await session.withTransaction(async () => {
+        // Atomic status lock (inside transaction — rolls back on failure)
+        updatedRequest = await SubscriptionRequest.findOneAndUpdate(
+          { _id: id, status: SUBSCRIPTION_REQUEST_STATUS.PENDING },
+          {
+            $set: {
+              status: SUBSCRIPTION_REQUEST_STATUS.APPROVED,
+              reviewedBy: adminId,
+              reviewedAt: new Date()
+            }
+          },
+          { new: true, session }
+        ).exec();
 
-    // Fetch plan (source of truth)
-    const plan = await CreditPlan.findById(updatedRequest.planId).exec();
-    if (!plan) {
-      return res.status(404).json({ error: 'Plan not found' });
-    }
-
-    // DEBUG: Log full plan object
-    console.log('[SUB_APPROVE] FULL PLAN:', JSON.stringify(plan, null, 2));
-
-    // Calculate credits: plan.credits + plan.bonusCredits
-    const baseCredits = Number(plan.credits) || 0;
-    const bonusCredits = Number(plan.bonusCredits) || 0;
-    const creditsToAdd = baseCredits + bonusCredits;
-    const validityDays = Number(plan.validityDays) || 0;
-    const planPrice = Number(plan.price) || 0;
-
-    console.log('[SUB_APPROVE] Credits:', { baseCredits, bonusCredits, creditsToAdd, validityDays, planPrice });
-
-    if (creditsToAdd <= 0) {
-      return res.status(400).json({ error: 'Invalid plan: credits must be greater than 0' });
-    }
-
-    // 1. Get or create wallet (safe initialization)
-    const now = new Date();
-    let wallet = await Wallet.findOne({ clientId: updatedRequest.clientId }).exec();
-    
-    // Create wallet if not exists (with 0 credits)
-    if (!wallet) {
-      wallet = await Wallet.create({
-        clientId: updatedRequest.clientId,
-        balance: 0,
-        walletCredits: 0,
-        subscriptionCredits: 0
-      });
-    }
-    
-    // SINGLE-ACTIVE: On upgrade, ADD credits and RESET expiry
-    // Calculate new expiry: RESET to now + validityDays (not MAX)
-    const newExpiry = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
-    
-    // Atomic update: ADD credits, RESET expiry, store plan info
-    const updatedWallet = await Wallet.findByIdAndUpdate(
-      wallet._id,
-      {
-        $inc: { subscriptionCredits: creditsToAdd },
-        $set: { 
-          subscriptionExpiresAt: newExpiry,
-          currentPlanId: plan._id,
-          currentPlanPrice: planPrice
+        if (!updatedRequest) {
+          throw new Error('REQUEST_ALREADY_PROCESSED');
         }
-      },
-      { new: true }
-    );
-    
-    // Safety check: ensure credits not negative
-    if (updatedWallet.subscriptionCredits < 0) {
-      await Wallet.findByIdAndUpdate(wallet._id, { $set: { subscriptionCredits: 0 } });
+
+        // Validate clientId
+        if (!updatedRequest.clientId) {
+          throw new Error('Invalid clientId in request');
+        }
+
+        // Fetch plan (source of truth)
+        const plan = await CreditPlan.findById(updatedRequest.planId).session(session).exec();
+        if (!plan) {
+          throw new Error('Plan not found');
+        }
+
+        // Calculate credits
+        const baseCredits = Number(plan.credits) || 0;
+        const bonusCredits = Number(plan.bonusCredits) || 0;
+        const creditsToAdd = baseCredits + bonusCredits;
+        const validityDays = Number(plan.validityDays) || 0;
+        const planPrice = Number(plan.price) || 0;
+
+        if (creditsToAdd <= 0) {
+          throw new Error('Invalid plan: credits must be greater than 0');
+        }
+
+        // Get or create wallet (safe initialization)
+        const now = new Date();
+        let wallet = await Wallet.findOne({ clientId: updatedRequest.clientId }).session(session).exec();
+        if (!wallet) {
+          const created = await Wallet.create([{
+            clientId: updatedRequest.clientId,
+            balance: 0,
+            walletCredits: 0,
+            subscriptionCredits: 0
+          }], { session });
+          wallet = created[0];
+        }
+
+        // ADD credits and RESET expiry
+        const newExpiry = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+        updatedWallet = await Wallet.findByIdAndUpdate(
+          wallet._id,
+          {
+            $inc: { subscriptionCredits: creditsToAdd },
+            $set: {
+              subscriptionExpiresAt: newExpiry,
+              currentPlanId: plan._id,
+              currentPlanPrice: planPrice
+            }
+          },
+          { new: true, session }
+        );
+
+        // Safety check: ensure credits not negative
+        if (updatedWallet.subscriptionCredits < 0) {
+          await Wallet.findByIdAndUpdate(wallet._id, { $set: { subscriptionCredits: 0 } }, { session });
+        }
+
+        // Record wallet transaction
+        transaction = await WalletTransaction.create([{
+          walletId: wallet._id,
+          type: 'SUBSCRIPTION_PURCHASE',
+          amount: -planPrice,
+          credits: creditsToAdd,
+          description: `Subscription Plan: ${plan.name}`,
+          referenceId: updatedRequest._id,
+        }], { session });
+        transaction = transaction[0];
+      });
+    } catch (txErr) {
+      await session.endSession();
+      if (txErr.message === 'REQUEST_ALREADY_PROCESSED') {
+        console.log('[SUB_APPROVE] Request was processed concurrently');
+        return res.status(400).json({ error: 'Request already processed' });
+      }
+      console.error('[SUB_APPROVE] Transaction aborted, all changes rolled back:', txErr.message);
+      return res.status(500).json({ error: 'Failed to approve subscription request', details: txErr.message });
     }
+    await session.endSession();
 
-    const expiresAt = newExpiry;
-
-    // 3. Record wallet transaction
-    await WalletTransaction.create({
-      walletId: wallet._id,
-      type: 'SUBSCRIPTION_PURCHASE',
-      amount: -planPrice,
-      credits: creditsToAdd,
-      description: `Subscription Plan: ${plan.name}`,
-      referenceId: updatedRequest._id,
-    });
-
-    console.log(`[SUB_REQ] Approved: ${updatedRequest.planName}, Credits: ${creditsToAdd}, Expires: ${newExpiry}`);
+    console.log(`[SUB_REQ] Approved: ${updatedRequest.planName}, Credits: ${transaction.credits}, Invoice: ${invoice.invoiceNumber}`);
     console.log('=== SUBSCRIPTION APPROVE COMPLETE ===');
 
     // 7. Notify client
@@ -846,7 +874,7 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
         recipientId: updatedRequest.clientId,
         type: 'SUBSCRIPTION_REQUEST_APPROVED',
         title: 'Subscription Approved',
-        message: `Your subscription request for ${updatedRequest.planName} has been approved. ${creditsToAdd} credits added!`,
+        message: `Your subscription request for ${updatedRequest.planName} has been approved. ${updatedRequest.totalCredits} credits added!`,
         relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: updatedRequest._id },
         notifyByEmail: true,
       });
@@ -858,11 +886,14 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
       id: updatedRequest._id.toString(),
       clientId: updatedRequest.clientId.toString(),
       planName: updatedRequest.planName,
-      totalCredits: creditsToAdd,
+      totalCredits: updatedRequest.totalCredits,
       status: updatedRequest.status,
       walletBalance: (Number(updatedWallet.walletCredits) || 0) + (Number(updatedWallet.subscriptionCredits) || 0),
       subscriptionCredits: updatedWallet.subscriptionCredits,
       expiresAt: updatedWallet.subscriptionExpiresAt,
+      transactionId: transaction._id.toString(),
+      invoiceId: invoice?._id?.toString() || null,
+      invoiceNumber: invoice?.invoiceNumber || null,
     });
   } catch (err) {
     console.error('[SUB_APPROVE_ERROR] Full error:', err);

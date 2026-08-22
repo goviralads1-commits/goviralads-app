@@ -10,6 +10,7 @@ const INVOICE_TYPE = Object.freeze({
   RECHARGE: 'RECHARGE',
   ORDER: 'ORDER',
   REFUND: 'REFUND',
+  SUBSCRIPTION: 'SUBSCRIPTION',
 });
 
 const invoiceSchema = new mongoose.Schema(
@@ -60,6 +61,13 @@ const invoiceSchema = new mongoose.Schema(
       unitPrice: Number,
       totalPrice: Number,
     }],
+
+    // For SUBSCRIPTION invoices
+    subscriptionRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SubscriptionRequest',
+      default: null,
+    },
 
     // Financial details
     amount: {
@@ -154,6 +162,11 @@ const invoiceSchema = new mongoose.Schema(
 invoiceSchema.index({ clientId: 1, createdAt: -1 });
 invoiceSchema.index({ status: 1, createdAt: -1 });
 invoiceSchema.index({ orderId: 1 });
+
+// Prevent duplicate subscription invoices at database level
+// Sparse: only indexes documents where subscriptionRequestId is non-null
+// (existing RECHARGE/ORDER/REFUND invoices have null and are unaffected)
+invoiceSchema.index({ subscriptionRequestId: 1 }, { unique: true, sparse: true });
 
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 

@@ -146,6 +146,77 @@ async function createInvoiceForRecharge(rechargeRequest, transaction, adminId) {
 }
 
 /**
+ * Create invoice when subscription/credit plan is approved
+ * @param {Object} subscriptionRequest - The approved subscription request
+ * @param {Object} transaction - The wallet transaction
+ * @param {String} adminId - Admin who approved
+ * @returns {Object} Created invoice
+ */
+async function createInvoiceForSubscription(subscriptionRequest, transaction, adminId) {
+  try {
+    const config = await BillingConfig.getConfig();
+    const invoiceNumber = await generateInvoiceNumber();
+    
+    // Get client billing info
+    const client = await User.findById(subscriptionRequest.clientId).select('billing identifier profile');
+    const clientBilling = client?.billing || {};
+    
+    // Invoice amount = actual money paid (finalPrice after any coupon discount)
+    const paidAmount = Number(subscriptionRequest.finalPrice) || 0;
+    
+    // Calculate tax
+    const { taxDetails, taxAmount } = calculateTaxDetails(paidAmount, config, clientBilling);
+    const totalAmount = paidAmount + taxAmount;
+
+    const invoice = await Invoice.create({
+      invoiceNumber,
+      invoiceType: INVOICE_TYPE.SUBSCRIPTION,
+      clientId: subscriptionRequest.clientId,
+      subscriptionRequestId: subscriptionRequest._id,
+      transactionId: transaction?._id || null,
+      amount: paidAmount,
+      taxAmount,
+      totalAmount,
+      paymentMethod: 'Online Transfer',
+      paymentReference: subscriptionRequest.transactionId || '',
+      status: INVOICE_STATUS.FINALIZED,
+      isDownloadableByClient: config.defaultClientInvoiceDownload,
+      generatedBy: adminId,
+      billingSnapshot: {
+        companyName: config.companyName,
+        companyAddress: config.companyAddress,
+        companyGST: config.companyGST,
+        companyPAN: config.companyPAN,
+        companyEmail: config.companyEmail,
+        companyPhone: config.companyPhone,
+        companyState: config.companyState,
+      },
+      clientBillingSnapshot: {
+        name: clientBilling.name || client?.profile?.name || '',
+        companyName: clientBilling.companyName || '',
+        email: clientBilling.email || client?.identifier || '',
+        phone: clientBilling.phone || '',
+        address: clientBilling.address || '',
+        city: clientBilling.city || '',
+        state: clientBilling.state || '',
+        pincode: clientBilling.pincode || '',
+        country: clientBilling.country || 'India',
+        gstNumber: clientBilling.gstNumber || '',
+      },
+      taxDetails,
+    });
+
+    console.log(`[BILLING] Invoice ${invoiceNumber} created for subscription ${subscriptionRequest._id}` + 
+      (taxDetails.isGstInvoice ? ` (GST: ${taxAmount})` : ' (Non-GST)'));
+    return invoice;
+  } catch (err) {
+    console.error('[BILLING] Failed to create subscription invoice:', err.message);
+    // Don't throw - invoice creation failure shouldn't block subscription approval
+    return null;
+  }
+}
+
+/**
  * Create invoice when order is approved
  * @param {Object} order - The approved order
  * @param {String} adminId - Admin who approved
@@ -377,6 +448,7 @@ async function getInvoiceById(invoiceId) {
     .populate('clientId', 'identifier profile billing')
     .populate('generatedBy', 'identifier')
     .populate('rechargeRequestId')
+    .populate('subscriptionRequestId')
     .populate('orderId')
     .exec();
 }
@@ -432,6 +504,7 @@ module.exports = {
   generateInvoiceNumber,
   generateReceiptNumber,
   createInvoiceForRecharge,
+  createInvoiceForSubscription,
   createInvoiceForOrder,
   createReceiptForTaskPurchase,
   getBillingConfig,
