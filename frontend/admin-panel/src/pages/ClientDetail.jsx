@@ -25,6 +25,7 @@ const ClientDetail = () => {
   const [roleSaving, setRoleSaving] = useState({});
   const [addingEmployeeForRole, setAddingEmployeeForRole] = useState(null);
   const [newEmployeeSelection, setNewEmployeeSelection] = useState({});
+  const [editingCommission, setEditingCommission] = useState(null);
 
   // Toast state
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -77,6 +78,7 @@ const ClientDetail = () => {
             employeeId: a.employee?.id || '',
             assignmentId: a.id,
             employee: a.employee,
+            commissionSettings: a.commissionSettings || { enabled: false, percentage: 0 },
           });
         }
       });
@@ -91,7 +93,7 @@ const ClientDetail = () => {
 
   const fetchAvailableEmployees = async () => {
     try {
-      const res = await api.get('/admin/employees?status=ACTIVE');
+      const res = await api.get('/admin/employees?status=ACTIVE&linkedToUser=true');
       setAvailableEmployees(res.data.employees || []);
     } catch (err) {
       setAvailableEmployees([]);
@@ -124,6 +126,7 @@ const ClientDetail = () => {
           employeeId,
           assignmentId: newAssignment?.id || '',
           employee: newAssignment?.employee,
+          commissionSettings: newAssignment?.commissionSettings || { enabled: false, percentage: 0 },
         }]
       }));
       showToast('Employee assigned');
@@ -151,6 +154,34 @@ const ClientDetail = () => {
       showToast(err.response?.data?.error || 'Failed to unassign employee', 'error');
     } finally {
       setRoleSaving(prev => ({ ...prev, [roleKey]: false }));
+    }
+  };
+
+  const handleUpdateCommission = async () => {
+    if (!editingCommission) return;
+    const { assignmentId, roleKey, enabled, percentage } = editingCommission;
+    const pct = Number(percentage);
+    if (enabled && (isNaN(pct) || pct < 0 || pct > 100)) {
+      showToast('Percentage must be between 0 and 100', 'error');
+      return;
+    }
+    setEditingCommission(prev => ({ ...prev, saving: true }));
+    try {
+      const payload = { commissionSettings: { enabled, percentage: enabled ? pct : 0 } };
+      const res = await api.patch(`/admin/employees/clients/${clientId}/assignments/${assignmentId}`, payload);
+      const updated = res.data.assignment?.commissionSettings || payload.commissionSettings;
+      setRoleAssignments(prev => ({
+        ...prev,
+        [roleKey]: (prev[roleKey] || []).map(a =>
+          a.assignmentId === assignmentId ? { ...a, commissionSettings: updated } : a
+        )
+      }));
+      setEditingCommission(null);
+      showToast(enabled ? `Commission override set to ${pct}%` : 'Commission override removed');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to update commission', 'error');
+    } finally {
+      setEditingCommission(prev => prev ? { ...prev, saving: false } : null);
     }
   };
 
@@ -296,7 +327,7 @@ const ClientDetail = () => {
           <div>
             <div style={{ marginBottom: '20px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px' }}>Assigned Team</h3>
-              <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Assign employees to this client. Commission rates are inherited from each employee's settings.</p>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Assign employees to this client. Commission uses each employee's default, or an assignment-level override if configured.</p>
             </div>
 
             {employeeAssignmentsLoading ? (
@@ -356,20 +387,78 @@ const ClientDetail = () => {
                           {assignments.map((assignment) => {
                             const emp = assignment.employee || availableEmployees.find(e => e.id === assignment.employeeId);
                             if (!emp) return null;
-                            const commission = emp.commissionSettings?.enabled ? `${emp.commissionSettings.percentage}%` : 'No commission';
+                            const comm = assignment.commissionSettings || {};
+                            const empComm = emp.commissionSettings || {};
+                            const isOverride = comm.enabled && empComm.enabled && comm.percentage !== empComm.percentage;
+                            const effectiveComm = comm.enabled ? comm : empComm;
+                            const commission = effectiveComm?.enabled ? `${effectiveComm.percentage}%` : 'No commission';
+                            const isEditing = editingCommission && editingCommission.assignmentId === assignment.assignmentId;
                             return (
-                              <div key={assignment.assignmentId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{emp.name}</div>
-                                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{roleName} • {commission}</div>
+                              <div key={assignment.assignmentId} style={{ padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: isEditing ? '1px solid #6366f1' : '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{emp.name}</div>
+                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                      {roleName} • {commission}
+                                      {isOverride && <span style={{ color: '#6366f1', marginLeft: '4px' }}>(override)</span>}
+                                      {!comm.enabled && empComm?.enabled && <span style={{ color: '#94a3b8', marginLeft: '4px' }}>(employee default)</span>}
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '4px' }}>
+                                    <button
+                                      onClick={() => setEditingCommission(isEditing ? null : { assignmentId: assignment.assignmentId, roleKey, enabled: comm.enabled || false, percentage: comm.percentage || 0, saving: false })}
+                                      disabled={isSaving}
+                                      style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: isEditing ? '#6366f1' : '#fff', fontSize: '11px', fontWeight: '500', color: isEditing ? '#fff' : '#6366f1', cursor: isSaving ? 'not-allowed' : 'pointer' }}
+                                    >
+                                      {isEditing ? '✕' : '✎'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveEmployeeFromRole(roleKey, assignment.assignmentId)}
+                                      disabled={isSaving}
+                                      style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #fecaca', backgroundColor: '#fff', fontSize: '11px', fontWeight: '500', color: '#dc2626', cursor: isSaving ? 'not-allowed' : 'pointer' }}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
                                 </div>
-                                <button
-                                  onClick={() => handleRemoveEmployeeFromRole(roleKey, assignment.assignmentId)}
-                                  disabled={isSaving}
-                                  style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #fecaca', backgroundColor: '#fff', fontSize: '11px', fontWeight: '500', color: '#dc2626', cursor: isSaving ? 'not-allowed' : 'pointer' }}
-                                >
-                                  Remove
-                                </button>
+                                {isEditing && (
+                                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#475569', cursor: 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={editingCommission.enabled}
+                                        onChange={e => setEditingCommission(prev => ({ ...prev, enabled: e.target.checked }))}
+                                        style={{ accentColor: '#6366f1' }}
+                                      />
+                                      Override
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={editingCommission.percentage}
+                                      onChange={e => setEditingCommission(prev => ({ ...prev, percentage: e.target.value }))}
+                                      disabled={!editingCommission.enabled}
+                                      placeholder="%"
+                                      style={{ width: '60px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px', opacity: editingCommission.enabled ? 1 : 0.5 }}
+                                    />
+                                    <span style={{ fontSize: '11px', color: '#64748b' }}>%</span>
+                                    <button
+                                      onClick={handleUpdateCommission}
+                                      disabled={editingCommission.saving}
+                                      style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', backgroundColor: '#6366f1', color: '#fff', fontSize: '11px', fontWeight: '600', cursor: editingCommission.saving ? 'not-allowed' : 'pointer', opacity: editingCommission.saving ? 0.6 : 1 }}
+                                    >
+                                      {editingCommission.saving ? 'Saving...' : 'Save'}
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingCommission(null)}
+                                      disabled={editingCommission.saving}
+                                      style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: '11px', fontWeight: '500', color: '#64748b', cursor: editingCommission.saving ? 'not-allowed' : 'pointer' }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
