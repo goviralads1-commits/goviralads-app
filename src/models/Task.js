@@ -152,7 +152,7 @@ const taskSchema = new mongoose.Schema(
     },
     commissionEarned: {
       type: Number,
-      default: 0,
+      default: null,
       min: 0,
     },
     // DEDUCTION MODE CONTROL

@@ -32,6 +32,15 @@ const Orders = () => {
   const [toDate, setToDate] = useState('');
   const [adminUsers, setAdminUsers] = useState([]);
   const [clientUsers, setClientUsers] = useState([]);
+  // Commission team selection for order approval
+  const [approvalTeam, setApprovalTeam] = useState([]);
+  const addApprovalMember = () => setApprovalTeam(prev => [...prev, { userId: '', percentage: 0 }]);
+  const removeApprovalMember = (idx) => setApprovalTeam(prev => prev.filter((_, i) => i !== idx));
+  const updateApprovalMember = (idx, field, value) => {
+    setApprovalTeam(prev => prev.map((m, i) => i === idx ? { ...m, [field]: field === 'percentage' ? Number(value) || 0 : value } : m));
+  };
+  const approvalTeamTotal = approvalTeam.reduce((s, m) => s + (Number(m.percentage) || 0), 0);
+  const approvalTeamUserIds = approvalTeam.map(m => m.userId).filter(Boolean);
   // Fetch admin users (used for order display)
   useEffect(() => {
     api.get('/admin/admin-users').then(res => setAdminUsers(res.data.users || [])).catch(() => {});
@@ -69,6 +78,7 @@ const Orders = () => {
       if (order) {
         setSelectedOrder(order);
         setShowDetailModal(true);
+        setApprovalTeam([]);
       }
     }
   }, [initialOrderId, orders]);
@@ -86,10 +96,16 @@ const Orders = () => {
     if (!selectedOrder) return;
     setActionLoading(true);
     try {
-      const res = await api.post(`/admin/orders/${selectedOrder.id || selectedOrder._id}/approve`, {});
+      const payload = {};
+      const validTeam = approvalTeam.filter(u => u.userId && u.percentage > 0);
+      if (validTeam.length > 0) {
+        payload.assignedUsers = validTeam.map(u => ({ userId: u.userId, percentage: u.percentage }));
+      }
+      const res = await api.post(`/admin/orders/${selectedOrder.id || selectedOrder._id}/approve`, payload);
       setToast({ type: 'success', message: res.data.message || 'Order approved successfully!' });
       setShowDetailModal(false);
       setSelectedOrder(null);
+      setApprovalTeam([]);
       fetchOrders();
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.error || 'Failed to approve order' });
@@ -122,6 +138,7 @@ const Orders = () => {
   const openOrderDetail = (order) => {
     setSelectedOrder(order);
     setShowDetailModal(true);
+    setApprovalTeam([]);
   };
 
   const formatDate = (dateStr) => {
@@ -526,6 +543,52 @@ const Orders = () => {
               {/* Action Buttons (only for PENDING_APPROVAL) */}
               {selectedOrder.orderStatus === 'PENDING_APPROVAL' && (
                 <>
+                  {/* Commission Recipients Selection */}
+                  <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>
+                      👥 Commission Recipients <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', textTransform: 'none' }}>(Optional – overrides plan defaults)</span>
+                    </h4>
+                    {approvalTeam.map((member, idx) => (
+                      <div key={idx} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                        <select
+                          value={member.userId}
+                          onChange={(e) => updateApprovalMember(idx, 'userId', e.target.value)}
+                          style={{ flex: '1 1 60%', minWidth: '0', padding: '10px 12px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                        >
+                          <option value="">Select user...</option>
+                          {clientUsers.filter(u => !approvalTeamUserIds.includes(u.id) || u.id === member.userId).map(u => (
+                            <option key={u.id} value={u.id}>{u.name || u.identifier}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={member.percentage}
+                          onChange={(e) => updateApprovalMember(idx, 'percentage', e.target.value)}
+                          placeholder="%"
+                          min="0"
+                          max="100"
+                          style={{ flex: '0 0 60px', width: '60px', padding: '10px 8px', fontSize: '13px', border: '2px solid #e2e8f0', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}
+                        />
+                        <button type="button" onClick={() => removeApprovalMember(idx)} style={{ flex: '0 0 36px', padding: '8px 12px', fontSize: '14px', border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '8px', cursor: 'pointer' }}>✕</button>
+                      </div>
+                    ))}
+                    {approvalTeam.length > 0 && (
+                      <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: '600', color: approvalTeamTotal > 100 ? '#dc2626' : '#16a34a' }}>
+                        Total: {approvalTeamTotal}% {approvalTeamTotal > 100 && '⚠️ Exceeds 100%'}
+                      </div>
+                    )}
+                    <button type="button" onClick={addApprovalMember} disabled={approvalTeamTotal >= 100} style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '600', border: '2px dashed #cbd5e1', borderRadius: '8px', backgroundColor: '#f8fafc', color: '#475569', cursor: 'pointer', width: '100%' }}>+ Add Commission Recipient</button>
+                    {approvalTeam.length > 0 && (
+                      <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#eff6ff', borderRadius: '8px', fontSize: '11px', color: '#3b82f6' }}>
+                        ℹ️ When set, this overrides plan defaults and employee team assignment.
+                      </div>
+                    )}
+                    {approvalTeam.length === 0 && (
+                      <div style={{ marginTop: '8px', padding: '8px 12px', backgroundColor: '#fefce8', borderRadius: '8px', fontSize: '11px', color: '#a16207' }}>
+                        ℹ️ If empty, plan defaults or employee team will be used as fallback.
+                      </div>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: '12px' }}>
                   <button
                     onClick={() => setShowRejectModal(true)}

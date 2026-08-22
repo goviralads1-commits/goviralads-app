@@ -3567,8 +3567,8 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           ...(item.planSnapshot?.defaultCommissionRoles?.length ? { defaultCommissionRoles: item.planSnapshot.defaultCommissionRoles } : {}),
           // Phase 2: pass through from approve request body (highest priority)
           ...(reqAssignedUsers && Array.isArray(reqAssignedUsers) && reqAssignedUsers.length > 0 ? { assignedUsers: reqAssignedUsers } : {}),
-          // Phase 3: auto-populate from client's assigned team (fallback)
-          ...(!reqAssignedUsers?.length && orderTeamAssignedUsers.length > 0 ? { assignedUsers: orderTeamAssignedUsers } : {}),
+          // Phase 3: auto-populate from client's assigned team (fallback ONLY if Phase 1 & 2 are empty)
+          ...(!reqAssignedUsers?.length && !item.planSnapshot?.defaultAssignedUsers?.length && orderTeamAssignedUsers.length > 0 ? { assignedUsers: orderTeamAssignedUsers } : {}),
         };
         
         const task = await Task.create([taskData], { session });
