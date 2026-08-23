@@ -812,6 +812,11 @@ router.post('/tasks/:taskId/content', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Owner-only: commission recipients (assignedUsers) cannot submit content
+    if (!isTaskOwner) {
+      return res.status(403).json({ error: 'Only the task owner can perform this action' });
+    }
+
     // Only allow content submission for active/pending tasks (not completed/cancelled)
     if (task.status === 'COMPLETED' || task.status === 'CANCELLED') {
       return res.status(400).json({ error: 'Cannot submit content for completed or cancelled tasks' });
@@ -1121,6 +1126,11 @@ router.post('/tasks/:taskId/approvals/:approvalId/select', async (req, res) => {
     
     if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Owner-only: commission recipients (assignedUsers) cannot submit approval selections
+    if (!isTaskOwner) {
+      return res.status(403).json({ error: 'Only the task owner can perform this action' });
     }
 
     const approval = task.approvalRequests?.find(a => a.id === approvalId);
@@ -2017,6 +2027,16 @@ router.get('/tasks', async (req, res) => {
         offerPrice: t.offerPrice,
         originalPrice: t.originalPrice,
         countdownEndDate: t.countdownEndDate,
+        // Commission-only indicator: true when user is in assignedUsers but NOT the task owner
+        isAssignedUser: (() => {
+          const isOwner = t.clientId && t.clientId.toString() === clientId;
+          if (isOwner) return false;
+          return (t.assignedUsers || []).some(u => {
+            if (!u.userId) return false;
+            const uid = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+            return uid === clientId;
+          });
+        })(),
         // FIX #1: Include milestones in response
         milestones: currentMilestones.map(m => ({
           name: m.name,
@@ -3898,6 +3918,7 @@ router.get('/earnings-balance', async (req, res) => {
     }
 
     const entries = await EarningsLedger.find(filter)
+      .populate('sourceTaskId', 'title')
       .sort({ createdAt: -1 })
       .limit(500);
 
@@ -3909,7 +3930,8 @@ router.get('/earnings-balance', async (req, res) => {
         id: e._id.toString(),
         type: e.type,
         amount: e.amount,
-        sourceTaskId: e.sourceTaskId?.toString() || null,
+        sourceTaskId: e.sourceTaskId?._id?.toString() || null,
+        taskTitle: e.sourceTaskId?.title || null,
         note: e.note,
         createdAt: e.createdAt,
       })),

@@ -402,6 +402,7 @@ const TaskDetail = () => {
                 onSubmitSuccess={fetchTask}
                 onViewHistory={(a) => setHistoryModalApproval(a)}
                 compact={isFullScreen}
+                readOnly={task?.isAssignedUser}
               />
               {/* View in Chat button */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-8px', marginBottom: '12px' }}>
@@ -447,6 +448,7 @@ const TaskDetail = () => {
         onSubmitSuccess={fetchTask}
         onViewHistory={(a) => setHistoryModalApproval(a)}
         compact={isFullScreen}
+        readOnly={task?.isAssignedUser}
       />
     );
 
@@ -939,6 +941,17 @@ const TaskDetail = () => {
             {task.title}
           </h1>
 
+          {/* Commission-only read-only indicator */}
+          {task.isAssignedUser && (
+            <span style={{
+              display: 'inline-block', marginTop: '8px', padding: '4px 12px',
+              fontSize: '11px', fontWeight: '600', borderRadius: '6px',
+              backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0'
+            }}>
+              {'\uD83D\uDCB0 Commission Recipient \u2014 Read Only'}
+            </span>
+          )}
+
           {/* Plan Name - Explicitly for booked tasks */}
           {isPendingApproval && (
             <p style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', margin: '8px 0 0 0' }}>
@@ -1238,9 +1251,9 @@ const TaskDetail = () => {
           );
         })()}
 
-        {/* CLIENT CONTENT SUBMISSION (Phase 2) */}
+        {/* CLIENT CONTENT SUBMISSION (Phase 2) - hidden for commission-only users */}
         {/* Show if content not yet submitted - regardless of status */}
-        {!task.clientContentSubmitted && (
+        {!task.clientContentSubmitted && !task.isAssignedUser && (
           <div style={{
             backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)', 

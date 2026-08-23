@@ -237,13 +237,28 @@ const EarningsLedger = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {entries.map((entry) => {
                   const color = typeColors[entry.type] || { bg: '#f1f5f9', text: '#475569' };
+                  const isClickable = !!entry.sourceTaskId;
+                  const displayLabel = (entry.type === 'COMMISSION_EARNED' && entry.taskTitle)
+                    ? `Commission \u2014 ${entry.taskTitle}`
+                    : (typeLabels[entry.type] || entry.type);
                   return (
-                    <div key={entry.id} style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                    <div
+                      key={entry.id}
+                      onClick={isClickable ? () => navigate(`/tasks/${entry.sourceTaskId}`) : undefined}
+                      style={{
+                        backgroundColor: '#fff', borderRadius: '12px', padding: '16px',
+                        border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        cursor: isClickable ? 'pointer' : 'default',
+                        transition: 'box-shadow 0.15s',
+                      }}
+                      onMouseEnter={isClickable ? (e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; } : undefined}
+                      onMouseLeave={isClickable ? (e) => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; } : undefined}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '11px', backgroundColor: color.bg, color: color.text, padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
-                          {typeLabels[entry.type] || entry.type}
+                        <span style={{ fontSize: '11px', backgroundColor: color.bg, color: color.text, padding: '3px 8px', borderRadius: '6px', fontWeight: '600', flex: 1, marginRight: '8px' }}>
+                          {displayLabel}
                         </span>
-                        <span style={{ fontSize: '15px', fontWeight: '700', color: entry.amount >= 0 ? '#16a34a' : '#dc2626' }}>
+                        <span style={{ fontSize: '15px', fontWeight: '700', color: entry.amount >= 0 ? '#16a34a' : '#dc2626', flexShrink: 0 }}>
                           {entry.amount >= 0 ? '+' : ''}{Math.abs(entry.amount).toLocaleString()} credits
                         </span>
                       </div>

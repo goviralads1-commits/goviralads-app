@@ -17,7 +17,8 @@ const ApprovalBox = ({
   taskId, 
   onSubmitSuccess, 
   onViewHistory,
-  compact = false 
+  compact = false,
+  readOnly = false
 }) => {
   // Local state for this approval
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -33,7 +34,7 @@ const ApprovalBox = ({
 
   // Handle option toggle
   const handleOptionToggle = (option) => {
-    if (isLocked) return;
+    if (isLocked || readOnly) return;
     
     setSelectedOptions(prev => {
       if (approval.type === 'single') {
@@ -117,7 +118,7 @@ const ApprovalBox = ({
             <button
               key={idx}
               onClick={() => handleOptionToggle(opt)}
-              disabled={isLocked}
+              disabled={isLocked || readOnly}
               style={{
                 width: '100%',
                 padding: '10px 14px',
@@ -127,8 +128,8 @@ const ApprovalBox = ({
                 backgroundColor: isSelected ? '#dcfce7' : '#fff',
                 border: isSelected ? '2px solid #22c55e' : '2px solid #e5e7eb',
                 textAlign: 'left',
-                cursor: isLocked ? 'not-allowed' : 'pointer',
-                opacity: isLocked ? 0.7 : 1,
+                cursor: (isLocked || readOnly) ? 'not-allowed' : 'pointer',
+                opacity: (isLocked || readOnly) ? 0.7 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
@@ -144,8 +145,8 @@ const ApprovalBox = ({
           );
         })}
 
-        {/* Submit Button - Only show if not locked */}
-        {!isLocked && (
+        {/* Submit Button - Only show if not locked and not read-only */}
+        {!isLocked && !readOnly && (
           <button
             onClick={handleSubmit}
             disabled={submitting || selectedOptions.length === 0}
