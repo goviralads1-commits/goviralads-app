@@ -489,7 +489,7 @@ const Dashboard = () => {
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>₹{(analytics.revenue?.total || 0).toLocaleString('en-IN')}</p>
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Total Revenue</p>
-                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+₹{(analytics.revenue?.thisMonth || 0).toLocaleString('en-IN')} this month</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+₹{(analytics.revenue?.thisMonth || 0).toLocaleString('en-IN')} current month</p>
                 <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
               </div>
               {/* Orders */}
@@ -507,7 +507,7 @@ const Dashboard = () => {
                   <span style={{ fontSize: '16px' }}>📋</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{analytics.tasks?.active || 0}</p>
-                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Tasks</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Open Tasks</p>
                 <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>{analytics.tasks?.completionRate || 0}% completion rate</p>
                 <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
               </div>
@@ -518,7 +518,7 @@ const Dashboard = () => {
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{(analytics.commissions?.totalPaid || 0).toLocaleString('en-IN')} credits</p>
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Commission Paid</p>
-                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>Costs: ₹{(analytics.costs?.totalAllCosts || 0).toLocaleString('en-IN')}</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>All Costs: ₹{(analytics.costs?.totalAllCosts || 0).toLocaleString('en-IN')}</p>
                 <span style={{ position: 'absolute', top: '10px', right: '10px', fontSize: '14px', opacity: 0.5 }}>↗</span>
               </div>
               {/* Total Clients */}
@@ -527,8 +527,8 @@ const Dashboard = () => {
                   <span style={{ fontSize: '16px' }}>👥</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 2px 0' }}>{analytics.clients?.active || 0}</p>
-                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Clients</p>
-                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+{analytics.clients?.newThisMonth || 0} this month</p>
+                <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Clients (in period)</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, margin: '2px 0 0 0' }}>+{analytics.clients?.newThisMonth || 0} current month</p>
               </div>
               {/* Net Profit */}
               <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
@@ -675,8 +675,8 @@ const Dashboard = () => {
 
         {/* COMMISSION EARNINGS SECTION */}
         <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>💰 Commission Earnings</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>💰 Commission Earnings <span style={{ fontSize: '12px', fontWeight: '500', color: '#94a3b8' }}>(All Time)</span></h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px' }}>
             {/* Total Revenue — main admin only */}
             {commissionData?.isMainAdmin && (
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
@@ -684,25 +684,7 @@ const Dashboard = () => {
                   <span style={{ fontSize: '16px' }}>💎</span>
                 </div>
                 <p style={{ fontSize: '22px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>{(commissionData?.overallTotal || 0).toLocaleString('en-IN')} credits</p>
-                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Commission</p>
-              </div>
-            )}
-            {/* Commission Paid */}
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '16px' }}>💵</span>
-              </div>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#10b981', margin: '0 0 2px 0' }}>{(commissionData?.overallTotal || 0).toLocaleString('en-IN')} credits</p>
-              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{commissionData?.isMainAdmin ? 'Commission Paid' : 'Your Earnings'}</p>
-            </div>
-            {/* Company Profit — main admin only */}
-            {commissionData?.isMainAdmin && (
-              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '16px' }}>🏢</span>
-                </div>
-                <p style={{ fontSize: '22px', fontWeight: '800', color: '#3b82f6', margin: '0 0 2px 0' }}>{analytics ? `₹${Math.max(0, (analytics.profit?.netProfit || 0)).toLocaleString('en-IN')}` : '—'}</p>
-                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Company Profit</p>
+                <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Commission (All Time)</p>
               </div>
             )}
             {/* Tasks Completed */}
@@ -718,7 +700,7 @@ const Dashboard = () => {
           {/* Recent Commission Logs */}
           {(commissionData?.logs || []).length > 0 ? (
             <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent Activity</h4>
+              <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent Commission Earnings</h4>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
@@ -765,8 +747,8 @@ const Dashboard = () => {
               <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </div>
             <p style={{ fontSize: '32px', fontWeight: '800', color: '#fff', margin: '0 0 4px 0' }}>{dashboardData?.totalClients || clients.length || 0}</p>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: 0 }}>Total Clients</p>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>Click to manage →</p>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: 0 }}>Registered Clients</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>All time · Manage →</p>
           </div>
 
           {/* Plans - Clickable */}
@@ -825,7 +807,7 @@ const Dashboard = () => {
         </div>
 
         {/* ADDITIONAL STATS ROW */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
           {/* Pending Approvals */}
           <div
             onClick={() => navigate('/tasks')}
@@ -840,22 +822,6 @@ const Dashboard = () => {
             </div>
             <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{dashboardData?.pendingApprovals || 0}</p>
             <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Pending Approvals</p>
-          </div>
-
-          {/* Active Tasks */}
-          <div
-            onClick={() => navigate('/tasks')}
-            style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '16px' }}>📋</span>
-              </div>
-            </div>
-            <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{dashboardData?.activeTasks || 0}</p>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Active Tasks</p>
           </div>
 
           {/* Client Responses */}
