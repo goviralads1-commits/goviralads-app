@@ -1067,7 +1067,32 @@ const Dashboard = () => {
         </div>
 
         {/* SECTION TABS */}
-        <div className="premium-tab-bar" data-theme="indigo" style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <style>{`
+          .premium-tab-bar {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            overflow: visible !important;
+            padding-bottom: 0 !important;
+          }
+          .premium-tab {
+            justify-content: center;
+            white-space: normal;
+            padding: 10px 8px !important;
+            font-size: 13px !important;
+          }
+          @media (min-width: 640px) {
+            .premium-tab-bar {
+              display: flex !important;
+            }
+            .premium-tab {
+              white-space: nowrap;
+              padding: 12px 20px !important;
+              font-size: 14px !important;
+            }
+          }
+        `}</style>
+        <div className="premium-tab-bar" data-theme="indigo" style={{ marginBottom: '20px' }}>
           {[
             { id: 'updates', label: 'Updates', icon: '🔄', count: updates.length },
             { id: 'requirements', label: 'Requirements', icon: '📋', count: requirements.length },
@@ -1079,9 +1104,9 @@ const Dashboard = () => {
               onClick={() => setActiveSection(tab.id)}
               className={`premium-tab${activeSection === tab.id ? ' active' : ''}`}
               style={{
-                display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px',
-                borderRadius: '12px', whiteSpace: 'nowrap',
-                fontWeight: '600', fontSize: '14px',
+                display: 'flex', alignItems: 'center', gap: '6px',
+                borderRadius: '12px',
+                fontWeight: '600',
               }}
             >
               <span>{tab.icon}</span>
