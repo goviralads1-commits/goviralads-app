@@ -87,88 +87,48 @@ const Wallet = () => {
     }
   };
 
-  const handleApprove = async (requestId) => {
-    try {
-      setLoadingId(requestId);
-      await api.post(`/admin/recharge-requests/${requestId}/approve`);
-      setToast('Approved successfully');
-      setTimeout(() => setToast(null), 3000);
-      try {
-        await Promise.all([fetchWallets(), fetchRechargeRequests()]);
-        if (selectedClient) await fetchClientWallet(selectedClient);
-      } catch (refreshErr) {
-        console.warn('Refresh after approve had issues:', refreshErr);
-      }
-    } catch (err) {
-      console.error('Approve error:', err);
-      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
-      setTimeout(() => setToast(null), 4000);
-    } finally {
-      setLoadingId(null);
-    }
-  };
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, type: 'recharge'|'subscription' }
 
-  const handleReject = async (requestId) => {
+  const handleDeleteRecharge = async (requestId) => {
     try {
       setLoadingId(requestId);
-      await api.post(`/admin/recharge-requests/${requestId}/reject`);
-      setToast('Rejected successfully');
+      await api.delete(`/admin/recharge-requests/${requestId}`);
+      setToast('Request deleted');
       setTimeout(() => setToast(null), 3000);
       try {
         await fetchRechargeRequests();
       } catch (refreshErr) {
-        console.warn('Refresh after reject had issues:', refreshErr);
+        console.warn('Refresh after delete had issues:', refreshErr);
       }
     } catch (err) {
-      console.error('Reject error:', err);
-      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
+      console.error('Delete error:', err);
+      setToast(err.response?.data?.error || 'Failed to delete request');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
+      setDeleteConfirm(null);
     }
   };
 
-  // Subscription Request Handlers
-  const handleSubscriptionApprove = async (requestId) => {
+  const handleDeleteSubscription = async (requestId) => {
     try {
       setLoadingId(requestId);
-      const res = await api.post(`/admin/subscription-requests/${requestId}/approve`);
-      // Success - show green toast
-      setToast({ type: 'success', message: `✅ Approved! ${res.data.totalCredits || ''} credits added` });
-      setTimeout(() => setToast(null), 3000);
-      try {
-        await Promise.all([fetchWallets(), fetchSubscriptionRequests()]);
-        if (selectedClient) await fetchClientWallet(selectedClient);
-      } catch (refreshErr) {
-        console.warn('Refresh after approve had issues:', refreshErr);
-      }
-    } catch (err) {
-      console.error('Subscription approve error:', err);
-      // Error - show red toast
-      setToast({ type: 'error', message: err.response?.data?.details || err.response?.data?.error || 'Failed to approve' });
-      setTimeout(() => setToast(null), 4000);
-    } finally {
-      setLoadingId(null);
-    }
-  };
-
-  const handleSubscriptionReject = async (requestId) => {
-    try {
-      setLoadingId(requestId);
-      await api.post(`/admin/subscription-requests/${requestId}/reject`);
-      setToast('Rejected successfully');
+      await api.delete(`/admin/subscription-requests/${requestId}`);
+      setToast('Request deleted');
       setTimeout(() => setToast(null), 3000);
       try {
         await fetchSubscriptionRequests();
       } catch (refreshErr) {
-        console.warn('Refresh after reject had issues:', refreshErr);
+        console.warn('Refresh after delete had issues:', refreshErr);
       }
     } catch (err) {
-      console.error('Subscription reject error:', err);
-      setToast(err.response?.data?.error || 'Something went wrong. Please try again.');
+      console.error('Delete error:', err);
+      setToast(err.response?.data?.error || 'Failed to delete request');
       setTimeout(() => setToast(null), 4000);
     } finally {
       setLoadingId(null);
+      setDeleteConfirm(null);
     }
   };
 
@@ -599,7 +559,7 @@ const Wallet = () => {
                       </div>
                       <div style={{display: 'flex', gap: '8px', flexShrink: 0}}>
                         <button
-                          onClick={() => handleReject(req.id)}
+                          onClick={() => setDeleteConfirm({ id: req.id, type: 'recharge' })}
                           disabled={loadingId === req.id}
                           style={{
                             padding: '8px 16px',
@@ -613,25 +573,7 @@ const Wallet = () => {
                             opacity: loadingId === req.id ? 0.6 : 1
                           }}
                         >
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => handleApprove(req.id)}
-                          disabled={loadingId === req.id}
-                          style={{
-                            padding: '8px 16px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            color: '#fff',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            borderRadius: '10px',
-                            border: 'none',
-                            cursor: loadingId === req.id ? 'not-allowed' : 'pointer',
-                            opacity: loadingId === req.id ? 0.6 : 1,
-                            boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
-                          }}
-                        >
-                          {loadingId === req.id ? 'Processing...' : 'Approve'}
+                          {loadingId === req.id ? 'Deleting...' : '🗑 Delete'}
                         </button>
                       </div>
                     </div>
@@ -721,7 +663,7 @@ const Wallet = () => {
                       </div>
                       <div style={{display: 'flex', gap: '8px', flexShrink: 0}}>
                         <button
-                          onClick={() => handleSubscriptionReject(req.id)}
+                          onClick={() => setDeleteConfirm({ id: req.id, type: 'subscription' })}
                           disabled={loadingId === req.id}
                           style={{
                             padding: '8px 16px',
@@ -735,25 +677,7 @@ const Wallet = () => {
                             opacity: loadingId === req.id ? 0.6 : 1
                           }}
                         >
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => handleSubscriptionApprove(req.id)}
-                          disabled={loadingId === req.id}
-                          style={{
-                            padding: '8px 16px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            color: '#fff',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            borderRadius: '10px',
-                            border: 'none',
-                            cursor: loadingId === req.id ? 'not-allowed' : 'pointer',
-                            opacity: loadingId === req.id ? 0.6 : 1,
-                            boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
-                          }}
-                        >
-                          {loadingId === req.id ? 'Processing...' : 'Approve'}
+                          {loadingId === req.id ? 'Deleting...' : '🗑 Delete'}
                         </button>
                       </div>
                     </div>
@@ -1048,6 +972,82 @@ const Wallet = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <>
+          <div
+            onClick={() => setDeleteConfirm(null)}
+            style={{
+              position: 'fixed', inset: 0,
+              backgroundColor: 'rgba(15,23,42,0.6)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 95
+            }}
+          />
+          <div style={{
+            position: 'fixed',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: '#fff',
+            borderRadius: '24px',
+            padding: '32px',
+            width: '90%',
+            maxWidth: '380px',
+            zIndex: 100,
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+          }}>
+            <h3 style={{fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: '0 0 12px 0'}}>Delete Request?</h3>
+            <p style={{fontSize: '14px', color: '#64748b', margin: '0 0 24px 0', lineHeight: '1.5'}}>
+              Delete this request? This cannot be undone.
+            </p>
+            <div style={{display: 'flex', gap: '12px'}}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: 'transparent',
+                  color: '#64748b',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '12px',
+                  border: '2px solid #e2e8f0',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={loadingId === deleteConfirm.id}
+                onClick={() => {
+                  if (deleteConfirm.type === 'recharge') {
+                    handleDeleteRecharge(deleteConfirm.id);
+                  } else {
+                    handleDeleteSubscription(deleteConfirm.id);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '12px',
+                  border: 'none',
+                  cursor: loadingId === deleteConfirm.id ? 'not-allowed' : 'pointer',
+                  opacity: loadingId === deleteConfirm.id ? 0.6 : 1
+                }}
+              >
+                {loadingId === deleteConfirm.id ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </>
       )}

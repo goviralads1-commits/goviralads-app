@@ -39,6 +39,10 @@ const { stripHtmlTags } = require('../utils/validators');
 const DeviceToken = require('../models/DeviceToken');
 const pushNotificationService = require('../services/pushNotificationService');
 const { computeCreditDelta } = require('../utils/transactionHelpers');
+const Notification = require('../models/Notification');
+const { ClientEmployeeAssignment } = require('../models/ClientEmployeeAssignment');
+const UserSubscription = require('../models/UserSubscription');
+const { ReminderLog } = require('../models/ReminderLog');
 
 const router = express.Router();
 
@@ -655,6 +659,36 @@ router.post('/recharge-requests/:id/reject', async (req, res) => {
   }
 });
 
+// DELETE /admin/recharge-requests/:id - Delete pending recharge request (no financial side effects)
+router.delete('/recharge-requests/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // ROLE CHECK: Only main admin can delete recharge requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can delete recharge requests' });
+    }
+
+    const request = await RechargeRequest.findById(id).exec();
+    if (!request) {
+      return res.status(404).json({ error: 'Recharge request not found' });
+    }
+    if (request.status !== RECHARGE_STATUS.PENDING) {
+      return res.status(400).json({ error: 'Only PENDING requests can be deleted' });
+    }
+
+    await RechargeRequest.findByIdAndDelete(id).exec();
+
+    return res.status(200).json({ message: 'Request deleted', id });
+  } catch (err) {
+    console.error('[RECHARGE] Delete error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete recharge request' });
+  }
+});
+
 // ================== SUBSCRIPTION REQUESTS ==================
 
 // GET /admin/subscription-requests - List all subscription requests
@@ -977,6 +1011,218 @@ router.post('/subscription-requests/:id/reject', async (req, res) => {
   } catch (err) {
     console.error('[SUB_REQ] Reject error:', err.message);
     return res.status(500).json({ error: 'Failed to reject subscription request' });
+  }
+});
+
+// DELETE /admin/subscription-requests/:id - Delete pending subscription request (no financial side effects)
+router.delete('/subscription-requests/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // ROLE CHECK: Only main admin can delete subscription requests
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can delete subscription requests' });
+    }
+
+    const request = await SubscriptionRequest.findById(id).exec();
+    if (!request) {
+      return res.status(404).json({ error: 'Subscription request not found' });
+    }
+    if (request.status !== SUBSCRIPTION_REQUEST_STATUS.PENDING) {
+      return res.status(400).json({ error: 'Only PENDING requests can be deleted' });
+    }
+
+    await SubscriptionRequest.findByIdAndDelete(id).exec();
+
+    return res.status(200).json({ message: 'Request deleted', id });
+  } catch (err) {
+    console.error('[SUB_REQ] Delete error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete subscription request' });
+  }
+});
+
+// ================== RESET TEST CLIENT DATA ==================
+// POST /admin/clients/:clientId/reset-data - Permanently delete all business data for a test client
+router.post('/clients/:clientId/reset-data', async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { confirmPhrase } = req.body;
+
+    // SAFETY 1: Only main admin
+    const adminUser = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = adminUser && adminUser.role === 'ADMIN' && !adminUser.customRole;
+    if (!isMainAdmin) {
+      return res.status(403).json({ error: 'Access denied: Only main admin can reset client data' });
+    }
+
+    // SAFETY 2: Target must exist and be a CLIENT
+    const targetUser = await User.findById(clientId).exec();
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (targetUser.role !== 'CLIENT') {
+      return res.status(403).json({ error: 'Only CLIENT accounts can be reset' });
+    }
+
+    // SAFETY 3: Cannot reset own account
+    if (req.user.id === clientId) {
+      return res.status(403).json({ error: 'Cannot reset your own account' });
+    }
+
+    // SAFETY 4: Confirmation phrase must match exactly
+    const expectedPhrase = `RESET ${targetUser.identifier}`;
+    if (confirmPhrase !== expectedPhrase) {
+      return res.status(400).json({ error: `Confirmation phrase must be exactly: ${expectedPhrase}` });
+    }
+
+    // Start MongoDB session for atomic operations
+    const session = await mongoose.startSession();
+    const summary = {};
+
+    try {
+      await session.withTransaction(async () => {
+        // 1. Find wallet and get ID for transaction lookup
+        const wallet = await Wallet.findOne({ clientId }).session(session).exec();
+        const walletId = wallet ? wallet._id : null;
+
+        // 2. Get client task IDs (for commission cascade) BEFORE deleting
+        const clientTasks = await Task.find(
+          { clientId, isListedInPlans: { $ne: true } },
+          '_id'
+        ).session(session).lean().exec();
+        const taskIds = clientTasks.map(t => t._id);
+
+        // 3. Get UserSubscription IDs (for reminder cascade)
+        const userSubs = await UserSubscription.find(
+          { userId: clientId },
+          '_id'
+        ).session(session).lean().exec();
+        const subIds = userSubs.map(s => s._id);
+
+        // 4. Delete WalletTransactions via native driver (bypass immutability hooks)
+        if (walletId) {
+          const txResult = await mongoose.connection.db
+            .collection('wallettransactions')
+            .deleteMany({ walletId }, { session });
+          summary.transactionsDeleted = txResult.deletedCount || 0;
+        }
+
+        // 5. Delete Wallet
+        const walletResult = await Wallet.deleteMany({ clientId }).session(session).exec();
+        summary.walletsDeleted = walletResult.deletedCount || 0;
+
+        // 6. Delete CommissionLogs tied to client's tasks
+        if (taskIds.length > 0) {
+          const commResult = await CommissionLog.deleteMany(
+            { taskId: { $in: taskIds } }
+          ).session(session).exec();
+          summary.commissionLogsDeleted = commResult.deletedCount || 0;
+        }
+
+        // 7. Delete EarningsLedger entries tied to client's tasks
+        if (taskIds.length > 0) {
+          const ledgerResult = await EarningsLedger.deleteMany(
+            { sourceTaskId: { $in: taskIds } }
+          ).session(session).exec();
+          summary.ledgerEntriesDeleted = ledgerResult.deletedCount || 0;
+        }
+
+        // 8. Delete Tasks (client-specific only, not plans)
+        const taskResult = await Task.deleteMany(
+          { clientId, isListedInPlans: { $ne: true } }
+        ).session(session).exec();
+        summary.tasksDeleted = taskResult.deletedCount || 0;
+
+        // 9. Delete Orders
+        const orderResult = await Order.deleteMany({ clientId }).session(session).exec();
+        summary.ordersDeleted = orderResult.deletedCount || 0;
+
+        // 10. Delete Invoices
+        const invoiceResult = await Invoice.deleteMany({ clientId }).session(session).exec();
+        summary.invoicesDeleted = invoiceResult.deletedCount || 0;
+
+        // 11. Delete Receipts
+        const receiptResult = await Receipt.deleteMany({ clientId }).session(session).exec();
+        summary.receiptsDeleted = receiptResult.deletedCount || 0;
+
+        // 12. Delete RechargeRequests
+        const rechargeResult = await RechargeRequest.deleteMany({ clientId }).session(session).exec();
+        summary.rechargeRequestsDeleted = rechargeResult.deletedCount || 0;
+
+        // 13. Delete SubscriptionRequests
+        const subReqResult = await SubscriptionRequest.deleteMany({ clientId }).session(session).exec();
+        summary.subscriptionRequestsDeleted = subReqResult.deletedCount || 0;
+
+        // 14. Delete Tickets
+        const Ticket = mongoose.model('Ticket');
+        const ticketResult = await Ticket.deleteMany({ clientId }).session(session).exec();
+        summary.ticketsDeleted = ticketResult.deletedCount || 0;
+
+        // 15. Delete ReminderLogs (cascade from UserSubscriptions)
+        if (subIds.length > 0) {
+          const reminderResult = await ReminderLog.deleteMany(
+            { subscriptionId: { $in: subIds } }
+          ).session(session).exec();
+          summary.reminderLogsDeleted = reminderResult.deletedCount || 0;
+        }
+
+        // 16. Delete UserSubscriptions
+        const userSubResult = await UserSubscription.deleteMany({ userId: clientId }).session(session).exec();
+        summary.userSubscriptionsDeleted = userSubResult.deletedCount || 0;
+
+        // 17. Delete EarningsRedeemRequests
+        const redeemResult = await EarningsRedeemRequest.deleteMany({ userId: clientId }).session(session).exec();
+        summary.redeemRequestsDeleted = redeemResult.deletedCount || 0;
+
+        // 18. Delete ClientEmployeeAssignments
+        const assignResult = await ClientEmployeeAssignment.deleteMany({ clientId }).session(session).exec();
+        summary.assignmentsDeleted = assignResult.deletedCount || 0;
+
+        // 19. Delete Notifications
+        const notifResult = await Notification.deleteMany({ recipientId: clientId }).session(session).exec();
+        summary.notificationsDeleted = notifResult.deletedCount || 0;
+
+        // 20. Delete DeviceTokens
+        const deviceResult = await DeviceToken.deleteMany({ userId: clientId }).session(session).exec();
+        summary.deviceTokensDeleted = deviceResult.deletedCount || 0;
+
+        // 21. Pull client responses from Notices (embedded array)
+        const noticeResult = await Notice.updateMany(
+          { 'responses.clientId': clientId },
+          { $pull: { responses: { clientId } } }
+        ).session(session).exec();
+        summary.noticeResponsesRemoved = noticeResult.modifiedCount || 0;
+
+        // 22. Recreate empty wallet
+        await Wallet.create([{
+          clientId,
+          walletCredits: 0,
+          subscriptionCredits: 0,
+          subscriptionExpiresAt: null,
+          currentPlanId: null,
+          currentPlanPrice: 0,
+        }], { session });
+        summary.walletRecreated = true;
+      });
+
+      return res.status(200).json({
+        message: `Test client data reset successfully for ${targetUser.identifier}`,
+        clientId,
+        identifier: targetUser.identifier,
+        summary,
+      });
+    } catch (txErr) {
+      console.error('[RESET] Transaction error:', txErr.message);
+      return res.status(500).json({ error: 'Reset failed - transaction rolled back. No data was lost.', details: txErr.message });
+    } finally {
+      await session.endSession();
+    }
+  } catch (err) {
+    console.error('[RESET] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to reset client data' });
   }
 });
 
