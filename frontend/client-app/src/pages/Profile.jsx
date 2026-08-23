@@ -34,6 +34,8 @@ const Profile = () => {
   const [walletLoading, setWalletLoading] = useState(false);
   // Activity fetch flag
   const [activityFetched, setActivityFetched] = useState(false);
+  // Wallet fetch flag - fetch once per page visit
+  const [walletFetched, setWalletFetched] = useState(false);
   // Toast/error state
   const [toast, setToast] = useState(null);
   // Push notification state
@@ -113,9 +115,10 @@ const Profile = () => {
   };
 
   useEffect(() => {
-    // Wallet tab - always fetch fresh data
-    if (activeTab === 'wallet') {
+    // Wallet tab - fetch once per page visit
+    if (activeTab === 'wallet' && !walletFetched) {
       fetchWallet();
+      setWalletFetched(true);
     }
     // Activity tab - fetch once
     if (activeTab === 'activity' && !activityFetched) {
@@ -126,7 +129,7 @@ const Profile = () => {
     if (activeTab === 'support' && tickets.length === 0) {
       fetchTickets();
     }
-  }, [activeTab, activityFetched, tickets.length]);
+  }, [activeTab, activityFetched, walletFetched, tickets.length]);
 
   // Fetch tickets
   const fetchTickets = async () => {

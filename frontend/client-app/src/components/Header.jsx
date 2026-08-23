@@ -24,6 +24,7 @@ const Header = ({ title }) => {
   const prevUnreadCountRef = useRef(null); // null = first load, not yet initialized
   const lastSoundPlayedRef = useRef(0);
   const lastPlayedNotificationIdRef = useRef(null); // Track last notification that triggered sound
+  const audioContextRef = useRef(null); // Cached AudioContext to avoid creating new ones
 
   // Play notification sound (soft beep using Web Audio API)
   const playNotificationSound = useCallback(() => {
@@ -39,8 +40,17 @@ const Header = ({ title }) => {
       if (now - lastSoundPlayedRef.current < 30000) return;
       lastSoundPlayedRef.current = now;
       
-      // Create soft notification sound using Web Audio API
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Reuse cached AudioContext (create only once)
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return; // Browser doesn't support Web Audio
+        audioContextRef.current = new AudioCtx();
+      }
+      const audioContext = audioContextRef.current;
+      
+      // Resume if suspended (browser autoplay policy)
+      if (audioContext.state === 'suspended') audioContext.resume();
+      
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
       
@@ -355,34 +365,37 @@ const Header = ({ title }) => {
               {/* Notifications Dropdown - Portal to body with fixed positioning */}
               {showNotifications && ReactDOM.createPortal(
                 <>
-                  {/* Backdrop for mobile */}
+                  {/* Backdrop for mobile — visibility controlled by CSS media query */}
                   <div 
+                    className="notif-backdrop"
                     onClick={() => setShowNotifications(false)}
-                    style={{
-                      position: 'fixed',
-                      inset: 0,
-                      backgroundColor: 'rgba(0,0,0,0.3)',
-                      zIndex: 9998,
-                      display: window.innerWidth < 768 ? 'block' : 'none'
-                    }}
                   />
+                  {/* Dropdown positioning — controlled by CSS media query, not inline window.innerWidth */}
+                  <style>{`
+                    .notif-backdrop {
+                      position: fixed; inset: 0; background-color: rgba(0,0,0,0.3);
+                      z-index: 9998; display: none;
+                    }
+                    .notification-dropdown {
+                      position: fixed;
+                      top: ${dropdownPosition.top}px;
+                      right: ${dropdownPosition.right}px;
+                      width: min(340px, calc(100vw - 32px));
+                      transform: none;
+                    }
+                    @media (max-width: 767px) {
+                      .notif-backdrop { display: block; }
+                      .notification-dropdown {
+                        top: 70px !important; left: 50% !important;
+                        transform: translateX(-50%) !important;
+                        width: min(92vw, 420px) !important; right: auto !important;
+                      }
+                    }
+                  `}</style>
                   <div
                     data-notification-dropdown
                     className="notification-dropdown"
                     style={{
-                      position: 'fixed',
-                      ...(window.innerWidth < 768 ? {
-                        top: '70px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 'min(92vw, 420px)',
-                        right: 'auto'
-                      } : {
-                        top: dropdownPosition.top,
-                        right: dropdownPosition.right,
-                        width: 'min(340px, calc(100vw - 32px))',
-                        transform: 'none'
-                      }),
                       maxHeight: '70vh',
                       overflowY: 'auto',
                       overflowX: 'hidden',

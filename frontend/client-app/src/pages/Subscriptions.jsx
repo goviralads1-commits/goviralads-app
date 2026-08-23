@@ -70,7 +70,7 @@ const Subscriptions = () => {
           <div style={{ marginBottom: '32px' }}>
             <div style={{ width: '180px', height: '28px', backgroundColor: '#f1f1f1', borderRadius: '8px', animation: 'pulse 1.5s infinite' }} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '20px' }}>
             {[1, 2].map(i => (
               <div key={i} style={{
                 backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden',
@@ -172,7 +172,7 @@ const Subscriptions = () => {
             </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '20px' }}>
             {subscriptions.map((sub) => {
               return (
                 <div
