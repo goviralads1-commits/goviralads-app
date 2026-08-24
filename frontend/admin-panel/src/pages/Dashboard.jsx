@@ -17,7 +17,14 @@ const Dashboard = () => {
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false });
   const [analytics, setAnalytics] = useState(null);
   // Date filter
-  const [dateFilter, setDateFilter] = useState({ type: 'month', label: 'This Month', startDate: '', endDate: '' });
+  const [dateFilter, setDateFilter] = useState(() => {
+    const now = new Date();
+    const monthIdx = now.getMonth();
+    const startDate = new Date(Date.UTC(now.getUTCFullYear(), monthIdx, 1)).toISOString().split('T')[0];
+    const endDate = now.toISOString().split('T')[0];
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return { type: `month-${monthIdx}`, label: monthNames[monthIdx], startDate, endDate };
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -108,7 +115,10 @@ const Dashboard = () => {
   const applyDateFilter = (type) => {
     const now = new Date();
     let startDate = '', endDate = '', label = '';
-    if (type === 'today') {
+    if (type === 'alltime') {
+      // All Time: no date restriction
+      label = 'All Time';
+    } else if (type === 'today') {
       startDate = now.toISOString().split('T')[0];
       endDate = now.toISOString().split('T')[0];
       label = 'Today';
@@ -130,17 +140,15 @@ const Dashboard = () => {
       startDate = start.toISOString().split('T')[0];
       endDate = now.toISOString().split('T')[0];
       label = 'Last 30 Days';
-    } else if (type === 'month') {
-      startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0];
-      endDate = now.toISOString().split('T')[0];
-      label = 'This Month';
     } else if (type.startsWith('month-')) {
       const monthIdx = parseInt(type.split('-')[1]);
       const year = now.getUTCFullYear();
+      const currentMonth = now.getUTCMonth();
       const firstDay = new Date(Date.UTC(year, monthIdx, 1));
       const lastDay = new Date(Date.UTC(year, monthIdx + 1, 0));
       startDate = firstDay.toISOString().split('T')[0];
-      endDate = lastDay.toISOString().split('T')[0];
+      // If selected month is current month, end date is today; otherwise last day of month
+      endDate = monthIdx === currentMonth ? now.toISOString().split('T')[0] : lastDay.toISOString().split('T')[0];
       label = firstDay.toLocaleString('en-US', { month: 'long' });
     }
     setDateFilter({ type, label, startDate, endDate });
@@ -191,14 +199,6 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Set default date filter to current month on mount
-  useEffect(() => {
-    const now = new Date();
-    const startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0];
-    const endDate = now.toISOString().split('T')[0];
-    setDateFilter({ type: 'month', label: 'This Month', startDate, endDate });
-  }, []);
 
   // Drill-down fetch handlers
   const openDrillModal = async (type, title) => {
@@ -466,12 +466,12 @@ const Dashboard = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>📊 Business Analytics</h3>
               <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                {['today', '7days', '15days', '30days', 'month'].map(t => (
+                {['alltime', 'today', '7days', '15days', '30days'].map(t => (
                   <button key={t} onClick={() => applyDateFilter(t)} style={{
                     padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: 'none',
                     background: dateFilter.type === t ? '#6366f1' : '#f1f5f9',
                     color: dateFilter.type === t ? '#fff' : '#64748b'
-                  }}>{t === 'today' ? 'Today' : t === '7days' ? '7 Days' : t === '15days' ? '15 Days' : t === '30days' ? '30 Days' : 'This Month'}</button>
+                  }}>{t === 'alltime' ? 'All Time' : t === 'today' ? 'Today' : t === '7days' ? '7 Days' : t === '15days' ? '15 Days' : '30 Days'}</button>
                 ))}
                 <select
                   value={dateFilter.type.startsWith('month-') ? dateFilter.type : ''}
@@ -749,7 +749,7 @@ const Dashboard = () => {
 
         {/* COMMISSION EARNINGS SECTION */}
         <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>💰 Commission Earnings <span style={{ fontSize: '12px', fontWeight: '500', color: '#94a3b8' }}>(All Time)</span></h3>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>💰 Commission Earnings <span style={{ fontSize: '12px', fontWeight: '500', color: '#94a3b8' }}>(Total: All Time · Entries & Logs: Date-filtered)</span></h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px' }}>
             {/* Total Revenue — main admin only */}
             {commissionData?.isMainAdmin && (
@@ -761,13 +761,13 @@ const Dashboard = () => {
                 <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Commission (All Time)</p>
               </div>
             )}
-            {/* Tasks Completed */}
+            {/* Commission Entries */}
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
               <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '16px' }}>✅</span>
               </div>
               <p style={{ fontSize: '22px', fontWeight: '800', color: '#f59e0b', margin: '0 0 2px 0' }}>{commissionData?.overallTaskCount || 0}</p>
-              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Tasks Completed</p>
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Commission Entries</p>
             </div>
           </div>
 

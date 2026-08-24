@@ -3507,7 +3507,7 @@ router.get('/reports/overview', async (req, res) => {
       totalClients,
       activeTasks,
       pendingRecharges,
-      totalCredits: totalCredits[0]?.total || 0,
+      totalCredits,
       pendingApprovals,
       totalNotices,
       unreadResponses: unreadResponses[0]?.total || 0,
