@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import { isAuthenticated } from '../services/authService';
 
 const Wallet = () => {
+  const navigate = useNavigate();
   const [walletData, setWalletData] = useState(null);
   const [rechargeRequests, setRechargeRequests] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -54,18 +57,22 @@ const Wallet = () => {
           api.get('/client/coupons').catch(() => null),
         ]);
         
-        // Critical: wallet data (must succeed)
+        // Critical: wallet data (must succeed for authed users)
         if (walletResult.status === 'fulfilled') {
           setWalletData(walletResult.value.data);
-        } else {
+        } else if (isAuthenticated()) {
           throw new Error('Failed to load wallet data');
+        } else {
+          setWalletData({}); // Empty wallet for unauth visitors
         }
         
-        // Critical: recharge requests (must succeed)
+        // Critical: recharge requests (must succeed for authed users)
         if (requestsResult.status === 'fulfilled') {
           setRechargeRequests(requestsResult.value.data.requests || []);
-        } else {
+        } else if (isAuthenticated()) {
           throw new Error('Failed to load recharge requests');
+        } else {
+          setRechargeRequests([]); // Empty list for unauth visitors
         }
         
         // Optional: invoices
@@ -202,6 +209,7 @@ const Wallet = () => {
   };
 
   const handleSubscriptionPurchase = (planId, plan) => {
+    if (!isAuthenticated()) { navigate('/login'); return; }
     setSubModalPlan({ planId, plan });
     setSubTransactionId('');
     setSubTransactionError('');
@@ -430,7 +438,7 @@ const Wallet = () => {
 
           {/* Add Money Button */}
           <button
-            onClick={() => setShowAddMoneyModal(true)}
+            onClick={() => isAuthenticated() ? setShowAddMoneyModal(true) : navigate('/login')}
             style={{
               marginTop: '20px',
               width: '100%',
@@ -1272,7 +1280,7 @@ const Wallet = () => {
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
                 <h4 style={{fontSize: '14px', fontWeight: '600', color: '#64748b', margin: 0}}>Request History</h4>
                 <button
-                  onClick={() => setShowAddMoneyModal(true)}
+                  onClick={() => isAuthenticated() ? setShowAddMoneyModal(true) : navigate('/login')}
                   style={{
                     padding: '8px 16px',
                     background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',

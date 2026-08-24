@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import api from '../services/api';
+import { isAuthenticated } from '../services/authService';
 import Header from '../components/Header';
 import ProgressWithFlag from '../components/ProgressWithFlag';
 
@@ -29,7 +30,11 @@ const Tasks = () => {
       setTasks(response.data.tasks || []);
       setError('');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load tasks');
+      if (!isAuthenticated() && err.response?.status === 401) {
+        setTasks([]); // Show existing "No tasks yet" empty state for unauth visitors
+      } else {
+        setError(err.response?.data?.error || 'Failed to load tasks');
+      }
     } finally {
       setLoading(false);
     }

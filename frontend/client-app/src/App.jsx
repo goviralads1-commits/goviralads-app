@@ -232,18 +232,11 @@ const AppShell = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/plans" element={<Plans />} />
             <Route path="/plans/:planId" element={<PlanDetail />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/wallet" element={<Wallet />} />
+            <Route path="/support" element={<Support />} />
             
             {/* Protected CLIENT Routes */}
-            <Route path="/wallet" element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <Wallet />
-            </ProtectedRoute>
-          } />
-          <Route path="/tasks" element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <Tasks />
-            </ProtectedRoute>
-          } />
           <Route path="/tasks/:taskId" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <TaskDetail />
@@ -267,11 +260,6 @@ const AppShell = () => {
           <Route path="/tickets/:ticketId" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <TicketDetail />
-            </ProtectedRoute>
-          } />
-          <Route path="/support" element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <Support />
             </ProtectedRoute>
           } />
           <Route path="/notifications" element={
