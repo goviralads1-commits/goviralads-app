@@ -1706,6 +1706,12 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       requireClientContent: plan.requireClientContent || false,
       // Auto-populate from client's assigned team
       ...(teamAssignedUsers.length > 0 ? { assignedUsers: teamAssignedUsers } : {}),
+      // Cost breakdown snapshot (frozen at purchase time — Plan edits won't affect this Task)
+      ...(plan.costBreakdown ? { costBreakdown: plan.costBreakdown } : {}),
+      ...(plan.defaultCostBreakdown ? { defaultCostBreakdown: plan.defaultCostBreakdown } : {}),
+      ...(plan.defaultCommissionRoles?.length ? { defaultCommissionRoles: plan.defaultCommissionRoles } : {}),
+      // INTERNAL: Snapshot commission base amount (₹) from plan
+      ...(plan.commissionBaseAmount ? { commissionBaseAmount: plan.commissionBaseAmount } : {}),
     });
 
     return res.status(201).json({
@@ -1876,6 +1882,11 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
         offerPrice: task.offerPrice,
         originalPrice: task.originalPrice,
         countdownEndDate: task.countdownEndDate,
+        // Cost breakdown snapshot (frozen at purchase time)
+        ...(task.costBreakdown ? { costBreakdown: task.costBreakdown } : {}),
+        ...(task.defaultCostBreakdown ? { defaultCostBreakdown: task.defaultCostBreakdown } : {}),
+        ...(task.defaultCommissionRoles?.length ? { defaultCommissionRoles: task.defaultCommissionRoles } : {}),
+        ...(task.commissionBaseAmount ? { commissionBaseAmount: task.commissionBaseAmount } : {}),
       });
 
       clonedTasks.push(newTask._id.toString());
@@ -3408,6 +3419,8 @@ router.post('/purchase-cart', async (req, res) => {
           defaultAssignedUsers: plan.defaultAssignedUsers || [],
           defaultCommissionRoles: plan.defaultCommissionRoles || [],
           defaultCostBreakdown: plan.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
+          // INTERNAL: Commission basis in ₹ (admin-only, never exposed to client)
+          commissionBaseAmount: plan.commissionBaseAmount || null,
         },
         inputs: item.inputs || [],
       });
