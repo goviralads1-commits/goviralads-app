@@ -250,7 +250,22 @@ const OfficeCMS = () => {
         </div>
       )}
 
-      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '20px', paddingBottom: '100px' }}>
+      <div className="oc-cms" style={{ maxWidth: '960px', margin: '0 auto', padding: '20px', paddingBottom: '100px' }}>
+        {/* Phase 2 editor responsiveness — layout/CSS only, no behaviour changes */}
+        <style>{`
+          .oc-cms input, .oc-cms select, .oc-cms textarea { box-sizing: border-box; }
+          .oc-reorder { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+          .oc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+          .oc-section-input { flex: 1; min-width: 0; }
+          @media (max-width: 640px) {
+            .oc-banner-row { flex-wrap: wrap; }
+            .oc-banner-row .oc-reorder { flex-direction: row; }
+            .oc-banner-row .oc-actions { width: 100%; justify-content: flex-end; }
+            .oc-section-row { flex-wrap: wrap; gap: 12px; }
+            .oc-section-row .oc-reorder { flex-direction: row; }
+            .oc-section-input { flex: 1 1 100%; }
+          }
+        `}</style>
         
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
@@ -330,7 +345,7 @@ const OfficeCMS = () => {
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0' }}>
                 {editingBanner ? '✏️ Edit Banner' : '➕ Add New Banner'}
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Title (optional)</label>
                   <input type="text" value={bannerForm.title} onChange={e => setBannerForm({...bannerForm, title: e.target.value})} placeholder="Banner heading (leave empty for image-only)..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
@@ -349,7 +364,7 @@ const OfficeCMS = () => {
                 </div>
                 <input type="text" value={bannerForm.gradient} onChange={e => setBannerForm({...bannerForm, gradient: e.target.value})} placeholder="Or paste custom gradient..." style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '13px' }} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>CTA Button Text (optional)</label>
                   <input type="text" value={bannerForm.ctaText} onChange={e => setBannerForm({...bannerForm, ctaText: e.target.value})} placeholder="Leave empty to hide button" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
@@ -359,7 +374,7 @@ const OfficeCMS = () => {
                   <input type="text" value={bannerForm.ctaLink} onChange={e => setBannerForm({...bannerForm, ctaLink: e.target.value})} placeholder="/plans or https://..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Link Type</label>
                   <select value={bannerForm.ctaLinkType} onChange={e => setBannerForm({...bannerForm, ctaLinkType: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }}>
@@ -403,7 +418,7 @@ const OfficeCMS = () => {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {config.banners.map((banner, idx) => (
-                    <div key={banner.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '16px', border: '1px solid #f1f5f9', opacity: banner.isActive ? 1 : 0.5 }}>
+                    <div key={banner.id} className="oc-banner-row" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '16px', border: '1px solid #f1f5f9', opacity: banner.isActive ? 1 : 0.5 }}>
                       <div style={{ width: '120px', height: '70px', borderRadius: '12px', background: banner.gradient || '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
                         {banner.imageUrl ? <img src={banner.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ color: '#fff', fontSize: '20px' }}>🖼️</span>}
                       </div>
@@ -415,14 +430,14 @@ const OfficeCMS = () => {
                           <span style={{ fontSize: '11px', backgroundColor: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: '6px' }}>{banner.ctaLink}</span>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <button onClick={() => handleReorderBanners('up', idx)} disabled={idx === 0} style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
-                        <button onClick={() => handleReorderBanners('down', idx)} disabled={idx === config.banners.length - 1} style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === config.banners.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === config.banners.length - 1 ? 0.3 : 1 }}>↓</button>
+                      <div className="oc-reorder">
+                        <button onClick={() => handleReorderBanners('up', idx)} disabled={idx === 0} style={{ minWidth: '40px', minHeight: '40px', padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                        <button onClick={() => handleReorderBanners('down', idx)} disabled={idx === config.banners.length - 1} style={{ minWidth: '40px', minHeight: '40px', padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === config.banners.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === config.banners.length - 1 ? 0.3 : 1 }}>↓</button>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={() => handleToggleBanner(banner)} style={{ padding: '8px 12px', backgroundColor: banner.isActive ? '#dcfce7' : '#fef2f2', color: banner.isActive ? '#16a34a' : '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>{banner.isActive ? 'Active' : 'Hidden'}</button>
-                        <button onClick={() => handleEditBanner(banner)} style={{ padding: '8px 12px', backgroundColor: '#e0f2fe', color: '#0369a1', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Edit</button>
-                        <button onClick={() => handleDeleteBanner(banner.id)} style={{ padding: '8px 12px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Delete</button>
+                      <div className="oc-actions">
+                        <button onClick={() => handleToggleBanner(banner)} style={{ padding: '10px 14px', minHeight: '42px', backgroundColor: banner.isActive ? '#dcfce7' : '#fef2f2', color: banner.isActive ? '#16a34a' : '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>{banner.isActive ? 'Active' : 'Hidden'}</button>
+                        <button onClick={() => handleEditBanner(banner)} style={{ padding: '10px 14px', minHeight: '42px', backgroundColor: '#e0f2fe', color: '#0369a1', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Edit</button>
+                        <button onClick={() => handleDeleteBanner(banner.id)} style={{ padding: '10px 14px', minHeight: '42px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Delete</button>
                       </div>
                     </div>
                   ))}
@@ -439,13 +454,13 @@ const OfficeCMS = () => {
             <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0' }}>Drag sections to reorder, toggle visibility. Updates/Requirements content comes from Notices.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {config?.sections?.sort((a, b) => a.order - b.order).map((section, idx) => (
-                <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '14px', border: '1px solid #f1f5f9', backgroundColor: section.isEnabled ? '#fff' : '#f8fafc' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <button onClick={() => handleReorderSections('up', idx)} disabled={idx === 0} style={{ padding: '4px 8px', backgroundColor: '#f1f5f9', borderRadius: '6px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1, fontSize: '12px' }}>↑</button>
-                    <button onClick={() => handleReorderSections('down', idx)} disabled={idx === config.sections.length - 1} style={{ padding: '4px 8px', backgroundColor: '#f1f5f9', borderRadius: '6px', border: 'none', cursor: idx === config.sections.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === config.sections.length - 1 ? 0.3 : 1, fontSize: '12px' }}>↓</button>
+                <div key={section.id} className="oc-section-row" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '14px', border: '1px solid #f1f5f9', backgroundColor: section.isEnabled ? '#fff' : '#f8fafc' }}>
+                  <div className="oc-reorder">
+                    <button onClick={() => handleReorderSections('up', idx)} disabled={idx === 0} style={{ minWidth: '38px', minHeight: '38px', padding: '4px 8px', backgroundColor: '#f1f5f9', borderRadius: '6px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1, fontSize: '14px' }}>↑</button>
+                    <button onClick={() => handleReorderSections('down', idx)} disabled={idx === config.sections.length - 1} style={{ minWidth: '38px', minHeight: '38px', padding: '4px 8px', backgroundColor: '#f1f5f9', borderRadius: '6px', border: 'none', cursor: idx === config.sections.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === config.sections.length - 1 ? 0.3 : 1, fontSize: '14px' }}>↓</button>
                   </div>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>{section.icon || '📦'}</div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>{section.icon || '📦'}</div>
+                  <div className="oc-section-input">
                     <input type="text" value={section.title} onChange={e => handleUpdateSectionTitle(section.id, e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', fontWeight: '600' }} />
                     <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>Type: {section.type}</p>
                   </div>
@@ -464,7 +479,7 @@ const OfficeCMS = () => {
           <div>
             <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0' }}>Featured Plans Settings</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Display Count</label>
                   <select value={config?.featuredPlansConfig?.displayCount || 4} onChange={e => handleUpdateFeaturedConfig({ displayCount: parseInt(e.target.value) })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }}>
@@ -479,7 +494,7 @@ const OfficeCMS = () => {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>See All Button Text</label>
                   <input type="text" value={config?.featuredPlansConfig?.seeAllButtonText || 'See All'} onChange={e => handleUpdateFeaturedConfig({ seeAllButtonText: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
@@ -496,9 +511,12 @@ const OfficeCMS = () => {
             {/* Manual Plan Selection */}
             {config?.featuredPlansConfig?.selectionMode === 'manual' && (
               <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>Select Plans to Feature</h3>
-                <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>Click to select/deselect plans. Selected: {config?.featuredPlansConfig?.manualPlanIds?.length || 0}</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Select Plans to Feature</h3>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#6366f1', backgroundColor: '#eef2ff', padding: '6px 12px', borderRadius: '999px', border: '1px solid #e0e7ff' }}>{config?.featuredPlansConfig?.manualPlanIds?.length || 0} / 4 selected</span>
+                </div>
+                <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>Tap a plan to select or deselect — your selection saves automatically. Maximum 4 plans.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '12px' }}>
                   {plans.map(plan => {
                     const isSelected = config?.featuredPlansConfig?.manualPlanIds?.includes(plan.id);
                     return (
@@ -508,10 +526,10 @@ const OfficeCMS = () => {
                             {plan.featureImage ? <img src={plan.featureImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '24px' }}>📦</span>}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{plan.title}</p>
+                            <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0, wordBreak: 'break-word' }}>{plan.title}</p>
                             <p style={{ fontSize: '13px', color: '#22c55e', fontWeight: '700', margin: '2px 0 0 0' }}>{plan.offerPrice || plan.creditCost || 0} credits</p>
                           </div>
-                          <div style={{ width: '24px', height: '24px', borderRadius: '8px', border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`, backgroundColor: isSelected ? '#6366f1' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '9px', border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`, backgroundColor: isSelected ? '#6366f1' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {isSelected && <span style={{ color: '#fff', fontSize: '14px' }}>✓</span>}
                           </div>
                         </div>
@@ -528,7 +546,7 @@ const OfficeCMS = () => {
         {activeTab === 'buttons' && (
           <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
             <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 16px 0' }}>See More Plans Button</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Button Text</label>
                 <input type="text" value={config?.seeMoreButtonConfig?.text || 'See More Plans'} onChange={e => handleUpdateSeeMore({ text: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
@@ -538,7 +556,7 @@ const OfficeCMS = () => {
                 <input type="text" value={config?.seeMoreButtonConfig?.link || '/plans'} onChange={e => handleUpdateSeeMore({ link: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '20px' }}>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={config?.seeMoreButtonConfig?.isEnabled !== false} onChange={e => handleUpdateSeeMore({ isEnabled: e.target.checked })} style={{ width: '20px', height: '20px' }} />
                 <span style={{ fontSize: '14px', fontWeight: '600' }}>Show Button</span>
@@ -597,14 +615,14 @@ const OfficeCMS = () => {
                     <div key={item.id} style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9', opacity: item.isEnabled ? 1 : 0.6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
                         <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>Navigation Item {idx + 1}</span>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <button onClick={() => handleReorderNavItem('up', idx)} disabled={idx === 0} style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
-                          <button onClick={() => handleReorderNavItem('down', idx)} disabled={idx === sortedNavItems.length - 1} style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === sortedNavItems.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === sortedNavItems.length - 1 ? 0.3 : 1 }}>↓</button>
-                          <button onClick={() => handleToggleNavItem(item)} style={{ padding: '8px 12px', backgroundColor: item.isEnabled ? '#dcfce7' : '#fef2f2', color: item.isEnabled ? '#16a34a' : '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>{item.isEnabled ? 'Enabled' : 'Disabled'}</button>
-                          <button onClick={() => handleDeleteNavItem(item.id)} style={{ padding: '8px 12px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Remove</button>
+                        <div className="oc-actions" style={{ alignItems: 'center' }}>
+                          <button onClick={() => handleReorderNavItem('up', idx)} disabled={idx === 0} style={{ minWidth: '40px', minHeight: '40px', padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                          <button onClick={() => handleReorderNavItem('down', idx)} disabled={idx === sortedNavItems.length - 1} style={{ minWidth: '40px', minHeight: '40px', padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === sortedNavItems.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === sortedNavItems.length - 1 ? 0.3 : 1 }}>↓</button>
+                          <button onClick={() => handleToggleNavItem(item)} style={{ padding: '10px 14px', minHeight: '42px', backgroundColor: item.isEnabled ? '#dcfce7' : '#fef2f2', color: item.isEnabled ? '#16a34a' : '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>{item.isEnabled ? 'Enabled' : 'Disabled'}</button>
+                          <button onClick={() => handleDeleteNavItem(item.id)} style={{ padding: '10px 14px', minHeight: '42px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Remove</button>
                         </div>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '16px', marginBottom: '16px' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Title (empty = hidden publicly)</label>
                           <input type="text" maxLength={60} value={draft.title} onChange={e => setNavDraft(item, 'title', e.target.value)} placeholder="e.g. About" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', boxSizing: 'border-box' }} />
