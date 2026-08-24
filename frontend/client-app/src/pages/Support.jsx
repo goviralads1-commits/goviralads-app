@@ -38,6 +38,10 @@ const Support = () => {
   const pollingRef = useRef(null);
   const selectedTaskRef = useRef(null);
   const prevMessageCountRef = useRef(0);
+  const lastMessageDateRef = useRef(null); // Tracks most recent message timestamp for incremental fetch
+  const scrollContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const [showNewMsgBadge, setShowNewMsgBadge] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
 
   // Keep ref in sync with selectedTask so the polling closure always reads fresh state
@@ -45,7 +49,7 @@ const Support = () => {
     selectedTaskRef.current = selectedTask;
   }, [selectedTask]);
 
-  // Polling: fetch messages every 3s when a chat is open — visibility-aware
+  // Incremental polling: fetch only NEW messages using 'since' param — avoids re-downloading entire conversation
   useEffect(() => {
     if (!activeTaskId) {
       if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
@@ -53,18 +57,51 @@ const Support = () => {
     }
     const poll = async () => {
       try {
-        const res = await api.get(`/client/tasks/${activeTaskId}/messages?page=0&limit=50`);
-        const fetched = res.data?.messages || [];
         const current = selectedTaskRef.current;
         if (!current) return;
-        // Only update if the server has more confirmed messages than we have locally
-        const currentReal = (current.messages || []).filter(m => !m._optimistic).length;
-        if (fetched.length > currentReal) {
-          setSelectedTask(prev => prev ? { ...prev, messages: fetched } : prev);
-        }
+        const lastDate = lastMessageDateRef.current;
+        // Use incremental fetch if we have a lastMessageDate, otherwise full page load
+        const url = lastDate
+          ? `/client/tasks/${activeTaskId}/messages?since=${encodeURIComponent(lastDate)}`
+          : `/client/tasks/${activeTaskId}/messages?page=0&limit=50`;
+        const res = await api.get(url);
+        const fetched = res.data?.messages || [];
+        if (fetched.length === 0) return;
+
+        // Update lastMessageDate to the most recent fetched message
+        const maxTs = fetched.reduce((max, m) => {
+          const t = new Date(m.createdAt).getTime();
+          return t > max ? t : max;
+        }, 0);
+        if (maxTs > 0) lastMessageDateRef.current = new Date(maxTs).toISOString();
+
+        setSelectedTask(prev => {
+          if (!prev) return prev;
+          const existing = prev.messages || [];
+          const optimistic = existing.filter(m => m._optimistic);
+          const real = existing.filter(m => !m._optimistic);
+
+          // Remove optimistic messages that are now confirmed by the server (match by sender + text)
+          const remainingOptimistic = optimistic.filter(om =>
+            !fetched.some(fm => fm.sender === om.sender && fm.text === om.text)
+          );
+          // Filter out duplicates already in real messages
+          const existingKeys = new Set(real.map(m => `${m.sender}-${m.text}-${new Date(m.createdAt).getTime()}`));
+          const trulyNew = fetched.filter(m =>
+            !existingKeys.has(`${m.sender}-${m.text}-${new Date(m.createdAt).getTime()}`)
+          );
+
+          if (trulyNew.length === 0 && remainingOptimistic.length === optimistic.length) return prev;
+
+          // Show new-message badge if user is scrolled up
+          if (!isNearBottomRef.current && trulyNew.length > 0) {
+            setShowNewMsgBadge(true);
+          }
+          return { ...prev, messages: [...real, ...trulyNew, ...remainingOptimistic] };
+        });
       } catch (_) { /* silent poll failure */ }
     };
-    
+
     // Only poll when the tab is visible to save bandwidth
     let intervalId = null;
     const startPolling = () => {
@@ -76,9 +113,9 @@ const Support = () => {
     const stopPolling = () => {
       if (intervalId) { clearInterval(intervalId); intervalId = null; pollingRef.current = null; }
     };
-    
+
     if (document.visibilityState === 'visible') startPolling();
-    
+
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         startPolling();
@@ -87,7 +124,23 @@ const Support = () => {
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => { stopPolling(); document.removeEventListener('visibilitychange', handleVisibility); };
+
+    // FCM event listener: trigger immediate poll when a push message arrives for this task
+    const handleFCMMessage = (e) => {
+      const payload = e.detail;
+      const pushTaskId = payload?.data?.taskId;
+      if (pushTaskId === activeTaskId) {
+        console.log('[Support] FCM message for active task — polling immediately');
+        poll();
+      }
+    };
+    window.addEventListener('gva-fcm-message', handleFCMMessage);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('gva-fcm-message', handleFCMMessage);
+    };
   }, [activeTaskId]);
 
   // Extract taskId from URL or sessionStorage on mount
@@ -162,6 +215,8 @@ const Support = () => {
   // Open chat directly by taskId (for deep links) with retry
   const openChatByTaskId = async (taskId, retryCount = 0) => {
     setChatLoading(true);
+    setShowNewMsgBadge(false);
+    isNearBottomRef.current = true;
     try {
       console.log('[Support] Opening chat for taskId:', taskId, retryCount > 0 ? `(retry ${retryCount})` : '');
       const res = await api.get(`/client/tasks/${taskId}`);
@@ -169,6 +224,17 @@ const Support = () => {
         console.log('[Support] Chat loaded successfully:', res.data.task.title);
         setSelectedTask(res.data.task);
         setActiveTaskId(taskId);
+        // Initialize lastMessageDate for incremental polling
+        const msgs = res.data.task?.messages || [];
+        if (msgs.length > 0) {
+          const maxTs = msgs.reduce((max, m) => {
+            const t = new Date(m.createdAt).getTime();
+            return t > max ? t : max;
+          }, 0);
+          lastMessageDateRef.current = new Date(maxTs).toISOString();
+        } else {
+          lastMessageDateRef.current = null;
+        }
       } else {
         throw new Error('No task in response');
       }
@@ -213,10 +279,23 @@ const Support = () => {
   const openChat = async (task) => {
     const taskId = task._id || task.id;
     setChatLoading(true);
+    setShowNewMsgBadge(false);
+    isNearBottomRef.current = true;
     try {
       const res = await api.get(`/client/tasks/${taskId}`);
       setSelectedTask(res.data.task);
       setActiveTaskId(taskId);
+      // Initialize lastMessageDate for incremental polling
+      const msgs = res.data.task?.messages || [];
+      if (msgs.length > 0) {
+        const maxTs = msgs.reduce((max, m) => {
+          const t = new Date(m.createdAt).getTime();
+          return t > max ? t : max;
+        }, 0);
+        lastMessageDateRef.current = new Date(maxTs).toISOString();
+      } else {
+        lastMessageDateRef.current = null;
+      }
     } catch (err) {
       console.error('[Support] Failed to load chat:', err);
     } finally {
@@ -230,7 +309,7 @@ const Support = () => {
     }, 350);
   }, []);
 
-  // Scroll to bottom only when message count increases (prevents auto-scroll on every poll)
+  // Scroll to bottom only when message count increases AND user is near bottom (prevents jumping when reading older messages)
   useEffect(() => {
     if (!selectedTask) {
       prevMessageCountRef.current = 0;
@@ -239,7 +318,9 @@ const Support = () => {
     const count = (selectedTask.messages || []).length;
     if (count !== prevMessageCountRef.current) {
       prevMessageCountRef.current = count;
-      scrollToBottom();
+      if (isNearBottomRef.current) {
+        scrollToBottom();
+      }
     }
   }, [selectedTask, scrollToBottom]);
 
@@ -251,8 +332,11 @@ const Support = () => {
     const hasImages = messageAttachments.length > 0;
 
     // Optimistic update for text-only messages — show immediately, don't wait for API
+    // _tempId uniquely identifies this optimistic message (safe even for identical text sent twice)
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     if (!hasImages && capturedText) {
       const optimisticMsg = {
+        _tempId: tempId,
         sender: 'CLIENT',
         text: capturedText,
         attachments: [],
@@ -299,23 +383,40 @@ const Support = () => {
       }
 
       // STEP 2: Send message
-      await api.post(`/client/tasks/${taskId}/message`, {
+      const sendRes = await api.post(`/client/tasks/${taskId}/message`, {
         text: capturedText || (attachmentUrls.length > 0 ? '[Image]' : ''),
         attachments: attachmentUrls
       });
 
       // STEP 3: Confirm optimistic (text) or refresh messages (image)
       if (!hasImages) {
-        // FIX 1: Mark optimistic as confirmed — skip extra GET, polling syncs within 3s
-        setSelectedTask(prev => prev ? {
-          ...prev,
-          messages: (prev.messages || []).map(m => m._optimistic ? { ...m, _optimistic: false } : m)
-        } : prev);
+        // Replace optimistic message with the authoritative server copy (server _id/createdAt).
+        // This guarantees the next incremental `since` poll cannot append a duplicate
+        // (same timestamp -> dedup key matches; cursor also advanced past it).
+        const serverMsg = sendRes?.data?.message;
+        setSelectedTask(prev => {
+          if (!prev) return prev;
+          const messages = (prev.messages || []).map(m =>
+            m._tempId === tempId
+              ? (serverMsg ? { ...serverMsg } : { ...m, _optimistic: false })
+              : m
+          );
+          return { ...prev, messages };
+        });
+        // Advance incremental-poll cursor past the server message timestamp
+        const serverTs = serverMsg?.createdAt ? new Date(serverMsg.createdAt).getTime() : NaN;
+        if (!isNaN(serverTs)) {
+          const currentTs = lastMessageDateRef.current ? new Date(lastMessageDateRef.current).getTime() : 0;
+          if (serverTs > currentTs) lastMessageDateRef.current = new Date(serverTs).toISOString();
+        }
       } else {
         const res = await api.get(`/client/tasks/${taskId}/messages?page=0&limit=50`);
         const fetched = res.data?.messages || [];
         if (fetched.length > 0) {
           setSelectedTask(prev => prev ? { ...prev, messages: fetched } : prev);
+          // Update lastMessageDate for incremental polling
+          const maxTs = fetched.reduce((max, m) => Math.max(max, new Date(m.createdAt).getTime()), 0);
+          if (maxTs > 0) lastMessageDateRef.current = new Date(maxTs).toISOString();
         }
       }
 
@@ -329,9 +430,9 @@ const Support = () => {
       scrollToBottom();
     } catch (err) {
       console.error('Send error:', err);
-      // Revert optimistic message on error and restore input text
+      // Revert optimistic message on error and restore input text (match by _tempId, not text)
       if (!hasImages && capturedText) {
-        setSelectedTask(prev => prev ? { ...prev, messages: (prev.messages || []).filter(m => !m._optimistic) } : prev);
+        setSelectedTask(prev => prev ? { ...prev, messages: (prev.messages || []).filter(m => m._tempId !== tempId) } : prev);
         setMessageText(capturedText);
       }
     } finally {
@@ -387,22 +488,47 @@ const Support = () => {
         </div>
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div ref={scrollContainerRef} onScroll={(e) => {
+          const el = e.currentTarget;
+          const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          isNearBottomRef.current = distFromBottom < 100;
+          if (isNearBottomRef.current && showNewMsgBadge) setShowNewMsgBadge(false);
+        }} style={{ flex: 1, overflowY: 'auto', padding: '16px', position: 'relative' }}>
+          {showNewMsgBadge && (
+            <button onClick={() => { scrollToBottom(true); setShowNewMsgBadge(false); }} style={{ position: 'sticky', bottom: '10px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#22c55e', color: '#fff', padding: '6px 16px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 12px rgba(34,197,94,0.3)', zIndex: 10, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14l-7 7-7-7M19 6l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              New messages
+            </button>
+          )}
           {timeline.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No messages yet</div>
           )}
           {timeline.map((item, idx) => {
+            // Date separator: show when day changes between consecutive items
+            const prevTs = idx > 0 ? timeline[idx - 1]._ts : null;
+            const currTs = item._ts || 0;
+            const showDateSep = prevTs === null || new Date(prevTs).toDateString() !== new Date(currTs).toDateString();
+            const dateLabel = (() => {
+              const d = new Date(currTs);
+              const today = new Date();
+              const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+              if (d.toDateString() === today.toDateString()) return 'Today';
+              if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+              return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            })();
             if (item._type === 'approval') {
               const taskId = selectedTask._id || selectedTask.id;
               return (
-                <ApprovalBox
-                  key={`a-${idx}`}
-                  approval={item}
-                  taskId={taskId}
-                  onSubmitSuccess={refreshTaskData}
-                  onViewHistory={(a) => setHistoryModalApproval(a)}
-                  compact={true}
-                />
+                <React.Fragment key={`a-${idx}`}>
+                  {showDateSep && <div style={{ textAlign: 'center', padding: '12px 0', color: '#94a3b8', fontSize: '12px', fontWeight: '600' }}>{dateLabel}</div>}
+                  <ApprovalBox
+                    approval={item}
+                    taskId={taskId}
+                    onSubmitSuccess={refreshTaskData}
+                    onViewHistory={(a) => setHistoryModalApproval(a)}
+                    compact={true}
+                  />
+                </React.Fragment>
               );
             }
             const isAdmin = item.sender === 'ADMIN';
@@ -439,7 +565,9 @@ const Support = () => {
             }
             
             return (
-              <div key={`m-${idx}`} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-start' : (isCurrentUser ? 'flex-end' : 'flex-start'), marginBottom: '12px' }}>
+              <React.Fragment key={`m-${idx}`}>
+                {showDateSep && <div style={{ textAlign: 'center', padding: '12px 0', color: '#94a3b8', fontSize: '12px', fontWeight: '600' }}>{dateLabel}</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-start' : (isCurrentUser ? 'flex-end' : 'flex-start'), marginBottom: '12px' }}>
                 <span style={{ fontSize: '11px', fontWeight: '600', color: isAdmin ? '#6366f1' : (isCurrentUser ? '#22c55e' : '#64748b'), marginBottom: '4px' }}>{senderLabel}</span>
                 <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#f1f5f9' : (isCurrentUser ? '#22c55e' : '#f1f5f9'), color: isAdmin ? '#0f172a' : (isCurrentUser ? '#fff' : '#0f172a') }}>
                   {item.attachments?.length > 0 && (
@@ -455,6 +583,7 @@ const Support = () => {
                   </p>
                 </div>
               </div>
+              </React.Fragment>
             );
           })}
           <div ref={messagesEndRef} />

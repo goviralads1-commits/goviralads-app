@@ -32,7 +32,9 @@ import EarningsRedeems from './pages/EarningsRedeems';
 import Employees from './pages/Employees';
 import EmployeeDetail from './pages/EmployeeDetail';
 import LegalPages from './pages/LegalPages';
+import Tickets from './pages/Tickets';
 import NotFound from './pages/NotFound';
+import { initPushNotifications, setupForegroundHandler } from './services/pushService';
 
 // Branding Context — shared across app (preloader + login + anywhere)
 const BrandingContext = createContext({
@@ -404,6 +406,31 @@ const NotificationClickHandler = () => {
   return null;
 };
 
+// Global Push Notification Manager — initializes FCM foreground handler at app level
+// so notifications work regardless of which admin page is open.
+// Dispatches a custom DOM event 'gva-fcm-message' that Header listens to
+// for instant notification refetch without polling delay.
+const PushNotificationManager = () => {
+  const { isLoggedIn } = useAuth();
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    // Initialize FCM token + service worker registration
+    initPushNotifications();
+
+    // Register foreground handler: dispatches custom event for every FCM message received while app is open
+    const unsubscribe = setupForegroundHandler((payload) => {
+      console.log('[FCM] Admin foreground message received:', payload?.data?.type || 'unknown');
+      window.dispatchEvent(new CustomEvent('gva-fcm-message', { detail: payload }));
+    });
+
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
+  }, [isLoggedIn]);
+
+  return null;
+};
+
 // Main App Component
 const App = () => {
   console.log('Admin app loaded');
@@ -414,6 +441,7 @@ const App = () => {
         <BrandedPreloader>
         <Router>
           <NotificationClickHandler />
+          <PushNotificationManager />
           <div className="App">
             <Routes>
           {/* Public Routes */}
@@ -553,6 +581,17 @@ const App = () => {
           <Route path="/legal-pages" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <LegalPages />
+            </ProtectedRoute>
+          } />
+          <Route path="/tickets" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Tickets />
+            </ProtectedRoute>
+          } />
+          {/* Deep-link target for ticket notifications — Tickets page is a list view (no detail param support yet) */}
+          <Route path="/tickets/:ticketId" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Tickets />
             </ProtectedRoute>
           } />
           <Route path="/subscription-requests" element={

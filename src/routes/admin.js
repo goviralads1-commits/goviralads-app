@@ -1527,28 +1527,10 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     
     const allMessages = task.messages || [];
     const totalMessages = allMessages.length;
-    
-    // Calculate slice indices (messages are oldest first in DB, we want newest first for pagination)
-    // Page 0: last 30 messages
-    // Page 1: messages 30-60 from end
-    // etc.
-    const endIndex = totalMessages - (page * limit);
-    const startIndex = Math.max(0, endIndex - limit);
-    
-    if (endIndex <= 0) {
-      return res.status(200).json({
-        messages: [],
-        page,
-        limit,
-        totalMessages,
-        hasMore: false
-      });
-    }
-    
-    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => {
-      // Resolve sender identity label
+
+    // Helper: map a raw message to response format
+    const mapMessage = (m) => {
       let senderLabel = 'Client';
-      
       if (m.sender === 'ADMIN') {
         senderLabel = 'Admin';
       } else if (m.senderId) {
@@ -1561,7 +1543,6 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
           senderLabel = assignedUser.userId?.profile?.designation || 'Team';
         }
       }
-      
       return {
         sender: m.sender,
         senderId: m.senderId?.toString(),
@@ -1570,7 +1551,44 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
         attachments: m.attachments || [],
         createdAt: m.createdAt,
       };
-    });
+    };
+
+    // Incremental fetch: if 'since' param provided, return only messages newer than that timestamp
+    const since = req.query.since;
+    if (since) {
+      const sinceDate = new Date(since);
+      if (!isNaN(sinceDate.getTime())) {
+        const newMessages = allMessages
+          .filter(m => new Date(m.createdAt) > sinceDate)
+          .map(mapMessage);
+        return res.status(200).json({
+          messages: newMessages,
+          totalMessages,
+          hasMore: false,
+          since: sinceDate.toISOString(),
+        });
+      }
+    }
+
+    // Full pagination (initial load / load older messages)
+    // Calculate slice indices (messages are oldest first in DB, we want newest first for pagination)
+    // Page 0: last 30 messages
+    // Page 1: messages 30-60 from end
+    // etc.
+    const endIndex = totalMessages - (page * limit);
+    const startIndex = Math.max(0, endIndex - limit);
+
+    if (endIndex <= 0) {
+      return res.status(200).json({
+        messages: [],
+        page,
+        limit,
+        totalMessages,
+        hasMore: false
+      });
+    }
+
+    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(mapMessage);
     
     console.log(`[Chat Pagination] Task ${taskId}: page=${page}, returned ${paginatedMessages.length}/${totalMessages} messages`);
     
@@ -4005,6 +4023,12 @@ router.get('/notifications', async (req, res) => {
   try {
     const adminId = req.user.id;
     const { unreadOnly } = req.query;
+
+    // Enforce inAppNotifications preference: if disabled, hide in-app notifications from bell
+    const userPrefs = await User.findById(adminId).select('preferences.inAppNotifications').lean();
+    if (userPrefs && userPrefs.preferences?.inAppNotifications === false) {
+      return res.status(200).json({ notifications: [], unreadCount: 0 });
+    }
 
     const notifications = await getNotificationsForUser(adminId, {
       unreadOnly: unreadOnly === 'true',

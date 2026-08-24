@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout, getPermissions, savePermissions } from '../services/authService';
 import api from '../services/api';
+import { disablePushNotifications, isPushEnabled, enablePushNotifications } from '../services/pushService';
 
 const Header = ({ title }) => {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ const Header = ({ title }) => {
   const profileRef = useRef(null);
   const notifRef = useRef(null);
   const bellButtonRef = useRef(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   // Fetch notifications with proper API
   const fetchNotifications = useCallback(async () => {
@@ -44,18 +47,37 @@ const Header = ({ title }) => {
     fetchNotifications();
     fetchBranding();
     
-    // Polling: Refresh notifications every 30 seconds
-    const pollInterval = setInterval(fetchNotifications, 30000);
+    // Visibility-aware polling: pause when tab is hidden to save bandwidth and battery
+    let pollInterval = null;
+    const startPolling = () => {
+      if (pollInterval) return;
+      pollInterval = setInterval(fetchNotifications, 30000);
+    };
+    const stopPolling = () => {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+    };
+    if (document.visibilityState === 'visible') startPolling();
     
-    // SECURITY: Refresh permissions when tab regains focus
+    // SECURITY: Refresh permissions when tab regains focus + resume polling
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
+        fetchNotifications(); // Immediate fetch on tab focus
+        startPolling();
         api.get('/admin/me/permissions').then(res => {
           savePermissions(res.data);
         }).catch(() => {});
+      } else {
+        stopPolling();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
+
+    // Listen for FCM foreground messages — triggers instant notification refetch
+    const handleFCMMessage = () => {
+      console.log('[Admin Header] FCM message received — fetching notifications immediately');
+      fetchNotifications();
+    };
+    window.addEventListener('gva-fcm-message', handleFCMMessage);
     
     // Close dropdowns on outside click
     const handleClickOutside = (e) => {
@@ -67,9 +89,10 @@ const Header = ({ title }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
+      stopPolling();
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('visibilitychange', handleVisibility);
-      clearInterval(pollInterval);
+      window.removeEventListener('gva-fcm-message', handleFCMMessage);
     };
   }, [fetchNotifications]);
 
@@ -88,10 +111,43 @@ const Header = ({ title }) => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clean up push token so stale sessions don't keep receiving notifications
+    try {
+      await disablePushNotifications();
+    } catch (e) {
+      // Silent fail — token cleanup is best-effort
+    }
     logout();
     navigate('/login');
   };
+
+  // Push notification toggle — reuses the SAME pushService functions as Profile Settings page
+  const handlePushToggle = async () => {
+    if (pushLoading) return;
+    setPushLoading(true);
+    try {
+      if (pushEnabled) {
+        await disablePushNotifications();
+        setPushEnabled(false);
+      } else {
+        await enablePushNotifications();
+        setPushEnabled(true);
+      }
+    } catch (e) {
+      console.error('[Header] Push toggle error:', e.message);
+      setPushEnabled(isPushEnabled());
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Sync push state whenever the profile dropdown is opened
+  useEffect(() => {
+    if (showProfileMenu) {
+      setPushEnabled(isPushEnabled());
+    }
+  }, [showProfileMenu]);
 
   const handleNotificationClick = async (notif) => {
     // LOG: Inspect notification object structure
@@ -415,6 +471,29 @@ const Header = ({ title }) => {
                         </Link>
                       </>
                     )}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '10px', backgroundColor: '#f8fafc', margin: '4px 0' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '500', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px' }}>🔔</span> Notifications
+                      </span>
+                      <button
+                        onClick={handlePushToggle}
+                        disabled={pushLoading}
+                        style={{
+                          width: '36px', height: '20px', borderRadius: '10px',
+                          border: 'none', cursor: pushLoading ? 'wait' : 'pointer',
+                          backgroundColor: pushEnabled ? '#6366f1' : '#cbd5e1',
+                          position: 'relative', transition: 'background-color 0.2s',
+                          padding: 0, flexShrink: 0,
+                        }}
+                      >
+                        <span style={{
+                          position: 'absolute', top: '2px',
+                          left: pushEnabled ? '18px' : '2px',
+                          width: '16px', height: '16px', borderRadius: '50%',
+                          backgroundColor: '#fff', transition: 'left 0.2s',
+                        }} />
+                      </button>
+                    </div>
                     <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '8px 0' }} />
                     <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', fontSize: '14px', fontWeight: '500', cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>🚪</span> Logout

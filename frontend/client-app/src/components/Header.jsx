@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout } from '../services/authService';
 import api from '../services/api';
 import { useCart } from '../context/CartContext';
+import { disablePushNotifications, isPushEnabled, enablePushNotifications } from '../services/pushService';
 
 const Header = ({ title }) => {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ const Header = ({ title }) => {
   const profileRef = useRef(null);
   const notifRef = useRef(null);
   const bellButtonRef = useRef(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
   
   // Notification sound refs
   const prevUnreadCountRef = useRef(null); // null = first load, not yet initialized
@@ -166,7 +169,16 @@ const Header = ({ title }) => {
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
+    // Listen for FCM foreground messages — triggers instant notification refetch without waiting for next poll
+    const handleFCMMessage = () => {
+      if (user) {
+        console.log('[Header] FCM message received — fetching notifications immediately');
+        fetchNotifications();
+      }
+    };
+    window.addEventListener('gva-fcm-message', handleFCMMessage);
+
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfileMenu(false);
       if (notifRef.current && !notifRef.current.contains(e.target) && 
@@ -178,14 +190,49 @@ const Header = ({ title }) => {
     return () => {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('gva-fcm-message', handleFCMMessage);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [fetchNotifications, fetchBranding]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clean up push token so stale sessions don't keep receiving notifications
+    try {
+      await disablePushNotifications();
+    } catch (e) {
+      // Silent fail — token cleanup is best-effort, logout should proceed regardless
+    }
     logout();
     navigate('/login');
   };
+
+  // Push notification toggle — reuses the SAME pushService functions as Profile Settings page
+  const handlePushToggle = async () => {
+    if (pushLoading) return;
+    setPushLoading(true);
+    try {
+      if (pushEnabled) {
+        await disablePushNotifications();
+        setPushEnabled(false);
+      } else {
+        await enablePushNotifications();
+        setPushEnabled(true);
+      }
+    } catch (e) {
+      console.error('[Header] Push toggle error:', e.message);
+      // Re-sync actual state on error
+      setPushEnabled(isPushEnabled());
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Sync push state whenever the profile dropdown is opened
+  useEffect(() => {
+    if (showProfileMenu) {
+      setPushEnabled(isPushEnabled());
+    }
+  }, [showProfileMenu]);
 
   const handleNotificationClick = async (notif) => {
     // LOG: Inspect notification object structure
@@ -548,6 +595,29 @@ const Header = ({ title }) => {
                     <Link to="/earnings-ledger" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#22c55e', fontSize: '14px', fontWeight: '600' }}>
                       <span style={{ fontSize: '16px' }}>💰</span> Earnings & Redeem
                     </Link>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '10px', backgroundColor: '#f8fafc', margin: '4px 0' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '500', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '16px' }}>🔔</span> Notifications
+                      </span>
+                      <button
+                        onClick={handlePushToggle}
+                        disabled={pushLoading}
+                        style={{
+                          width: '36px', height: '20px', borderRadius: '10px',
+                          border: 'none', cursor: pushLoading ? 'wait' : 'pointer',
+                          backgroundColor: pushEnabled ? '#22c55e' : '#cbd5e1',
+                          position: 'relative', transition: 'background-color 0.2s',
+                          padding: 0, flexShrink: 0,
+                        }}
+                      >
+                        <span style={{
+                          position: 'absolute', top: '2px',
+                          left: pushEnabled ? '18px' : '2px',
+                          width: '16px', height: '16px', borderRadius: '50%',
+                          backgroundColor: '#fff', transition: 'left 0.2s',
+                        }} />
+                      </button>
+                    </div>
                     <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0', paddingTop: '4px' }}>
                       <Link to="/legal/privacy-policy" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', textDecoration: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
                         <span style={{ fontSize: '16px' }}>📋</span> Privacy Policy

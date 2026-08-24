@@ -915,28 +915,10 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     
     const allMessages = task.messages || [];
     const totalMessages = allMessages.length;
-    
-    // Calculate slice indices (messages are oldest first in DB, we want newest first for pagination)
-    // Page 0: last 30 messages
-    // Page 1: messages 30-60 from end
-    // etc.
-    const endIndex = totalMessages - (page * limit);
-    const startIndex = Math.max(0, endIndex - limit);
-    
-    if (endIndex <= 0) {
-      return res.status(200).json({
-        messages: [],
-        page,
-        limit,
-        totalMessages,
-        hasMore: false
-      });
-    }
-    
-    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(m => {
-      // Resolve sender identity label
+
+    // Helper: map a raw message to response format
+    const mapMessage = (m) => {
       let senderLabel = 'CLIENT';
-      
       if (m.sender === 'ADMIN') {
         senderLabel = 'ADMIN';
       } else if (m.senderId) {
@@ -949,7 +931,6 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
           senderLabel = 'ASSIGNED_USER';
         }
       }
-      
       return {
         sender: m.sender,
         senderId: m.senderId?.toString(),
@@ -958,10 +939,47 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
         attachments: m.attachments || [],
         createdAt: m.createdAt,
       };
-    });
-    
+    };
+
+    // Incremental fetch: if 'since' param provided, return only messages newer than that timestamp
+    const since = req.query.since;
+    if (since) {
+      const sinceDate = new Date(since);
+      if (!isNaN(sinceDate.getTime())) {
+        const newMessages = allMessages
+          .filter(m => new Date(m.createdAt) > sinceDate)
+          .map(mapMessage);
+        return res.status(200).json({
+          messages: newMessages,
+          totalMessages,
+          hasMore: false,
+          since: sinceDate.toISOString(),
+        });
+      }
+    }
+
+    // Full pagination (initial load / load older messages)
+    // Calculate slice indices (messages are oldest first in DB, we want newest first for pagination)
+    // Page 0: last 30 messages
+    // Page 1: messages 30-60 from end
+    // etc.
+    const endIndex = totalMessages - (page * limit);
+    const startIndex = Math.max(0, endIndex - limit);
+
+    if (endIndex <= 0) {
+      return res.status(200).json({
+        messages: [],
+        page,
+        limit,
+        totalMessages,
+        hasMore: false
+      });
+    }
+
+    const paginatedMessages = allMessages.slice(startIndex, endIndex).map(mapMessage);
+
     console.log(`[Chat Pagination] Task ${taskId}: page=${page}, returned ${paginatedMessages.length}/${totalMessages} messages`);
-    
+
     return res.status(200).json({
       messages: paginatedMessages,
       page,
@@ -2233,6 +2251,12 @@ router.get('/notifications', async (req, res) => {
     const clientId = req.user.id;
     const { unreadOnly } = req.query;
 
+    // Enforce inAppNotifications preference: if disabled, hide in-app notifications from bell
+    const userPrefs = await User.findById(clientId).select('preferences.inAppNotifications').lean();
+    if (userPrefs && userPrefs.preferences?.inAppNotifications === false) {
+      return res.status(200).json({ notifications: [], unreadCount: 0 });
+    }
+
     const notifications = await getNotificationsForUser(clientId, {
       unreadOnly: unreadOnly === 'true',
     });
@@ -3074,7 +3098,36 @@ router.post('/tickets/:ticketId/reply', async (req, res) => {
 
     await ticket.save();
 
-    // Notify admin via email
+    // Create in-app notification for all admins + send push
+    try {
+      const admins = await User.find({ role: 'ADMIN', isDeleted: { $ne: true } }).select('_id').exec();
+      const clientUser = await User.findById(clientId).select('name email').exec();
+      const senderName = clientUser?.name || clientUser?.email || 'Client';
+      const messagePreview = (message || '').trim() || (attachments?.length ? '[Image attachment]' : 'New reply');
+
+      for (const admin of admins) {
+        await createNotification({
+          recipientId: admin._id,
+          type: NOTIFICATION_TYPES.TICKET_REPLIED,
+          title: `Ticket Reply: ${ticket.subject}`,
+          message: messagePreview.substring(0, 200) + (messagePreview.length > 200 ? '...' : ''),
+          relatedEntity: { entityType: 'TICKET', entityId: ticket._id },
+        });
+      }
+      console.log(`[TICKET] Notified ${admins.length} admin(s) of client reply on ticket ${ticket._id}`);
+
+      // Send push notification to all admins
+      pushNotificationService.sendToRole('admin',
+        { title: `Ticket Reply from ${senderName}`, body: messagePreview.substring(0, 100) },
+        { type: 'TICKET_REPLIED', ticketId: ticket._id.toString(), url: '/tickets' }
+      ).then(result => {
+        console.log('[PUSH] Ticket reply → Admins:', result?.successCount || 0, 'sent');
+      }).catch(err => console.error('[PUSH] Ticket reply admin push failed:', err.message));
+    } catch (notifErr) {
+      console.error('[TICKET] Notification error:', notifErr.message);
+    }
+
+    // Notify admin via email (existing behavior preserved)
     try {
       const reminderScheduler = require('../services/reminderScheduler');
       await reminderScheduler.sendTicketReplyEmail(ticket, message.trim(), 'ADMIN');

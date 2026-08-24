@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
-import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
 import { getCurrentUser, isAuthenticated } from '../services/authService';
 
 // Helper: Extract video thumbnail URL
@@ -84,14 +83,6 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Initialize push notifications after login
-  useEffect(() => {
-    initPushNotifications();
-    // Register foreground message handler so notifications show when tab is open
-    const unsubscribe = setupForegroundHandler(null);
-    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
-  }, []);
 
   // Auto-rotate banners
   useEffect(() => {

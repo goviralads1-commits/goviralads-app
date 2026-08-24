@@ -25,6 +25,7 @@ import Register from './pages/Register';
 import Earnings from './pages/Earnings';
 import EarningsLedgerPage from './pages/EarningsLedger';
 import NotFound from './pages/NotFound';
+import { initPushNotifications, setupForegroundHandler } from './services/pushService';
 
 // Auth Context for managing auth state
 const AuthContext = createContext({
@@ -215,12 +216,39 @@ const NotificationClickHandler = () => {
   return null;
 };
 
+// Global Push Notification Manager — initializes FCM foreground handler at app level
+// so notifications work regardless of which page is open (not just Dashboard).
+// Dispatches a custom DOM event 'gva-fcm-message' that Header and Support listen to
+// for instant notification refetch without polling delay.
+const PushNotificationManager = () => {
+  const { isLoggedIn } = useAuth();
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    // Initialize FCM token + service worker registration
+    initPushNotifications();
+
+    // Register foreground handler: dispatches custom event for every FCM message received while app is open
+    // The handler in pushService.js also shows a browser notification when the tab is hidden.
+    const unsubscribe = setupForegroundHandler((payload) => {
+      console.log('[FCM] Foreground message received:', payload?.data?.type || 'unknown');
+      window.dispatchEvent(new CustomEvent('gva-fcm-message', { detail: payload }));
+    });
+
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
+  }, [isLoggedIn]);
+
+  return null;
+};
+
 // App shell — renders Router immediately so public routes (login) are never blocked
 const AppShell = () => {
   return (
     <CartProvider>
       <Router>
         <NotificationClickHandler />
+        <PushNotificationManager />
         <div className="App">
           <Routes>
             {/* Public Routes */}
