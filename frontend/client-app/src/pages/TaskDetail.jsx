@@ -23,6 +23,29 @@ const formatDescription = (desc) => {
   return desc.trim() || null;
 };
 
+// ==================== FAQ-STYLE COLLAPSIBLE SECTION HELPERS (UI interaction only) ====================
+// CSS grid-rows collapse: children stay MOUNTED while collapsed (no remount, no refetch),
+// so chat polling / message state / approvals are completely unaffected.
+const Collapse = ({ open, children }) => (
+  <div
+    aria-hidden={!open}
+    style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}
+  >
+    <div style={{ overflow: 'hidden', minHeight: 0 }}>{children}</div>
+  </div>
+);
+
+// Expand/collapse indicator (rotates with state)
+const Chevron = ({ open }) => (
+  <svg
+    width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    style={{ flexShrink: 0, transition: 'transform 0.2s ease', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+  >
+    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+// ==================== END COLLAPSIBLE HELPERS ====================
+
 const TaskDetail = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -77,6 +100,11 @@ const TaskDetail = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
   const [allMessages, setAllMessages] = useState([]); // Combined messages from pagination
+
+  // FAQ-style collapsible sections (UI interaction only — compact by default, independent toggles)
+  const [openSections, setOpenSections] = useState({ planDetails: false, inputs: false, discussion: false, progress: false, timeline: false });
+  const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  const sectionKeyDown = (e, key) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(key); } };
   
   // Auto-resize textarea
   const handleTextareaChange = (e) => {
@@ -607,9 +635,11 @@ const TaskDetail = () => {
   // Auto-scroll to discussion if scrollToChat=true
   useEffect(() => {
     if (!loading && task && searchParams.get('scrollToChat') === 'true' && discussionRef.current) {
+      // Deep link lands on a collapsed-by-default section — open it so the chat is visible
+      setOpenSections(prev => ({ ...prev, discussion: true }));
       setTimeout(() => {
         discussionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+      }, 300);
     }
   }, [loading, task, searchParams]);
 
@@ -864,11 +894,19 @@ const TaskDetail = () => {
           </div>
         )}
 
-        {/* Hero Card - Title + Status */}
+        {/* Hero Card - Title + Status (Plan Details — collapsible; chip + title stay visible) */}
         <div style={{
           backgroundColor: '#fff', borderRadius: '28px', padding: '36px 32px', marginBottom: '20px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
         }}>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={openSections.planDetails}
+            onClick={() => toggleSection('planDetails')}
+            onKeyDown={(e) => sectionKeyDown(e, 'planDetails')}
+            style={{ cursor: 'pointer' }}
+          >
           {/* Progress Chip - milestone-based, no internal status label */}
           <div style={{ marginBottom: '20px' }}>
             {(() => {
@@ -934,13 +972,18 @@ const TaskDetail = () => {
           </div>
 
           {/* Title */}
-          <h1 style={{
-            fontSize: '28px', fontWeight: '700', color: '#1a1a1a', margin: 0, lineHeight: 1.35,
-            letterSpacing: '-0.02em'
-          }}>
-            {task.title}
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <h1 style={{
+              fontSize: '28px', fontWeight: '700', color: '#1a1a1a', margin: 0, lineHeight: 1.35,
+              letterSpacing: '-0.02em', flex: 1
+            }}>
+              {task.title}
+            </h1>
+            <span style={{ color: '#94a3b8', marginTop: '8px' }} aria-hidden="true"><Chevron open={openSections.planDetails} /></span>
+          </div>
+          </div>
 
+          <Collapse open={openSections.planDetails}>
           {/* Commission-only read-only indicator */}
           {task.isAssignedUser && (
             <span style={{
@@ -968,6 +1011,7 @@ const TaskDetail = () => {
               {formatDescription(task.description)}
             </p>
           )}
+          </Collapse>
         </div>
 
         {/* CLIENT INPUTS SUBMITTED */}
@@ -976,7 +1020,14 @@ const TaskDetail = () => {
             backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={openSections.inputs}
+              onClick={() => toggleSection('inputs')}
+              onKeyDown={(e) => sectionKeyDown(e, 'inputs')}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: openSections.inputs ? '20px' : '0', cursor: 'pointer' }}
+            >
               <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
@@ -985,12 +1036,14 @@ const TaskDetail = () => {
                   <line x1="16" y1="17" x2="8" y2="17" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Your Submitted Inputs</h3>
                 <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Information you provided during order</p>
               </div>
+              <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.inputs} /></span>
             </div>
-            
+
+            <Collapse open={openSections.inputs}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {task.clientInputs.map((input, idx) => (
                 <div key={idx} style={{ padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
@@ -1008,6 +1061,7 @@ const TaskDetail = () => {
                 </div>
               ))}
             </div>
+            </Collapse>
           </div>
         )}
 
@@ -1016,16 +1070,27 @@ const TaskDetail = () => {
           backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
-                <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: openSections.discussion ? '20px' : '0' }}>
+            {/* Clickable title area only — header action buttons remain separate */}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={openSections.discussion}
+              onClick={() => toggleSection('discussion')}
+              onKeyDown={(e) => sectionKeyDown(e, 'discussion')}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0, cursor: 'pointer' }}
+            >
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                  <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
+                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Chat with admin about this task</p>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Chat with admin about this task</p>
-            </div>
+            <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.discussion} /></span>
             {/* Approval Filter Toggle */}
             {(task.approvalRequests?.filter(a => a.isVisibleToClient !== false).length > 0) && (
               <button
@@ -1062,6 +1127,7 @@ const TaskDetail = () => {
             </button>
           </div>
 
+          <Collapse open={openSections.discussion}>
           {/* Messages */}
           <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
             {renderChatContent(false)}
@@ -1131,6 +1197,7 @@ const TaskDetail = () => {
               </button>
             </div>
           </div>
+          </Collapse>
         </div>
 
         {/* FINAL APPROVED DECISIONS - Summary below chat */}
@@ -1440,10 +1507,19 @@ const TaskDetail = () => {
           boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
         }}>
           {/* Section Header */}
-          <div style={{ marginBottom: '24px' }}>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={openSections.progress}
+            onClick={() => toggleSection('progress')}
+            onKeyDown={(e) => sectionKeyDown(e, 'progress')}
+            style={{ marginBottom: openSections.progress ? '24px' : '0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+          >
             <span style={{ fontSize: '14px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Progress</span>
+            <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.progress} /></span>
           </div>
 
+          <Collapse open={openSections.progress}>
           {isPendingApproval ? (
             <div style={{ padding: '24px', backgroundColor: '#eff6ff', borderRadius: '20px', border: '1px solid #bfdbfe', textAlign: 'center' }}>
               <div style={{ fontSize: '40px', marginBottom: '16px' }}>⏳</div>
@@ -1462,6 +1538,7 @@ const TaskDetail = () => {
               progressIcon={task.progressIcon}
             />
           )}
+          </Collapse>
         </div>
 
         {/* Details Card */}
@@ -1495,7 +1572,7 @@ const TaskDetail = () => {
         )}
 
         {/* Pricing & Quantity Card - CONDITIONAL */}
-        {((task.quantity && task.showQuantityToClient) || ((task.creditCost || task.creditsUsed) && task.showCreditsToClient !== false) || task.offerPrice || task.originalPrice) && (
+        {((task.quantity && task.showQuantityToClient) || ((task.creditCost || task.creditsUsed) && task.showCreditsToClient !== false) || task.offerPrice || task.originalPrice || task.myCommission) && (
           <div style={{
             backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
@@ -1504,7 +1581,8 @@ const TaskDetail = () => {
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Quantity - CONDITIONAL (Scope Clarity) */}
-              {task.quantity && task.showQuantityToClient && (
+              {/* Recipient privacy: commission recipients see ONLY their commission */}
+              {task.quantity && task.showQuantityToClient && !(task.myCommission > 0) && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
                   <div>
                     <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '3px' }}>Scope Quantity</span>
@@ -1514,9 +1592,21 @@ const TaskDetail = () => {
                 </div>
               )}
 
-              {/* Credits - CONDITIONAL */}
-              {/* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */}
-              {(task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
+              {/* Commission (Phase 3) — shown ONLY to the task's commission
+                  recipient; amount comes verbatim from the persisted
+                  EarningsLedger record. Falls back to existing Credits Used. */}
+              {task.myCommission > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
+                  <div>
+                    <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Commission</span>
+                    <span style={{ fontSize: '12px', color: '#15803d' }}>Earned on this task</span>
+                  </div>
+                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>₹{Number(task.myCommission).toLocaleString('en-IN')}</span>
+                </div>
+              ) : (
+              /* Credits - CONDITIONAL */
+              /* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */
+              (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
                   <div>
                     <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Credits Used</span>
@@ -1524,10 +1614,12 @@ const TaskDetail = () => {
                   </div>
                   <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>{task.creditsUsed || task.creditCost || 0} credits</span>
                 </div>
+              )
               )}
 
               {/* Offer Price - CONDITIONAL */}
-              {task.offerPrice && (
+              {/* Recipient privacy: commission recipients must never see task pricing */}
+              {task.offerPrice && !(task.myCommission > 0) && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#fffbeb', borderRadius: '14px', border: '1px solid #fef3c7' }}>
                   <div>
                     <span style={{ fontSize: '14px', color: '#92400e', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Offer Price</span>
@@ -1668,8 +1760,19 @@ const TaskDetail = () => {
             backgroundColor: '#fff', borderRadius: '28px', padding: '32px',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
           }}>
-            <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '24px' }}>Timeline</p>
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={openSections.timeline}
+              onClick={() => toggleSection('timeline')}
+              onKeyDown={(e) => sectionKeyDown(e, 'timeline')}
+              style={{ marginBottom: openSections.timeline ? '24px' : '0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+            >
+              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Timeline</p>
+              <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.timeline} /></span>
+            </div>
 
+            <Collapse open={openSections.timeline}>
             {/* Date Range Visual */}
             {(task.startDate || task.endDate) && (
               <div style={{
@@ -1734,6 +1837,7 @@ const TaskDetail = () => {
                 <p style={{ fontSize: '13px', color: humanStatus.color, fontWeight: '600', margin: 0 }}>{humanStatus.label}</p>
               </div>
             </div>
+            </Collapse>
           </div>
         )}
       </div>

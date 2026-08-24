@@ -631,6 +631,33 @@ router.get('/tasks/:taskId', async (req, res) => {
     // Log milestones for verification
     console.log(`[SINGLE-TASK] Task ${task._id} milestones:`, JSON.stringify(currentMilestones));
 
+    // === COMMISSION DISPLAY (Phase 3) — read-only, recipient-only exposure ===
+    // Expose ONLY the authenticated user's own persisted commission for this
+    // task. Authoritative source: EarningsLedger (never recalculated).
+    // COMMISSION_REVERSED entries are stored as negative amounts, so a plain
+    // sum of earned + reversed yields the correct net. Net <= 0 => null.
+    let myCommission = null;
+    try {
+      const [commissionAgg] = await EarningsLedger.aggregate([
+        {
+          $match: {
+            userId: new mongoose.Types.ObjectId(clientId), // authenticated user only — never from request params
+            sourceTaskId: new mongoose.Types.ObjectId(taskId),
+            type: { $in: ['COMMISSION_EARNED', 'COMMISSION_REVERSED'] },
+          },
+        },
+        { $group: { _id: null, net: { $sum: '$amount' } } },
+      ]);
+      const net = commissionAgg?.net;
+      if (typeof net === 'number' && net > 0) {
+        myCommission = net;
+      }
+    } catch (commissionErr) {
+      // Fail safe: any lookup problem means the UI keeps its existing display
+      console.error('[SINGLE-TASK] myCommission lookup failed:', commissionErr.message);
+      myCommission = null;
+    }
+
     return res.status(200).json({
       task: {
         id: task._id.toString(),
@@ -656,6 +683,10 @@ router.get('/tasks/:taskId', async (req, res) => {
         updatedAt: task.updatedAt,
         // TASK OWNERSHIP INFO - needed for UI to show "My Task" vs "Assigned Task"
         isAssignedUser: isAssignedUserOnly,
+        // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
+        // for this task from EarningsLedger, or null when none/zero. Never
+        // contains another recipient's amount.
+        myCommission,
         assignedUsers: (task.assignedUsers || []).map(u => ({
           userId: u.userId?.toString(),
           percentage: u.percentage,
