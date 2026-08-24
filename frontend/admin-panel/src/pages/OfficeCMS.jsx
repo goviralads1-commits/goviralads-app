@@ -13,6 +13,8 @@ const OfficeCMS = () => {
   const [activeTab, setActiveTab] = useState('banners');
   const [editingBanner, setEditingBanner] = useState(null);
   const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', gradient: '', imageUrl: '', ctaText: '', ctaLink: '', ctaLinkType: 'internal' });
+  // Local drafts for header navigation item edits (persisted only when Save is clicked)
+  const [navDrafts, setNavDrafts] = useState({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -164,6 +166,58 @@ const OfficeCMS = () => {
     await saveConfig({ seeMoreButtonConfig: { ...config.seeMoreButtonConfig, ...updates } });
   };
 
+  // Header Navigation handlers (public header menu, max 4 items)
+  const sortedNavItems = (config?.headerNavItems || []).slice().sort((a, b) => a.order - b.order);
+  const getNavDraft = (item) => navDrafts[item.id] || { title: item.title || '', content: item.content || '', link: item.link || '' };
+  const setNavDraft = (item, field, value) => {
+    setNavDrafts(prev => {
+      const base = prev[item.id] || { title: item.title || '', content: item.content || '', link: item.link || '' };
+      return { ...prev, [item.id]: { ...base, [field]: value } };
+    });
+  };
+
+  const persistNavItems = async (items) => {
+    const normalized = items.map((item, i) => ({ ...item, order: i }));
+    await saveConfig({ headerNavItems: normalized });
+  };
+
+  const handleSaveNavItem = async (item) => {
+    const draft = getNavDraft(item);
+    const updated = sortedNavItems.map(i => i.id === item.id ? { ...i, title: draft.title, content: draft.content, link: draft.link } : i);
+    await persistNavItems(updated);
+    setNavDrafts(prev => {
+      const next = { ...prev };
+      delete next[item.id];
+      return next;
+    });
+  };
+
+  const handleToggleNavItem = async (item) => {
+    await persistNavItems(sortedNavItems.map(i => i.id === item.id ? { ...i, isEnabled: !i.isEnabled } : i));
+  };
+
+  const handleReorderNavItem = async (direction, index) => {
+    const items = [...sortedNavItems];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+    [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+    await persistNavItems(items);
+  };
+
+  const handleDeleteNavItem = async (itemId) => {
+    if (!confirm('Remove this navigation item?')) return;
+    await persistNavItems(sortedNavItems.filter(i => i.id !== itemId));
+  };
+
+  const handleAddNavItem = async () => {
+    if (sortedNavItems.length >= 4) {
+      showToast('error', 'Maximum 4 navigation items. Remove one first.');
+      return;
+    }
+    const items = [...sortedNavItems, { id: `nav-${Date.now()}`, title: 'New Item', content: '', link: '', isEnabled: true, order: sortedNavItems.length }];
+    await persistNavItems(items);
+  };
+
   const gradientPresets = [
     { name: 'Purple', value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
     { name: 'Pink', value: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
@@ -216,6 +270,7 @@ const OfficeCMS = () => {
             { id: 'sections', label: '📑 Sections', desc: 'Order & visibility' },
             { id: 'featured', label: '⭐ Featured Plans', desc: 'Showcase' },
             { id: 'buttons', label: '🔘 Buttons', desc: 'CTAs' },
+            { id: 'navigation', label: '🧭 Header Nav', desc: 'Public menu' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -469,6 +524,73 @@ const OfficeCMS = () => {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Page Title</label>
               <input type="text" value={config?.pageTitle || 'Office'} onChange={e => saveConfig({ pageTitle: e.target.value })} style={{ width: '100%', maxWidth: '300px', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
             </div>
+          </div>
+        )}
+
+        {/* NAVIGATION TAB — admin-configurable public header menu (max 4 items) */}
+        {activeTab === 'navigation' && (
+          <div>
+            <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 6px 0' }}>Public Header Navigation ({sortedNavItems.length}/4)</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: 0, maxWidth: '640px', lineHeight: 1.5 }}>
+                    These items appear as a small menu row in the client app header — for logged-out visitors and logged-in clients.
+                    Empty titles are never shown publicly. If all items are disabled or removed, the menu row is hidden completely.
+                    Clicking an item opens its <strong>Content</strong> in a popup — the popup is always the default behaviour.
+                    The optional <strong>Link</strong> field is a fallback used ONLY when Content is empty (reserved for future routing, e.g. <code>/legal/about</code>).
+                    Content supports basic formatting HTML (h3, p, ul, li, strong, em) — all other tags/attributes are stripped for safety before public display.
+                  </p>
+                </div>
+                <button onClick={handleAddNavItem} disabled={sortedNavItems.length >= 4 || saving} style={{ padding: '12px 24px', backgroundColor: sortedNavItems.length >= 4 ? '#e2e8f0' : '#22c55e', color: sortedNavItems.length >= 4 ? '#94a3b8' : '#fff', borderRadius: '12px', border: 'none', fontWeight: '600', cursor: sortedNavItems.length >= 4 ? 'not-allowed' : 'pointer' }}>
+                  + Add Item
+                </button>
+              </div>
+            </div>
+
+            {sortedNavItems.length === 0 ? (
+              <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🧭</div>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>No navigation items. The public header menu row is currently hidden. Click "+ Add Item" to create one.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {sortedNavItems.map((item, idx) => {
+                  const draft = getNavDraft(item);
+                  const hasDraft = Boolean(navDrafts[item.id]);
+                  return (
+                    <div key={item.id} style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9', opacity: item.isEnabled ? 1 : 0.6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>Navigation Item {idx + 1}</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button onClick={() => handleReorderNavItem('up', idx)} disabled={idx === 0} style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                          <button onClick={() => handleReorderNavItem('down', idx)} disabled={idx === sortedNavItems.length - 1} style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', borderRadius: '8px', border: 'none', cursor: idx === sortedNavItems.length - 1 ? 'not-allowed' : 'pointer', opacity: idx === sortedNavItems.length - 1 ? 0.3 : 1 }}>↓</button>
+                          <button onClick={() => handleToggleNavItem(item)} style={{ padding: '8px 12px', backgroundColor: item.isEnabled ? '#dcfce7' : '#fef2f2', color: item.isEnabled ? '#16a34a' : '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>{item.isEnabled ? 'Enabled' : 'Disabled'}</button>
+                          <button onClick={() => handleDeleteNavItem(item.id)} style={{ padding: '8px 12px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Remove</button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Title (empty = hidden publicly)</label>
+                          <input type="text" maxLength={60} value={draft.title} onChange={e => setNavDraft(item, 'title', e.target.value)} placeholder="e.g. About" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', boxSizing: 'border-box' }} />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Link (optional fallback — used only if Content is empty)</label>
+                          <input type="text" value={draft.link} onChange={e => setNavDraft(item, 'link', e.target.value)} placeholder="e.g. /legal/about — popup is the default" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', boxSizing: 'border-box' }} />
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Content (opens in the popup — basic formatting HTML allowed, unsafe tags stripped)</label>
+                        <textarea value={draft.content} onChange={e => setNavDraft(item, 'content', e.target.value)} rows={6} placeholder="<h3>Heading</h3><p>Your content here...</p>" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+                      </div>
+                      <button onClick={() => handleSaveNavItem(item)} disabled={saving || !hasDraft} style={{ padding: '12px 24px', backgroundColor: hasDraft ? '#6366f1' : '#e2e8f0', color: hasDraft ? '#fff' : '#94a3b8', borderRadius: '12px', border: 'none', fontWeight: '600', cursor: hasDraft ? 'pointer' : 'default' }}>
+                        {hasDraft ? 'Save Changes' : 'Saved'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

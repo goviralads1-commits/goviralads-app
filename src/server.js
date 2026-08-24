@@ -612,6 +612,29 @@ app.get('/public/categories', async (_req, res) => {
   }
 });
 
+// GET /public/header-nav - Public admin-configurable header navigation (no auth required)
+// Returns ONLY enabled items with non-empty titles, sorted by order, max 4.
+// Lightweight single-query endpoint — no plan lookups, safe for logged-out visitors.
+app.get('/public/header-nav', async (_req, res) => {
+  try {
+    const config = await OfficeConfig.getConfig();
+    const items = (config.headerNavItems || [])
+      .filter(item => item.isEnabled && item.title && item.title.trim() !== '')
+      .sort((a, b) => a.order - b.order)
+      .slice(0, 4)
+      .map(item => ({
+        id: item.id,
+        title: item.title.trim(),
+        content: item.content || '',
+        link: item.link || ''
+      }));
+    return res.status(200).json({ items });
+  } catch (err) {
+    // Never block the public header — an empty list simply hides the navigation row
+    return res.status(200).json({ items: [] });
+  }
+});
+
 // GET /public/office-config - Public office config + featured plans (PUBLIC visibility only)
 app.get('/public/office-config', async (_req, res) => {
   try {

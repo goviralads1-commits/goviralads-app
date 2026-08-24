@@ -6526,6 +6526,24 @@ router.patch('/office-config', async (req, res) => {
         config[field] = updates[field];
       }
     });
+
+    // Public header navigation items ΓÇö validated separately (max 4, bounded sizes)
+    if (updates.headerNavItems !== undefined) {
+      if (!Array.isArray(updates.headerNavItems)) {
+        return res.status(400).json({ error: 'headerNavItems must be an array' });
+      }
+      if (updates.headerNavItems.length > 4) {
+        return res.status(400).json({ error: 'Maximum 4 header navigation items allowed' });
+      }
+      config.headerNavItems = updates.headerNavItems.slice(0, 4).map((item, idx) => ({
+        id: String(item.id || `nav-${Date.now()}-${idx}`),
+        title: String(item.title || '').trim().slice(0, 60),
+        content: String(item.content || '').slice(0, 50000),
+        link: String(item.link || '').trim().slice(0, 300),
+        isEnabled: item.isEnabled !== false,
+        order: Number.isFinite(Number(item.order)) ? Number(item.order) : idx
+      }));
+    }
     
     config.lastUpdatedBy = req.user._id;
     config.updatedAt = new Date();

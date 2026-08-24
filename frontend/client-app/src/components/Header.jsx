@@ -5,6 +5,7 @@ import { getCurrentUser, logout } from '../services/authService';
 import api from '../services/api';
 import { useCart } from '../context/CartContext';
 import { disablePushNotifications, isPushEnabled, enablePushNotifications } from '../services/pushService';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 const Header = ({ title }) => {
   const navigate = useNavigate();
@@ -22,6 +23,13 @@ const Header = ({ title }) => {
   const bellButtonRef = useRef(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+
+  // Public header navigation (admin-configurable, max 4) — UI-only, no polling
+  const [navItems, setNavItems] = useState([]);
+  const [navModalItem, setNavModalItem] = useState(null);
+  const [navModalVisible, setNavModalVisible] = useState(false);
+  const navCloseTimerRef = useRef(null);
+  const navCloseBtnRef = useRef(null);
   
   // Notification sound refs
   const prevUnreadCountRef = useRef(null); // null = first load, not yet initialized
@@ -138,9 +146,73 @@ const Header = ({ title }) => {
     }
   }, []);
 
+  // Public header navigation — single lightweight request, cached in sessionStorage
+  // (same pattern as branding) with a small TTL so admin edits never stay stale
+  // indefinitely. No polling; failure simply hides the nav row.
+  const fetchHeaderNav = useCallback(async () => {
+    const NAV_CACHE_KEY = 'clientHeaderNav';
+    const NAV_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    try {
+      const raw = sessionStorage.getItem(NAV_CACHE_KEY);
+      if (raw) {
+        try {
+          const cached = JSON.parse(raw);
+          if (cached && Array.isArray(cached.items)) {
+            setNavItems(cached.items); // fast initial render
+            if (typeof cached.ts === 'number' && Date.now() - cached.ts < NAV_CACHE_TTL_MS) {
+              return; // fresh — no network call
+            }
+            // Stale: keep showing cached items while refreshing once below
+          }
+        } catch (_) { /* invalid cache, fetch fresh */ }
+      }
+      const res = await api.get('/public/header-nav');
+      const items = (res.data?.items || []).slice(0, 4);
+      setNavItems(items);
+      try { sessionStorage.setItem(NAV_CACHE_KEY, JSON.stringify({ ts: Date.now(), items })); } catch (_) {}
+    } catch (err) {
+      // Silent fail — cached/stale items (if any) stay visible, otherwise the row stays hidden
+    }
+  }, []);
+
+  const openNavModal = useCallback((item) => {
+    // POPUP-FIRST: the modal always opens when the item has content.
+    // The optional `link` field is a fallback ONLY for content-less items
+    // (reserved for future routing, e.g. /legal/about) — it never silently
+    // bypasses the popup when content exists.
+    const hasContent = item.content && String(item.content).trim() !== '';
+    if (!hasContent && item.link) { navigate(item.link); return; }
+    if (navCloseTimerRef.current) { clearTimeout(navCloseTimerRef.current); navCloseTimerRef.current = null; }
+    setNavModalItem(item);
+    // Double rAF so the browser paints the initial (hidden) state before the transition starts
+    requestAnimationFrame(() => requestAnimationFrame(() => setNavModalVisible(true)));
+  }, [navigate]);
+
+  const closeNavModal = useCallback(() => {
+    setNavModalVisible(false);
+    navCloseTimerRef.current = setTimeout(() => setNavModalItem(null), 240);
+  }, []);
+
+  // Modal lifecycle: body scroll lock + ESC to close + focus the close button
+  useEffect(() => {
+    if (!navModalItem) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e) => { if (e.key === 'Escape') closeNavModal(); };
+    document.addEventListener('keydown', onKeyDown);
+    if (navCloseBtnRef.current) navCloseBtnRef.current.focus();
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [navModalItem, closeNavModal]);
+
   useEffect(() => {
     // Branding is public — fetch for all users (logo, app name)
     fetchBranding();
+
+    // Public header navigation — fetch for all users (logged-out + logged-in)
+    fetchHeaderNav();
     
     // Notifications require auth — only fetch/poll if user is logged in
     if (user) {
@@ -192,8 +264,9 @@ const Header = ({ title }) => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('gva-fcm-message', handleFCMMessage);
       document.removeEventListener('mousedown', handleClickOutside);
+      if (navCloseTimerRef.current) clearTimeout(navCloseTimerRef.current);
     };
-  }, [fetchNotifications, fetchBranding]);
+  }, [fetchNotifications, fetchBranding, fetchHeaderNav]);
 
   const handleLogout = async () => {
     // Clean up push token so stale sessions don't keep receiving notifications
@@ -322,7 +395,23 @@ const Header = ({ title }) => {
           .header-actions { gap: 4px !important; }
           .header-action-btn { border-radius: 10px !important; }
           .header-login { padding: 8px 14px !important; font-size: 13px !important; min-height: 44px !important; }
+          .header-nav-row { justify-content: flex-start !important; padding: 0 12px 8px !important; gap: 6px !important; }
+          .header-nav-item { padding: 7px 14px !important; font-size: 12px !important; }
         }
+        .header-nav-row {
+          max-width: 1400px; margin: 0 auto; padding: 0 20px 10px;
+          display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap;
+          overflow-x: auto; scrollbar-width: none;
+        }
+        .header-nav-row::-webkit-scrollbar { display: none; }
+        .header-nav-item {
+          flex-shrink: 0; padding: 8px 18px; border-radius: 999px;
+          border: 1px solid #e2e8f0; background: #f8fafc; color: #334155;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+          white-space: nowrap; font-family: inherit;
+        }
+        .header-nav-item:hover { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
       `}</style>
       {/* Premium Top Header */}
       <header style={{
@@ -638,7 +727,83 @@ const Header = ({ title }) => {
             </div>
           </div>
         </div>
+
+        {/* Public header navigation row (admin-configurable) — hidden entirely when no enabled items */}
+        {navItems.length > 0 && (
+          <nav className="header-nav-row" aria-label="Site information menu">
+            {navItems.map(item => (
+              <button
+                key={item.id}
+                className="header-nav-item"
+                onClick={() => openNavModal(item)}
+              >
+                {item.title}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
+
+      {/* Header navigation content modal — lightweight CSS animation, portal to body */}
+      {navModalItem && ReactDOM.createPortal(
+        <div
+          className={`nav-modal-overlay${navModalVisible ? ' nav-modal-open' : ''}`}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeNavModal(); }}
+        >
+          <style>{`
+            .nav-modal-overlay {
+              position: fixed; inset: 0; z-index: 10000;
+              background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+              display: flex; align-items: center; justify-content: center; padding: 20px;
+              opacity: 0; transition: opacity 0.22s ease;
+            }
+            .nav-modal-overlay.nav-modal-open { opacity: 1; }
+            .nav-modal-card {
+              width: min(560px, 100%); max-height: min(80vh, 640px);
+              background: #fff; border-radius: 20px;
+              box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+              display: flex; flex-direction: column; overflow: hidden;
+              transform: translateY(16px) scale(0.96);
+              transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            .nav-modal-overlay.nav-modal-open .nav-modal-card { transform: translateY(0) scale(1); }
+            .nav-modal-content { overflow-y: auto; padding: 4px 24px 24px; color: #334155; font-size: 14px; line-height: 1.7; }
+            .nav-modal-content h3 { color: #0f172a; margin: 20px 0 8px; font-size: 17px; font-weight: 700; }
+            .nav-modal-content p { margin: 0 0 12px; }
+            .nav-modal-content ul { margin: 0 0 12px; padding-left: 20px; }
+            .nav-modal-content li { margin-bottom: 6px; }
+            @media (max-width: 640px) {
+              .nav-modal-overlay { padding: 12px; align-items: flex-end; }
+              .nav-modal-card { max-height: 85vh; }
+            }
+          `}</style>
+          <div className="nav-modal-card" role="dialog" aria-modal="true" aria-label={navModalItem.title}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: '#0f172a' }}>{navModalItem.title}</h2>
+              <button
+                ref={navCloseBtnRef}
+                onClick={closeNavModal}
+                aria-label="Close dialog"
+                style={{
+                  width: '36px', height: '36px', borderRadius: '10px',
+                  backgroundColor: '#f8fafc', border: '1px solid #e2e8f0',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+            <div
+              className="nav-modal-content"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(navModalItem.content) || '<p>Content coming soon.</p>' }}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Bottom Navigation Bar */}
       <nav style={{
