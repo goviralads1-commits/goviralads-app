@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import api from '../services/api';
 import DOMPurify from 'dompurify';
 import { useCart } from '../context/CartContext';
+import { isAuthenticated } from '../services/authService';
 
 // Helper: Extract video thumbnail URL
 const getVideoThumbnail = (url) => {
@@ -88,9 +89,11 @@ const Plans = () => {
         search: debouncedSearch || undefined
       };
       
+      const plansBase = isAuthenticated() ? '/client/plans' : '/public/plans';
+      const catsBase = isAuthenticated() ? '/client/categories' : '/public/categories';
       const [plansRes, categoriesRes] = await Promise.all([
-        api.get('/client/plans', { params }),
-        api.get('/client/categories').catch(() => ({ data: { categories: [] } }))
+        api.get(plansBase, { params }),
+        api.get(catsBase).catch(() => ({ data: { categories: [] } }))
       ]);
       
       setPlans(plansRes.data.plans || []);

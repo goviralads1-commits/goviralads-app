@@ -305,6 +305,8 @@ const LegalPage = require('./models/LegalPage');
 const Settings = require('./models/Settings');
 const UserSubscription = require('./models/UserSubscription');
 const Notification = require('./models/Notification');
+const Category = require('./models/Category');
+const OfficeConfig = require('./models/OfficeConfig');
 const { createNotification, NOTIFICATION_TYPES } = require('./services/notificationService');
 
 app.get('/', (_req, res) => {
@@ -412,6 +414,282 @@ app.get('/public/agency-info', async (_req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch agency info' });
+  }
+});
+
+// ============================================================
+// PUBLIC MARKETPLACE ENDPOINTS (no auth required)
+// These return ONLY data safe for unauthenticated visitors.
+// Never expose private client data, SELECTED plans, or internal fields.
+// ============================================================
+
+// GET /public/plans - Public marketplace plan listing (PUBLIC visibility only)
+app.get('/public/plans', async (req, res) => {
+  try {
+    const { categoryId, search, sort } = req.query;
+
+    let query = {
+      isListedInPlans: true,
+      clientId: null,
+      isActivePlan: true,
+      visibility: 'PUBLIC'
+    };
+
+    if (categoryId && categoryId !== 'ALL') {
+      query.categoryId = categoryId;
+    }
+
+    let plansQuery = Task.find(query)
+      .populate('categoryId', 'name icon color slug');
+
+    switch (sort) {
+      case 'price_low':
+        plansQuery = plansQuery.sort({ creditCost: 1 });
+        break;
+      case 'price_high':
+        plansQuery = plansQuery.sort({ creditCost: -1 });
+        break;
+      case 'newest':
+      default:
+        plansQuery = plansQuery.sort({ createdAt: -1 });
+    }
+
+    const allPlans = await plansQuery.exec();
+
+    let filteredPlans = allPlans;
+    if (search && search.trim()) {
+      const searchLower = search.toLowerCase();
+      filteredPlans = filteredPlans.filter(p =>
+        p.title?.toLowerCase().includes(searchLower) ||
+        p.description?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return res.status(200).json({
+      plans: filteredPlans.map((p) => ({
+        id: p._id.toString(),
+        title: p.title,
+        description: p.description,
+        creditCost: p.creditCost,
+        featureImage: p.featureImage,
+        planMedia: p.planMedia,
+        offerPrice: p.offerPrice,
+        originalPrice: p.originalPrice,
+        countdownEndDate: p.countdownEndDate,
+        quantity: p.showQuantityToClient ? p.quantity : null,
+        showCreditsToClient: p.showCreditsToClient,
+        progressTarget: p.progressTarget,
+        categoryId: p.categoryId ? p.categoryId._id.toString() : null,
+        categoryName: p.categoryId ? p.categoryId.name : null,
+        categoryIcon: p.categoryId ? p.categoryId.icon : null,
+        categoryColor: p.categoryId ? p.categoryId.color : null,
+        publicNotes: p.publicNotes,
+        createdAt: p.createdAt,
+        requireLink: p.requireLink || false,
+        requireCustomInput: p.requireCustomInput || false,
+        customInputLabel: p.customInputLabel || '',
+        customInputPlaceholder: p.customInputPlaceholder || '',
+      })),
+    });
+  } catch (err) {
+    console.error('Public marketplace error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve marketplace plans' });
+  }
+});
+
+// GET /public/plans/:planId - Public plan detail (PUBLIC visibility only)
+app.get('/public/plans/:planId', async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    const plan = await Task.findById(planId)
+      .populate('categoryId', 'name icon color slug')
+      .exec();
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    if (!plan.isListedInPlans || plan.clientId !== null) {
+      return res.status(404).json({ error: 'Plan not available' });
+    }
+
+    if (!plan.isActivePlan) {
+      return res.status(404).json({ error: 'Plan not available' });
+    }
+
+    // PUBLIC visibility only — no SELECTED access for unauthenticated users
+    const visibility = plan.visibility || 'PUBLIC';
+    if (visibility !== 'PUBLIC') {
+      return res.status(404).json({ error: 'Plan not available' });
+    }
+
+    return res.status(200).json({
+      plan: {
+        id: plan._id.toString(),
+        title: plan.title,
+        description: plan.description,
+        creditCost: plan.creditCost,
+        featureImage: plan.featureImage,
+        planMedia: plan.planMedia,
+        offerPrice: plan.offerPrice,
+        originalPrice: plan.originalPrice,
+        countdownEndDate: plan.countdownEndDate,
+        quantity: plan.showQuantityToClient ? plan.quantity : null,
+        showQuantityToClient: plan.showQuantityToClient,
+        showCreditsToClient: plan.showCreditsToClient,
+        progressTarget: plan.progressTarget,
+        progressMode: plan.progressMode,
+        milestones: plan.milestones,
+        categoryId: plan.categoryId ? plan.categoryId._id.toString() : null,
+        categoryName: plan.categoryId ? plan.categoryId.name : null,
+        categoryIcon: plan.categoryId ? plan.categoryId.icon : null,
+        categoryColor: plan.categoryId ? plan.categoryId.color : null,
+        publicNotes: plan.publicNotes,
+        createdAt: plan.createdAt,
+        requireLink: plan.requireLink || false,
+        requireCustomInput: plan.requireCustomInput || false,
+        customInputLabel: plan.customInputLabel || '',
+        customInputPlaceholder: plan.customInputPlaceholder || '',
+      },
+    });
+  } catch (err) {
+    console.error('Public plan detail error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve plan' });
+  }
+});
+
+// GET /public/categories - Active categories for marketplace (PUBLIC visibility only)
+app.get('/public/categories', async (_req, res) => {
+  try {
+    const categories = await Category.find({ isActive: true })
+      .sort({ order: 1, name: 1 })
+      .exec();
+
+    const categoryCounts = await Task.aggregate([
+      { $match: { isListedInPlans: true, clientId: null, isActivePlan: { $ne: false }, visibility: 'PUBLIC' } },
+      { $group: { _id: '$categoryId', count: { $sum: 1 } } }
+    ]);
+
+    const countMap = {};
+    categoryCounts.forEach(c => {
+      if (c._id) countMap[c._id.toString()] = c.count;
+    });
+
+    const uncategorizedCount = await Task.countDocuments({
+      isListedInPlans: true,
+      clientId: null,
+      isActivePlan: { $ne: false },
+      visibility: 'PUBLIC',
+      categoryId: null
+    });
+
+    return res.status(200).json({
+      categories: [
+        {
+          id: 'ALL',
+          name: 'All',
+          icon: '🏠',
+          color: '#6366f1',
+          slug: 'all',
+          planCount: categoryCounts.reduce((sum, c) => sum + c.count, 0) + uncategorizedCount
+        },
+        ...categories.map(c => ({
+          id: c._id.toString(),
+          name: c.name,
+          slug: c.slug,
+          icon: c.icon,
+          image: c.image,
+          color: c.color,
+          description: c.description,
+          planCount: countMap[c._id.toString()] || 0,
+        }))
+      ],
+    });
+  } catch (err) {
+    console.error('Public categories error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve categories' });
+  }
+});
+
+// GET /public/office-config - Public office config + featured plans (PUBLIC visibility only)
+app.get('/public/office-config', async (_req, res) => {
+  try {
+    const config = await OfficeConfig.getConfig();
+
+    // PUBLIC visibility only — no SELECTED filtering (no user to check against)
+    const visibilityFilter = { visibility: 'PUBLIC' };
+
+    const activeBanners = config.banners
+      .filter(b => b.isActive)
+      .sort((a, b) => a.order - b.order);
+
+    const enabledSections = config.sections
+      .filter(s => s.isEnabled)
+      .sort((a, b) => a.order - b.order);
+
+    let featuredPlans = [];
+    if (config.featuredPlansConfig.selectionMode === 'manual' && config.featuredPlansConfig.manualPlanIds.length > 0) {
+      featuredPlans = await Task.find({
+        _id: { $in: config.featuredPlansConfig.manualPlanIds },
+        isListedInPlans: true,
+        isActivePlan: true,
+        clientId: null,
+        ...visibilityFilter
+      }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').limit(config.featuredPlansConfig.displayCount);
+    } else {
+      featuredPlans = await Task.find({
+        isListedInPlans: true,
+        isActivePlan: true,
+        clientId: null,
+        isFeatured: true,
+        ...visibilityFilter
+      }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').sort({ createdAt: -1 }).limit(config.featuredPlansConfig.displayCount);
+
+      if (featuredPlans.length < config.featuredPlansConfig.displayCount) {
+        const remaining = config.featuredPlansConfig.displayCount - featuredPlans.length;
+        const existingIds = featuredPlans.map(p => p._id);
+        const morePlans = await Task.find({
+          _id: { $nin: existingIds },
+          isListedInPlans: true,
+          isActivePlan: true,
+          clientId: null,
+          ...visibilityFilter
+        }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').sort({ createdAt: -1 }).limit(remaining);
+        featuredPlans = [...featuredPlans, ...morePlans];
+      }
+    }
+
+    return res.status(200).json({
+      config: {
+        pageTitle: config.pageTitle,
+        banners: activeBanners,
+        bannerAutoRotate: config.bannerAutoRotate,
+        bannerRotateInterval: config.bannerRotateInterval,
+        sections: enabledSections,
+        featuredPlansConfig: {
+          displayCount: config.featuredPlansConfig.displayCount,
+          showSeeAllButton: config.featuredPlansConfig.showSeeAllButton,
+          seeAllButtonText: config.featuredPlansConfig.seeAllButtonText
+        },
+        seeMoreButtonConfig: config.seeMoreButtonConfig,
+        updatesSectionConfig: config.updatesSectionConfig,
+        requirementsSectionConfig: config.requirementsSectionConfig
+      },
+      featuredPlans: featuredPlans.map(p => ({
+        id: p._id.toString(),
+        title: p.title,
+        description: p.description,
+        offerPrice: p.offerPrice,
+        originalPrice: p.originalPrice,
+        creditCost: p.creditCost,
+        planMedia: p.planMedia,
+        featureImage: p.featureImage,
+        isFeatured: p.isFeatured
+      }))
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch office config' });
   }
 });
 

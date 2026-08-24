@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import api from '../services/api';
 import DOMPurify from 'dompurify';
 import { useCart } from '../context/CartContext';
+import { isAuthenticated } from '../services/authService';
 
 const PlanDetail = () => {
   const { planId } = useParams();
@@ -18,7 +19,8 @@ const PlanDetail = () => {
 
   const fetchPlan = useCallback(async () => {
     try {
-      const response = await api.get(`/client/plans/${planId}`);
+      const endpoint = isAuthenticated() ? `/client/plans/${planId}` : `/public/plans/${planId}`;
+      const response = await api.get(endpoint);
       setPlan(response.data.plan);
       setError(null);
     } catch (err) {

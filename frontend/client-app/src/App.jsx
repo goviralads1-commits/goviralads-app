@@ -228,13 +228,13 @@ const AppShell = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/legal/:slug" element={<LegalPage />} />
             
+            {/* Public Browsing Routes (no auth required) */}
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/plans" element={<Plans />} />
+            <Route path="/plans/:planId" element={<PlanDetail />} />
+            
             {/* Protected CLIENT Routes */}
-            <Route path="/dashboard" element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/wallet" element={
+            <Route path="/wallet" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <Wallet />
             </ProtectedRoute>
@@ -247,16 +247,6 @@ const AppShell = () => {
           <Route path="/tasks/:taskId" element={
             <ProtectedRoute allowedRoles={['CLIENT']}>
               <TaskDetail />
-            </ProtectedRoute>
-          } />
-          <Route path="/plans" element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <Plans />
-            </ProtectedRoute>
-          } />
-          <Route path="/plans/:planId" element={
-            <ProtectedRoute allowedRoles={['CLIENT']}>
-              <PlanDetail />
             </ProtectedRoute>
           } />
           <Route path="/subscriptions" element={
@@ -310,7 +300,7 @@ const AppShell = () => {
             </ProtectedRoute>
           } />
           
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <CookieConsent />

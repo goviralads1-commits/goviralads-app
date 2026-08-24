@@ -136,8 +136,13 @@ const Header = ({ title }) => {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
+    // Branding is public — fetch for all users (logo, app name)
     fetchBranding();
+    
+    // Notifications require auth — only fetch/poll if user is logged in
+    if (user) {
+      fetchNotifications();
+    }
     
     // Visibility-aware polling: pause when tab is hidden to save bandwidth and battery
     let pollInterval = null;
@@ -149,13 +154,13 @@ const Header = ({ title }) => {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     };
     
-    // Start polling only if page is visible
-    if (document.visibilityState === 'visible') startPolling();
+    // Start polling only if page is visible and user is logged in
+    if (user && document.visibilityState === 'visible') startPolling();
     
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchNotifications(); // Immediate fetch on tab focus
-        startPolling();
+        if (user) { fetchNotifications(); // Immediate fetch on tab focus
+        startPolling(); }
       } else {
         stopPolling();
       }
@@ -460,8 +465,9 @@ const Header = ({ title }) => {
               )}
             </div>
 
-            {/* Profile Dropdown */}
+            {/* Profile Dropdown or Login Button */}
             <div ref={profileRef} style={{ position: 'relative' }}>
+              {user ? (
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 style={{
@@ -484,9 +490,27 @@ const Header = ({ title }) => {
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
+              ) : (
+                <button
+                  onClick={() => navigate('/login')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '10px 20px', borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                    color: '#fff', fontSize: '14px', fontWeight: '700',
+                    border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                    boxShadow: '0 4px 12px rgba(34,197,94,0.3)'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Login
+                </button>
+              )}
               
               {/* Profile Menu */}
-              {showProfileMenu && (
+              {showProfileMenu && user && (
                 <div style={{
                   position: 'absolute', top: '52px', right: 0,
                   width: '200px', backgroundColor: '#fff', borderRadius: '16px',

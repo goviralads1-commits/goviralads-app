@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
-import { getCurrentUser } from '../services/authService';
+import { getCurrentUser, isAuthenticated } from '../services/authService';
 
 // Helper: Extract video thumbnail URL
 const getVideoThumbnail = (url) => {
@@ -58,7 +58,7 @@ const Dashboard = () => {
   const fetchData = useCallback(async () => {
     try {
       const [configRes, noticesRes, tasksRes, commRes, walletRes] = await Promise.all([
-        api.get('/client/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
+        api.get(isAuthenticated() ? '/client/office-config' : '/public/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
         api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
         api.get('/client/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } })),
