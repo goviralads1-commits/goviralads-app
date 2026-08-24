@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { login, savePermissions } from '../services/authService';
 import api from '../services/api';
 import { useBranding } from '../App';
 
 const LoginForm = () => {
+  // Already-authenticated admins reaching /login (e.g. browser Back through a
+  // stale history entry) are bounced straight to the Dashboard. Captured ONCE
+  // at mount so an in-progress login/logout cycle is never interfered with.
+  const [hadValidTokenOnMount] = useState(() => !!localStorage.getItem('token'));
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -118,6 +123,10 @@ const LoginForm = () => {
   };
 
   const accentColor = branding.accentColor || '#6366f1';
+
+  if (hadValidTokenOnMount) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div style={{

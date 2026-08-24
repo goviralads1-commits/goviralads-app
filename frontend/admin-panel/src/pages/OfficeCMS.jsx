@@ -258,33 +258,68 @@ const OfficeCMS = () => {
             <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px 0' }}>Office CMS</h1>
             <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Customize what clients see in their Office tab</p>
           </div>
-          <button onClick={() => navigate('/')} style={{ padding: '10px 20px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '12px', border: 'none', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}>
+          <button onClick={() => navigate('/dashboard')} style={{ padding: '10px 20px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '12px', border: 'none', fontWeight: '600', fontSize: '14px', cursor: 'pointer' }}>
             ← Back to Office
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="premium-tab-bar" data-theme="indigo" style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
-          {[
-            { id: 'banners', label: '🖼️ Banners', desc: 'Hero slides' },
-            { id: 'sections', label: '📑 Sections', desc: 'Order & visibility' },
-            { id: 'featured', label: '⭐ Featured Plans', desc: 'Showcase' },
-            { id: 'buttons', label: '🔘 Buttons', desc: 'CTAs' },
-            { id: 'navigation', label: '🧭 Header Nav', desc: 'Public menu' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`premium-tab${activeTab === tab.id ? ' active' : ''}`}
-              style={{
-                padding: '14px 20px', borderRadius: '14px', textAlign: 'left',
-                minWidth: '140px'
-              }}
-            >
-              <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '2px' }}>{tab.label}</div>
-              <div style={{ fontSize: '11px', opacity: 0.8 }}>{tab.desc}</div>
-            </button>
-          ))}
+        {/* Tabs — compact single-line pills: mobile-first, horizontally
+            scrollable on small screens (right-edge fade hints at more tabs),
+            fits one clean row on desktop. Tab ids/behaviour unchanged. */}
+        <div className="officecms-tabbar-wrap" style={{ position: 'relative', marginBottom: '24px' }}>
+          <div role="tablist" aria-label="Office CMS sections" className="officecms-tabbar" style={{ display: 'flex', gap: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', padding: '2px' }}>
+            {[
+              { id: 'banners', label: '🖼️ Banners' },
+              { id: 'sections', label: '📑 Sections' },
+              { id: 'featured', label: '⭐ Featured Plans' },
+              { id: 'buttons', label: '🔘 Buttons' },
+              { id: 'navigation', label: '🧭 Header Nav' },
+            ].map(tab => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    flex: '0 0 auto',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    minHeight: '44px',
+                    padding: '10px 18px',
+                    borderRadius: '999px',
+                    border: `1px solid ${isActive ? '#6366f1' : '#e2e8f0'}`,
+                    backgroundColor: isActive ? '#6366f1' : '#fff',
+                    color: isActive ? '#fff' : '#475569',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    boxShadow: isActive ? '0 4px 12px rgba(99,102,241,0.3)' : '0 1px 2px rgba(0,0,0,0.04)',
+                    transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          <style>{`
+            .officecms-tabbar::-webkit-scrollbar { display: none; }
+            .officecms-tabbar { scrollbar-width: none; }
+            @media (max-width: 719px) {
+              .officecms-tabbar-wrap::after {
+                content: '';
+                position: absolute;
+                top: 0; right: 0; bottom: 0;
+                width: 36px;
+                background: linear-gradient(to right, rgba(248,250,252,0), #f8fafc);
+                pointer-events: none;
+              }
+            }
+          `}</style>
         </div>
 
         {/* BANNERS TAB */}

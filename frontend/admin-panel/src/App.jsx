@@ -349,6 +349,16 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
+// Root redirect — auth-aware: an authenticated admin session goes to the
+// Dashboard, otherwise to Login. Uses replace so "/" never adds a history
+// entry that later Back-navigation could land on. ProtectedRoute and all
+// permission checks remain fully intact for every protected page.
+const RootRedirect = () => {
+  const { isLoggedIn } = useAuth();
+  const tokenExists = !!localStorage.getItem('token');
+  return <Navigate to={(isLoggedIn || tokenExists) ? '/dashboard' : '/login'} replace />;
+};
+
 // Notification Click Handler - ALWAYS store URL first, then navigate
 const NotificationClickHandler = () => {
   const navigate = useNavigate();
@@ -598,7 +608,7 @@ const App = () => {
             <Navigate to="/wallet" replace />
           } />
           
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
