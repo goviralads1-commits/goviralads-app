@@ -275,7 +275,7 @@ const PlanDetail = () => {
             </div>
           )}
 
-          <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px', lineHeight: 1.3, letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: 'clamp(18px, 5vw, 26px)', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px', lineHeight: 1.3, letterSpacing: '-0.02em' }}>
             {plan.title}
           </h1>
 
@@ -314,7 +314,7 @@ const PlanDetail = () => {
                       {plan.creditCost} credits
                     </span>
                   )}
-                  <span style={{ fontSize: '40px', fontWeight: '800', color: '#28a745' }}>
+                  <span style={{ fontSize: 'clamp(24px, 8vw, 40px)', fontWeight: '800', color: '#28a745' }}>
                     {plan.offerPrice} credits
                   </span>
                   {hasDiscount && (
@@ -333,7 +333,7 @@ const PlanDetail = () => {
                 )}
               </div>
             ) : plan.showCreditsToClient !== false ? (
-              <span style={{ fontSize: '40px', fontWeight: '800', color: '#28a745' }}>
+              <span style={{ fontSize: 'clamp(24px, 8vw, 40px)', fontWeight: '800', color: '#28a745' }}>
                 {plan.creditCost || 0} credits
               </span>
             ) : null}

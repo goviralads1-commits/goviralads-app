@@ -222,7 +222,7 @@ const Tasks = () => {
       <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px 20px', paddingBottom: '120px' }}>
         {/* Page Title */}
         <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#1a1a1a', margin: 0, letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontSize: 'clamp(18px, 5vw, 28px)', fontWeight: '700', color: '#1a1a1a', margin: 0, letterSpacing: '-0.02em' }}>
             My Tasks
           </h1>
           <p style={{ fontSize: '14px', color: '#999', margin: '8px 0 0 0' }}>

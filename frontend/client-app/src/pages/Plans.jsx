@@ -392,7 +392,7 @@ const Plans = () => {
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
-                <h1 style={{ fontSize: '26px', fontWeight: '700', color: '#0f172a', margin: 0, letterSpacing: '-0.025em' }}>Marketplace</h1>
+                <h1 style={{ fontSize: 'clamp(18px, 5vw, 26px)', fontWeight: '700', color: '#0f172a', margin: 0, letterSpacing: '-0.025em' }}>Marketplace</h1>
                 <p style={{ fontSize: '14px', color: '#64748b', margin: '6px 0 0', fontWeight: '500' }}>
                   {selectedCategory === 'ALL' ? `${plans.length} plans available` : `${plans.length} in ${categories.find(c => (c.id || c._id) === selectedCategory)?.name || 'category'}`}
                 </p>

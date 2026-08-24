@@ -305,7 +305,7 @@ const LegalPage = require('./models/LegalPage');
 const Settings = require('./models/Settings');
 const UserSubscription = require('./models/UserSubscription');
 const Notification = require('./models/Notification');
-const Category = require('./models/Category');
+const { Category } = require('./models/Category');
 const OfficeConfig = require('./models/OfficeConfig');
 const { createNotification, NOTIFICATION_TYPES } = require('./services/notificationService');
 

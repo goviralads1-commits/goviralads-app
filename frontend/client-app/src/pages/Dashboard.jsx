@@ -235,7 +235,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 3px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</p>
-                <p style={{ fontSize: '26px', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span></p>
+                <p style={{ fontSize: 'clamp(20px, 6vw, 26px)', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span></p>
               </div>
               <button onClick={() => navigate('/wallet')} style={{ padding: '9px 16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 Recharge Wallet

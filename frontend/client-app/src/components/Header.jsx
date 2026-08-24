@@ -266,6 +266,17 @@ const Header = ({ title }) => {
 
   return (
     <>
+      <style>{`
+        @media (max-width: 768px) {
+          .header-inner { padding: 8px 12px !important; gap: 8px !important; }
+          .header-brand { gap: 8px !important; }
+          .header-logo { width: 32px !important; height: 32px !important; border-radius: 10px !important; }
+          .header-appname { font-size: 15px !important; }
+          .header-actions { gap: 4px !important; }
+          .header-action-btn { border-radius: 10px !important; }
+          .header-login { padding: 8px 14px !important; font-size: 13px !important; min-height: 44px !important; }
+        }
+      `}</style>
       {/* Premium Top Header */}
       <header style={{
         backgroundColor: '#ffffff',
@@ -274,7 +285,7 @@ const Header = ({ title }) => {
         top: 0,
         zIndex: 100
       }}>
-        <div style={{
+        <div className="header-inner" style={{
           maxWidth: '1400px',
           margin: '0 auto',
           padding: '12px 20px',
@@ -284,8 +295,8 @@ const Header = ({ title }) => {
           gap: '16px'
         }}>
           {/* Left: Logo + App Name */}
-          <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-            <div style={{
+          <Link to="/dashboard" className="header-brand" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
+            <div className="header-logo" style={{
               width: '40px', height: '40px', borderRadius: '12px',
               background: branding.logoUrl ? 'transparent' : `linear-gradient(135deg, ${branding.accentColor} 0%, #16a34a 100%)`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -298,16 +309,17 @@ const Header = ({ title }) => {
                 <span style={{ color: '#fff', fontSize: '18px', fontWeight: '800' }}>{branding.appName?.charAt(0) || 'C'}</span>
               )}
             </div>
-            <span style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>
+            <span className="header-appname" style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', letterSpacing: '-0.02em' }}>
               {branding.appName || 'Client Portal'}
             </span>
           </Link>
 
           {/* Right: Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             
             {/* Cart Icon */}
             <button
+              className="header-action-btn"
               onClick={() => navigate('/cart')}
               style={{
                 width: '44px', height: '44px', borderRadius: '12px',
@@ -341,6 +353,7 @@ const Header = ({ title }) => {
             <div ref={notifRef} style={{ position: 'relative' }}>
               <button
                 ref={bellButtonRef}
+                className="header-action-btn"
                 onClick={handleBellClick}
                 style={{
                   width: '44px', height: '44px', borderRadius: '12px',
@@ -492,6 +505,7 @@ const Header = ({ title }) => {
               </button>
               ) : (
                 <button
+                  className="header-login"
                   onClick={() => navigate('/login')}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
@@ -534,6 +548,17 @@ const Header = ({ title }) => {
                     <Link to="/earnings-ledger" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#22c55e', fontSize: '14px', fontWeight: '600' }}>
                       <span style={{ fontSize: '16px' }}>💰</span> Earnings & Redeem
                     </Link>
+                    <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0', paddingTop: '4px' }}>
+                      <Link to="/legal/privacy-policy" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', textDecoration: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
+                        <span style={{ fontSize: '16px' }}>📋</span> Privacy Policy
+                      </Link>
+                      <Link to="/legal/terms-of-service" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', textDecoration: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
+                        <span style={{ fontSize: '16px' }}>📋</span> Terms of Service
+                      </Link>
+                      <Link to="/legal/contact-us" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', textDecoration: 'none', color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
+                        <span style={{ fontSize: '16px' }}>📞</span> Contact
+                      </Link>
+                    </div>
                     <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', fontSize: '14px', fontWeight: '500', cursor: 'pointer', textAlign: 'left' }}>
                       <span style={{ fontSize: '16px' }}>🚪</span> Logout
                     </button>

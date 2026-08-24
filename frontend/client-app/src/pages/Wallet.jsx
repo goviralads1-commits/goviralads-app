@@ -379,7 +379,7 @@ const Wallet = () => {
         <div style={{
           background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
           borderRadius: '24px',
-          padding: '32px 24px',
+          padding: 'clamp(20px, 5vw, 32px) 24px',
           marginBottom: '24px',
           color: '#fff',
           boxShadow: '0 10px 40px rgba(99,102,241,0.3)',
@@ -393,7 +393,7 @@ const Wallet = () => {
               style={{cursor: 'help', opacity: 0.7, fontSize: '14px'}}
             >ⓘ</span>
           </div>
-          <p style={{fontSize: '42px', fontWeight: '800', margin: '0 0 20px 0'}}>{walletData?.totalCredits || walletData?.balance || 0} <span style={{fontSize: '20px', opacity: 0.8}}>credits</span></p>
+          <p style={{fontSize: 'clamp(24px, 8vw, 42px)', fontWeight: '800', margin: '0 0 20px 0'}}>{walletData?.totalCredits || walletData?.balance || 0} <span style={{fontSize: '20px', opacity: 0.8}}>credits</span></p>
 
           {/* Credit Breakdown */}
           <div style={{display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '16px'}}>
