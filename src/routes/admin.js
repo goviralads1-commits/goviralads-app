@@ -7543,14 +7543,46 @@ router.get('/analytics', async (req, res) => {
     // Recent activity
     const [recentOrders, recentTasks, recentRecharges] = await Promise.all([
       Order.find({ ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('orderId clientId totalAmount orderStatus createdAt').lean(),
-      Task.find({ ...taskBase, status: 'COMPLETED', ...updatedAtFilter }).sort({ updatedAt: -1 }).limit(5).select('title creditCost updatedAt').lean(),
-      RechargeRequest.find({ status: 'APPROVED', ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('amount createdAt').lean()
+      Task.find({ ...taskBase, status: 'COMPLETED', ...updatedAtFilter }).sort({ updatedAt: -1 }).limit(5).select('title clientId creditCost updatedAt').lean(),
+      RechargeRequest.find({ status: 'APPROVED', ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('amount clientId createdAt').lean()
     ]);
+    // Batch-fetch client names for all activity items (max ~15 unique IDs, no N+1)
+    const activityClientIds = [
+      ...recentOrders.map(o => o.clientId),
+      ...recentTasks.map(t => t.clientId),
+      ...recentRecharges.map(r => r.clientId)
+    ].filter(Boolean);
+    const activityClientUsers = activityClientIds.length > 0
+      ? await User.find({ _id: { $in: activityClientIds } }).select('identifier profile.name billing.companyName billing.name').lean()
+      : [];
+    const clientNameMap = {};
+    activityClientUsers.forEach(u => {
+      clientNameMap[u._id.toString()] = u.profile?.name || u.billing?.companyName || u.billing?.name || u.identifier || 'Unknown';
+    });
     const recentActivity = [
-      ...recentOrders.map(o => ({ type: 'order', label: `Order ${o.orderId || ''}`, value: o.totalAmount, status: o.orderStatus, date: o.createdAt })),
-      ...recentTasks.map(t => ({ type: 'task', label: t.title || 'Task', value: t.creditCost, status: 'COMPLETED', date: t.updatedAt })),
-      ...recentRecharges.map(r => ({ type: 'recharge', label: 'Recharge Approved', value: r.amount, status: 'APPROVED', date: r.createdAt }))
+      ...recentOrders.map(o => ({ type: 'order', label: `Order ${o.orderId || ''}`, value: o.totalAmount, status: o.orderStatus, date: o.createdAt, clientName: o.clientId ? (clientNameMap[o.clientId.toString()] || 'Unknown') : null })),
+      ...recentTasks.map(t => ({ type: 'task', label: t.title || 'Task', value: t.creditCost, status: 'COMPLETED', date: t.updatedAt, clientName: t.clientId ? (clientNameMap[t.clientId.toString()] || 'Unknown') : null })),
+      ...recentRecharges.map(r => ({ type: 'recharge', label: 'Recharge Approved', value: r.amount, status: 'APPROVED', date: r.createdAt, clientName: r.clientId ? (clientNameMap[r.clientId.toString()] || 'Unknown') : null }))
     ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+
+    // Top 3 Commission Earners (date-filtered, reuses existing topClientsCommission aggregation)
+    const topEarnersSorted = [...topClientsCommission]
+      .filter(c => c._id)
+      .sort((a, b) => (b.totalCommission || 0) - (a.totalCommission || 0))
+      .slice(0, 3);
+    const earnerIds = topEarnersSorted.map(c => c._id);
+    const earnerUsers = earnerIds.length > 0
+      ? await User.find({ _id: { $in: earnerIds } }).select('identifier profile.name billing.companyName billing.name').lean()
+      : [];
+    const earnerNameMap = {};
+    earnerUsers.forEach(u => {
+      earnerNameMap[u._id.toString()] = u.profile?.name || u.billing?.companyName || u.billing?.name || u.identifier || 'Unknown';
+    });
+    const topCommissionEarners = topEarnersSorted.map(c => ({
+      userId: c._id.toString(),
+      identifier: earnerNameMap[c._id.toString()] || 'Unknown',
+      totalCommission: c.totalCommission || 0
+    }));
 
     // Top 10 clients
     const spendMap = {};
@@ -7582,7 +7614,8 @@ router.get('/analytics', async (req, res) => {
       },
       top10,
       services: { top5: serviceTop5 },
-      recentActivity
+      recentActivity,
+      topCommissionEarners
     });
   } catch (err) {
     console.error('Analytics error:', err);

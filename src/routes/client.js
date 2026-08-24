@@ -3120,15 +3120,17 @@ router.get('/office-config', async (req, res) => {
     
     // Get featured plans based on config
     let featuredPlans = [];
-    if (config.featuredPlansConfig.selectionMode === 'manual' && config.featuredPlansConfig.manualPlanIds.length > 0) {
-      // Fetch manually selected plans
-      featuredPlans = await Task.find({
-        _id: { $in: config.featuredPlansConfig.manualPlanIds },
-        isListedInPlans: true,
-        isActivePlan: true,
-        clientId: null,
-        ...visibilityFilter
-      }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').limit(config.featuredPlansConfig.displayCount);
+    if (config.featuredPlansConfig.selectionMode === 'manual') {
+      // Manual mode: only show admin-selected plans (empty = no featured plans, no auto fallback)
+      if (config.featuredPlansConfig.manualPlanIds.length > 0) {
+        featuredPlans = await Task.find({
+          _id: { $in: config.featuredPlansConfig.manualPlanIds },
+          isListedInPlans: true,
+          isActivePlan: true,
+          clientId: null,
+          ...visibilityFilter
+        }).select('_id title description offerPrice originalPrice creditCost planMedia featureImage isFeatured').limit(config.featuredPlansConfig.displayCount);
+      }
     } else {
       // Auto mode: fetch featured plans or most recent plans
       featuredPlans = await Task.find({

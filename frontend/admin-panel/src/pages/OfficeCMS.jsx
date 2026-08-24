@@ -150,8 +150,13 @@ const OfficeCMS = () => {
 
   const handleTogglePlanSelection = (planId) => {
     const current = config.featuredPlansConfig.manualPlanIds || [];
-    const updated = current.includes(planId) ? current.filter(id => id !== planId) : [...current, planId];
-    handleUpdateFeaturedConfig({ manualPlanIds: updated });
+    if (current.includes(planId)) {
+      handleUpdateFeaturedConfig({ manualPlanIds: current.filter(id => id !== planId) });
+    } else if (current.length < 4) {
+      handleUpdateFeaturedConfig({ manualPlanIds: [...current, planId] });
+    } else {
+      showToast('error', 'Maximum 4 featured plans allowed. Remove one first.');
+    }
   };
 
   // See More Button handlers

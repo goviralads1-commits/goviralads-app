@@ -16,6 +16,7 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false });
   const [analytics, setAnalytics] = useState(null);
+  const [officeConfig, setOfficeConfig] = useState(null);
   // Date filter
   const [dateFilter, setDateFilter] = useState(() => {
     const now = new Date();
@@ -36,7 +37,6 @@ const Dashboard = () => {
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [toast, setToast] = useState(null);
   const [activeSection, setActiveSection] = useState('updates');
-  const [currentBanner, setCurrentBanner] = useState(0);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -98,13 +98,6 @@ const Dashboard = () => {
     }
   };
 
-  // Banner data - matches client
-  const banners = [
-    { id: 1, title: 'Premium Services', subtitle: 'Get started with our top plans', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { id: 2, title: 'Special Offers', subtitle: 'Limited time deals available', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-    { id: 3, title: 'New Arrivals', subtitle: 'Check out the latest plans', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }
-  ];
-
   const buildFilterParams = () => {
     const p = {};
     if (dateFilter.startDate) p.startDate = dateFilter.startDate;
@@ -164,7 +157,7 @@ const Dashboard = () => {
   const fetchData = useCallback(async () => {
     try {
       const params = buildFilterParams();
-      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes, pendingRes] = await Promise.all([
+      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes, pendingRes, officeConfigRes] = await Promise.all([
         api.get('/admin/reports/overview'),
         api.get('/admin/notices'),
         api.get('/admin/clients'),
@@ -173,6 +166,7 @@ const Dashboard = () => {
         api.get('/admin/commissions', { params }).catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
         api.get('/admin/analytics', { params }).catch(() => ({ data: null })),
         api.get('/admin/pending-clients').catch(() => ({ data: { clients: [] } })),
+        api.get('/admin/office-config').catch(() => ({ data: { config: null } })),
       ]);
       setDashboardData(overviewRes.data);
       setNotices(noticesRes.data.notices || []);
@@ -189,6 +183,7 @@ const Dashboard = () => {
         isMainAdmin: cd.isMainAdmin || false,
       });
       if (analyticsRes.data) setAnalytics(analyticsRes.data);
+      setOfficeConfig(officeConfigRes.data?.config);
     } catch (err) {
       setError('Failed to load dashboard data');
     } finally {
@@ -261,14 +256,6 @@ const Dashboard = () => {
     const unsubscribe = setupForegroundHandler(null);
     return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
   }, []);
-
-  // Auto-rotate banners
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentBanner(prev => (prev + 1) % banners.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [banners.length]);
 
   // Scroll lock for modals
   useEffect(() => {
@@ -381,7 +368,6 @@ const Dashboard = () => {
   const updates = notices.filter(n => n.type === 'UPDATE');
   const requirements = notices.filter(n => n.type === 'REQUIREMENT');
   const promotions = notices.filter(n => n.type === 'PROMOTION');
-  const featuredPlans = plans.filter(p => p.isFeatured).slice(0, 4);
 
   // Urgent Work - Tasks due Today/Tomorrow
   const today = new Date();
@@ -624,25 +610,29 @@ const Dashboard = () => {
               <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
                 <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent Activity</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {(analytics.recentActivity || []).map((item, idx) => (
+                  {(analytics.recentActivity || []).map((item, idx) => {
+                    const dateObj = item.date ? new Date(item.date) : null;
+                    const dateStr = dateObj ? `${dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · ${dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}` : '-';
+                    return (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: idx < analytics.recentActivity.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px',
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0,
                           backgroundColor: item.type === 'order' ? '#dbeafe' : item.type === 'task' ? '#dcfce7' : '#fef3c7'
                         }}>
                           {item.type === 'order' ? '🛒' : item.type === 'task' ? '✅' : '💳'}
                         </div>
-                        <div>
-                          <p style={{ fontSize: '13px', fontWeight: '500', color: '#334155', margin: 0 }}>{item.label}</p>
-                          <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{item.status}</p>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          {item.clientName && <p style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.clientName}</p>}
+                          <p style={{ fontSize: '12px', fontWeight: '500', color: '#334155', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</p>
+                          <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{item.status} · {dateStr}</p>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
+                      <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: '8px' }}>
                         <p style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{item.type === 'order' || item.type === 'task' ? `${(item.value || 0).toLocaleString('en-IN')} credits` : `₹${(item.value || 0).toLocaleString('en-IN')}`}</p>
-                        <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{item.date ? new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'}</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -761,13 +751,26 @@ const Dashboard = () => {
                 <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Total Commission (All Time)</p>
               </div>
             )}
-            {/* Commission Entries */}
+            {/* Top Commission Earners */}
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '16px' }}>✅</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '8px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: '14px' }}>🏆</span>
+                </div>
+                <p style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Earners</p>
               </div>
-              <p style={{ fontSize: '22px', fontWeight: '800', color: '#f59e0b', margin: '0 0 2px 0' }}>{commissionData?.overallTaskCount || 0}</p>
-              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Commission Entries</p>
+              {(analytics.topCommissionEarners || []).length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {(analytics.topCommissionEarners || []).map((earner, idx) => (
+                    <div key={earner.userId || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '500', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{idx + 1}. {earner.identifier}</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#f59e0b', flexShrink: 0, paddingLeft: '6px' }}>{(earner.totalCommission || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No commission generated in this period</p>
+              )}
             </div>
           </div>
 
@@ -805,129 +808,73 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* QUICK ACCESS CARDS - Premium Design */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '24px' }}>
-          {/* Total Clients - Clickable → User Manager */}
-          <div
-            onClick={() => navigate('/profile', { state: { activeTab: 'users' } })}
-            style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '20px', padding: '20px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 4px 20px rgba(99,102,241,0.25)' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(99,102,241,0.35)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,0.25)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-              </div>
-              <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        {/* QUICK ACCESS CARDS - Compact */}
+        <style>{`@media (max-width: 768px) { .quick-access-grid { grid-template-columns: repeat(2, 1fr) !important; } }`}</style>
+        <div className="quick-access-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
+          {/* Registered Clients → User Manager */}
+          <div onClick={() => navigate('/profile', { state: { activeTab: 'users' } })} style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', borderRadius: '12px', padding: '10px', cursor: 'pointer', transition: 'opacity 0.2s' }} onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }} onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+              <p style={{ fontSize: '18px', fontWeight: '800', color: '#fff', margin: 0 }}>{dashboardData?.totalClients || clients.length || 0}</p>
             </div>
-            <p style={{ fontSize: '32px', fontWeight: '800', color: '#fff', margin: '0 0 4px 0' }}>{dashboardData?.totalClients || clients.length || 0}</p>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: 0 }}>Registered Clients</p>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>All time · Manage →</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Registered Clients</p>
           </div>
 
-          {/* Plans - Clickable */}
-          <div
-            onClick={() => navigate('/plans')}
-            style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', borderRadius: '20px', padding: '20px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 4px 20px rgba(34,197,94,0.25)' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(34,197,94,0.35)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(34,197,94,0.25)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-              </div>
-              <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          {/* Total Plans → Plans page */}
+          <div onClick={() => navigate('/plans')} style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', borderRadius: '12px', padding: '10px', cursor: 'pointer', transition: 'opacity 0.2s' }} onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }} onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <p style={{ fontSize: '18px', fontWeight: '800', color: '#fff', margin: 0 }}>{plans.length || 0}</p>
             </div>
-            <p style={{ fontSize: '32px', fontWeight: '800', color: '#fff', margin: '0 0 4px 0' }}>{plans.length || 0}</p>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: 0 }}>Total Plans</p>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>Manage catalog →</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Total Plans</p>
           </div>
 
-          {/* Wallet Actions */}
-          <div
-            onClick={() => navigate('/wallet')}
-            style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '20px', padding: '20px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 4px 20px rgba(245,158,11,0.25)' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(245,158,11,0.35)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(245,158,11,0.25)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
-              </div>
-              <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          {/* Pending Requests → Wallet */}
+          <div onClick={() => navigate('/wallet')} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '12px', padding: '10px', cursor: 'pointer', transition: 'opacity 0.2s' }} onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }} onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+              <p style={{ fontSize: '18px', fontWeight: '800', color: '#fff', margin: 0 }}>{dashboardData?.pendingRecharges || 0}</p>
             </div>
-            <p style={{ fontSize: '32px', fontWeight: '800', color: '#fff', margin: '0 0 4px 0' }}>{dashboardData?.pendingRecharges || 0}</p>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: 0 }}>Pending Requests</p>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>Review wallet →</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Pending Requests</p>
           </div>
 
-          {/* Notices */}
-          <div
-            onClick={() => setActiveSection('updates')}
-            style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', borderRadius: '20px', padding: '20px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 4px 20px rgba(139,92,246,0.25)' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(139,92,246,0.35)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(139,92,246,0.25)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
-              </div>
-              <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          {/* Total Notices → Updates Manager */}
+          <div onClick={() => setActiveSection('updates')} style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', borderRadius: '12px', padding: '10px', cursor: 'pointer', transition: 'opacity 0.2s' }} onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }} onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+              <p style={{ fontSize: '18px', fontWeight: '800', color: '#fff', margin: 0 }}>{notices.length || 0}</p>
             </div>
-            <p style={{ fontSize: '32px', fontWeight: '800', color: '#fff', margin: '0 0 4px 0' }}>{notices.length || 0}</p>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', margin: 0 }}>Total Notices</p>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>Manage below ↓</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Total Notices</p>
           </div>
         </div>
 
-        {/* ADDITIONAL STATS ROW */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-          {/* Pending Approvals */}
-          <div
-            onClick={() => navigate('/tasks')}
-            style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '16px' }}>⏳</span>
-              </div>
+        {/* ADDITIONAL STATS ROW - Compact */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '16px' }}>
+          {/* Pending Approvals → Tasks */}
+          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px' }}>⏳</span>
+              <p style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{dashboardData?.pendingApprovals || 0}</p>
             </div>
-            <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{dashboardData?.pendingApprovals || 0}</p>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Pending Approvals</p>
+            <p style={{ fontSize: '10px', color: '#64748b', margin: 0 }}>Pending Approvals</p>
           </div>
 
-          {/* Client Responses */}
-          <div
-            onClick={() => setActiveSection('requirements')}
-            style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '16px' }}>💬</span>
-              </div>
+          {/* Client Responses → Requirements Manager */}
+          <div onClick={() => setActiveSection('requirements')} style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px' }}>💬</span>
+              <p style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{dashboardData?.unreadResponses || 0}</p>
             </div>
-            <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{dashboardData?.unreadResponses || 0}</p>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Client Responses</p>
+            <p style={{ fontSize: '10px', color: '#64748b', margin: 0 }}>Client Responses</p>
           </div>
 
-          {/* Total Credits */}
-          <div
-            onClick={() => navigate('/wallet')}
-            style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#fce7f3', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '16px' }}>💎</span>
-              </div>
+          {/* Total Credits → Wallet */}
+          <div onClick={() => navigate('/wallet')} style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer', transition: 'background-color 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }} onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; }} onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff'; }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12px' }}>💎</span>
+              <p style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{dashboardData?.totalCredits || 0}</p>
             </div>
-            <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{dashboardData?.totalCredits || 0} credits</p>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Total Credits</p>
+            <p style={{ fontSize: '10px', color: '#64748b', margin: 0 }}>Total Credits</p>
           </div>
         </div>
 
@@ -1051,85 +998,18 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* BANNER PREVIEW - Matches Client Layout */}
-        <div style={{ position: 'relative', marginBottom: '24px' }}>
-          <div style={{ position: 'absolute', top: '-10px', left: '16px', zIndex: 10, backgroundColor: '#6366f1', color: '#fff', padding: '4px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700' }}>
-            BANNER PREVIEW
-          </div>
-          <div 
-            className="banner-preview"
-            style={{ 
-              background: banners[currentBanner].gradient,
-              borderRadius: '24px',
-              padding: '32px 24px',
-              aspectRatio: '16 / 6',
-              minHeight: '140px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              transition: 'background 0.5s ease',
-              overflow: 'hidden',
-              position: 'relative',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat'
-            }}
-          >
-            <style>{`
-              @media (max-width: 768px) {
-                .banner-preview {
-                  aspect-ratio: 16 / 7 !important;
-                  background-size: contain !important;
-                }
-              }
-            `}</style>
-            <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
-            {banners[currentBanner].title && (
-              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#fff', margin: '0 0 8px', position: 'relative', zIndex: 1 }}>
-                {banners[currentBanner].title}
-              </h2>
-            )}
-            {banners[currentBanner].subtitle && (
-              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.9)', margin: '0 0 16px', position: 'relative', zIndex: 1 }}>
-                {banners[currentBanner].subtitle}
-              </p>
-            )}
-            {(banners[currentBanner].ctaText && banners[currentBanner].ctaLink) && (
-              <button style={{ alignSelf: 'flex-start', padding: '12px 24px', backgroundColor: '#fff', color: '#0f172a', fontSize: '14px', fontWeight: '700', borderRadius: '12px', border: 'none', position: 'relative', zIndex: 1 }}>
-                {banners[currentBanner].ctaText}
-              </button>
-            )}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '14px' }}>
-            {banners.map((_, idx) => (
-              <button key={idx} onClick={() => setCurrentBanner(idx)} style={{ width: idx === currentBanner ? '24px' : '8px', height: '8px', borderRadius: '4px', border: 'none', cursor: 'pointer', backgroundColor: idx === currentBanner ? '#6366f1' : '#e2e8f0', transition: 'all 0.3s ease' }} />
-            ))}
-          </div>
-        </div>
-
-        {/* FEATURED PLANS PREVIEW */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>⭐</span>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Featured Plans</h3>
-              <span style={{ backgroundColor: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: '700' }}>PREVIEW</span>
+        {/* FEATURED PLANS - Compact Manager */}
+        <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '14px', border: '1px solid #e2e8f0', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '16px' }}>⭐</span>
             </div>
-            <span style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600' }}>See All →</span>
+            <div>
+              <p style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Featured Plans</p>
+              <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{officeConfig?.featuredPlansConfig?.manualPlanIds?.length || 0} of 4 plans featured</p>
+            </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-            {(featuredPlans.length > 0 ? featuredPlans : [{title: 'Sample Plan 1', creditCost: 99}, {title: 'Sample Plan 2', creditCost: 149}]).slice(0, 4).map((plan, idx) => (
-              <div key={plan.id || idx} style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-                <div style={{ height: '100px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {plan.featureImage ? <img src={plan.featureImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '32px', opacity: 0.3 }}>📦</span>}
-                </div>
-                <div style={{ padding: '12px' }}>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: '0 0 6px 0' }}>{plan.title}</p>
-                  <p style={{ fontSize: '16px', fontWeight: '800', color: '#22c55e', margin: 0 }}>{plan.creditCost || plan.offerPrice || 0} credits</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <button onClick={() => navigate('/office-cms')} style={{ padding: '8px 16px', backgroundColor: '#6366f1', color: '#fff', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>Manage →</button>
         </div>
 
         {/* SEE MORE BUTTON PREVIEW */}
