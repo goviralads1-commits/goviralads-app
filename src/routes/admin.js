@@ -2086,6 +2086,65 @@ router.get('/tasks/:taskId/media-url', async (req, res) => {
   }
 });
 
+// DELETE /admin/tasks/:taskId/media — delete ONE chat media attachment.
+// Body: { messageId, key }. Server-side ownership: the key must exist in
+// the given message of this task (the R2 service re-validates task<-key).
+// The R2 object is deleted FIRST; the Mongo attachment is marked deleted
+// ONLY after the storage deletion succeeds — a failed R2 delete never
+// destroys the reference. Idempotent: already-deleted attachments return
+// 200 without touching R2 again. Legacy string image attachments are
+// never affected.
+router.delete('/tasks/:taskId/media', async (req, res) => {
+  try {
+    if (!mediaStorage.isEnabled()) {
+      return res.status(403).json({ error: 'Chat media is disabled' });
+    }
+    const { taskId } = req.params;
+    const { messageId, key } = req.body || {};
+    if (!messageId || typeof key !== 'string') {
+      return res.status(400).json({ error: 'messageId and key are required' });
+    }
+
+    const task = await Task.findById(taskId).select('messages').exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Admin authorization comes from router-level authenticateJWT + requireAdmin
+    const message = (task.messages || []).find(m => m._id && m._id.toString() === String(messageId));
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    const attIdx = (message.attachments || []).findIndex(
+      att => att && typeof att === 'object' && att.kind && att.key === key
+    );
+    if (attIdx === -1) {
+      return res.status(404).json({ error: 'Media not found in this message' });
+    }
+    if (message.attachments[attIdx].deleted) {
+      return res.status(200).json({ ok: true, alreadyDeleted: true }); // idempotent
+    }
+
+    // R2 delete FIRST — if it fails, the Mongo reference stays intact.
+    await mediaStorage.deleteMediaObject(task, key);
+
+    const updateRes = await Task.updateOne(
+      { _id: task._id, 'messages._id': message._id },
+      { $set: { [`messages.$.attachments.${attIdx}.deleted`]: true } }
+    );
+    if (!updateRes || updateRes.modifiedCount === 0) {
+      // R2 object is already gone; the Mongo reference survives so the
+      // UI degrades to the expired/unavailable state instead of breaking.
+      return res.status(409).json({ error: 'Media state changed — please refresh' });
+    }
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('[CHAT MEDIA] media delete error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete media' });
+  }
+});
+
 // =======================================================================
 // APPROVAL REQUEST SYSTEM (Phase 7)
 // Structured approval requests within task chat

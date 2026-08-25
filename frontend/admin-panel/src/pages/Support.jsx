@@ -5,7 +5,7 @@ import api from '../services/api';
 import AttachSheet from '../components/chat/AttachSheet';
 import MediaBubble from '../components/chat/MediaBubble';
 import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
-import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES } from '../components/chat/mediaUpload';
+import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES, deleteMedia } from '../components/chat/mediaUpload';
 
 const Support = () => {
   const location = useLocation();
@@ -788,6 +788,32 @@ Status: ${status}
     showMediaToast(msg);
   };
 
+  // CHAT MEDIA (delete): confirmed media only. All authorization is
+  // server-side; on success we mark the attachment deleted locally so the
+  // bubble flips to the inert "Media deleted" chip immediately. Incremental
+  // polling only ever APPENDS new messages, so it cannot revive the marker.
+  const handleDeleteMedia = async (msg, att) => {
+    if (!selectedTask || !msg || !msg._id || !att || !att.key) return;
+    if (!window.confirm('Delete this media for everyone in this chat?')) return;
+    const taskId = selectedTask._id || selectedTask.id;
+    try {
+      await deleteMedia(taskId, msg._id, att.key);
+      setSelectedTask(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: (prev.messages || []).map(m =>
+            m._id === msg._id
+              ? { ...m, attachments: (m.attachments || []).map(a => (a && typeof a === 'object' && a.key === att.key ? { ...a, deleted: true } : a)) }
+              : m
+          ),
+        };
+      });
+    } catch (err) {
+      showMediaToast(err.response?.data?.error || 'Could not delete media');
+    }
+  };
+
   // ==================== LEVEL 3: CHAT VIEW ====================
   if (selectedTask) {
     const messages = selectedTask.messages || [];
@@ -875,6 +901,7 @@ Status: ${status}
                       taskId={selectedTask._id || selectedTask.id}
                       onRetry={handleRetryMedia}
                       onDiscard={handleDiscardMedia}
+                      onDelete={(a) => handleDeleteMedia(msg, a)}
                     />
                   );
                 }

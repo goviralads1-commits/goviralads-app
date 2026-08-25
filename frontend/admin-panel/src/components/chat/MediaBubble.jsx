@@ -42,6 +42,21 @@ const chipStyle = {
   backgroundColor: 'rgba(0,0,0,0.12)',
 };
 
+// Small unobtrusive delete affordance under confirmed media tiles.
+// All authorization is enforced server-side; this is UX-only.
+const deleteBtnStyle = {
+  alignSelf: 'flex-end',
+  border: '1px solid rgba(148,163,184,0.5)',
+  backgroundColor: 'transparent',
+  color: '#94a3b8',
+  fontSize: '11px',
+  fontWeight: '600',
+  borderRadius: '8px',
+  padding: '6px 12px',
+  minHeight: '32px',
+  cursor: 'pointer',
+};
+
 const fmtDur = (sec) => {
   if (!Number.isFinite(sec)) return '0:00';
   const m = Math.floor(sec / 60);
@@ -207,7 +222,7 @@ const AudioTile = ({ att, taskId }) => {
 };
 
 // ---------------- Entry point ----------------
-const MediaBubble = ({ att, taskId, onRetry, onDiscard }) => {
+const MediaBubble = ({ att, taskId, onRetry, onDiscard, onDelete }) => {
   // Optimistic upload in flight (or failed) — metadata carried on the message
   if (att && att._upload) {
     return <UploadBubble meta={att} onRetry={onRetry} onDiscard={onDiscard} />;
@@ -216,9 +231,20 @@ const MediaBubble = ({ att, taskId, onRetry, onDiscard }) => {
   if (att.deleted || isLocallyExpired(att)) {
     return <span style={chipStyle}>{att.deleted ? 'Media deleted' : 'Media expired'}</span>;
   }
-  if (att.kind === 'video') return <VideoTile att={att} taskId={taskId} />;
-  if (att.kind === 'audio') return <AudioTile att={att} taskId={taskId} />;
-  return null;
+  const tile = att.kind === 'video'
+    ? <VideoTile att={att} taskId={taskId} />
+    : att.kind === 'audio'
+      ? <AudioTile att={att} taskId={taskId} />
+      : null;
+  if (!tile) return null;
+  // No delete callback => exact pre-delete-feature rendering
+  if (!onDelete) return tile;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
+      {tile}
+      <button type="button" style={deleteBtnStyle} onClick={() => onDelete(att)}>Delete</button>
+    </div>
+  );
 };
 
 export default MediaBubble;

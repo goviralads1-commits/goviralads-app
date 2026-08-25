@@ -1240,6 +1240,80 @@ router.get('/tasks/:taskId/media-url', async (req, res) => {
   }
 });
 
+// DELETE /client/tasks/:taskId/media — delete ONE chat media attachment.
+// Body: { messageId, key }. Server-side authorization (all JWT-derived):
+//   1. task access: owner OR assigned user (same rule as media-url)
+//   2. message ownership: sender === 'CLIENT' AND senderId === requester
+//      — a client can never delete admin media or another client's media.
+// The R2 object is deleted FIRST; the Mongo attachment is marked deleted
+// ONLY after the storage deletion succeeds. Idempotent. Legacy string
+// image attachments are never affected.
+router.delete('/tasks/:taskId/media', async (req, res) => {
+  try {
+    if (!mediaStorage.isEnabled()) {
+      return res.status(403).json({ error: 'Chat media is disabled' });
+    }
+    const { taskId } = req.params;
+    const clientId = req.user.id; // identity from JWT only — never from body/query
+    const { messageId, key } = req.body || {};
+    if (!messageId || typeof key !== 'string') {
+      return res.status(400).json({ error: 'messageId and key are required' });
+    }
+
+    const task = await Task.findById(taskId).select('messages clientId assignedUsers').exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Existing task access rules: owner OR assigned user
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
+    if (!isTaskOwner && !isAssignedUser) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const message = (task.messages || []).find(m => m._id && m._id.toString() === String(messageId));
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    // Message ownership: only the client who sent it may delete its media
+    if (message.sender !== 'CLIENT' || !message.senderId || message.senderId.toString() !== clientId) {
+      return res.status(403).json({ error: 'Not authorized to delete this media' });
+    }
+    const attIdx = (message.attachments || []).findIndex(
+      att => att && typeof att === 'object' && att.kind && att.key === key
+    );
+    if (attIdx === -1) {
+      return res.status(404).json({ error: 'Media not found in this message' });
+    }
+    if (message.attachments[attIdx].deleted) {
+      return res.status(200).json({ ok: true, alreadyDeleted: true }); // idempotent
+    }
+
+    // R2 delete FIRST — if it fails, the Mongo reference stays intact.
+    await mediaStorage.deleteMediaObject(task, key);
+
+    const updateRes = await Task.updateOne(
+      { _id: task._id, 'messages._id': message._id },
+      { $set: { [`messages.$.attachments.${attIdx}.deleted`]: true } }
+    );
+    if (!updateRes || updateRes.modifiedCount === 0) {
+      // R2 object is already gone; the Mongo reference survives so the
+      // UI degrades to the expired/unavailable state instead of breaking.
+      return res.status(409).json({ error: 'Media state changed — please refresh' });
+    }
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('[CHAT MEDIA] media delete error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete media' });
+  }
+});
+
 // =======================================================================
 // APPROVAL REQUEST SYSTEM (Phase 7) - Client Endpoints
 // =======================================================================

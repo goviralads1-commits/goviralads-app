@@ -7,8 +7,9 @@
  * - Media BYTES never pass through Node: browsers PUT directly to R2
  *   using short-lived presigned URLs issued here.
  * - This service only ever issues URLs and reads object metadata (HEAD).
- * - Deletion is handled at the storage layer by an R2 lifecycle rule
- *   (objects older than MEDIA_RETENTION_DAYS). No cron, no workers.
+ * - Deletion of individual media is explicit and server-guarded
+ *   (deleteMediaObject); everything else is swept by an R2 lifecycle
+ *   rule (objects older than MEDIA_RETENTION_DAYS). No cron, no workers.
  * - Feature flag: CHAT_MEDIA_ENABLED must be literally 'true' to enable.
  * - If R2 env vars are missing the app still boots; media stays disabled.
  */
@@ -277,6 +278,7 @@ const issueViewUrl = async (task, key) => {
     if (found) break;
   }
   if (!found) throw new MediaError(404, 'Media not found for this task');
+  if (found.deleted) throw new MediaError(410, 'Media has been deleted');
   if (found.expiresAt && new Date(found.expiresAt).getTime() <= Date.now()) {
     throw new MediaError(410, 'Media has expired');
   }
@@ -291,6 +293,49 @@ const issueViewUrl = async (task, key) => {
   return { url, expiresInSec: VIEW_TTL_SEC };
 };
 
+/**
+ * Delete a media object from R2. Same strict guards as issueViewUrl:
+ * the key must match the fixed key shape AND already exist in THIS task's
+ * stored message attachments — arbitrary or cross-task keys are rejected.
+ * R2 DeleteObject is idempotent (a missing object still succeeds), which
+ * keeps repeated deletion safe. The caller marks the Mongo attachment
+ * ONLY after this resolves — a failed R2 delete never destroys the
+ * reference.
+ */
+const deleteMediaObject = async (task, key) => {
+  if (!isEnabled()) throw new MediaError(403, 'Chat media is disabled');
+  const taskId = task?._id?.toString();
+  if (!isValidTaskId(taskId)) throw new MediaError(400, 'Invalid task id');
+  if (typeof key !== 'string' || !KEY_REGEX.test(key) || !key.startsWith(`chat-media/${taskId}/`)) {
+    throw new MediaError(400, 'Invalid media key');
+  }
+
+  // Key must belong to a stored message attachment of this exact task.
+  let found = null;
+  for (const m of task.messages || []) {
+    for (const att of m.attachments || []) {
+      if (att && typeof att === 'object' && att.key === key) {
+        found = att;
+        break;
+      }
+    }
+    if (found) break;
+  }
+  if (!found) throw new MediaError(404, 'Media not found for this task');
+
+  const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+  const s3 = getS3Client();
+  try {
+    await s3.client.send(
+      new DeleteObjectCommand({ Bucket: s3.bucket, Key: key })
+    );
+  } catch (delErr) {
+    console.error('[MEDIA] R2 DELETE failed:', delErr.message);
+    throw new MediaError(502, 'Media storage deletion failed');
+  }
+  return { key };
+};
+
 module.exports = {
   MediaError,
   isEnabled,
@@ -298,4 +343,5 @@ module.exports = {
   issueUpload,
   validateStoredAttachment,
   issueViewUrl,
+  deleteMediaObject,
 };

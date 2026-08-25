@@ -6,7 +6,7 @@ import api from '../services/api';
 import AttachSheet from '../components/chat/AttachSheet';
 import MediaBubble from '../components/chat/MediaBubble';
 import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
-import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES } from '../components/chat/mediaUpload';
+import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES, deleteMedia } from '../components/chat/mediaUpload';
 
 const Support = () => {
   const location = useLocation();
@@ -610,6 +610,33 @@ const Support = () => {
     showMediaToast(msg);
   };
 
+  // CHAT MEDIA (delete): confirmed media only. All authorization is
+  // server-side (task access + sender === requester); on success we mark
+  // the attachment deleted locally so the bubble flips to the inert
+  // "Media deleted" chip immediately. Incremental polling only ever
+  // APPENDS new messages, so it cannot revive the marker.
+  const handleDeleteMedia = async (msg, att) => {
+    if (!selectedTask || !msg || !msg._id || !att || !att.key) return;
+    if (!window.confirm('Delete this media for everyone in this chat?')) return;
+    const taskId = selectedTask._id || selectedTask.id;
+    try {
+      await deleteMedia(taskId, msg._id, att.key);
+      setSelectedTask(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: (prev.messages || []).map(m =>
+            m._id === msg._id
+              ? { ...m, attachments: (m.attachments || []).map(a => (a && typeof a === 'object' && a.key === att.key ? { ...a, deleted: true } : a)) }
+              : m
+          ),
+        };
+      });
+    } catch (err) {
+      showMediaToast(err.response?.data?.error || 'Could not delete media');
+    }
+  };
+
   // Refresh task data (used by ApprovalBox)
   const refreshTaskData = async () => {
     const taskId = selectedTask._id || selectedTask.id;
@@ -741,6 +768,10 @@ const Support = () => {
                         // CHAT MEDIA (Phase 2A): server media objects render via MediaBubble;
                         // legacy strings / plain-url objects keep the exact existing <img> path.
                         if (att && typeof att === 'object' && att.kind) {
+                          // Delete affordance only on the client's OWN media;
+                          // server re-verifies senderId ownership.
+                          const senderIdStr = msg.senderId && typeof msg.senderId === 'object' ? (msg.senderId._id || '') : (msg.senderId || '');
+                          const canDelete = msg.sender === 'CLIENT' && currentUserId && String(senderIdStr) === String(currentUserId);
                           return (
                             <MediaBubble
                               key={i}
@@ -748,6 +779,7 @@ const Support = () => {
                               taskId={selectedTask._id || selectedTask.id}
                               onRetry={handleRetryMedia}
                               onDiscard={handleDiscardMedia}
+                              onDelete={canDelete ? (a) => handleDeleteMedia(msg, a) : undefined}
                             />
                           );
                         }

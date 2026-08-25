@@ -120,3 +120,12 @@ export async function fetchMediaUrl(taskId, key) {
 
 // Best-effort local expiry check from server-stamped metadata (no requests)
 export const isLocallyExpired = (att) => !!(att && att.expiresAt && new Date(att.expiresAt).getTime() <= Date.now());
+
+// ---------------------------------------------------------------------
+// Delete ONE media attachment. All authorization is server-side (task /
+// message / attachment ownership); the server removes the R2 object and
+// leaves a deleted marker on the message. Idempotent on the server.
+// ---------------------------------------------------------------------
+export async function deleteMedia(taskId, messageId, key) {
+  await api.delete(`/client/tasks/${taskId}/media`, { data: { messageId, key } });
+}
