@@ -374,9 +374,14 @@ const taskSchema = new mongoose.Schema(
         trim: true,
         maxlength: 2000,
       },
-      attachments: [{
-        type: String, // Image URLs (data URLs or hosted URLs)
-      }],
+      attachments: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: [],
+        // Backward-compatible: legacy string image URLs AND server-validated
+        // chat media metadata objects ({ kind, key, name, size, mime, expiresAt }).
+        // Object attachments are validated server-side (mediaStorageService)
+        // before storage — Mixed is storage-only, never a trust boundary.
+      },
       createdAt: {
         type: Date,
         default: Date.now,

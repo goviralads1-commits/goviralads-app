@@ -43,6 +43,7 @@ const Notification = require('../models/Notification');
 const { ClientEmployeeAssignment } = require('../models/ClientEmployeeAssignment');
 const UserSubscription = require('../models/UserSubscription');
 const { ReminderLog } = require('../models/ReminderLog');
+const mediaStorage = require('../services/mediaStorageService');
 
 const router = express.Router();
 
@@ -1917,13 +1918,31 @@ router.post('/tasks/:taskId/message', async (req, res) => {
       return res.status(400).json({ error: 'Message too long (max 2000 characters)' });
     }
 
-    // Validate attachments (URLs only, max 5)
+    // Validate attachments (max 5)
+    // - legacy strings: image URLs ΓÇö behavior unchanged
+    // - objects: R2 chat media metadata ΓÇö fully server-validated
     if (attachments && attachments.length > 0) {
       if (attachments.length > 5) {
         return res.status(400).json({ error: 'Maximum 5 attachments allowed' });
       }
-      for (const att of attachments) {
-        if (typeof att !== 'string' || !att.startsWith('http')) {
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        if (typeof att === 'string') {
+          if (!att.startsWith('http')) {
+            return res.status(400).json({ error: 'Attachments must be valid URLs' });
+          }
+        } else if (att && typeof att === 'object' && !Array.isArray(att)) {
+          // CHAT MEDIA (Phase 1): validate shape/kind/MIME/size/key format,
+          // confirm the key belongs to this task, HEAD the R2 object and
+          // verify ContentLength === declared size. Store ONLY the
+          // server-built metadata ΓÇö never the client object as-is.
+          try {
+            attachments[i] = await mediaStorage.validateStoredAttachment(taskId, att);
+          } catch (mediaErr) {
+            const status = mediaErr.status || 400;
+            return res.status(status).json({ error: mediaErr.message || 'Invalid media attachment' });
+          }
+        } else {
           return res.status(400).json({ error: 'Attachments must be valid URLs' });
         }
       }
@@ -2009,6 +2028,61 @@ router.post('/tasks/:taskId/message', async (req, res) => {
   } catch (err) {
     console.error('[DISCUSSION ERROR]', err);
     return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// =======================================================================
+// CHAT MEDIA (Phase 1) ΓÇö R2 direct-upload foundation (admin)
+// Media bytes NEVER pass through this server: browsers PUT directly to
+// R2 using the short-lived presigned URLs issued below.
+// =======================================================================
+
+// POST /admin/tasks/:taskId/media/upload-url ΓÇö issue a presigned PUT URL
+router.post('/tasks/:taskId/media/upload-url', async (req, res) => {
+  try {
+    if (!mediaStorage.isEnabled()) {
+      return res.status(403).json({ error: 'Chat media is disabled' });
+    }
+    const { taskId } = req.params;
+    const { kind, filename, size, mime } = req.body || {};
+
+    const task = await Task.findById(taskId).select('_id').exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Admin authorization comes from router-level authenticateJWT + requireAdmin
+    const result = await mediaStorage.issueUpload({ taskId, kind, filename, size, mime });
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('[CHAT MEDIA] upload-url error:', err.message);
+    return res.status(500).json({ error: 'Failed to issue upload URL' });
+  }
+});
+
+// GET /admin/tasks/:taskId/media-url?key=... ΓÇö short-lived presigned GET.
+// Only keys already stored in this task's message attachments are allowed.
+router.get('/tasks/:taskId/media-url', async (req, res) => {
+  try {
+    if (!mediaStorage.isEnabled()) {
+      return res.status(403).json({ error: 'Chat media is disabled' });
+    }
+    const { taskId } = req.params;
+    const key = req.query.key;
+
+    const task = await Task.findById(taskId).select('messages').exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Admin authorization comes from router-level authenticateJWT + requireAdmin
+    const result = await mediaStorage.issueViewUrl(task, key);
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('[CHAT MEDIA] media-url error:', err.message);
+    return res.status(500).json({ error: 'Failed to issue media URL' });
   }
 });
 

@@ -317,6 +317,18 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
+// CHAT MEDIA (Phase 1) — safe capability diagnostic for the R2 media
+// foundation. Exposes ONLY booleans + limits: never credentials, account
+// ID, or bucket name. Performs no R2 network call and no writes.
+app.get('/health/media', (_req, res) => {
+  try {
+    const mediaStorage = require('./services/mediaStorageService');
+    res.status(200).json(mediaStorage.getCapabilities());
+  } catch (err) {
+    res.status(200).json({ enabled: false, configured: false, error: 'unavailable' });
+  }
+});
+
 app.use('/auth', authRoutes);
 app.use('/client', clientRoutes);
 app.use('/admin', adminRoutes);
