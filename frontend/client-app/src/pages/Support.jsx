@@ -3,6 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ApprovalBox from '../components/ApprovalBox';
 import api from '../services/api';
+import AttachSheet from '../components/chat/AttachSheet';
+import MediaBubble from '../components/chat/MediaBubble';
+import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
+import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES } from '../components/chat/mediaUpload';
 
 const Support = () => {
   const location = useLocation();
@@ -43,6 +47,14 @@ const Support = () => {
   const isNearBottomRef = useRef(true);
   const [showNewMsgBadge, setShowNewMsgBadge] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
+
+  // CHAT MEDIA (Phase 2A): all media state lives here; text/image flows above are untouched
+  const [mediaEnabled, setMediaEnabled] = useState(false);
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaToast, setMediaToast] = useState(null);
+  const videoInputRef = useRef(null);
+  const uploadsRef = useRef(new Map()); // _tempId -> { blob, abortController, ... } (outside React state — no re-renders)
 
   // Keep ref in sync with selectedTask so the polling closure always reads fresh state
   useEffect(() => {
@@ -140,6 +152,22 @@ const Support = () => {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('gva-fcm-message', handleFCMMessage);
+    };
+  }, [activeTaskId]);
+
+  // CHAT MEDIA (Phase 2A): one-time capability probe per opened task.
+  // Flag OFF (or probe failure) => media controls stay hidden, exact legacy UI.
+  // Also aborts any in-flight uploads when switching tasks.
+  useEffect(() => {
+    if (!activeTaskId) { setMediaEnabled(false); return; }
+    let cancelled = false;
+    probeMediaEnabled(activeTaskId)
+      .then(on => { if (!cancelled) setMediaEnabled(!!on); })
+      .catch(() => { if (!cancelled) setMediaEnabled(false); });
+    return () => {
+      cancelled = true;
+      uploadsRef.current.forEach(u => { try { u.abortController?.abort(); } catch (_) {} });
+      uploadsRef.current.clear();
     };
   }, [activeTaskId]);
 
@@ -445,6 +473,143 @@ const Support = () => {
     setMessageAttachments(prev => [...prev, ...files].slice(0, 5));
   };
 
+  // ==================== CHAT MEDIA (Phase 2A) — direct-to-R2 video/audio ====================
+  // Fully independent from the text/image send path above. Bytes go browser -> R2
+  // via presigned PUT (XHR, no 30s timeout); the Node backend only sees metadata.
+  const showMediaToast = (msg) => {
+    setMediaToast(msg);
+    setTimeout(() => setMediaToast(null), 4000);
+  };
+
+  const patchMediaMessage = (tempId, patch) => {
+    setSelectedTask(prev => {
+      if (!prev) return prev;
+      return { ...prev, messages: (prev.messages || []).map(m => m._tempId === tempId ? { ...m, ...patch } : m) };
+    });
+  };
+
+  const startMediaUpload = async (fileOrBlob, kind, { tempId: existingTempId = null, name = null, mime = null } = {}) => {
+    if (!selectedTask) return;
+    const taskId = selectedTask._id || selectedTask.id;
+    const limitMB = limitFor(kind);
+    if (fileOrBlob.size > mbToBytes(limitMB)) {
+      showMediaToast(`${kind === 'audio' ? 'Voice note' : 'Video'} too large — max ${limitMB} MB`);
+      return;
+    }
+    const tempId = existingTempId || `tmp-media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const fileName = name || fileOrBlob.name || `${kind}.${kind === 'audio' ? 'webm' : 'mp4'}`;
+    // Normalize MIME for upload metadata only: MediaRecorder can produce
+    // 'audio/webm;codecs=opus' but the server whitelist expects the base type.
+    // The Blob itself is untouched; the server remains authoritative.
+    const fileMime = ((mime || fileOrBlob.type || '').split(';')[0].trim()) || (kind === 'video' ? 'video/mp4' : 'audio/webm');
+
+    if (!existingTempId) {
+      // Optimistic media bubble appears immediately (upload state lives on the attachment)
+      const optimisticMsg = {
+        _tempId: tempId,
+        sender: 'CLIENT',
+        text: '',
+        attachments: [{ _upload: 'uploading', _progress: 0, kind, name: fileName, size: fileOrBlob.size }],
+        createdAt: new Date().toISOString(),
+        _optimistic: true
+      };
+      setSelectedTask(prev => prev ? { ...prev, messages: [...(prev.messages || []), optimisticMsg] } : prev);
+      scrollToBottom(true);
+    } else {
+      patchMediaMessage(tempId, { attachments: [{ _upload: 'uploading', _progress: 0, kind, name: fileName, size: fileOrBlob.size }] });
+    }
+
+    const abortController = new AbortController();
+    uploadsRef.current.set(tempId, { blob: fileOrBlob, kind, name: fileName, mime: fileMime, taskId, abortController });
+
+    try {
+      // Fresh presigned URL for EVERY attempt (initial + retries) — never reused
+      const urlRes = await api.post(`/client/tasks/${taskId}/media/upload-url`, {
+        kind, filename: fileName, size: fileOrBlob.size, mime: fileMime
+      });
+      const { uploadUrl, attachment } = urlRes.data || {};
+      if (!uploadUrl || !attachment) throw new Error('No upload URL returned');
+
+      await putToR2(uploadUrl, fileOrBlob, {
+        contentType: fileMime,
+        signal: abortController.signal,
+        onProgress: (pct) => patchMediaMessage(tempId, {
+          attachments: [{ _upload: 'uploading', _progress: pct, kind, name: fileName, size: fileOrBlob.size }]
+        })
+      });
+
+      patchMediaMessage(tempId, { attachments: [{ _upload: 'sending', kind, name: fileName, size: fileOrBlob.size }] });
+      // Send with the SERVER-ISSUED metadata; server re-validates + HEAD-checks the R2 object
+      const sendRes = await api.post(`/client/tasks/${taskId}/message`, { text: '', attachments: [attachment] });
+      const serverMsg = sendRes?.data?.message;
+      // Same reconcile pattern as the text flow: replace by _tempId + advance poll cursor
+      setSelectedTask(prev => {
+        if (!prev) return prev;
+        const messages = (prev.messages || []).map(m =>
+          m._tempId === tempId ? (serverMsg ? { ...serverMsg } : { ...m, _optimistic: false }) : m
+        );
+        return { ...prev, messages };
+      });
+      const serverTs = serverMsg?.createdAt ? new Date(serverMsg.createdAt).getTime() : NaN;
+      if (!isNaN(serverTs)) {
+        const currentTs = lastMessageDateRef.current ? new Date(lastMessageDateRef.current).getTime() : 0;
+        if (serverTs > currentTs) lastMessageDateRef.current = new Date(serverTs).toISOString();
+      }
+      scrollToBottom();
+      // Terminal success — the Blob is no longer needed for Retry; release it.
+      uploadsRef.current.delete(tempId);
+    } catch (err) {
+      if (err.message === 'cancelled') return; // discard/task-switch already cleaned up
+      // FAILED upload: keep the Blob in uploadsRef so Retry can re-upload it
+      // with a fresh presigned URL. Only success / Discard / task-switch release it.
+      patchMediaMessage(tempId, {
+        attachments: [{ _upload: 'error', _error: err.response?.data?.error || err.message || 'Upload failed', kind, name: fileName, size: fileOrBlob.size }]
+      });
+      console.error('[Chat Media] Upload/send failed:', err);
+    }
+  };
+
+  const handleRetryMedia = (tempId) => {
+    const entry = uploadsRef.current.get(tempId);
+    if (!entry) { showMediaToast('File no longer available — please attach again'); return; }
+    // Same original Blob (by reference, never copied); startMediaUpload will
+    // request a completely NEW presigned upload URL for this attempt.
+    startMediaUpload(entry.blob, entry.kind, { tempId, name: entry.name, mime: entry.mime });
+  };
+
+  const handleDiscardMedia = (tempId) => {
+    const entry = uploadsRef.current.get(tempId);
+    if (entry) { try { entry.abortController.abort(); } catch (_) {} uploadsRef.current.delete(tempId); }
+    setSelectedTask(prev => prev ? { ...prev, messages: (prev.messages || []).filter(m => m._tempId !== tempId) } : prev);
+  };
+
+  const handleVideoSelect = (e) => {
+    const file = Array.from(e.target.files || [])[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!VIDEO_MIME_TYPES.includes(file.type)) {
+      showMediaToast('Only MP4 or WebM videos are supported');
+      return;
+    }
+    if (file.size > mbToBytes(limitFor('video'))) {
+      showMediaToast(`Video too large — max ${limitFor('video')} MB`);
+      return;
+    }
+    startMediaUpload(file, 'video', {});
+  };
+
+  const handleRecorded = (blob, { mime, name }) => {
+    setIsRecording(false);
+    startMediaUpload(blob, 'audio', { mime, name });
+  };
+
+  const handleRecordCancel = () => setIsRecording(false);
+
+  const handleRecordError = (msg) => {
+    setIsRecording(false);
+    showMediaToast(msg);
+  };
+
   // Refresh task data (used by ApprovalBox)
   const refreshTaskData = async () => {
     const taskId = selectedTask._id || selectedTask.id;
@@ -572,9 +737,24 @@ const Support = () => {
                 <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: '14px', backgroundColor: isAdmin ? '#f1f5f9' : (isCurrentUser ? '#22c55e' : '#f1f5f9'), color: isAdmin ? '#0f172a' : (isCurrentUser ? '#fff' : '#0f172a') }}>
                   {item.attachments?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: item.text && item.text !== '[Image]' ? '6px' : 0 }}>
-                      {item.attachments.map((att, i) => (
-                        <img key={i} src={typeof att === 'string' ? att : att.url} alt="" onClick={() => setLightboxImage(typeof att === 'string' ? att : att.url)} style={{ maxWidth: '120px', maxHeight: '120px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }} />
-                      ))}
+                      {item.attachments.map((att, i) => {
+                        // CHAT MEDIA (Phase 2A): server media objects render via MediaBubble;
+                        // legacy strings / plain-url objects keep the exact existing <img> path.
+                        if (att && typeof att === 'object' && att.kind) {
+                          return (
+                            <MediaBubble
+                              key={i}
+                              att={att}
+                              taskId={selectedTask._id || selectedTask.id}
+                              onRetry={handleRetryMedia}
+                              onDiscard={handleDiscardMedia}
+                            />
+                          );
+                        }
+                        return (
+                          <img key={i} src={typeof att === 'string' ? att : att.url} alt="" onClick={() => setLightboxImage(typeof att === 'string' ? att : att.url)} style={{ maxWidth: '120px', maxHeight: '120px', borderRadius: '8px', cursor: 'pointer', objectFit: 'cover' }} />
+                        );
+                      })}
                     </div>
                   )}
                   {item.text && item.text !== '[Image]' && <p style={{ fontSize: '14px', margin: 0, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{item.text}</p>}
@@ -601,16 +781,38 @@ const Support = () => {
               ))}
             </div>
           )}
+          {mediaToast && (
+            <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px' }}>{mediaToast}</div>
+          )}
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-            <button onClick={() => fileInputRef.current?.click()} style={{ padding: '10px', borderRadius: '10px', border: 'none', backgroundColor: '#f1f5f9', cursor: 'pointer' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
-            <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} placeholder="Type a message..." style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: '1px solid #e2e8f0', fontSize: '14px', resize: 'none', minHeight: '40px', maxHeight: '100px' }} />
-            <button onClick={handleSendMessage} disabled={sendingMessage || (!messageText.trim() && messageAttachments.length === 0)} style={{ padding: '10px 16px', borderRadius: '20px', border: 'none', backgroundColor: '#22c55e', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', opacity: (sendingMessage || (!messageText.trim() && messageAttachments.length === 0)) ? 0.5 : 1 }}>
-              {sendingMessage ? '...' : 'Send'}
-            </button>
+            {isRecording && mediaEnabled ? (
+              <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
+            ) : (
+              <>
+                <button onClick={() => (mediaEnabled ? setAttachSheetOpen(true) : fileInputRef.current?.click())} style={{ padding: '10px', borderRadius: '10px', border: 'none', backgroundColor: '#f1f5f9', cursor: 'pointer' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
+                {mediaEnabled && <input ref={videoInputRef} type="file" accept={VIDEO_ACCEPT} onChange={handleVideoSelect} style={{ display: 'none' }} />}
+                <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} placeholder="Type a message..." style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: '1px solid #e2e8f0', fontSize: '14px', resize: 'none', minHeight: '40px', maxHeight: '100px' }} />
+                <button onClick={handleSendMessage} disabled={sendingMessage || (!messageText.trim() && messageAttachments.length === 0)} style={{ padding: '10px 16px', borderRadius: '20px', border: 'none', backgroundColor: '#22c55e', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', opacity: (sendingMessage || (!messageText.trim() && messageAttachments.length === 0)) ? 0.5 : 1 }}>
+                  {sendingMessage ? '...' : 'Send'}
+                </button>
+                {mediaEnabled && isRecordingSupported() && (
+                  <button onClick={() => setIsRecording(true)} title="Record voice note" style={{ padding: '10px', borderRadius: '10px', border: 'none', backgroundColor: '#f1f5f9', cursor: 'pointer', flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                )}
+              </>
+            )}
           </div>
+          {attachSheetOpen && (
+            <AttachSheet
+              onClose={() => setAttachSheetOpen(false)}
+              onPickPhoto={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
+              onPickVideo={() => { setAttachSheetOpen(false); videoInputRef.current?.click(); }}
+            />
+          )}
         </div>
 
         {/* Lightbox */}
