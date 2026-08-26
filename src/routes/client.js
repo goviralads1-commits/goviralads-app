@@ -688,6 +688,13 @@ router.get('/tasks/:taskId', async (req, res) => {
         // for this task from EarningsLedger, or null when none/zero. Never
         // contains another recipient's amount.
         myCommission,
+        // ORDER LINKAGE — expose the existing human-readable Order ID (Order.orderId)
+        // via the existing Task.orderId -> Order.orderId relationship; null when the
+        // task has no order. Additive, read-only; same pattern as the task-list
+        // endpoint; no order logic changed.
+        orderCode: task.orderId
+          ? await Order.findById(task.orderId).select('orderId').lean().then(o => o?.orderId || null).catch(() => null)
+          : null,
         assignedUsers: (task.assignedUsers || []).map(u => ({
           userId: u.userId?.toString(),
           percentage: u.percentage,

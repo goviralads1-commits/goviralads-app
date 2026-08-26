@@ -5,6 +5,7 @@ import api from '../services/api';
 import Header from '../components/Header';
 import ProgressWithFlag from '../components/ProgressWithFlag';
 import ApprovalBox from '../components/ApprovalBox';
+import { PresetIcon, isValidPreset } from '../components/PresetIcons';
 
 // Utility: Clean description - handles HTML and plain text
 const formatDescription = (desc) => {
@@ -101,8 +102,10 @@ const TaskDetail = () => {
   const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
   const [allMessages, setAllMessages] = useState([]); // Combined messages from pagination
 
-  // FAQ-style collapsible sections (UI interaction only — compact by default, independent toggles)
-  const [openSections, setOpenSections] = useState({ planDetails: false, inputs: false, discussion: false, progress: false, timeline: false });
+  // Discussion is the only collapsible section and it is OPEN BY DEFAULT —
+  // it is the primary interaction surface. Everything else (progress, state,
+  // next step, task info) is always visible and never behind a toggle.
+  const [openSections, setOpenSections] = useState({ discussion: true });
   const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   const sectionKeyDown = (e, key) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(key); } };
   
@@ -696,26 +699,6 @@ const TaskDetail = () => {
     return sortedMilestones.find(m => progress >= m.percentage) || null;
   };
 
-  // Progress color based on progress percentage (clean gradient)
-  const getProgressColor = (progress) => {
-    if (progress >= 100) return '#22c55e'; // Green
-    if (progress >= 75) return '#84cc16';  // Lime
-    if (progress >= 50) return '#f59e0b';  // Amber
-    if (progress >= 25) return '#f97316';  // Orange
-    return '#6366f1'; // Indigo
-  };
-
-  // Get milestone flag color based on percentage position (journey gradient)
-  const getMilestoneFlagColor = (percentage, isReached) => {
-    if (!isReached) return '#d1d5db'; // Gray for unreached
-    // Color journey: Dark Red → Orange → Light Green → Green
-    if (percentage >= 100) return '#22c55e'; // Green (final)
-    if (percentage >= 75) return '#84cc16';  // Lime green
-    if (percentage >= 50) return '#f59e0b';  // Amber/Orange
-    if (percentage >= 25) return '#f97316';  // Orange
-    return '#dc2626'; // Dark red (early)
-  };
-
   // Format date for display
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
@@ -739,17 +722,18 @@ const TaskDetail = () => {
       <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
         <Header />
         <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px 20px', paddingBottom: '120px' }}>
-          <div style={{ width: '100px', height: '32px', backgroundColor: '#f1f1f1', borderRadius: '8px', marginBottom: '32px', animation: 'pulse 1.5s infinite' }} />
-          <div style={{ backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-            <div style={{ width: '75%', height: '32px', backgroundColor: '#f1f1f1', borderRadius: '8px', marginBottom: '20px', animation: 'pulse 1.5s infinite' }} />
-            <div style={{ width: '120px', height: '36px', backgroundColor: '#f1f1f1', borderRadius: '18px', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ width: '92px', height: '16px', backgroundColor: '#f1f1f1', borderRadius: '8px', marginBottom: '20px', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ backgroundColor: '#fff', borderRadius: '18px', padding: '20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #eef0f3' }}>
+            <div style={{ width: '55%', height: '20px', backgroundColor: '#f1f1f1', borderRadius: '6px', marginBottom: '12px', animation: 'pulse 1.5s infinite' }} />
+            <div style={{ width: '100%', height: '6px', backgroundColor: '#f1f1f1', borderRadius: '999px', animation: 'pulse 1.5s infinite' }} />
           </div>
-          <div style={{ backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-            <div style={{ width: '100%', height: '12px', backgroundColor: '#f1f1f1', borderRadius: '6px', marginBottom: '16px', animation: 'pulse 1.5s infinite' }} />
-            <div style={{ width: '60%', height: '48px', backgroundColor: '#f1f1f1', borderRadius: '8px', margin: '0 auto', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ backgroundColor: '#fff', borderRadius: '18px', padding: '20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #eef0f3' }}>
+            <div style={{ width: '40%', height: '14px', backgroundColor: '#f1f1f1', borderRadius: '6px', marginBottom: '12px', animation: 'pulse 1.5s infinite' }} />
+            <div style={{ width: '100%', height: '44px', backgroundColor: '#f1f1f1', borderRadius: '10px', animation: 'pulse 1.5s infinite' }} />
           </div>
-          <div style={{ backgroundColor: '#fff', borderRadius: '28px', padding: '32px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-            <div style={{ width: '100%', height: '80px', backgroundColor: '#f1f1f1', borderRadius: '12px', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ backgroundColor: '#fff', borderRadius: '18px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #eef0f3' }}>
+            <div style={{ width: '100%', height: '10px', backgroundColor: '#f1f1f1', borderRadius: '6px', marginBottom: '8px', animation: 'pulse 1.5s infinite' }} />
+            <div style={{ width: '75%', height: '10px', backgroundColor: '#f1f1f1', borderRadius: '6px', animation: 'pulse 1.5s infinite' }} />
           </div>
         </div>
         <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
@@ -838,9 +822,7 @@ const TaskDetail = () => {
   // ========== END HARD GUARD ==========
 
   const progress = task.progress || 0;
-  const progressColor = getProgressColor(progress);
   const activeMilestone = getActiveMilestone(task.milestones, progress);
-  const isOverachieving = progress > 100;
 
   // Build milestones from task if available
   const milestones = task.milestones || [];
@@ -868,209 +850,361 @@ const TaskDetail = () => {
           All Tasks
         </button>
 
-        {/* Feature Image Header - If Available */}
-        {task.featureImage && (
-          <div style={{
-            borderRadius: '24px', overflow: 'hidden', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', position: 'relative'
-          }}>
-            <img 
-              src={task.featureImage} 
-              alt="" 
-              style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }}
-              onError={(e) => { e.target.parentElement.style.display = 'none'; }}
-            />
-            <div style={{
-              position: 'absolute', bottom: '16px', left: '20px',
-              display: 'flex', alignItems: 'center', gap: '12px'
-            }}>
-              <span style={{ 
-                fontSize: '36px', 
-                filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))' 
-              }}>
-                {task.icon || '📝'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Hero Card - Title + Status (Plan Details — collapsible; chip + title stay visible) */}
+        {/* ==========================================================
+            HEADER CARD — identity + state + progress at a glance.
+            ONE strong card replaces the old hero + separate progress
+            accordion. Progress/milestones are DISPLAY ONLY (existing
+            data; no calculation changes). */}
         <div style={{
-          backgroundColor: '#fff', borderRadius: '28px', padding: '36px 32px', marginBottom: '20px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
+          backgroundColor: '#fff', borderRadius: '18px', padding: '18px', marginBottom: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+          border: isPendingApproval ? '1.5px solid #6366f1' : '1px solid #eef0f3'
         }}>
-          <div
-            role="button"
-            tabIndex={0}
-            aria-expanded={openSections.planDetails}
-            onClick={() => toggleSection('planDetails')}
-            onKeyDown={(e) => sectionKeyDown(e, 'planDetails')}
-            style={{ cursor: 'pointer' }}
-          >
-          {/* Progress Chip - milestone-based, no internal status label */}
-          <div style={{ marginBottom: '20px' }}>
-            {(() => {
-              if (isPendingApproval) {
-                return (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                    backgroundColor: '#eef2ff', color: '#6366f1'
-                  }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#6366f1' }} />
-                    ⏳ Booked
-                  </span>
-                );
-              }
-              if (progress >= 100 || task.status === 'COMPLETED') {
-                return (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                    backgroundColor: '#f0fdf4', color: '#22c55e'
-                  }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
-                    ✅ Delivered
-                  </span>
-                );
-              }
-              if (progress > 0 && activeMilestone) {
-                return (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                    backgroundColor: `${activeMilestone.color}15`, color: activeMilestone.color
-                  }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: activeMilestone.color }} />
-                    🚩 {activeMilestone.name}
-                  </span>
-                );
-              }
-              if (progress > 0) {
-                return (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                    backgroundColor: '#eff6ff', color: '#3b82f6'
-                  }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
-                    In Progress
-                  </span>
-                );
-              }
-              return (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '8px',
-                  padding: '10px 18px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                  backgroundColor: '#fffbeb', color: '#f59e0b'
-                }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />
-                  Starting Soon
-                </span>
-              );
-            })()}
+          {/* Row 1: platform icon + status pill (ONE consistent status system) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {task.progressIcon && task.progressIcon.type === 'preset' && isValidPreset(task.progressIcon.value) && (
+              <PresetIcon name={task.progressIcon.value} size={24} />
+            )}
+            <span style={{
+              fontSize: '11px', fontWeight: '700', color: humanStatus.color,
+              backgroundColor: humanStatus.bg, padding: '4px 10px',
+              borderRadius: '100px', whiteSpace: 'nowrap'
+            }}>
+              {humanStatus.label}
+            </span>
+            {task.isAssignedUser && (
+              <span style={{
+                fontSize: '9px', fontWeight: '700', color: '#15803d',
+                backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0',
+                padding: '3px 7px', borderRadius: '6px', letterSpacing: '0.04em',
+                textTransform: 'uppercase', whiteSpace: 'nowrap'
+              }}>
+                {'\uD83D\uDCB0 Commission'}
+              </span>
+            )}
           </div>
 
           {/* Title */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-            <h1 style={{
-              fontSize: '28px', fontWeight: '700', color: '#1a1a1a', margin: 0, lineHeight: 1.35,
-              letterSpacing: '-0.02em', flex: 1
-            }}>
-              {task.title}
-            </h1>
-            <span style={{ color: '#94a3b8', marginTop: '8px' }} aria-hidden="true"><Chevron open={openSections.planDetails} /></span>
-          </div>
-          </div>
+          <h1 style={{
+            fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '10px 0 0 0',
+            lineHeight: 1.35, letterSpacing: '-0.01em', overflowWrap: 'anywhere'
+          }}>
+            {task.title}
+          </h1>
 
-          <Collapse open={openSections.planDetails}>
-          {/* Commission-only read-only indicator */}
-          {task.isAssignedUser && (
-            <span style={{
-              display: 'inline-block', marginTop: '8px', padding: '4px 12px',
-              fontSize: '11px', fontWeight: '600', borderRadius: '6px',
-              backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0'
-            }}>
-              {'\uD83D\uDCB0 Commission Recipient \u2014 Read Only'}
-            </span>
+          {/* Meta row: Order ref + dates (existing fields only) */}
+          {(task.orderCode || task.startDate || task.createdAt) && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>
+              {task.orderCode && <span style={{ color: '#64748b', fontWeight: '600' }}>Order {task.orderCode}</span>}
+              {task.orderCode && (task.startDate || task.createdAt) && <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#cbd5e1', flexShrink: 0 }} />}
+              {task.startDate && <span>Started {formatDate(task.startDate)}</span>}
+              {!task.startDate && task.createdAt && <span>Created {formatDate(task.createdAt)}</span>}
+              {(task.endDate || task.deadline) && (
+                <>
+                  <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#cbd5e1', flexShrink: 0 }} />
+                  <span>Due {formatDate(task.endDate || task.deadline)}</span>
+                </>
+              )}
+              {/* Quantity — existing privacy conditions kept identical */}
+              {task.quantity && task.showQuantityToClient && !(task.myCommission > 0) && (
+                <>
+                  <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#cbd5e1', flexShrink: 0 }} />
+                  <span>Qty {task.quantity}</span>
+                </>
+              )}
+            </div>
           )}
 
-          {/* Plan Name - Explicitly for booked tasks */}
-          {isPendingApproval && (
-            <p style={{ fontSize: '14px', color: '#6366f1', fontWeight: '600', margin: '8px 0 0 0' }}>
-              Plan: {task.title}
-            </p>
+          {/* Feature image (single render — was duplicated before) */}
+          {task.featureImage && (
+            <div style={{ marginTop: '12px', borderRadius: '12px', overflow: 'hidden' }}>
+              <img
+                src={task.featureImage}
+                alt=""
+                style={{ width: '100%', height: '140px', objectFit: 'cover', display: 'block' }}
+                onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+              />
+            </div>
           )}
 
-          {/* Short Description */}
+          {/* Progress — ALWAYS visible (existing ProgressWithFlag, display only) */}
+          <div style={{ marginTop: '14px' }}>
+            {isPendingApproval ? (
+              <div style={{ padding: '12px 14px', backgroundColor: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                <p style={{ fontSize: '13px', color: '#1e40af', margin: 0, fontWeight: '500' }}>
+                  {'\u23F3'} Booked {'\u2014'} admin will review and start it shortly.
+                </p>
+              </div>
+            ) : (
+              <>
+                <ProgressWithFlag
+                  progress={progress}
+                  milestones={milestones}
+                  size="default"
+                  showLabel={true}
+                  showPercentage={true}
+                  progressIcon={task.progressIcon}
+                />
+                {/* Milestone stepper — same visual language as the approved Task
+                    List. Existing milestone data only; hidden when none. */}
+                {(() => {
+                  if (!milestones || milestones.length === 0) return null;
+                  const sortedAsc = [...milestones].sort((a, b) => a.percentage - b.percentage);
+                  const reachedAny = sortedAsc.some(m => m.reached);
+                  const focusMilestone = activeMilestone || (!reachedAny ? sortedAsc[0] : null);
+                  return (
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        {sortedAsc.map((m, i) => {
+                          const isCurrent = focusMilestone && m.name === focusMilestone.name && m.percentage === focusMilestone.percentage;
+                          return (
+                            <React.Fragment key={`${m.name}-${i}`}>
+                              {i > 0 && (
+                                <span style={{ flex: 1, height: '2px', backgroundColor: sortedAsc[i - 1].reached ? (sortedAsc[i - 1].color || '#22c55e') : '#e2e8f0', minWidth: '6px' }} />
+                              )}
+                              <span
+                                title={m.name}
+                                style={{
+                                  width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '10px', fontWeight: '700',
+                                  backgroundColor: m.reached ? (m.color || '#22c55e') : '#fff',
+                                  color: m.reached ? '#fff' : '#94a3b8',
+                                  border: m.reached ? 'none' : `1.5px solid ${isCurrent ? '#6366f1' : '#e2e8f0'}`,
+                                  boxShadow: isCurrent ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none'
+                                }}
+                              >
+                                {m.reached ? (
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                ) : (i + 1)}
+                              </span>
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                      {focusMilestone && (
+                        <p style={{ fontSize: '11px', fontWeight: '600', color: focusMilestone.color || '#64748b', margin: '6px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {focusMilestone.name}{focusMilestone.percentage ? ` \u00B7 ${focusMilestone.percentage}%` : ''}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+
+          {/* Description (existing value, normal compact section) */}
           {formatDescription(task.description) && (
             <p style={{
-              fontSize: '16px', color: '#666', margin: '16px 0 0 0', lineHeight: 1.6,
-              whiteSpace: 'pre-wrap' // Preserve line breaks from backend
+              fontSize: '14px', color: '#475569', margin: '14px 0 0 0', lineHeight: 1.55,
+              whiteSpace: 'pre-wrap', borderTop: '1px solid #f1f5f9', paddingTop: '12px'
             }}>
               {formatDescription(task.description)}
             </p>
           )}
-          </Collapse>
         </div>
 
-        {/* CLIENT INPUTS SUBMITTED */}
-        {task.clientInputs && task.clientInputs.length > 0 && (
+        {/* FINAL DELIVERY — promoted directly after the header/state section so
+            the deliverable is seen immediately when ready. Link, permissions,
+            notes and timestamp rendering unchanged. */}
+        {task.finalDeliveryLink && (
           <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
+            backgroundColor: '#fff', borderRadius: '18px', padding: '16px', marginBottom: '16px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+            border: '1px solid #eef0f3', borderTop: '3px solid #22c55e'
           }}>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-expanded={openSections.inputs}
-              onClick={() => toggleSection('inputs')}
-              onKeyDown={(e) => sectionKeyDown(e, 'inputs')}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: openSections.inputs ? '20px' : '0', cursor: 'pointer' }}
-            >
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
-                  <polyline points="14,2 14,8 20,8" strokeLinecap="round" strokeLinejoin="round" />
-                  <line x1="16" y1="13" x2="8" y2="13" strokeLinecap="round" strokeLinejoin="round" />
-                  <line x1="16" y1="17" x2="8" y2="17" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Your Submitted Inputs</h3>
-                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Information you provided during order</p>
-              </div>
-              <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.inputs} /></span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '8px' }}>
+              <p style={{ fontSize: '11px', fontWeight: '700', color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>Final Delivery</p>
+              <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '10px', fontWeight: '700', backgroundColor: '#dcfce7', color: '#15803d', whiteSpace: 'nowrap' }}>
+                {'\u2713'} Ready
+              </span>
             </div>
 
-            <Collapse open={openSections.inputs}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {task.clientInputs.map((input, idx) => (
-                <div key={idx} style={{ padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>Item {idx + 1}</div>
-                  {input.link && (
-                    <div style={{ fontSize: '14px', color: '#0f172a', marginBottom: input.customInput ? '6px' : '0' }}>
-                      <span style={{ fontWeight: '600' }}>Link:</span> {input.link}
-                    </div>
-                  )}
-                  {input.customInput && (
-                    <div style={{ fontSize: '14px', color: '#0f172a' }}>
-                      <span style={{ fontWeight: '600' }}>{task.customInputLabel || 'Input'}:</span> {input.customInput}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            </Collapse>
+            {/* Download Button */}
+            <a
+              href={task.finalDeliveryLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                width: '100%', padding: '13px 20px', marginBottom: task.finalDeliveryText ? '12px' : '0',
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                color: '#fff', fontSize: '14px', fontWeight: '600', borderRadius: '12px',
+                textDecoration: 'none', boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)',
+                boxSizing: 'border-box', minHeight: '44px'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Open Final Delivery Folder
+            </a>
+
+            {/* Delivery Notes */}
+            {task.finalDeliveryText && (
+              <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Delivery Notes</label>
+                <p style={{ fontSize: '13px', color: '#334155', lineHeight: 1.55, margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {task.finalDeliveryText}
+                </p>
+              </div>
+            )}
+
+            {/* Delivered Timestamp */}
+            {task.finalDeliveredAt && (
+              <p style={{ fontSize: '11px', color: '#15803d', margin: '10px 0 0', textAlign: 'right' }}>
+                Delivered on {new Date(task.finalDeliveredAt).toLocaleString('en-IN', {
+                  day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                })}
+              </p>
+            )}
           </div>
         )}
 
-        {/* TASK DISCUSSION (Phase 6) - MOVED TO TOP */}
+        {/* NEXT STEP — one clean actions area answering "What do I need to do
+            next?". Upload folder + content submission behavior, handlers,
+            validation and permissions are all unchanged. */}
+        {(() => {
+          const uploadFolderLink = task.clientUploadFolderLink || userDefaultUploadFolder;
+          const showContentForm = !task.clientContentSubmitted && !task.isAssignedUser;
+          const hasActions = !!uploadFolderLink || showContentForm;
+          if (!hasActions) return null;
+          return (
+            <div style={{
+              backgroundColor: '#fff', borderRadius: '18px', padding: '16px', marginBottom: '16px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+              border: '1px solid #eef0f3', borderTop: '3px solid #6366f1'
+            }}>
+              <p style={{ fontSize: '11px', fontWeight: '700', color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px' }}>
+                Next Step
+              </p>
+
+              {/* Content Toast */}
+              {contentToast && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: '10px', marginBottom: '12px',
+                  backgroundColor: contentToast.type === 'error' ? '#fef2f2' : '#f0fdf4',
+                  border: contentToast.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0',
+                  color: contentToast.type === 'error' ? '#dc2626' : '#15803d',
+                  fontSize: '13px', fontWeight: '500'
+                }}>
+                  {contentToast.message}
+                </div>
+              )}
+
+              {/* Content Required notice — existing messaging, compact presentation */}
+              {showContentForm && task.requireClientContent && !task.clientContentSubmitted && (
+                <div style={{
+                  padding: '10px 12px', backgroundColor: '#fffbeb', borderRadius: '10px', marginBottom: '12px',
+                  border: '1px solid #fde68a', display: 'flex', alignItems: 'flex-start', gap: '10px'
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}>
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <div>
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#92400e', margin: 0 }}>Please submit content to start this task</p>
+                    <p style={{ fontSize: '12px', color: '#b45309', margin: '2px 0 0', lineHeight: 1.4 }}>Work will begin once you submit the required content below.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* CLIENT UPLOAD FOLDER - Upload Your Files (Phase 4B)
+                  Fallback: task.clientUploadFolderLink OR user.defaultUploadFolder */}
+              {uploadFolderLink && (
+                <div style={{ marginBottom: showContentForm ? '14px' : 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Upload Your Files</h3>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Open your upload folder to add files</p>
+                    </div>
+                  </div>
+                  <a
+                    href={uploadFolderLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                      width: '100%', padding: '12px 20px', minHeight: '44px',
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                      color: '#fff', fontSize: '14px', fontWeight: '600',
+                      borderRadius: '12px', textDecoration: 'none', boxSizing: 'border-box'
+                    }}
+                  >
+                    Upload Content {'\u2192'}
+                  </a>
+                </div>
+              )}
+
+              {/* CLIENT CONTENT SUBMISSION (Phase 2) - hidden for commission-only users */}
+              {showContentForm && (
+                <>
+                  {uploadFolderLink && <div style={{ borderTop: '1px solid #f1f5f9', margin: '0 0 14px' }} />}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Submit Content</h3>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Share your content or instructions</p>
+                    </div>
+                  </div>
+
+                  {/* Content Text */}
+                  <textarea
+                    value={contentText}
+                    onChange={(e) => setContentText(e.target.value)}
+                    placeholder="Enter your content, captions, instructions, or any details..."
+                    maxLength={5000}
+                    style={{
+                      width: '100%', minHeight: '110px', padding: '12px 14px',
+                      fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '12px',
+                      outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                      fontFamily: 'inherit', lineHeight: 1.6
+                    }}
+                  />
+                  <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 10px', textAlign: 'right' }}>
+                    {contentText.length}/5000
+                  </p>
+
+                  {/* Content Folder Link - REMOVED: Now handled by admin-set upload folder */}
+                  {/* Content Links - REMOVED: Simplified workflow */}
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleContentSubmit}
+                    disabled={submittingContent}
+                    style={{
+                      width: '100%', padding: '13px 24px', minHeight: '44px',
+                      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      color: '#fff', fontSize: '14px', fontWeight: '600',
+                      borderRadius: '12px', border: 'none', boxSizing: 'border-box',
+                      cursor: submittingContent ? 'not-allowed' : 'pointer',
+                      opacity: submittingContent ? 0.6 : 1
+                    }}
+                  >
+                    {submittingContent ? 'Submitting...' : 'Submit Content'}
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
         <div ref={discussionRef} style={{
-          backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0'
+          backgroundColor: '#fff', borderRadius: '18px', padding: '16px', marginBottom: '16px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+          border: '1px solid #eef0f3'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: openSections.discussion ? '20px' : '0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: openSections.discussion ? '14px' : '0' }}>
             {/* Clickable title area only — header action buttons remain separate */}
             <div
               role="button"
@@ -1078,33 +1212,34 @@ const TaskDetail = () => {
               aria-expanded={openSections.discussion}
               onClick={() => toggleSection('discussion')}
               onKeyDown={(e) => sectionKeyDown(e, 'discussion')}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, cursor: 'pointer' }}
             >
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+              <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
                   <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
-                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Chat with admin about this task</p>
+                <h2 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
+                <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Chat with admin about this task</p>
               </div>
             </div>
-            <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.discussion} /></span>
-            {/* Approval Filter Toggle */}
+            {/* Approval Filter Toggle — same filter behavior, brand pill styling */}
             {(task.approvalRequests?.filter(a => a.isVisibleToClient !== false).length > 0) && (
               <button
                 onClick={() => setShowOnlyApprovals(!showOnlyApprovals)}
                 style={{
-                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '600',
-                  backgroundColor: showOnlyApprovals ? '#fef3c7' : '#f1f5f9',
-                  color: showOnlyApprovals ? '#92400e' : '#64748b',
-                  border: showOnlyApprovals ? '2px solid #fbbf24' : '1px solid #e2e8f0',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                  transition: 'all 0.2s'
+                  padding: '6px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: '600',
+                  backgroundColor: showOnlyApprovals ? '#eef2ff' : '#f8fafc',
+                  color: showOnlyApprovals ? '#4f46e5' : '#64748b',
+                  border: showOnlyApprovals ? '1px solid #c7d2fe' : '1px solid #e2e8f0',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+                  whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.2s'
                 }}
               >
-                ✅ Approvals ({task.approvalRequests.filter(a => a.isVisibleToClient !== false).length})
+                {task.approvalRequests.filter(a => a.isVisibleToClient !== false).length > 0 && (
+                  <>{'\u2705'} Approvals ({task.approvalRequests.filter(a => a.isVisibleToClient !== false).length})</>
+                )}
               </button>
             )}
             {/* Full Screen Toggle */}
@@ -1115,21 +1250,22 @@ const TaskDetail = () => {
               }}
               title="Expand chat"
               style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer',
+                width: '34px', height: '34px', borderRadius: '10px',
+                backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.2s'
+                flexShrink: 0, transition: 'all 0.2s'
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            <span style={{ color: '#94a3b8', flexShrink: 0 }} aria-hidden="true"><Chevron open={openSections.discussion} /></span>
           </div>
 
           <Collapse open={openSections.discussion}>
           {/* Messages */}
-          <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
+          <div style={{ maxHeight: '340px', overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
             {renderChatContent(false)}
           </div>
 
@@ -1200,71 +1336,75 @@ const TaskDetail = () => {
           </Collapse>
         </div>
 
-        {/* FINAL APPROVED DECISIONS - Summary below chat */}
+        {/* FINAL APPROVED DECISIONS — important outcome, kept as its own
+            section but substantially lighter: white premium card, subtle
+            green accent, compact rows. Export Proof action unchanged. */}
         {(() => {
           const approvedItems = (task.approvalRequests || [])
             .filter(a => a.isVisibleToClient !== false && (a.selectionsHistory || []).length > 0);
           if (approvedItems.length === 0) return null;
           return (
             <div style={{
-              backgroundColor: '#f0fdf4', borderRadius: '20px', padding: '20px', marginBottom: '20px',
-              border: '1px solid #bbf7d0', position: 'relative'
+              backgroundColor: '#fff', borderRadius: '18px', padding: '16px', marginBottom: '16px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+              border: '1px solid #eef0f3', borderTop: '3px solid #22c55e', position: 'relative'
             }}>
               {/* Copy Toast */}
               {copyToast && (
                 <div style={{
-                  position: 'absolute', top: '16px', right: '16px',
-                  backgroundColor: '#166534', color: '#fff', padding: '8px 14px',
+                  position: 'absolute', top: '12px', right: '12px',
+                  backgroundColor: '#166534', color: '#fff', padding: '6px 12px',
                   borderRadius: '8px', fontSize: '12px', fontWeight: '600',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 10
                 }}>
                   {copyToast}
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#166534', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>✅</span> Final Approved Decisions
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#166534', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>{'\u2705'}</span> Final Approved Decisions
                 </h4>
                 <button
                   onClick={handleExportProof}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 12px', borderRadius: '8px',
-                    fontSize: '12px', fontWeight: '600',
-                    backgroundColor: '#dcfce7', color: '#166534',
-                    border: '1px solid #bbf7d0', cursor: 'pointer'
+                    padding: '6px 12px', borderRadius: '100px',
+                    fontSize: '11px', fontWeight: '600',
+                    backgroundColor: '#f0fdf4', color: '#166534',
+                    border: '1px solid #bbf7d0', cursor: 'pointer',
+                    whiteSpace: 'nowrap', flexShrink: 0
                   }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
                     <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                   </svg>
                   Export Proof
                 </button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {approvedItems.map((approval, idx) => {
                   const latest = approval.selectionsHistory[approval.selectionsHistory.length - 1];
-                  const hasHistory = (approval.selectionsHistory || []).length > 0;
                   const isLocked = approval.isLocked;
                   return (
                     <div key={`summary-${approval.id || idx}`} style={{
-                      backgroundColor: '#fff', padding: '14px', borderRadius: '12px',
-                      border: '1px solid #dcfce7'
+                      padding: '10px 2px',
+                      borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none'
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px 0' }}>{approval.title}</p>
-                          <p style={{ fontSize: '15px', fontWeight: '600', color: '#166534', margin: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 2px 0' }}>{approval.title}</p>
+                          <p style={{ fontSize: '14px', fontWeight: '600', color: '#166534', margin: 0, overflowWrap: 'anywhere' }}>
                             {latest?.selectedOptions?.join(', ') || 'No selection'}
                           </p>
                         </div>
                         {isLocked && (
                           <span style={{
-                            padding: '4px 10px', fontSize: '11px', fontWeight: '600',
-                            backgroundColor: '#dcfce7', color: '#166534', borderRadius: '8px'
+                            padding: '3px 8px', fontSize: '10px', fontWeight: '700',
+                            backgroundColor: '#dcfce7', color: '#166534', borderRadius: '100px',
+                            whiteSpace: 'nowrap'
                           }}>
-                            Locked ✓
+                            Locked {'\u2713'}
                           </span>
                         )}
                       </div>
@@ -1276,221 +1416,6 @@ const TaskDetail = () => {
           );
         })()}
 
-        {/* CLIENT UPLOAD FOLDER - Upload Your Files (Phase 4B) */}
-        {/* Fallback: task.clientUploadFolderLink OR user.defaultUploadFolder */}
-        {(() => {
-          const uploadFolderLink = task.clientUploadFolderLink || userDefaultUploadFolder;
-          if (!uploadFolderLink) return null;
-          return (
-            <div style={{ 
-              backgroundColor: '#eff6ff', borderRadius: '28px', padding: '28px', marginBottom: '20px',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #3b82f6'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e40af', margin: 0 }}>Upload Your Files</h3>
-                  <p style={{ fontSize: '13px', color: '#3b82f6', margin: '2px 0 0' }}>Click to open the upload folder</p>
-                </div>
-              </div>
-              <a
-                href={uploadFolderLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'block', width: '100%', padding: '16px 24px',
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                  color: '#fff', fontSize: '15px', fontWeight: '600',
-                  borderRadius: '14px', textAlign: 'center', textDecoration: 'none',
-                  boxSizing: 'border-box', marginBottom: '12px'
-                }}
-              >
-                Upload Content →
-              </a>
-              <p style={{ fontSize: '13px', color: '#64748b', margin: 0, textAlign: 'center' }}>
-                Upload your files directly in this Google Drive folder
-              </p>
-            </div>
-          );
-        })()}
-
-        {/* CLIENT CONTENT SUBMISSION (Phase 2) - hidden for commission-only users */}
-        {/* Show if content not yet submitted - regardless of status */}
-        {!task.clientContentSubmitted && !task.isAssignedUser && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', 
-            border: task.clientContentSubmitted ? '2px solid #bbf7d0' : (task.requireClientContent ? '2px solid #fbbf24' : '2px solid #e0e7ff')
-          }}>
-            {/* Content Required Warning */}
-            {task.requireClientContent && !task.clientContentSubmitted && (
-              <div style={{
-                padding: '14px 18px', backgroundColor: '#fef3c7', borderRadius: '14px', marginBottom: '20px',
-                border: '1px solid #fcd34d', display: 'flex', alignItems: 'flex-start', gap: '12px'
-              }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
-                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: 0 }}>Please submit content to start this task</p>
-                  <p style={{ fontSize: '13px', color: '#b45309', margin: '4px 0 0', lineHeight: 1.4 }}>Work will begin once you submit the required content below.</p>
-                </div>
-              </div>
-            )}
-            
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
-                {task.clientContentSubmitted ? 'Submitted Content' : 'Submit Content'}
-              </p>
-              {task.clientContentSubmitted && (
-                <span style={{
-                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700',
-                  backgroundColor: '#dcfce7', color: '#15803d'
-                }}>
-                  ✓ Submitted
-                </span>
-              )}
-            </div>
-
-            {/* Content Toast */}
-            {contentToast && (
-              <div style={{
-                padding: '12px 16px', borderRadius: '12px', marginBottom: '16px',
-                backgroundColor: contentToast.type === 'error' ? '#fef2f2' : '#f0fdf4',
-                color: contentToast.type === 'error' ? '#dc2626' : '#15803d',
-                fontSize: '14px', fontWeight: '500'
-              }}>
-                {contentToast.message}
-              </div>
-            )}
-
-            {/* IF NOT SUBMITTED - Show Form */}
-            {!task.clientContentSubmitted ? (
-              <>
-                {/* Content Text */}
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '8px' }}>
-                    Content / Instructions
-                  </label>
-                  <textarea
-                    value={contentText}
-                    onChange={(e) => setContentText(e.target.value)}
-                    placeholder="Enter your content, captions, instructions, or any details..."
-                    maxLength={5000}
-                    style={{
-                      width: '100%', minHeight: '120px', padding: '14px 16px',
-                      fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '14px',
-                      outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-                      fontFamily: 'inherit', lineHeight: 1.6
-                    }}
-                  />
-                  <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', textAlign: 'right' }}>
-                    {contentText.length}/5000
-                  </p>
-                </div>
-
-                {/* Content Folder Link - REMOVED: Now handled by admin-set upload folder */}
-
-                {/* Content Links - REMOVED: Simplified workflow */}
-
-                {/* Submit Button */}
-                <button
-                  onClick={handleContentSubmit}
-                  disabled={submittingContent}
-                  style={{
-                    width: '100%', padding: '16px 24px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: '#fff', fontSize: '15px', fontWeight: '600',
-                    borderRadius: '14px', border: 'none',
-                    cursor: submittingContent ? 'not-allowed' : 'pointer',
-                    opacity: submittingContent ? 0.6 : 1
-                  }}
-                >
-                  {submittingContent ? 'Submitting...' : 'Submit Content'}
-                </button>
-              </>
-            ) : (
-              /* IF SUBMITTED - Show Read-Only Content */
-              <>
-                {/* Submitted Text */}
-                {task.clientContentText && (
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-                      Content / Instructions
-                    </label>
-                    <div style={{
-                      padding: '16px', backgroundColor: '#f8fafc', borderRadius: '14px',
-                      fontSize: '14px', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap'
-                    }}>
-                      {task.clientContentText}
-                    </div>
-                  </div>
-                )}
-
-                {/* Submitted Content Folder */}
-                {task.clientDriveLink && (
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-                      Content Folder Link
-                    </label>
-                    <a
-                      href={task.clientDriveLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'block', padding: '14px 16px', backgroundColor: '#eff6ff',
-                        borderRadius: '12px', fontSize: '14px', color: '#3b82f6',
-                        textDecoration: 'none', wordBreak: 'break-all'
-                      }}
-                    >
-                      {task.clientDriveLink}
-                    </a>
-                  </div>
-                )}
-
-                {/* Submitted Links */}
-                {task.clientContentLinks && task.clientContentLinks.length > 0 && (
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-                      Additional Links
-                    </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {task.clientContentLinks.map((link, index) => (
-                        <a
-                          key={index}
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'block', padding: '12px 14px', backgroundColor: '#f1f5f9',
-                            borderRadius: '10px', fontSize: '14px', color: '#6366f1',
-                            textDecoration: 'none', wordBreak: 'break-all'
-                          }}
-                        >
-                          {link}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Submitted At */}
-                {task.clientContentSubmittedAt && (
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: '16px 0 0 0', textAlign: 'right' }}>
-                    Submitted on {new Date(task.clientContentSubmittedAt).toLocaleString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
         {/* Lightbox */}
         {lightboxImage && (
           <div 
@@ -1501,345 +1426,116 @@ const TaskDetail = () => {
           </div>
         )}
 
-        {/* PROGRESS CARD - Clean Client View */}
-        <div style={{
-          backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
-        }}>
-          {/* Section Header */}
-          <div
-            role="button"
-            tabIndex={0}
-            aria-expanded={openSections.progress}
-            onClick={() => toggleSection('progress')}
-            onKeyDown={(e) => sectionKeyDown(e, 'progress')}
-            style={{ marginBottom: openSections.progress ? '24px' : '0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-          >
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Progress</span>
-            <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.progress} /></span>
-          </div>
+        {/* TASK INFO — ONE compact information section merging the old
+            Details / Pricing / Countdown / Receipt / Timeline reference data
+            into clean key/value rows. All privacy conditions remain
+            semantically identical. */}
+        {(() => {
+          // Privacy conditions kept SEMANTICALLY IDENTICAL to the previous cards
+          // Recipient privacy: commission recipients see ONLY their commission
+          const showQty = task.quantity && task.showQuantityToClient && !(task.myCommission > 0);
+          const showCommission = task.myCommission > 0;
+          // FIX preserved: creditsUsed (actual deducted) over creditCost (base price)
+          const showCredits = !showCommission && (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false;
+          // Recipient privacy: commission recipients must never see task pricing
+          const showOffer = task.offerPrice && !(task.myCommission > 0);
+          const showCountdown = task.countdownEndDate && new Date(task.countdownEndDate) > new Date();
+          const hasInfo = task.publicNotes || showQty || showCommission || showCredits || showOffer || showCountdown || receipt;
+          if (!hasInfo) return null;
 
-          <Collapse open={openSections.progress}>
-          {isPendingApproval ? (
-            <div style={{ padding: '24px', backgroundColor: '#eff6ff', borderRadius: '20px', border: '1px solid #bfdbfe', textAlign: 'center' }}>
-              <div style={{ fontSize: '40px', marginBottom: '16px' }}>⏳</div>
-              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e40af', marginBottom: '8px' }}>Pending Admin Approval</h3>
-              <p style={{ fontSize: '15px', color: '#1e40af', margin: 0, lineHeight: 1.6 }}>
-                Your task is booked. Admin will review and start it shortly.
-              </p>
+          const Row = ({ label, value, valueColor }) => (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 2px', borderTop: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: '13px', color: '#64748b', flexShrink: 0 }}>{label}</span>
+              <span style={{ fontSize: '13px', fontWeight: '600', color: valueColor || '#0f172a', textAlign: 'right', minWidth: 0, overflowWrap: 'anywhere' }}>{value}</span>
             </div>
-          ) : (
-            <ProgressWithFlag 
-              progress={progress} 
-              milestones={milestones} 
-              size="default"
-              showLabel={true}
-              showPercentage={true}
-              progressIcon={task.progressIcon}
-            />
-          )}
-          </Collapse>
-        </div>
+          );
 
-        {/* Details Card */}
-        {task.publicNotes && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
-          }}>
-            <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Details</p>
-            <p style={{
-              fontSize: '15px', color: '#444', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap'
+          return (
+            <div style={{
+              backgroundColor: '#fff', borderRadius: '18px', padding: '16px', marginBottom: '16px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+              border: '1px solid #eef0f3'
             }}>
-              {task.publicNotes}
-            </p>
-          </div>
-        )}
+              <p style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Task Info</p>
 
-        {/* Feature Image - CONDITIONAL */}
-        {task.featureImage && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '0', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', overflow: 'hidden'
-          }}>
-            <img 
-              src={task.featureImage} 
-              alt={task.title}
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          </div>
-        )}
-
-        {/* Pricing & Quantity Card - CONDITIONAL */}
-        {((task.quantity && task.showQuantityToClient) || ((task.creditCost || task.creditsUsed) && task.showCreditsToClient !== false) || task.offerPrice || task.originalPrice || task.myCommission) && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
-          }}>
-            <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '20px' }}>Pricing & Details</p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Quantity - CONDITIONAL (Scope Clarity) */}
-              {/* Recipient privacy: commission recipients see ONLY their commission */}
-              {task.quantity && task.showQuantityToClient && !(task.myCommission > 0) && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
-                  <div>
-                    <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '3px' }}>Scope Quantity</span>
-                    <span style={{ fontSize: '11px', color: '#15803d' }}>Total units of work</span>
-                  </div>
-                  <span style={{ fontSize: '28px', fontWeight: '700', color: '#15803d' }}>{task.quantity}</span>
-                </div>
-              )}
-
-              {/* Commission (Phase 3) — shown ONLY to the task's commission
-                  recipient; amount comes verbatim from the persisted
-                  EarningsLedger record. Falls back to existing Credits Used. */}
-              {task.myCommission > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
-                  <div>
-                    <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Commission</span>
-                    <span style={{ fontSize: '12px', color: '#15803d' }}>Earned on this task</span>
-                  </div>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>₹{Number(task.myCommission).toLocaleString('en-IN')}</span>
-                </div>
-              ) : (
-              /* Credits - CONDITIONAL */
-              /* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */
-              (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
-                  <div>
-                    <span style={{ fontSize: '14px', color: '#166534', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Credits Used</span>
-                    <span style={{ fontSize: '12px', color: '#15803d' }}>Deducted from wallet</span>
-                  </div>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#15803d' }}>{task.creditsUsed || task.creditCost || 0} credits</span>
-                </div>
-              )
-              )}
-
-              {/* Offer Price - CONDITIONAL */}
-              {/* Recipient privacy: commission recipients must never see task pricing */}
-              {task.offerPrice && !(task.myCommission > 0) && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#fffbeb', borderRadius: '14px', border: '1px solid #fef3c7' }}>
-                  <div>
-                    <span style={{ fontSize: '14px', color: '#92400e', fontWeight: '600', display: 'block', marginBottom: '2px' }}>Offer Price</span>
-                    {task.originalPrice && (
-                      <span style={{ fontSize: '12px', color: '#a16207', textDecoration: 'line-through' }}>{task.originalPrice} credits</span>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>{task.offerPrice} credits</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Countdown Timer - CONDITIONAL */}
-        {task.countdownEndDate && new Date(task.countdownEndDate) > new Date() && (
-          <div style={{
-            backgroundColor: '#fef2f2', borderRadius: '28px', padding: '28px 32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '1px solid #fecaca', textAlign: 'center'
-          }}>
-            <p style={{ fontSize: '12px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Offer Ends</p>
-            <p style={{ fontSize: '20px', fontWeight: '700', color: '#dc2626', margin: 0 }}>
-              {formatDateTime(task.countdownEndDate)}
-            </p>
-          </div>
-        )}
-
-        {/* Receipt Card - CONDITIONAL */}
-        {receipt && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #e0e7ff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Service Receipt</p>
-              <span style={{
-                padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700',
-                backgroundColor: '#dcfce7', color: '#15803d'
-              }}>
-                Paid via Wallet
-              </span>
-            </div>
-            
-            <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderRadius: '16px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontSize: '14px', color: '#64748b' }}>Receipt Number</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{receipt.receiptNumber}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontSize: '14px', color: '#64748b' }}>Credits Used</span>
-                <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>{receipt.creditsUsed?.toFixed(2)} credits</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#64748b' }}>Date</span>
-                <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>
-                  {new Date(receipt.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
-              </div>
-            </div>
-
-            {receipt.isDownloadableByClient && (
-              <button
-                onClick={handleDownloadReceipt}
-                disabled={downloadingReceipt}
-                style={{
-                  width: '100%', padding: '14px 20px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  color: '#fff', fontSize: '14px', fontWeight: '600',
-                  borderRadius: '14px', border: 'none',
-                  cursor: downloadingReceipt ? 'not-allowed' : 'pointer',
-                  opacity: downloadingReceipt ? 0.6 : 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                }}
-              >
-                <span>📄</span>
-                {downloadingReceipt ? 'Downloading...' : 'Download Receipt PDF'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* FINAL DELIVERY SECTION (Phase 3) */}
-        {task.finalDeliveryLink && (
-          <div style={{
-            backgroundColor: '#f0fdf4', borderRadius: '28px', padding: '32px', marginBottom: '20px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)', border: '2px solid #22c55e'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Final Delivery Folder</p>
-              <span style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '700', backgroundColor: '#dcfce7', color: '#15803d' }}>
-                ✓ Ready
-              </span>
-            </div>
-
-            {/* Download Button */}
-            <a
-              href={task.finalDeliveryLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                width: '100%', padding: '16px 20px', marginBottom: task.finalDeliveryText ? '16px' : '0',
-                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                color: '#fff', fontSize: '15px', fontWeight: '600', borderRadius: '14px',
-                textDecoration: 'none', boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)'
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Open Final Delivery Folder
-            </a>
-
-            {/* Delivery Notes */}
-            {task.finalDeliveryText && (
-              <div style={{ padding: '16px', backgroundColor: '#fff', borderRadius: '14px', border: '1px solid #bbf7d0' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>Delivery Notes</label>
-                <p style={{ fontSize: '14px', color: '#334155', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
-                  {task.finalDeliveryText}
+              {/* Public notes/details */}
+              {task.publicNotes && (
+                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.55, margin: '6px 0 4px', whiteSpace: 'pre-wrap' }}>
+                  {task.publicNotes}
                 </p>
-              </div>
-            )}
+              )}
 
-            {/* Delivered Timestamp */}
-            {task.finalDeliveredAt && (
-              <p style={{ fontSize: '12px', color: '#15803d', margin: '16px 0 0', textAlign: 'right' }}>
-                Delivered on {new Date(task.finalDeliveredAt).toLocaleString('en-IN', {
-                  day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                })}
-              </p>
-            )}
-          </div>
-        )}
+              <div>
+                {/* Scope Quantity */}
+                {showQty && <Row label="Scope Quantity" value={task.quantity} />}
 
-        {/* Timeline Card */}
-        {!isPendingApproval && (
-          <div style={{
-            backgroundColor: '#fff', borderRadius: '28px', padding: '32px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)'
-          }}>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-expanded={openSections.timeline}
-              onClick={() => toggleSection('timeline')}
-              onKeyDown={(e) => sectionKeyDown(e, 'timeline')}
-              style={{ marginBottom: openSections.timeline ? '24px' : '0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-            >
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Timeline</p>
-              <span style={{ color: '#94a3b8' }} aria-hidden="true"><Chevron open={openSections.timeline} /></span>
-            </div>
+                {/* Commission (Phase 3) — shown ONLY to the task's commission
+                    recipient; amount comes verbatim from the persisted
+                    EarningsLedger record. Falls back to existing Credits Used. */}
+                {showCommission && <Row label="Commission" value={'\u20B9' + Number(task.myCommission).toLocaleString('en-IN')} valueColor="#15803d" />}
+                {showCredits && <Row label="Credits Used" value={`${task.creditsUsed || task.creditCost || 0} credits`} valueColor="#15803d" />}
 
-            <Collapse open={openSections.timeline}>
-            {/* Date Range Visual */}
-            {(task.startDate || task.endDate) && (
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '20px 24px', backgroundColor: '#fafafa', borderRadius: '16px', marginBottom: '24px'
-              }}>
-                {/* Start */}
-                <div style={{ textAlign: 'left' }}>
-                  <p style={{ fontSize: '11px', color: '#999', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Started</p>
-                  <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>{formatDate(task.startDate) || '—'}</p>
-                </div>
+                {/* Offer Price */}
+                {showOffer && (
+                  <Row label="Offer Price" value={
+                    <span>
+                      {task.originalPrice && (
+                        <span style={{ fontSize: '12px', color: '#a16207', textDecoration: 'line-through', marginRight: '6px', fontWeight: '500' }}>{task.originalPrice} credits</span>
+                      )}
+                      <span style={{ color: '#f59e0b' }}>{task.offerPrice} credits</span>
+                    </span>
+                  } />
+                )}
 
-                {/* Arrow */}
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
-                  <div style={{ flex: 1, height: '2px', backgroundColor: '#e5e5e5' }} />
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2" style={{ margin: '0 -4px' }}>
-                    <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-
-                {/* End */}
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '11px', color: '#999', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Due</p>
-                  <p style={{ fontSize: '15px', fontWeight: '600', color: '#1a1a1a', margin: 0 }}>{formatDate(task.endDate || task.deadline) || '—'}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Activity Log */}
-            <div style={{ position: 'relative', paddingLeft: '24px' }}>
-              <div style={{ position: 'absolute', left: '7px', top: '8px', bottom: '8px', width: '2px', backgroundColor: '#f0f0f0' }} />
-
-              {/* Created */}
-              <div style={{ position: 'relative', marginBottom: '20px' }}>
-                <div style={{
-                  position: 'absolute', left: '-24px', top: '2px', width: '16px', height: '16px',
-                  borderRadius: '50%', backgroundColor: '#22c55e', border: '3px solid #dcfce7'
-                }} />
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a1a', margin: '0 0 2px 0' }}>Task created</p>
-                <p style={{ fontSize: '13px', color: '#999', margin: 0 }}>{formatDateTime(task.createdAt)}</p>
+                {/* Countdown — compact row instead of the oversized red card */}
+                {showCountdown && <Row label="Offer Ends" value={formatDateTime(task.countdownEndDate)} valueColor="#dc2626" />}
               </div>
 
-              {/* Updated */}
-              {task.updatedAt && task.updatedAt !== task.createdAt && (
-                <div style={{ position: 'relative', marginBottom: '20px' }}>
-                  <div style={{
-                    position: 'absolute', left: '-24px', top: '2px', width: '16px', height: '16px',
-                    borderRadius: '50%', backgroundColor: '#8b5cf6', border: '3px solid #ede9fe'
-                  }} />
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a1a', margin: '0 0 2px 0' }}>Last updated</p>
-                  <p style={{ fontSize: '13px', color: '#999', margin: 0 }}>{formatDateTime(task.updatedAt)}</p>
+              {/* SERVICE RECEIPT — existing data + download behavior unchanged */}
+              {receipt && (
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <p style={{ fontSize: '12px', fontWeight: '700', color: '#334155', margin: 0 }}>Service Receipt</p>
+                    <span style={{
+                      padding: '3px 8px', borderRadius: '100px', fontSize: '10px', fontWeight: '700',
+                      backgroundColor: '#dcfce7', color: '#15803d'
+                    }}>
+                      Paid via Wallet
+                    </span>
+                  </div>
+                  <Row label="Receipt Number" value={receipt.receiptNumber} />
+                  <Row label="Credits Used" value={`${receipt.creditsUsed?.toFixed(2)} credits`} valueColor="#15803d" />
+                  <Row label="Date" value={new Date(receipt.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} />
+                  {receipt.isDownloadableByClient && (
+                    <button
+                      onClick={handleDownloadReceipt}
+                      disabled={downloadingReceipt}
+                      style={{
+                        width: '100%', padding: '14px 20px', marginTop: '8px', minHeight: '44px',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                        color: '#fff', fontSize: '14px', fontWeight: '600',
+                        borderRadius: '14px', border: 'none',
+                        cursor: downloadingReceipt ? 'not-allowed' : 'pointer',
+                        opacity: downloadingReceipt ? 0.6 : 1,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                      }}
+                    >
+                      <span>📄</span>
+                      {downloadingReceipt ? 'Downloading...' : 'Download Receipt PDF'}
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Current State */}
-              <div style={{ position: 'relative' }}>
-                <div style={{
-                  position: 'absolute', left: '-24px', top: '2px', width: '16px', height: '16px',
-                  borderRadius: '50%', backgroundColor: humanStatus.color, border: `3px solid ${humanStatus.bg}`
-                }} />
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a1a', margin: '0 0 2px 0' }}>Current status</p>
-                <p style={{ fontSize: '13px', color: humanStatus.color, fontWeight: '600', margin: 0 }}>{humanStatus.label}</p>
-              </div>
+              {/* Created / Updated footer (existing timeline data, compact) */}
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '12px 2px 0' }}>
+                Created {formatDateTime(task.createdAt)}
+                {task.updatedAt && task.updatedAt !== task.createdAt && ` · Updated ${formatDateTime(task.updatedAt)}`}
+              </p>
             </div>
-            </Collapse>
-          </div>
-        )}
+          );
+        })()}
+
       </div>
 
       <style>{`
@@ -1888,13 +1584,13 @@ const TaskDetail = () => {
                 onClick={() => setShowOnlyApprovals(!showOnlyApprovals)}
                 style={{
                   padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: '600',
-                  backgroundColor: showOnlyApprovals ? '#fef3c7' : '#f1f5f9',
-                  color: showOnlyApprovals ? '#92400e' : '#64748b',
-                  border: showOnlyApprovals ? '2px solid #fbbf24' : '1px solid #e2e8f0',
+                  backgroundColor: showOnlyApprovals ? '#eef2ff' : '#f1f5f9',
+                  color: showOnlyApprovals ? '#4f46e5' : '#64748b',
+                  border: showOnlyApprovals ? '1px solid #6366f1' : '1px solid #e2e8f0',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                 }}
               >
-                ✅ Approvals ({task.approvalRequests.filter(a => a.isVisibleToClient !== false).length})
+                {'\u2705'} Approvals ({task.approvalRequests.filter(a => a.isVisibleToClient !== false).length})
               </button>
             )}
           </div>
