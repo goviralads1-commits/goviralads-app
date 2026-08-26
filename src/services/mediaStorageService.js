@@ -93,6 +93,13 @@ const getS3Client = () => {
         accessKeyId: cfg.accessKeyId,
         secretAccessKey: cfg.secretAccessKey,
       },
+      // R2 does not implement S3 flexible checksums. Since AWS SDK v3.729
+      // the default (WHEN_SUPPORTED) injects x-amz-checksum-crc32 into the
+      // signed request, which appears in presigned URLs as signed query
+      // params (x-amz-checksum-crc32, x-amz-sdk-checksum-algorithm) and
+      // makes R2 reject the browser PUT. WHEN_REQUIRED disables automatic
+      // request checksum calculation for this client. No-op on SDK < 3.729.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
     }),
     HeadObjectCommand,
     getSignedUrl,
