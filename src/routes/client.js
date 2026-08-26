@@ -2150,6 +2150,38 @@ router.get('/tasks', async (req, res) => {
     const now = new Date();
     const processedTasks = [];
 
+    // === COMMISSION DISPLAY (Phase 3) — read-only, recipient-only exposure ===
+    // Same semantics as the single-task endpoint: expose ONLY the authenticated
+    // user's own persisted net commission per task, sourced from EarningsLedger
+    // (never recalculated). COMMISSION_REVERSED entries are stored as negative
+    // amounts, so a plain sum yields the correct net. Net <= 0 => null.
+    // ONE aggregation for the whole list (no per-task queries).
+    let commissionByTask = new Map();
+    try {
+      const taskIds = tasks.map(t => t._id);
+      if (taskIds.length > 0) {
+        const rows = await EarningsLedger.aggregate([
+          {
+            $match: {
+              userId: new mongoose.Types.ObjectId(clientId), // authenticated user only — never from request params
+              sourceTaskId: { $in: taskIds },
+              type: { $in: ['COMMISSION_EARNED', 'COMMISSION_REVERSED'] },
+            },
+          },
+          { $group: { _id: '$sourceTaskId', net: { $sum: '$amount' } } },
+        ]);
+        for (const row of rows || []) {
+          if (row && row._id && typeof row.net === 'number' && row.net > 0) {
+            commissionByTask.set(row._id.toString(), row.net);
+          }
+        }
+      }
+    } catch (commissionErr) {
+      // Fail safe: any lookup problem means the UI keeps its existing display
+      console.error('[CLIENT-TASKS] myCommission lookup failed:', commissionErr.message);
+      commissionByTask = new Map();
+    }
+
     for (const t of tasks) {
       let needsSave = false;
       let currentStatus = t.status;
@@ -2267,6 +2299,10 @@ router.get('/tasks', async (req, res) => {
             return uid === clientId;
           });
         })(),
+        // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
+        // for this task from EarningsLedger, or null when none/zero. Never
+        // contains another recipient's amount.
+        myCommission: commissionByTask.get(t._id.toString()) || null,
         // FIX #1: Include milestones in response
         milestones: currentMilestones.map(m => ({
           name: m.name,

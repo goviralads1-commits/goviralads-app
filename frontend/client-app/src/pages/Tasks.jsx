@@ -457,9 +457,22 @@ const Tasks = () => {
                   </div>
                 )}
 
-                {/* Credits - CONDITIONAL (only if showCreditsToClient = true) */}
-                {/* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */}
-                {(task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
+                {/* Commission (Phase 3) — shown ONLY to the task's commission
+                    recipient; amount comes verbatim from the persisted
+                    EarningsLedger record (same source as Task Detail).
+                    Falls back to existing Credits Used. */}
+                {task.myCommission > 0 ? (
+                  <div style={{ 
+                    marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                  }}>
+                    <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Commission</span>
+                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>₹{Number(task.myCommission).toLocaleString('en-IN')}</span>
+                  </div>
+                ) : (
+                /* Credits - CONDITIONAL (only if showCreditsToClient = true) */
+                /* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */
+                (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
                   <div style={{ 
                     marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
@@ -467,6 +480,7 @@ const Tasks = () => {
                     <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Credits Used</span>
                     <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>{task.creditsUsed || task.creditCost || 0} credits</span>
                   </div>
+                )
                 )}
 
                 {/* Chat Icon - if messages exist */}
