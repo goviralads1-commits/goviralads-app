@@ -2182,6 +2182,48 @@ router.get('/tasks', async (req, res) => {
       commissionByTask = new Map();
     }
 
+    // === ORDER CODE PRELOAD — ONE batch query for the whole list (no N+1) ===
+    // Resolves the existing Task.orderId -> Order.orderId relationship. Same
+    // source as a per-task Order.findById(), but preloaded in a single find.
+    let orderCodeByTask = new Map();
+    try {
+      const orderIds = [...new Set(tasks.filter(t => t.orderId).map(t => t.orderId.toString()))];
+      if (orderIds.length > 0) {
+        const orders = await Order.find({ _id: { $in: orderIds } }).select('orderId').lean();
+        for (const o of orders || []) {
+          if (o && o._id) orderCodeByTask.set(o._id.toString(), o.orderId || null);
+        }
+      }
+    } catch (orderErr) {
+      // Fail safe: orderCode stays null for every task
+      console.error('[CLIENT-TASKS] orderCode preload failed:', orderErr.message);
+      orderCodeByTask = new Map();
+    }
+
+    // === CUSTOM PROGRESS ICON PRELOAD — ONE batch query (no N+1) ===
+    // Same source/resolution semantics as the single-task endpoint resolver:
+    // only icons of type 'custom' need a ProgressIconLibrary URL lookup;
+    // preset/default icons carry everything the client needs.
+    let customIconUrlByValue = new Map();
+    try {
+      const customValues = [...new Set(
+        tasks
+          .filter(t => t.progressIcon && t.progressIcon.type === 'custom' && t.progressIcon.value)
+          .map(t => t.progressIcon.value.toString())
+      )];
+      if (customValues.length > 0) {
+        const { ProgressIconLibrary } = require('../models/ProgressIconLibrary');
+        const icons = await ProgressIconLibrary.find({ _id: { $in: customValues } }).select('url').lean();
+        for (const ic of icons || []) {
+          if (ic && ic._id) customIconUrlByValue.set(ic._id.toString(), ic.url || null);
+        }
+      }
+    } catch (iconErr) {
+      // Fail safe: custom icons fall back to no-url shape below
+      console.error('[CLIENT-TASKS] progressIcon preload failed:', iconErr.message);
+      customIconUrlByValue = new Map();
+    }
+
     for (const t of tasks) {
       let needsSave = false;
       let currentStatus = t.status;
@@ -2303,6 +2345,27 @@ router.get('/tasks', async (req, res) => {
         // for this task from EarningsLedger, or null when none/zero. Never
         // contains another recipient's amount.
         myCommission: commissionByTask.get(t._id.toString()) || null,
+        // PROGRESS ICON — expose the SAME existing field/source as the single-task
+        // endpoint (additive, read-only) so the Task List can render the existing
+        // platform icon via the existing PresetIcon system. Custom icon URLs come
+        // from the batch-preloaded ProgressIconLibrary map above (no per-task query).
+        progressIcon: (() => {
+          const icon = t.progressIcon || { type: 'default', value: '' };
+          if (icon.type === 'custom' && icon.value) {
+            return {
+              type: 'custom',
+              value: icon.value,
+              url: customIconUrlByValue.get(icon.value.toString()) || null
+            };
+          }
+          return icon;
+        })(),
+        // ORDER LINKAGE — expose the existing human-readable Order ID (Order.orderId)
+        // for tasks created from an order; null when the task has no order.
+        // Read from the batch-preloaded order map (no per-task query).
+        orderCode: t.orderId
+          ? (orderCodeByTask.get(t.orderId.toString()) || null)
+          : null,
         // FIX #1: Include milestones in response
         milestones: currentMilestones.map(m => ({
           name: m.name,

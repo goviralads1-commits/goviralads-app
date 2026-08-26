@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 import api from '../services/api';
 import { isAuthenticated } from '../services/authService';
 import Header from '../components/Header';
-import ProgressWithFlag from '../components/ProgressWithFlag';
+import { PresetIcon, isValidPreset } from '../components/PresetIcons';
 
 // Utility: Clean description - handles HTML and plain text
 const formatDescription = (desc) => {
@@ -261,23 +261,42 @@ const Tasks = () => {
           {filteredTasks.map((task, index) => {
             const progress = task.progress || 0;
             const progressColor = getProgressColor(task);
-            const activeMilestone = getActiveMilestone(task.milestones, progress);
-            const isOverachieving = progress > 100;
 
             const isPendingApproval = task.status === 'PENDING_APPROVAL';
 
             const position = index + 1;
-            const positionLabel = `${String(position).padStart(2, '0')} of ${totalFiltered}`;
+            const taskNum = String(position).padStart(2, '0');
+
+            // Status pill — same existing values/colors from getHumanStatus
+            const humanStatus = getHumanStatus(task.status);
+
+            // Existing platform identity via the existing progressIcon + PresetIcon system
+            const platformPreset = (task.progressIcon && task.progressIcon.type === 'preset' && isValidPreset(task.progressIcon.value))
+              ? task.progressIcon.value
+              : null;
+
+            // Milestones — existing data only, rendered as a compact stepper
+            const milestones = task.milestones || [];
+            const sortedAsc = [...milestones].sort((a, b) => a.percentage - b.percentage);
+            const reachedAny = sortedAsc.some(m => m.reached);
+            const currentMilestone = getActiveMilestone(milestones, progress);
+            const focusMilestone = currentMilestone || (!reachedAny ? sortedAsc[0] : null);
+
+            // Existing date source
+            const dateLabel = task.createdAt
+              ? new Date(task.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+              : null;
 
             return (
               <div
                 key={task.id}
                 onClick={() => navigate(`/tasks/${task.id}`)}
                 style={{
-                  backgroundColor: '#fff', borderRadius: '24px', overflow: 'hidden',
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.04)', cursor: 'pointer',
+                  backgroundColor: '#fff', borderRadius: '18px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)',
+                  border: isPendingApproval ? '1.5px solid #6366f1' : '1px solid #eef0f3',
+                  cursor: 'pointer',
                   transition: 'all 0.2s ease',
-                  border: isPendingApproval ? '2px solid #6366f1' : 'none',
                   position: 'relative'
                 }}
                 onMouseEnter={(e) => {
@@ -286,222 +305,192 @@ const Tasks = () => {
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.04)';
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.04)';
                 }}
               >
-                {/* Position Badge */}
-                <div style={{
-                  position: 'absolute', top: '12px', right: '12px',
-                  padding: '4px 10px', borderRadius: '100px',
-                  backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
-                  fontSize: '11px', fontWeight: '700', color: '#fff',
-                  letterSpacing: '0.02em', zIndex: 2
-                }}>
-                  {positionLabel}
-                </div>
-
-                {/* Thumbnail/Feature Image with Gradient Fallback */}
-                {task.featureImage ? (
-                  <div style={{ position: 'relative', height: '100px', overflow: 'hidden' }}>
-                    <img 
-                      src={task.featureImage} 
-                      alt="" 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      onError={(e) => { e.target.parentElement.style.display = 'none'; }}
-                    />
-                    <div style={{
-                      position: 'absolute', bottom: '8px', left: '12px',
-                      fontSize: '24px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                <div style={{ padding: '14px 16px 12px' }}>
+                  {/* Row 1: Task # + platform icon + status pill */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                      background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                      color: '#fff', fontSize: '12px', fontWeight: '700',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 2px 6px rgba(99,102,241,0.3)'
                     }}>
-                      {task.icon || '📝'}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ 
-                    height: '60px', 
-                    background: `linear-gradient(135deg, ${progressColor}20 0%, ${progressColor}05 100%)`,
-                    display: 'flex', alignItems: 'center', padding: '0 20px'
-                  }}>
-                    <span style={{ fontSize: '28px' }}>{task.icon || '📝'}</span>
-                  </div>
-                )}
-
-                <div style={{ padding: '20px 24px 24px' }}>
-                {/* Title */}
-                <h3 style={{
-                  fontSize: '18px', fontWeight: '600', color: '#1a1a1a', margin: '0 0 12px 0',
-                  lineHeight: 1.4, letterSpacing: '-0.01em'
-                }}>
-                  {task.title} {isPendingApproval && <span style={{fontSize: '14px', verticalAlign: 'middle'}}>\u23F3</span>}
-                </h3>
-                {/* Commission-only badge */}
-                {task.isAssignedUser && (
-                  <span style={{
-                    display: 'inline-block', marginBottom: '10px', padding: '3px 10px',
-                    fontSize: '10px', fontWeight: '700', borderRadius: '6px',
-                    backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
-                    letterSpacing: '0.02em', textTransform: 'uppercase'
-                  }}>
-                    {'\uD83D\uDCB0 Commission'}
-                  </span>
-                )}
-
-                {isPendingApproval && (
-                  <p style={{ fontSize: '12px', color: '#6366f1', fontWeight: '600', margin: '-8px 0 12px 0' }}>
-                    Plan: {task.title}
-                  </p>
-                )}
-
-                {/* Progress Chip - milestone-based, no internal status label */}
-                <div style={{ marginBottom: '20px' }}>
-                  {(() => {
-                    if (isPendingApproval) {
-                      return (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '6px',
-                          padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
-                          backgroundColor: '#eef2ff', color: '#6366f1'
-                        }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#6366f1' }} />
-                          ⏳ Booked
-                        </span>
-                      );
-                    }
-                    if (progress >= 100 || task.status === 'COMPLETED') {
-                      return (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '6px',
-                          padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
-                          backgroundColor: '#f0fdf4', color: '#22c55e'
-                        }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
-                          ✅ Delivered
-                        </span>
-                      );
-                    }
-                    if (progress > 0 && activeMilestone) {
-                      return (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '6px',
-                          padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
-                          backgroundColor: `${activeMilestone.color}15`, color: activeMilestone.color
-                        }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: activeMilestone.color }} />
-                          🚩 {activeMilestone.name}
-                        </span>
-                      );
-                    }
-                    if (progress > 0) {
-                      return (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '6px',
-                          padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
-                          backgroundColor: '#eff6ff', color: '#3b82f6'
-                        }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
-                          In Progress
-                        </span>
-                      );
-                    }
-                    return (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '6px',
-                        padding: '8px 14px', borderRadius: '100px', fontSize: '12px', fontWeight: '600',
-                        backgroundColor: '#fffbeb', color: '#f59e0b'
-                      }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />
-                        Starting Soon
-                      </span>
-                    );
-                  })()}
-                </div>
-
-                {/* SMART PROGRESS SYSTEM */}
-                {!isPendingApproval ? (
-                  <div style={{ marginBottom: '12px' }}>
-                    <ProgressWithFlag 
-                      progress={progress} 
-                      milestones={task.milestones || []} 
-                      size="compact"
-                      showLabel={true}
-                      showPercentage={true}
-                      progressIcon={task.progressIcon}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#eff6ff', borderRadius: '14px', border: '1px solid #bfdbfe' }}>
-                    <p style={{ fontSize: '13px', color: '#1e40af', margin: 0, fontWeight: '500' }}>
-                      Your task is booked. Admin will review and start it shortly.
-                    </p>
-                  </div>
-                )}
-
-                {/* Short Description (if exists) */}
-                {formatDescription(task.description) && (
-                  <p style={{
-                    fontSize: '14px', color: '#666', margin: '16px 0 0 0', lineHeight: 1.5,
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                  }}>
-                    {formatDescription(task.description)}
-                  </p>
-                )}
-
-                {/* Quantity - CONDITIONAL (only if showQuantityToClient = true) */}
-                {task.quantity && task.showQuantityToClient && (
-                  <div style={{ 
-                    marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                  }}>
-                    <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Quantity</span>
-                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#6366f1' }}>{task.quantity}</span>
-                  </div>
-                )}
-
-                {/* Commission (Phase 3) — shown ONLY to the task's commission
-                    recipient; amount comes verbatim from the persisted
-                    EarningsLedger record (same source as Task Detail).
-                    Falls back to existing Credits Used for task owners.
-                    Recipient privacy: assigned users never see credit info,
-                    mirroring the Task Detail endpoint behavior. */}
-                {task.myCommission > 0 ? (
-                  <div style={{ 
-                    marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                  }}>
-                    <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Commission</span>
-                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>₹{Number(task.myCommission).toLocaleString('en-IN')}</span>
-                  </div>
-                ) : (
-                /* Credits - CONDITIONAL (only if showCreditsToClient = true) */
-                /* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */
-                !task.isAssignedUser && (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
-                  <div style={{ 
-                    marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                  }}>
-                    <span style={{ fontSize: '12px', color: '#999', fontWeight: '500' }}>Credits Used</span>
-                    <span style={{ fontSize: '16px', fontWeight: '700', color: '#15803d' }}>{task.creditsUsed || task.creditCost || 0} credits</span>
-                  </div>
-                )
-                )}
-
-                {/* Chat Icon - if messages exist */}
-                {task.messages && task.messages.length > 0 && (
-                  <div 
-                    onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id || task._id}?scrollToChat=true`); }}
-                    style={{ 
-                      marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #f0f0f0',
-                      display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
-                      <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: '600' }}>
-                      {task.messages.length} message{task.messages.length !== 1 ? 's' : ''}
+                      {taskNum}
+                    </span>
+                    {platformPreset && <PresetIcon name={platformPreset} size={22} />}
+                    <span style={{ flex: 1 }} />
+                    <span style={{
+                      fontSize: '11px', fontWeight: '700', color: humanStatus.color,
+                      backgroundColor: humanStatus.bg, padding: '4px 10px',
+                      borderRadius: '100px', whiteSpace: 'nowrap'
+                    }}>
+                      {humanStatus.label}
                     </span>
                   </div>
-                )}
+
+                  {/* Row 2: Order ID + Date (existing sources) */}
+                  {(task.orderCode || dateLabel) && (
+                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      {task.orderCode && <span style={{ color: '#64748b', fontWeight: '600' }}>Order {task.orderCode}</span>}
+                      {task.orderCode && dateLabel && <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: '#cbd5e1' }} />}
+                      {dateLabel && <span>{dateLabel}</span>}
+                    </div>
+                  )}
+
+                  {/* Row 3: Title (existing value, mobile-safe clamp) */}
+                  <h3 style={{
+                    fontSize: '15px', fontWeight: '700', color: '#1a1a1a', margin: '8px 0 0 0',
+                    lineHeight: 1.35, letterSpacing: '-0.01em',
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                  }}>
+                    {task.title} {isPendingApproval && <span style={{fontSize: '13px', verticalAlign: 'middle'}}>\u23F3</span>}
+                  </h3>
+
+                  {/* Commission-only badge (existing behavior) */}
+                  {task.isAssignedUser && (
+                    <span style={{
+                      display: 'inline-block', marginTop: '6px', padding: '2px 8px',
+                      fontSize: '9px', fontWeight: '700', borderRadius: '6px',
+                      backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+                      letterSpacing: '0.04em', textTransform: 'uppercase'
+                    }}>
+                      {'\uD83D\uDCB0 Commission'}
+                    </span>
+                  )}
+
+                  {/* Body */}
+                  {isPendingApproval ? (
+                    <div style={{ marginTop: '10px', padding: '10px 12px', backgroundColor: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
+                      <p style={{ fontSize: '12px', color: '#1e40af', margin: 0, fontWeight: '500' }}>
+                        ⏳ Booked — admin will review and start it shortly.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Milestones — compact stepper, existing data/states only.
+                          Hidden entirely when the task has no milestones. */}
+                      {milestones.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            {sortedAsc.map((m, i) => {
+                              const isCurrent = focusMilestone && m.name === focusMilestone.name && m.percentage === focusMilestone.percentage;
+                              return (
+                                <React.Fragment key={`${m.name}-${i}`}>
+                                  {i > 0 && (
+                                    <span style={{ flex: 1, height: '2px', backgroundColor: sortedAsc[i - 1].reached ? (sortedAsc[i - 1].color || '#22c55e') : '#e2e8f0', minWidth: '6px' }} />
+                                  )}
+                                  <span
+                                    title={m.name}
+                                    style={{
+                                      width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                      fontSize: '9px', fontWeight: '700',
+                                      backgroundColor: m.reached ? (m.color || '#22c55e') : '#fff',
+                                      color: m.reached ? '#fff' : '#94a3b8',
+                                      border: m.reached ? 'none' : `1.5px solid ${isCurrent ? '#6366f1' : '#e2e8f0'}`,
+                                      boxShadow: isCurrent ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none'
+                                    }}
+                                  >
+                                    {m.reached ? (
+                                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    ) : (i + 1)}
+                                  </span>
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                          {focusMilestone && (
+                            <p style={{ fontSize: '10px', fontWeight: '600', color: focusMilestone.color || '#64748b', margin: '4px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {focusMilestone.name}{focusMilestone.percentage ? ` · ${focusMilestone.percentage}%` : ''}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Progress — existing value, slim presentation */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: milestones.length > 0 ? '10px' : '12px' }}>
+                        <div style={{ flex: 1, height: '6px', backgroundColor: '#f1f5f9', borderRadius: '999px', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${Math.min(progress, 100)}%`, height: '100%',
+                            background: `linear-gradient(90deg, #6366f1 0%, ${progressColor} 100%)`,
+                            borderRadius: '999px'
+                          }} />
+                        </div>
+                        <span style={{ fontSize: '12px', fontWeight: '700', color: progressColor, flexShrink: 0 }}>
+                          {Math.round(progress)}%{progress > 100 ? ' 🎉' : ''}
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Short Description (if exists) */}
+                  {formatDescription(task.description) && (
+                    <p style={{
+                      fontSize: '12px', color: '#64748b', margin: '10px 0 0 0', lineHeight: 1.45,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                    }}>
+                      {formatDescription(task.description)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Footer: Commission/Credits/Quantity + chat + View Details.
+                    Commission (Phase 3) logic kept VERBATIM — shown ONLY to the
+                    task's commission recipient; falls back to Credits Used for
+                    task owners with the existing privacy gate. */}
+                <div style={{ borderTop: '1px solid #f1f5f9', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {task.myCommission > 0 ? (
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>Commission</span>
+                      ₹{Number(task.myCommission).toLocaleString('en-IN')}
+                    </span>
+                  ) : (
+                  /* Credits - CONDITIONAL (only if showCreditsToClient = true) */
+                  /* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */
+                  !task.isAssignedUser && (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>Credits Used</span>
+                      {task.creditsUsed || task.creditCost || 0} credits
+                    </span>
+                  )
+                  )}
+
+                  {/* Quantity - CONDITIONAL (only if showQuantityToClient = true) */}
+                  {task.quantity && task.showQuantityToClient && (
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#6366f1', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>Qty</span>
+                      {task.quantity}
+                    </span>
+                  )}
+
+                  {/* Chat shortcut - existing navigation, if messages exist */}
+                  {task.messages && task.messages.length > 0 && (
+                    <span
+                      onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id || task._id}?scrollToChat=true`); }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#6366f1', fontWeight: '600' }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
+                        <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {task.messages.length}
+                    </span>
+                  )}
+
+                  <span style={{ flex: 1 }} />
+
+                  {/* View Details — same existing navigation target */}
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '7px 12px', borderRadius: '8px',
+                    backgroundColor: '#f8fafc', border: '1px solid #e2e8f0',
+                    fontSize: '12px', fontWeight: '600', color: '#334155', whiteSpace: 'nowrap'
+                  }}>
+                    View Details
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </span>
                 </div>
               </div>
             );
