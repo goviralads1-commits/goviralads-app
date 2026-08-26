@@ -460,7 +460,9 @@ const Tasks = () => {
                 {/* Commission (Phase 3) — shown ONLY to the task's commission
                     recipient; amount comes verbatim from the persisted
                     EarningsLedger record (same source as Task Detail).
-                    Falls back to existing Credits Used. */}
+                    Falls back to existing Credits Used for task owners.
+                    Recipient privacy: assigned users never see credit info,
+                    mirroring the Task Detail endpoint behavior. */}
                 {task.myCommission > 0 ? (
                   <div style={{ 
                     marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
@@ -472,7 +474,7 @@ const Tasks = () => {
                 ) : (
                 /* Credits - CONDITIONAL (only if showCreditsToClient = true) */
                 /* FIX: Use creditsUsed (actual deducted) over creditCost (base price) */
-                (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
+                !task.isAssignedUser && (task.creditsUsed || task.creditCost) && task.showCreditsToClient !== false && (
                   <div style={{ 
                     marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
