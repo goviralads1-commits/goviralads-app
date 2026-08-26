@@ -1,4 +1,4 @@
-import api from '../services/api';
+import api from '../../services/api';
 
 // =====================================================================
 // CHAT MEDIA (Phase 2A) — client-side media helpers
