@@ -916,6 +916,30 @@ const TaskDetail = () => {
     });
   };
 
+  // Commission-task deadline label — existing deadline data only (e.g. "29 Aug, 6:00 PM")
+  const formatDeadline = (dateStr) => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const dayMonth = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${dayMonth}, ${time}`;
+  };
+
+  // Time remaining until the deadline — pure display, derived ONLY from the
+  // existing deadline value. Returns null when no valid deadline exists.
+  const getRemainingLabel = (dateStr) => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const diff = d.getTime() - Date.now();
+    if (diff <= 0) return 'Deadline passed';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} left`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} left`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} left`;
+  };
+
   // Skeleton Loader
   if (loading) {
     return (
@@ -1135,6 +1159,45 @@ const TaskDetail = () => {
                   {'\u23F3'} Booked {'\u2014'} admin will review and start it shortly.
                 </p>
               </div>
+            ) : task.isAssignedUser ? (
+              /* COMMISSION TASK — deadline-oriented presentation (existing
+                 backend deadline only; never a calculated/invented date).
+                 Non-commission tasks keep ProgressWithFlag below, untouched. */
+              (() => {
+                const deadlineValue = task.deadline || task.endDate;
+                const deadlineLabel = deadlineValue ? formatDeadline(deadlineValue) : null;
+                const remainingLabel = deadlineValue ? getRemainingLabel(deadlineValue) : null;
+                const overdue = remainingLabel === 'Deadline passed';
+                return (
+                  <div style={{
+                    padding: '14px', borderRadius: '12px',
+                    backgroundColor: overdue ? '#fffbeb' : '#eef2ff',
+                    border: overdue ? '1px solid #fde68a' : '1px solid #e0e7ff',
+                    display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap'
+                  }}>
+                    <span style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0 }}>{'\u23F1'}</span>
+                    <div style={{ flex: 1, minWidth: '140px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: '700', color: overdue ? '#92400e' : '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                        Deadline
+                      </p>
+                      <p style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '2px 0 0' }}>
+                        {deadlineLabel || 'No deadline set'}
+                      </p>
+                    </div>
+                    {remainingLabel && (
+                      <span style={{
+                        fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap',
+                        padding: '5px 10px', borderRadius: '100px',
+                        backgroundColor: overdue ? '#fef3c7' : '#fff',
+                        color: overdue ? '#92400e' : '#4f46e5',
+                        border: overdue ? '1px solid #fde68a' : '1px solid #e0e7ff'
+                      }}>
+                        {remainingLabel}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <>
                 <ProgressWithFlag
