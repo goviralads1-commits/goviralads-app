@@ -1449,6 +1449,7 @@ router.get('/tasks/:taskId', async (req, res) => {
           }
           
           return {
+            _id: m._id.toString(), // REQUIRED by the media-delete flow (messageId)
             sender: m.sender,
             senderId: m.senderId?.toString(),
             senderLabel, // Include sender identity for admin panel
@@ -1545,6 +1546,7 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
         }
       }
       return {
+        _id: m._id.toString(), // REQUIRED by the media-delete flow (messageId)
         sender: m.sender,
         senderId: m.senderId?.toString(),
         senderLabel,

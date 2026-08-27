@@ -125,3 +125,31 @@ button, a, input[type="checkbox"], input[type="radio"] {
 .premium-tab-bar[data-theme="indigo"] { --tab-theme: #6366f1; --tab-theme-dark: #4f46e5; --tab-shadow: rgba(99, 102, 241, 0.25); }
 .premium-tab-bar[data-theme="teal"]   { --tab-theme: #14b8a6; --tab-theme-dark: #0d9488; --tab-shadow: rgba(20, 184, 166, 0.25); }
 .premium-tab-bar[data-theme="gray"]   { --tab-theme: #64748b; --tab-theme-dark: #475569; --tab-shadow: rgba(100, 116, 139, 0.25); }
+
+/* ============================================
+   Chat layout utilities
+   - .gva-chat-root: viewport-constrained full-page chat root
+     (dvh handles mobile browser chrome/keyboard; falls back to vh)
+   - .gva-composer-row + .gva-composer-input: on small screens the
+     textarea gets its own full-width row and the action buttons wrap
+     to a second row. Desktop keeps the existing single compact row.
+   - .gva-composer-bar: composer respects the bottom safe-area inset.
+   ============================================ */
+.gva-chat-root {
+  height: 100vh;
+  height: 100dvh;
+}
+
+@media (max-width: 640px) {
+  .gva-composer-row {
+    flex-wrap: wrap !important;
+  }
+  .gva-composer-row > .gva-composer-input {
+    flex: 1 1 100% !important;
+    order: -1 !important;
+    min-height: 48px !important;
+  }
+  .gva-composer-bar {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

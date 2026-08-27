@@ -440,8 +440,14 @@ const TaskDetail = () => {
   // re-verified server-side; on success we mark the attachment deleted locally so the
   // bubble flips to the inert "Media deleted" chip without resetting pagination.
   const handleDeleteMedia = (msg, att) => {
-    if (!msg || !msg._id || !att || !att.key) return;
-    if (!window.confirm('Delete this media for everyone in this chat?')) return;
+    if (!msg?._id || !att?.key) {
+      // Never fail silently — surface exactly which value the delete flow is missing
+      const missing = !msg?._id ? 'messageId' : 'attachment key';
+      console.error('[Delete Media] Aborted — missing', missing, { msg, att });
+      showMediaToast(`Cannot delete media: missing ${missing}`);
+      return;
+    }
+    if (!window.confirm('Delete this media?')) return;
     deleteMedia(taskId, msg._id, att.key)
       .then(() => {
         setAllMessages(prev => prev.map(m =>
@@ -1486,7 +1492,7 @@ const TaskDetail = () => {
             {isRecording && mediaEnabled ? (
               <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
             ) : (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+            <div className="gva-composer-row" style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -1509,6 +1515,7 @@ const TaskDetail = () => {
                 📎
               </button>
               <textarea
+                className="gva-composer-input"
                 ref={textareaRef}
                 value={messageText}
                 onChange={handleTextareaChange}
@@ -1814,7 +1821,7 @@ const TaskDetail = () => {
           </div>
 
           {/* Footer - Input */}
-          <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fff' }}>
+          <div className="gva-composer-bar" style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fff' }}>
             {/* CHAT MEDIA: compact media error/info strip */}
             {mediaToast && (
               <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px' }}>{mediaToast}</div>
@@ -1836,7 +1843,7 @@ const TaskDetail = () => {
             {isRecording && mediaEnabled ? (
               <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
             ) : (
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+            <div className="gva-composer-row" style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -1859,6 +1866,7 @@ const TaskDetail = () => {
                 </svg>
               </button>
               <textarea
+                className="gva-composer-input"
                 ref={fullscreenInputRef}
                 value={messageText}
                 onChange={handleTextareaChange}

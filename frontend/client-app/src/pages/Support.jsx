@@ -616,8 +616,15 @@ const Support = () => {
   // "Media deleted" chip immediately. Incremental polling only ever
   // APPENDS new messages, so it cannot revive the marker.
   const handleDeleteMedia = async (msg, att) => {
-    if (!selectedTask || !msg || !msg._id || !att || !att.key) return;
-    if (!window.confirm('Delete this media for everyone in this chat?')) return;
+    if (!selectedTask) return;
+    if (!msg?._id || !att?.key) {
+      // Never fail silently — surface exactly which value the delete flow is missing
+      const missing = !msg?._id ? 'messageId' : 'attachment key';
+      console.error('[Delete Media] Aborted — missing', missing, { msg, att });
+      showMediaToast(`Cannot delete media: missing ${missing}`);
+      return;
+    }
+    if (!window.confirm('Delete this media?')) return;
     const taskId = selectedTask._id || selectedTask.id;
     try {
       await deleteMedia(taskId, msg._id, att.key);
@@ -667,7 +674,7 @@ const Support = () => {
     const timeline = [...messageItems, ...approvalItems].sort((a, b) => a._ts - b._ts);
 
     return (
-      <div style={{ height: '100vh', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+      <div className="gva-chat-root" style={{ backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ backgroundColor: '#fff', padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={() => { setSelectedTask(null); setActiveTaskId(null); }} style={{ padding: '8px', borderRadius: '8px', border: 'none', backgroundColor: '#f1f5f9', cursor: 'pointer' }}>
@@ -802,7 +809,7 @@ const Support = () => {
         </div>
 
         {/* Input */}
-        <div style={{ backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', padding: '12px 16px' }}>
+        <div className="gva-composer-bar" style={{ backgroundColor: '#fff', borderTop: '1px solid #e2e8f0', padding: '12px 16px' }}>
           {messageAttachments.length > 0 && (
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
               {messageAttachments.map((f, i) => (
@@ -816,7 +823,7 @@ const Support = () => {
           {mediaToast && (
             <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px' }}>{mediaToast}</div>
           )}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+          <div className="gva-composer-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
             {isRecording && mediaEnabled ? (
               <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
             ) : (
@@ -826,7 +833,7 @@ const Support = () => {
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
                 {mediaEnabled && <input ref={videoInputRef} type="file" accept={VIDEO_ACCEPT} onChange={handleVideoSelect} style={{ display: 'none' }} />}
-                <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} placeholder="Type a message..." style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: '1px solid #e2e8f0', fontSize: '14px', resize: 'none', minHeight: '40px', maxHeight: '100px' }} />
+                <textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} placeholder="Type a message..." className="gva-composer-input" style={{ flex: 1, padding: '10px 14px', borderRadius: '20px', border: '1px solid #e2e8f0', fontSize: '14px', resize: 'none', minHeight: '40px', maxHeight: '100px' }} />
                 <button onClick={handleSendMessage} disabled={sendingMessage || (!messageText.trim() && messageAttachments.length === 0)} style={{ padding: '10px 16px', borderRadius: '20px', border: 'none', backgroundColor: '#22c55e', color: '#fff', fontWeight: '600', fontSize: '14px', cursor: 'pointer', opacity: (sendingMessage || (!messageText.trim() && messageAttachments.length === 0)) ? 0.5 : 1 }}>
                   {sendingMessage ? '...' : 'Send'}
                 </button>
