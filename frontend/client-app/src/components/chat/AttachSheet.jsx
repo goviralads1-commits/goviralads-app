@@ -4,10 +4,12 @@ import { MEDIA_LIMITS } from './mediaUpload';
 // Compact attachment menu (Phase 2A). Bottom-sheet style on mobile,
 // small centered card on desktop. Photo = existing Cloudinary flow,
 // Video = new direct-to-R2 flow. Rendered only when media is enabled.
+// zIndex sits above the fullscreen chat overlay (9999) and the history
+// modal (10000) so it works from BOTH composers.
 const overlayStyle = {
   position: 'fixed',
   inset: 0,
-  zIndex: 900,
+  zIndex: 10001,
   display: 'flex',
   alignItems: 'flex-end',
   justifyContent: 'center',

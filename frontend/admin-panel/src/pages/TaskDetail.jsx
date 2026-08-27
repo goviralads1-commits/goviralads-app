@@ -1590,6 +1590,7 @@ const TaskDetail = () => {
                 ref={textareaRef}
                 value={messageText}
                 onChange={handleTextareaChange}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                 placeholder="Reply to client..."
                 style={{
                   flex: 1, padding: '12px 16px', fontSize: '14px',

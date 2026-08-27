@@ -770,8 +770,8 @@ const Support = () => {
                         if (att && typeof att === 'object' && att.kind) {
                           // Delete affordance only on the client's OWN media;
                           // server re-verifies senderId ownership.
-                          const senderIdStr = msg.senderId && typeof msg.senderId === 'object' ? (msg.senderId._id || '') : (msg.senderId || '');
-                          const canDelete = msg.sender === 'CLIENT' && currentUserId && String(senderIdStr) === String(currentUserId);
+                          const senderIdStr = item.senderId && typeof item.senderId === 'object' ? (item.senderId._id || '') : (item.senderId || '');
+                          const canDelete = item.sender === 'CLIENT' && currentUserId && String(senderIdStr) === String(currentUserId);
                           return (
                             <MediaBubble
                               key={i}
@@ -779,7 +779,7 @@ const Support = () => {
                               taskId={selectedTask._id || selectedTask.id}
                               onRetry={handleRetryMedia}
                               onDiscard={handleDiscardMedia}
-                              onDelete={canDelete ? (a) => handleDeleteMedia(msg, a) : undefined}
+                              onDelete={canDelete ? (a) => handleDeleteMedia(item, a) : undefined}
                             />
                           );
                         }

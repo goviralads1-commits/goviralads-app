@@ -6,6 +6,10 @@ import Header from '../components/Header';
 import ProgressWithFlag from '../components/ProgressWithFlag';
 import ApprovalBox from '../components/ApprovalBox';
 import { PresetIcon, isValidPreset } from '../components/PresetIcons';
+import AttachSheet from '../components/chat/AttachSheet';
+import MediaBubble from '../components/chat/MediaBubble';
+import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
+import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES, deleteMedia } from '../components/chat/mediaUpload';
 
 // Utility: Clean description - handles HTML and plain text
 const formatDescription = (desc) => {
@@ -70,7 +74,23 @@ const TaskDetail = () => {
       console.error('[TaskDetail] Failed to get current user ID:', err);
     }
   }, []);
-  
+
+  // CHAT MEDIA: one-time capability probe per task. Flag OFF (or probe failure) =>
+  // media controls stay hidden, exact legacy UI. Also aborts any in-flight uploads
+  // when leaving the page.
+  useEffect(() => {
+    if (!taskId) { setMediaEnabled(false); return; }
+    let cancelled = false;
+    probeMediaEnabled(taskId)
+      .then(on => { if (!cancelled) setMediaEnabled(!!on); })
+      .catch(() => { if (!cancelled) setMediaEnabled(false); });
+    return () => {
+      cancelled = true;
+      uploadsRef.current.forEach(u => { try { u.abortController?.abort(); } catch (_) {} });
+      uploadsRef.current.clear();
+    };
+  }, [taskId]);
+
   // Content submission state (Phase 2)
   const [contentText, setContentText] = useState('');
   const [contentLinks, setContentLinks] = useState(['']);
@@ -101,6 +121,18 @@ const TaskDetail = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
   const [allMessages, setAllMessages] = useState([]); // Combined messages from pagination
+
+  // CHAT MEDIA (Phase 2C parity): direct-to-R2 video/audio state. Fully independent
+  // from the text/image send path. Optimistic bubbles live in pendingMedia (this page
+  // has no polling, same model as Admin TaskDetail) and merge into the timeline at
+  // render; success removes them and reuses the existing fetchTask() refresh.
+  const [mediaEnabled, setMediaEnabled] = useState(false);
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaToast, setMediaToast] = useState(null);
+  const [pendingMedia, setPendingMedia] = useState([]); // optimistic uploading/failed media messages
+  const videoInputRef = useRef(null);
+  const uploadsRef = useRef(new Map()); // _tempId -> { blob, abortController, ... } (outside React state — no re-renders)
 
   // Discussion is the only collapsible section and it is OPEN BY DEFAULT —
   // it is the primary interaction surface. Everything else (progress, state,
@@ -309,6 +341,147 @@ const TaskDetail = () => {
     }
   };
 
+  // ==================== CHAT MEDIA (Phase 2C parity) — direct-to-R2 video/audio ====================
+  // Mirrors Client Support / Admin TaskDetail behavior. Bytes go browser -> R2 via
+  // presigned PUT (XHR, no 30s timeout); the Node backend only sees server-issued
+  // metadata. The text/image flow above is untouched.
+  const showMediaToast = (msg) => {
+    setMediaToast(msg);
+    setTimeout(() => setMediaToast(null), 4000);
+  };
+
+  const patchPendingMedia = (tempId, patch) => {
+    setPendingMedia(prev => prev.map(m => m._tempId === tempId ? { ...m, ...patch } : m));
+  };
+
+  const startMediaUpload = async (fileOrBlob, kind, { tempId: existingTempId = null, name = null, mime = null } = {}) => {
+    if (!taskId) return;
+    const limitMB = limitFor(kind);
+    if (fileOrBlob.size > mbToBytes(limitMB)) {
+      showMediaToast(`${kind === 'audio' ? 'Voice note' : 'Video'} too large — max ${limitMB} MB`);
+      return;
+    }
+    const tempId = existingTempId || `tmp-media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const fileName = name || fileOrBlob.name || `${kind}.${kind === 'audio' ? 'webm' : 'mp4'}`;
+    // Normalize MIME for upload metadata only: MediaRecorder can produce
+    // 'audio/webm;codecs=opus' but the server whitelist expects the base type.
+    // The Blob itself is untouched; the server remains authoritative.
+    const fileMime = ((mime || fileOrBlob.type || '').split(';')[0].trim()) || (kind === 'video' ? 'video/mp4' : 'audio/webm');
+
+    if (!existingTempId) {
+      // Optimistic media bubble appears immediately (upload state lives on the attachment)
+      setPendingMedia(prev => [...prev, {
+        _tempId: tempId,
+        sender: 'CLIENT',
+        text: '',
+        attachments: [{ _upload: 'uploading', _progress: 0, kind, name: fileName, size: fileOrBlob.size }],
+        createdAt: new Date().toISOString(),
+        _optimistic: true
+      }]);
+    } else {
+      patchPendingMedia(tempId, { attachments: [{ _upload: 'uploading', _progress: 0, kind, name: fileName, size: fileOrBlob.size }] });
+    }
+
+    const abortController = new AbortController();
+    uploadsRef.current.set(tempId, { blob: fileOrBlob, kind, name: fileName, mime: fileMime, taskId, abortController });
+
+    try {
+      // Fresh presigned URL for EVERY attempt (initial + retries) — never reused
+      const urlRes = await api.post(`/client/tasks/${taskId}/media/upload-url`, {
+        kind, filename: fileName, size: fileOrBlob.size, mime: fileMime
+      });
+      const { uploadUrl, attachment } = urlRes.data || {};
+      if (!uploadUrl || !attachment) throw new Error('No upload URL returned');
+
+      await putToR2(uploadUrl, fileOrBlob, {
+        contentType: fileMime,
+        signal: abortController.signal,
+        onProgress: (pct) => patchPendingMedia(tempId, {
+          attachments: [{ _upload: 'uploading', _progress: pct, kind, name: fileName, size: fileOrBlob.size }]
+        })
+      });
+
+      patchPendingMedia(tempId, { attachments: [{ _upload: 'sending', kind, name: fileName, size: fileOrBlob.size }] });
+      // Send with the SERVER-ISSUED metadata; server re-validates + HEAD-checks the R2 object
+      await api.post(`/client/tasks/${taskId}/message`, { text: '', attachments: [attachment] });
+      // Remove the optimistic bubble, then reuse the existing authoritative refresh
+      setPendingMedia(prev => prev.filter(m => m._tempId !== tempId));
+      // Terminal success — the Blob is no longer needed for Retry; release it.
+      uploadsRef.current.delete(tempId);
+      await fetchTask();
+    } catch (err) {
+      if (err.message === 'cancelled') return; // discard/unmount already cleaned up
+      // FAILED upload: keep the Blob in uploadsRef so Retry can re-upload it
+      // with a fresh presigned URL. Only success / Discard / unmount release it.
+      patchPendingMedia(tempId, {
+        attachments: [{ _upload: 'error', _error: err.response?.data?.error || err.message || 'Upload failed', kind, name: fileName, size: fileOrBlob.size }]
+      });
+      console.error('[Chat Media] Upload/send failed:', err);
+    }
+  };
+
+  const handleRetryMedia = (tempId) => {
+    const entry = uploadsRef.current.get(tempId);
+    if (!entry) { showMediaToast('File no longer available — please attach again'); return; }
+    // Same original Blob (by reference, never copied); startMediaUpload will
+    // request a completely NEW presigned upload URL for this attempt.
+    startMediaUpload(entry.blob, entry.kind, { tempId, name: entry.name, mime: entry.mime });
+  };
+
+  const handleDiscardMedia = (tempId) => {
+    const entry = uploadsRef.current.get(tempId);
+    if (entry) { try { entry.abortController.abort(); } catch (_) {} uploadsRef.current.delete(tempId); }
+    setPendingMedia(prev => prev.filter(m => m._tempId !== tempId));
+  };
+
+  // CHAT MEDIA (delete): confirmed media only (pendingMedia has no server key and
+  // never reaches this handler). Delete affordance is ONLY rendered for the client's
+  // OWN CLIENT-sent media — admin media never gets onDelete. All authorization is
+  // re-verified server-side; on success we mark the attachment deleted locally so the
+  // bubble flips to the inert "Media deleted" chip without resetting pagination.
+  const handleDeleteMedia = (msg, att) => {
+    if (!msg || !msg._id || !att || !att.key) return;
+    if (!window.confirm('Delete this media for everyone in this chat?')) return;
+    deleteMedia(taskId, msg._id, att.key)
+      .then(() => {
+        setAllMessages(prev => prev.map(m =>
+          m._id === msg._id
+            ? { ...m, attachments: (m.attachments || []).map(a => (a && typeof a === 'object' && a.key === att.key ? { ...a, deleted: true } : a)) }
+            : m
+        ));
+      })
+      .catch(err => {
+        showMediaToast(err.response?.data?.error || 'Could not delete media');
+      });
+  };
+
+  const handleVideoSelect = (e) => {
+    const file = Array.from(e.target.files || [])[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!VIDEO_MIME_TYPES.includes(file.type)) {
+      showMediaToast('Only MP4 or WebM videos are supported');
+      return;
+    }
+    if (file.size > mbToBytes(limitFor('video'))) {
+      showMediaToast(`Video too large — max ${limitFor('video')} MB`);
+      return;
+    }
+    startMediaUpload(file, 'video', {});
+  };
+
+  const handleRecorded = (blob, { mime, name }) => {
+    setIsRecording(false);
+    startMediaUpload(blob, 'audio', { mime, name });
+  };
+
+  const handleRecordCancel = () => setIsRecording(false);
+
+  const handleRecordError = (msg) => {
+    setIsRecording(false);
+    showMediaToast(msg);
+  };
+
   // Export Proof: Generate text report and copy to clipboard
   const handleExportProof = () => {
     const approvedItems = (task.approvalRequests || [])
@@ -456,7 +629,9 @@ const TaskDetail = () => {
 
     // Merge messages and approvals into single timeline, sorted by timestamp
     // Use allMessages (paginated) instead of task.messages
-    const messages = allMessages;
+    // CHAT MEDIA: optimistic pending media merges at this single point; its
+    // timestamp is Date.now() at creation, so it always sorts at the end.
+    const messages = [...allMessages, ...pendingMedia];
     const approvalItems = visibleApprovals.map(a => ({ ...a, _type: 'approval', _timestamp: new Date(a.createdAt || 0).getTime() }));
     const messageItems = messages.map(m => ({ ...m, _type: 'message', _timestamp: new Date(m.createdAt || 0).getTime() }));
     const timeline = [...messageItems, ...approvalItems].sort((a, b) => a._timestamp - b._timestamp);
@@ -543,6 +718,25 @@ const TaskDetail = () => {
           {msg.attachments && msg.attachments.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: msg.text && msg.text !== '[Image]' ? '8px' : 0 }}>
               {msg.attachments.map((att, attIdx) => {
+                // CHAT MEDIA: server media objects render via MediaBubble (video/audio
+                // player + upload states); legacy strings / plain-url objects keep the
+                // exact existing <img> path.
+                if (att && typeof att === 'object' && att.kind) {
+                  // Delete affordance only on the client's OWN confirmed media;
+                  // server re-verifies senderId ownership. Admin media never gets onDelete.
+                  const senderIdStr = msg.senderId && typeof msg.senderId === 'object' ? (msg.senderId._id || '') : (msg.senderId || '');
+                  const canDelete = msg.sender === 'CLIENT' && currentUserId && String(senderIdStr) === String(currentUserId);
+                  return (
+                    <MediaBubble
+                      key={attIdx}
+                      att={att}
+                      taskId={taskId}
+                      onRetry={handleRetryMedia}
+                      onDiscard={handleDiscardMedia}
+                      onDelete={canDelete ? (a) => handleDeleteMedia(msg, a) : undefined}
+                    />
+                  );
+                }
                 const imgUrl = typeof att === 'string' ? att : att.url;
                 return (
                   <img
@@ -1271,6 +1465,10 @@ const TaskDetail = () => {
 
           {/* Input */}
           <div>
+            {/* CHAT MEDIA: compact media error/info strip */}
+            {mediaToast && (
+              <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px' }}>{mediaToast}</div>
+            )}
             {/* Attachment Preview */}
             {messageAttachments.length > 0 && (
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -1285,6 +1483,9 @@ const TaskDetail = () => {
                 ))}
               </div>
             )}
+            {isRecording && mediaEnabled ? (
+              <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
+            ) : (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
               <input
                 type="file"
@@ -1294,15 +1495,16 @@ const TaskDetail = () => {
                 multiple
                 style={{ display: 'none' }}
               />
+              {mediaEnabled && <input type="file" ref={videoInputRef} onChange={handleVideoSelect} accept={VIDEO_ACCEPT} style={{ display: 'none' }} />}
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => (mediaEnabled ? setAttachSheetOpen(true) : fileInputRef.current?.click())}
                 disabled={messageAttachments.length >= 5}
                 style={{
                   padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none',
                   cursor: messageAttachments.length >= 5 ? 'not-allowed' : 'pointer', opacity: messageAttachments.length >= 5 ? 0.5 : 1,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px'
                 }}
-                title="Attach image"
+                title="Attach"
               >
                 📎
               </button>
@@ -1310,6 +1512,7 @@ const TaskDetail = () => {
                 ref={textareaRef}
                 value={messageText}
                 onChange={handleTextareaChange}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                 placeholder="Type your message..."
                 style={{
                   flex: 1, padding: '12px 16px', fontSize: '14px',
@@ -1331,7 +1534,17 @@ const TaskDetail = () => {
               >
                 {sendingMessage ? '...' : 'Send'}
               </button>
+              {mediaEnabled && isRecordingSupported() && (
+                <button
+                  onClick={() => setIsRecording(true)}
+                  title="Record voice note"
+                  style={{ padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none', cursor: 'pointer', minWidth: '44px', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              )}
             </div>
+            )}
           </div>
           </Collapse>
         </div>
@@ -1602,6 +1815,10 @@ const TaskDetail = () => {
 
           {/* Footer - Input */}
           <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fff' }}>
+            {/* CHAT MEDIA: compact media error/info strip */}
+            {mediaToast && (
+              <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px' }}>{mediaToast}</div>
+            )}
             {/* Attachment Preview */}
             {messageAttachments.length > 0 && (
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -1616,6 +1833,9 @@ const TaskDetail = () => {
                 ))}
               </div>
             )}
+            {isRecording && mediaEnabled ? (
+              <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
+            ) : (
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
               <input
                 type="file"
@@ -1625,8 +1845,9 @@ const TaskDetail = () => {
                 multiple
                 style={{ display: 'none' }}
               />
+              {mediaEnabled && <input type="file" ref={videoInputRef} onChange={handleVideoSelect} accept={VIDEO_ACCEPT} style={{ display: 'none' }} />}
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => (mediaEnabled ? setAttachSheetOpen(true) : fileInputRef.current?.click())}
                 disabled={messageAttachments.length >= 5}
                 style={{
                   padding: '14px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none',
@@ -1660,7 +1881,17 @@ const TaskDetail = () => {
               >
                 {sendingMessage ? '...' : 'Send'}
               </button>
+              {mediaEnabled && isRecordingSupported() && (
+                <button
+                  onClick={() => setIsRecording(true)}
+                  title="Record voice note"
+                  style={{ padding: '14px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none', cursor: 'pointer', minWidth: '48px', minHeight: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              )}
             </div>
+            )}
           </div>
         </div>
       )}
@@ -1762,6 +1993,17 @@ const TaskDetail = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* CHAT MEDIA: attachment menu — ONE shared instance for both composers (inline
+          + fullscreen). zIndex 10001 sits above the fullscreen chat overlay (9999)
+          and the history modal (10000). */}
+      {attachSheetOpen && (
+        <AttachSheet
+          onClose={() => setAttachSheetOpen(false)}
+          onPickPhoto={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
+          onPickVideo={() => { setAttachSheetOpen(false); videoInputRef.current?.click(); }}
+        />
       )}
     </div>
   );
