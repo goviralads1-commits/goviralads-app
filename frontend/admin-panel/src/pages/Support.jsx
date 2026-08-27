@@ -34,10 +34,8 @@ const Support = () => {
   const [sendingApproval, setSendingApproval] = useState(false);
   const [historyModalApproval, setHistoryModalApproval] = useState(null);
   const [showOnlyApprovals, setShowOnlyApprovals] = useState(false);
-  const [isChatFullScreen, setIsChatFullScreen] = useState(false);
   const [copyToast, setCopyToast] = useState(null);
   const [toast, setToast] = useState(null);
-  const fullscreenInputRef = useRef(null);
   const pollingRef = useRef(null);
   const selectedTaskRef = useRef(null);
   const prevMessageCountRef = useRef(0);
@@ -352,18 +350,6 @@ const Support = () => {
       }
     }
   }, [selectedTask, scrollToBottom]);
-
-  // Close fullscreen chat on ESC key
-  useEffect(() => {
-    if (!isChatFullScreen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        setIsChatFullScreen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isChatFullScreen]);
 
   const handleSendMessage = async () => {
     if ((!messageText.trim() && messageAttachments.length === 0) || sendingMessage) return;
@@ -977,10 +963,6 @@ Status: ${status}
               ✅ Approvals ({approvals.length})
             </button>
           )}
-          {/* Full Screen Toggle */}
-          <button onClick={() => { setIsChatFullScreen(true); setTimeout(() => fullscreenInputRef.current?.focus(), 100); }} title="Expand chat" style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
         </div>
 
         {/* Messages */}
@@ -1117,74 +1099,6 @@ Status: ${status}
                 <button onClick={() => { setShowApprovalModal(false); setApprovalQuestion(''); setApprovalOptions(['', '']); }} style={{ padding: '12px 20px', fontSize: '14px', fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer' }}>Cancel</button>
                 <button onClick={handleSendApproval} disabled={sendingApproval} style={{ padding: '12px 20px', fontSize: '14px', fontWeight: '600', backgroundColor: '#6366f1', color: '#fff', border: 'none', borderRadius: '10px', cursor: sendingApproval ? 'not-allowed' : 'pointer', opacity: sendingApproval ? 0.6 : 1 }}>{sendingApproval ? 'Sending...' : 'Send'}</button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Full Screen Chat Overlay */}
-        {isChatFullScreen && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#fff' }}>
-              <button onClick={() => setIsChatFullScreen(false)} style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-              <div style={{ flex: 1 }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Discussion</h2>
-                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>{selectedTask.title}</p>
-              </div>
-              {approvals.length > 0 && (
-                <button onClick={() => setShowOnlyApprovals(!showOnlyApprovals)} style={{ padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: '600', backgroundColor: showOnlyApprovals ? '#fef3c7' : '#f1f5f9', color: showOnlyApprovals ? '#92400e' : '#64748b', border: showOnlyApprovals ? '2px solid #fbbf24' : '1px solid #e2e8f0', cursor: 'pointer' }}>
-                  ✅ Approvals ({approvals.length})
-                </button>
-              )}
-            </div>
-            <div onScroll={(e) => {
-              const el = e.currentTarget;
-              const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-              isNearBottomRef.current = distFromBottom < 100;
-              if (isNearBottomRef.current && showNewMsgBadge) setShowNewMsgBadge(false);
-            }} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', position: 'relative' }}>
-              {showNewMsgBadge && (
-                <button onClick={() => { scrollToBottom(true); setShowNewMsgBadge(false); }} style={{ position: 'sticky', bottom: '10px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#6366f1', color: '#fff', padding: '6px 16px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', zIndex: 10, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 14l-7 7-7-7M19 6l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  New messages
-                </button>
-              )}
-              {renderChatContent()}
-            </div>
-            <div className="gva-composer-bar" style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fff' }}>
-              {mediaToast && (
-                <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '13px' }}>{mediaToast}</div>
-              )}
-              {messageAttachments.length > 0 && (
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                  {messageAttachments.map((att, idx) => (
-                    <div key={idx} style={{ position: 'relative' }}>
-                      <img src={att.previewUrl} alt="" style={{ width: '50px', height: '50px', borderRadius: '8px', objectFit: 'cover' }} />
-                      <button onClick={() => removeAttachment(idx)} style={{ position: 'absolute', top: '-5px', right: '-5px', width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '11px', lineHeight: 1 }}>×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {isRecording && mediaEnabled ? (
-                <VoiceRecorder onRecorded={handleRecorded} onCancel={handleRecordCancel} onError={handleRecordError} />
-              ) : (
-              <div className="gva-composer-row" style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-                <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/jpeg,image/png,image/webp,image/gif" multiple style={{ display: 'none' }} />
-                <button onClick={() => (mediaEnabled ? setAttachSheetOpen(true) : fileInputRef.current?.click())} disabled={messageAttachments.length >= 5} style={{ padding: '14px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none', cursor: messageAttachments.length >= 5 ? 'not-allowed' : 'pointer', minWidth: '48px', minHeight: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Attach">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </button>
-                <textarea ref={fullscreenInputRef} value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}} placeholder="Type a message..." className="gva-composer-input" style={{ flex: 1, padding: '14px 16px', fontSize: '15px', borderRadius: '14px', border: '2px solid #e2e8f0', outline: 'none', resize: 'none', minHeight: '48px', maxHeight: '120px', lineHeight: 1.4 }} />
-                <button onClick={handleSendMessage} disabled={sendingMessage || (!messageText.trim() && messageAttachments.length === 0)} style={{ padding: '14px 20px', backgroundColor: '#6366f1', borderRadius: '14px', border: 'none', color: '#fff', fontWeight: '600', cursor: 'pointer', opacity: sendingMessage || (!messageText.trim() && messageAttachments.length === 0) ? 0.5 : 1 }}>
-                  {sendingMessage ? '...' : 'Send'}
-                </button>
-                {mediaEnabled && isRecordingSupported() && (
-                  <button onClick={() => setIsRecording(true)} title="Record voice note" style={{ padding: '14px', backgroundColor: '#f1f5f9', borderRadius: '14px', border: 'none', cursor: 'pointer', minWidth: '48px', minHeight: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  </button>
-                )}
-              </div>
-              )}
             </div>
           </div>
         )}

@@ -1346,7 +1346,7 @@ router.get('/tasks/:taskId', async (req, res) => {
   try {
     const { taskId } = req.params;
     const task = await Task.findById(taskId)
-      .populate('clientId', 'identifier')
+      .populate('clientId', 'identifier profile.name')
       .populate('assignedBy', 'identifier')
       .populate('assignedTo', 'identifier')
       .populate('assignedUsers.userId', 'profile.designation')
@@ -1430,7 +1430,8 @@ router.get('/tasks/:taskId', async (req, res) => {
         // Use GET /admin/tasks/:taskId/messages?page=X for older messages
         messages: (task.messages || []).slice(-30).map(m => {
           // Resolve sender identity label for admin panel
-          let senderLabel = 'Client'; // Default for task owner
+          // Task owner client: show the actual client display name (profile.name only — never email/identifier)
+          let senderLabel = task.clientId?.profile?.name || 'Client';
           
           if (m.sender === 'ADMIN') {
             senderLabel = 'Admin';
@@ -1521,7 +1522,7 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
     const page = parseInt(req.query.page) || 0; // 0 = latest, 1 = older, etc.
     const limit = parseInt(req.query.limit) || 30;
     
-    const task = await Task.findById(taskId).select('messages clientId assignedTo assignedUsers').populate('assignedUsers.userId', 'profile.designation').exec();
+    const task = await Task.findById(taskId).select('messages clientId assignedTo assignedUsers').populate('assignedUsers.userId', 'profile.designation').populate('clientId', 'profile.name').exec();
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
@@ -1532,7 +1533,8 @@ router.get('/tasks/:taskId/messages', async (req, res) => {
 
     // Helper: map a raw message to response format
     const mapMessage = (m) => {
-      let senderLabel = 'Client';
+      // Task owner client: show the actual client display name (profile.name only — never email/identifier)
+      let senderLabel = task.clientId?.profile?.name || 'Client';
       if (m.sender === 'ADMIN') {
         senderLabel = 'Admin';
       } else if (m.senderId) {
