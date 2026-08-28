@@ -594,11 +594,12 @@ const PlanDetail = () => {
             </div>
 
             {/* WORKING-DAY DEADLINE SYSTEM: Delivery Time (working days) */}
-            <div>
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Delivery Time</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="1"
                   step="1"
                   value={formData.deliveryDuration}
@@ -609,11 +610,11 @@ const PlanDetail = () => {
                     }
                   }}
                   placeholder="e.g. 2"
-                  style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }}
+                  style={{ width: '100%', boxSizing: 'border-box', minHeight: '48px', padding: '12px 130px 12px 16px', fontSize: '16px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: '#fff' }}
                 />
-                <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap' }}>Working Days</span>
+                <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none' }}>Working Days</span>
               </div>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0' }}>Deadlines for purchased tasks are auto-calculated in working days (weekends and holidays skipped, 6:00 PM). Leave empty for no auto deadline.</p>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0' }}>Deadlines for purchased tasks are auto-calculated using the office's configured working days (Mon–Fri by default; holidays always skipped), landing at 6:00 PM on the last working day. Leave empty for no automatic deadline.</p>
             </div>
 
             {/* Milestones Editor — reused from TaskDetail.jsx */}

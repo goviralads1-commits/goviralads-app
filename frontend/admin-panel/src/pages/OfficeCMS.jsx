@@ -90,6 +90,37 @@ const OfficeCMS = () => {
     }
   };
 
+  // CONFIGURABLE WORKING WEEK: toggle a weekday (0=Sun ... 6=Sat).
+  // Saving with zero working days is blocked here and on the backend.
+  const WEEKDAY_LABELS = [
+    { day: 1, label: 'Monday' },
+    { day: 2, label: 'Tuesday' },
+    { day: 3, label: 'Wednesday' },
+    { day: 4, label: 'Thursday' },
+    { day: 5, label: 'Friday' },
+    { day: 6, label: 'Saturday' },
+    { day: 0, label: 'Sunday' }
+  ];
+
+  const handleToggleWorkingDay = async (day) => {
+    const current = Array.isArray(config?.workingWeek) && config.workingWeek.length > 0
+      ? config.workingWeek
+      : [1, 2, 3, 4, 5];
+    const isEnabled = current.includes(day);
+    if (isEnabled && current.length === 1) {
+      showToast('error', 'At least one working day must stay enabled');
+      return;
+    }
+    const next = isEnabled ? current.filter(d => d !== day) : [...current, day].sort((a, b) => a - b);
+    try {
+      const res = await api.patch('/admin/office-config', { workingWeek: next });
+      setConfig(res.data.config);
+      showToast('success', 'Working week updated');
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to update working week');
+    }
+  };
+
   // Banner handlers
   const handleAddBanner = async () => {
     // Title is now optional - no validation required
@@ -688,14 +719,35 @@ const OfficeCMS = () => {
         )}
 
         {/* HOLIDAYS TAB — WORKING-DAY DEADLINE SYSTEM working calendar.
-            Weekends (Sat/Sun) are always non-working; dates listed here are
-            additionally skipped when auto-calculating task deadlines. */}
+            Weekly working days are configurable below; holiday dates listed
+            here are always skipped when auto-calculating task deadlines. */}
         {activeTab === 'holidays' && (
           <div>
             <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>Weekly Working Days</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>
+                Working days are used to calculate deadlines for new tasks. Changes apply only to future automatic deadlines. Holidays are always skipped.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {WEEKDAY_LABELS.map(({ day, label }) => {
+                  const currentWeek = Array.isArray(config?.workingWeek) && config.workingWeek.length > 0
+                    ? config.workingWeek
+                    : [1, 2, 3, 4, 5];
+                  const enabled = currentWeek.includes(day);
+                  return (
+                    <label key={day} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '10px', cursor: 'pointer', backgroundColor: enabled ? '#f5f3ff' : 'transparent' }}>
+                      <input type="checkbox" checked={enabled} onChange={() => handleToggleWorkingDay(day)} style={{ width: '18px', height: '18px', accentColor: '#6366f1', cursor: 'pointer' }} />
+                      <span style={{ fontSize: '14px', fontWeight: enabled ? '600' : '500', color: enabled ? '#0f172a' : '#64748b' }}>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>Holiday Calendar</h3>
               <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0' }}>
-                Task deadlines are auto-calculated in working days: Monday–Friday, skipping the holidays listed here. Deadlines land at 6:00 PM on the last working day.
+                Task deadlines are auto-calculated using the working days checked above, skipping the holidays listed here. Deadlines land at 6:00 PM on the last working day.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
                 <div>
@@ -715,7 +767,7 @@ const OfficeCMS = () => {
             {(config?.holidays || []).length === 0 ? (
               <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
                 <div style={{ fontSize: '36px', marginBottom: '12px' }}>📅</div>
-                <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>No holidays configured. Only weekends are skipped when calculating deadlines.</p>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>No holidays configured. Only non-working weekdays are skipped when calculating deadlines.</p>
               </div>
             ) : (
               <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '8px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>

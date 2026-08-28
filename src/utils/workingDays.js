@@ -3,11 +3,15 @@
 // =============================================================================
 // DAY-1 CONVENTION (documented, one consistent rule everywhere):
 //   The task's start date counts as Working Day 1 when it is a working day
-//   (Monday–Friday, not a configured holiday). When the start falls on a
-//   weekend/holiday, Day 1 is the next working day after it. The deadline is
-//   18:00 (6:00 PM) business time on the Nth working day.
-//   Example: 2 working days, start Friday -> Friday=Day 1, Monday=Day 2 ->
-//   deadline Monday 18:00.
+//   (its weekday is in the configured working week and it is not a configured
+//   holiday). When the start falls on a non-working day/holiday, Day 1 is the
+//   next working day after it. The deadline is 18:00 (6:00 PM) business time
+//   on the Nth working day.
+//   Example (default Mon–Fri): 2 working days, start Friday -> Friday=Day 1,
+//   Monday=Day 2 -> deadline Monday 18:00.
+//
+// WORKING WEEK: configurable via OfficeConfig.workingWeek (JS day numbers,
+// 0=Sunday ... 6=Saturday). Default Mon–Fri; holidays always win.
 //
 // BUSINESS TIMEZONE: fixed IST (UTC+05:30). The server may run in any TZ;
 // all calendar-day reasoning here uses a fixed +330 minute offset so results
@@ -20,6 +24,9 @@ const BUSINESS_TZ_OFFSET_MIN = 330;
 // Default deadline time of day in business timezone (18:00 = 6:00 PM)
 const DEADLINE_HOUR = 18;
 const DEADLINE_MINUTE = 0;
+
+// Default working week (Mon–Fri) used when OfficeConfig has no valid setting
+const DEFAULT_WORKING_WEEK = [1, 2, 3, 4, 5];
 
 // Safety cap so an invalid duration can never loop forever
 const MAX_SCAN_DAYS = 2000;
@@ -51,9 +58,21 @@ function toHolidaySet(holidays) {
   return set;
 }
 
-/** Business day = Monday–Friday and not a configured holiday. */
-function isWorkingDay(parts, holidaySet) {
-  if (parts.dow === 0 || parts.dow === 6) return false;
+/**
+ * Normalize an OfficeConfig workingWeek value into a Set of JS day numbers
+ * (0=Sun ... 6=Sat). Invalid/missing values fall back to Mon–Fri so a
+ * tampered config can never break the calculation.
+ */
+function toWorkingWeekSet(workingWeek) {
+  const valid = Array.isArray(workingWeek)
+    ? workingWeek.filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
+    : [];
+  return new Set(valid.length > 0 ? valid : DEFAULT_WORKING_WEEK);
+}
+
+/** Working day = weekday is in the configured working week and not a holiday. */
+function isWorkingDay(parts, holidaySet, weekSet) {
+  if (!weekSet.has(parts.dow)) return false;
   const key = `${parts.year}-${String(parts.month + 1).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
   return !holidaySet.has(key);
 }
@@ -75,11 +94,13 @@ function nextDay(parts) {
  * @param {Date|string|number} start  Task start (startDate or approval time)
  * @param {number} workingDays        Positive whole number of working days
  * @param {Array} holidays            OfficeConfig holidays ([{ date: 'YYYY-MM-DD', name }])
+ * @param {Array} [workingWeek]       OfficeConfig workingWeek (JS day numbers
+ *                                    0=Sun ... 6=Sat); defaults to Mon–Fri
  * @returns {Date|null} Deadline instant (Nth working day at 18:00 IST) or
  *                      null when inputs are invalid (caller keeps legacy
  *                      behavior — no invented deadline).
  */
-function calcWorkingDayDeadline(start, workingDays, holidays) {
+function calcWorkingDayDeadline(start, workingDays, holidays, workingWeek) {
   const startDate = start instanceof Date ? start : new Date(start);
   if (!startDate || isNaN(startDate.getTime())) return null;
 
@@ -87,12 +108,13 @@ function calcWorkingDayDeadline(start, workingDays, holidays) {
   if (!Number.isInteger(duration) || duration < 1) return null;
 
   const holidaySet = toHolidaySet(holidays);
+  const weekSet = toWorkingWeekSet(workingWeek);
 
   // Find Day 1: the start date itself when it is a working day, otherwise
   // the next working day after it (documented DAY-1 convention).
   let parts = toBusinessDayParts(startDate);
   let scanned = 0;
-  while (!isWorkingDay(parts, holidaySet)) {
+  while (!isWorkingDay(parts, holidaySet, weekSet)) {
     parts = nextDay(parts);
     if (++scanned > MAX_SCAN_DAYS) return null;
   }
@@ -102,7 +124,7 @@ function calcWorkingDayDeadline(start, workingDays, holidays) {
   while (counted < duration) {
     parts = nextDay(parts);
     if (++scanned > MAX_SCAN_DAYS) return null;
-    if (isWorkingDay(parts, holidaySet)) counted += 1;
+    if (isWorkingDay(parts, holidaySet, weekSet)) counted += 1;
   }
 
   // Deadline instant: that working day at 18:00 business time (IST)
@@ -112,5 +134,6 @@ function calcWorkingDayDeadline(start, workingDays, holidays) {
 
 module.exports = {
   BUSINESS_TZ_OFFSET_MIN,
+  DEFAULT_WORKING_WEEK,
   calcWorkingDayDeadline,
 };

@@ -79,6 +79,11 @@ const officeConfigSchema = new mongoose.Schema({
 
   // WORKING-DAY DEADLINE SYSTEM: configurable holiday calendar (empty = none)
   holidays: [holidaySchema],
+
+  // WORKING-DAY DEADLINE SYSTEM: configurable weekly working days.
+  // JS day numbers (0=Sunday ... 6=Saturday). Default Mon–Fri preserves the
+  // historical behavior; docs missing this field fall back to the default.
+  workingWeek: { type: [Number], default: [1, 2, 3, 4, 5] },
   
   // Updates Section Config
   updatesSectionConfig: {

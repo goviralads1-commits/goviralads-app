@@ -3037,16 +3037,17 @@ router.patch('/tasks/:taskId/approve', async (req, res) => {
     // WORKING-DAY DEADLINE SYSTEM (auto, backend-authoritative): when the admin
     // approves without supplying an end date and the task carries a snapshotted
     // delivery duration, compute the deadline from startDate + working calendar
-    // (weekends + OfficeConfig holidays skipped, 18:00 IST, Day-1 convention
-    // documented in utils/workingDays.js). Only task.deadline is written —
-    // endDate is never touched here so AUTO progress behavior is unchanged.
+    // (configured working week + OfficeConfig holidays skipped, 18:00 IST,
+    // Day-1 convention documented in utils/workingDays.js). Only task.deadline
+    // is written — endDate is never touched here so AUTO progress behavior is
+    // unchanged.
     // An admin-supplied endDate is a MANUAL override and is never recomputed.
     // Runs once at approval only — never recalculated afterwards.
     if (!endDate && task.deliveryDuration && task.startDate) {
       try {
         const { calcWorkingDayDeadline } = require('../utils/workingDays');
         const officeCfg = await OfficeConfig.getConfig();
-        const computedDeadline = calcWorkingDayDeadline(task.startDate, task.deliveryDuration, officeCfg.holidays || []);
+        const computedDeadline = calcWorkingDayDeadline(task.startDate, task.deliveryDuration, officeCfg.holidays || [], officeCfg.workingWeek);
         if (computedDeadline) {
           task.deadline = computedDeadline;
           console.log(`[WORKING-DAY DEADLINE] Task ${task._id}: auto deadline ${computedDeadline.toISOString()} (${task.deliveryDuration} working days from ${task.startDate})`);
@@ -4000,9 +4001,11 @@ router.post('/orders/:orderId/approve', async (req, res) => {
     // WORKING-DAY DEADLINE SYSTEM: load the working calendar once for all
     // tasks created by this approval (order tasks start immediately = now).
     let workingDayHolidays = [];
+    let workingDayWeek;
     try {
       const officeCfg = await OfficeConfig.getConfig();
       workingDayHolidays = officeCfg.holidays || [];
+      workingDayWeek = officeCfg.workingWeek;
     } catch (holErr) {
       console.error('[WORKING-DAY DEADLINE] holiday load failed:', holErr.message);
     }
@@ -4057,7 +4060,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
                 deliveryDurationUnit: 'WORKING_DAYS',
                 ...((() => {
                   const { calcWorkingDayDeadline } = require('../utils/workingDays');
-                  const d = calcWorkingDayDeadline(new Date(), item.planSnapshot.deliveryDuration, workingDayHolidays);
+                  const d = calcWorkingDayDeadline(new Date(), item.planSnapshot.deliveryDuration, workingDayHolidays, workingDayWeek);
                   return d ? { deadline: d } : {};
                 })()),
               }
@@ -6800,6 +6803,32 @@ router.patch('/office-config', async (req, res) => {
         });
       }
       config.holidays = cleanedHolidays;
+    }
+
+    // WORKING-DAY DEADLINE SYSTEM: weekly working days — validated separately.
+    // JS day numbers (0=Sun ... 6=Sat); strict validation, sorted on save.
+    // Applies only to FUTURE automatic deadline calculations.
+    if (updates.workingWeek !== undefined) {
+      if (!Array.isArray(updates.workingWeek)) {
+        return res.status(400).json({ error: 'workingWeek must be an array' });
+      }
+      if (updates.workingWeek.length < 1) {
+        return res.status(400).json({ error: 'At least one working day must be enabled' });
+      }
+      if (updates.workingWeek.length > 7) {
+        return res.status(400).json({ error: 'Maximum 7 working days allowed' });
+      }
+      const seenDays = new Set();
+      for (const d of updates.workingWeek) {
+        if (!Number.isInteger(d) || d < 0 || d > 6) {
+          return res.status(400).json({ error: 'workingWeek entries must be integers 0–6 (0=Sunday ... 6=Saturday)' });
+        }
+        if (seenDays.has(d)) {
+          return res.status(400).json({ error: `Duplicate working day: ${d}` });
+        }
+        seenDays.add(d);
+      }
+      config.workingWeek = [...seenDays].sort((a, b) => a - b);
     }
     
     config.lastUpdatedBy = req.user._id;
