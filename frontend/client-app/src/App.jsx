@@ -1,31 +1,49 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { isAuthenticated, getUserRole } from './services/authService';
 import { CartProvider } from './context/CartContext';
+// Critical startup components stay eager (no lazy) so login/auth shell loads instantly
 import ErrorBoundary from './components/ErrorBoundary';
 import LoginForm from './components/LoginForm';
 import Header from './components/Header';
 import CookieConsent from './components/CookieConsent';
-import Dashboard from './pages/Dashboard';
-import Wallet from './pages/Wallet';
-import Tasks from './pages/Tasks';
-import Plans from './pages/Plans';
-import PlanDetail from './pages/PlanDetail';
-import Cart from './pages/Cart';
-import Orders from './pages/Orders';
-import Subscriptions from './pages/Subscriptions';
-import Profile from './pages/Profile';
-import TaskDetail from './pages/TaskDetail';
-import Tickets from './pages/Tickets';
-import TicketDetail from './pages/TicketDetail';
-import Support from './pages/Support';
-import Notifications from './pages/Notifications';
-import LegalPage from './pages/LegalPage';
-import Register from './pages/Register';
-import Earnings from './pages/Earnings';
-import EarningsLedgerPage from './pages/EarningsLedger';
-import NotFound from './pages/NotFound';
+// Pages are code-split: each route chunk loads only when navigated to
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Wallet = React.lazy(() => import('./pages/Wallet'));
+const Tasks = React.lazy(() => import('./pages/Tasks'));
+const Plans = React.lazy(() => import('./pages/Plans'));
+const PlanDetail = React.lazy(() => import('./pages/PlanDetail'));
+const Cart = React.lazy(() => import('./pages/Cart'));
+const Orders = React.lazy(() => import('./pages/Orders'));
+const Subscriptions = React.lazy(() => import('./pages/Subscriptions'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+const TaskDetail = React.lazy(() => import('./pages/TaskDetail'));
+const Tickets = React.lazy(() => import('./pages/Tickets'));
+const TicketDetail = React.lazy(() => import('./pages/TicketDetail'));
+const Support = React.lazy(() => import('./pages/Support'));
+const Notifications = React.lazy(() => import('./pages/Notifications'));
+const LegalPage = React.lazy(() => import('./pages/LegalPage'));
+const Register = React.lazy(() => import('./pages/Register'));
+const Earnings = React.lazy(() => import('./pages/Earnings'));
+const EarningsLedgerPage = React.lazy(() => import('./pages/EarningsLedger'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
 import { initPushNotifications, setupForegroundHandler } from './services/pushService';
+
+// Lightweight Suspense fallback while a lazy route chunk loads (existing spinner style)
+const RouteLoadingFallback = () => (
+  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '32px', height: '32px',
+        border: '3px solid #e2e8f0', borderTopColor: '#6366f1',
+        borderRadius: '50%', animation: 'spin 1s linear infinite',
+        margin: '0 auto 12px'
+      }} />
+      <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Loading...</p>
+    </div>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+);
 
 // Auth Context for managing auth state
 const AuthContext = createContext({
@@ -250,6 +268,7 @@ const AppShell = () => {
         <NotificationClickHandler />
         <PushNotificationManager />
         <div className="App">
+          <Suspense fallback={<RouteLoadingFallback />}>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginForm />} />
@@ -319,6 +338,7 @@ const AppShell = () => {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           <CookieConsent />
         </div>
       </Router>

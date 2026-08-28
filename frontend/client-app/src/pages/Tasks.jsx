@@ -254,30 +254,27 @@ const Tasks = () => {
           </p>
         </div>
 
-        {/* Filter Tabs */}
-        <div style={{
-          display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto',
-          paddingBottom: '4px', WebkitOverflowScrolling: 'touch'
-        }}>
-          {filters.map(f => {
-            const isActive = activeFilter === f.key;
-            const count = filterCounts[f.key] ?? 0;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setActiveFilter(f.key)}
-                style={{
-                  padding: '8px 16px', borderRadius: '100px', fontSize: '13px', fontWeight: '600',
-                  border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-                  backgroundColor: isActive ? '#1a1a1a' : '#f1f1f1',
-                  color: isActive ? '#fff' : '#666',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {f.label} ({count})
-              </button>
-            );
-          })}
+        {/* Filter — compact native select (same filters/counts as before) */}
+        <div style={{ marginBottom: '24px' }}>
+          <select
+            value={activeFilter}
+            onChange={(e) => setActiveFilter(e.target.value)}
+            aria-label="Filter tasks"
+            style={{
+              width: '100%', maxWidth: '320px', minHeight: '44px',
+              padding: '10px 14px', fontSize: '16px', fontWeight: '600',
+              color: '#1a1a1a', backgroundColor: '#fff',
+              border: '2px solid #e2e8f0', borderRadius: '12px',
+              outline: 'none', cursor: 'pointer', boxSizing: 'border-box',
+              appearance: 'auto'
+            }}
+          >
+            {filters.map(f => (
+              <option key={f.key} value={f.key}>
+                {f.label} ({filterCounts[f.key] ?? 0})
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Task Cards */}

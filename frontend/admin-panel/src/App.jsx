@@ -1,40 +1,58 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { isAuthenticated, getUserRole, getPermissions, savePermissions } from './services/authService';
 import api from './services/api';
+// Critical startup components stay eager (no lazy) so login/auth shell loads instantly
 import ErrorBoundary from './components/ErrorBoundary';
 import LoginForm from './components/LoginForm';
 import Header from './components/Header';
-import Dashboard from './pages/Dashboard';
-import Clients from './pages/Clients';
-import ClientDetail from './pages/ClientDetail';
-import Recharges from './pages/Recharges';
-import Tasks from './pages/Tasks';
-import Reports from './pages/Reports';
-import Notifications from './pages/Notifications';
-import Plans from './pages/Plans';
-import Categories from './pages/Categories';
-import Profile from './pages/Profile';
-import TaskDetail from './pages/TaskDetail';
-import PlanDetail from './pages/PlanDetail';
-import PlanPreview from './pages/PlanPreview';
-import Wallet from './pages/Wallet';
-import Billing from './pages/Billing';
-import CreditPlans from './pages/CreditPlans';
-import OfficeCMS from './pages/OfficeCMS';
-import Orders from './pages/Orders';
-import Settings from './pages/Settings';
-import Roles from './pages/Roles';
-import ProgressIcons from './pages/ProgressIcons';
-import Support from './pages/Support';
-import Earnings from './pages/Earnings';
-import EarningsRedeems from './pages/EarningsRedeems';
-import Employees from './pages/Employees';
-import EmployeeDetail from './pages/EmployeeDetail';
-import LegalPages from './pages/LegalPages';
-import Tickets from './pages/Tickets';
-import NotFound from './pages/NotFound';
+// Pages are code-split: each route chunk loads only when navigated to
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Clients = React.lazy(() => import('./pages/Clients'));
+const ClientDetail = React.lazy(() => import('./pages/ClientDetail'));
+const Recharges = React.lazy(() => import('./pages/Recharges'));
+const Tasks = React.lazy(() => import('./pages/Tasks'));
+const Reports = React.lazy(() => import('./pages/Reports'));
+const Notifications = React.lazy(() => import('./pages/Notifications'));
+const Plans = React.lazy(() => import('./pages/Plans'));
+const Categories = React.lazy(() => import('./pages/Categories'));
+const Profile = React.lazy(() => import('./pages/Profile'));
+const TaskDetail = React.lazy(() => import('./pages/TaskDetail'));
+const PlanDetail = React.lazy(() => import('./pages/PlanDetail'));
+const PlanPreview = React.lazy(() => import('./pages/PlanPreview'));
+const Wallet = React.lazy(() => import('./pages/Wallet'));
+const Billing = React.lazy(() => import('./pages/Billing'));
+const CreditPlans = React.lazy(() => import('./pages/CreditPlans'));
+const OfficeCMS = React.lazy(() => import('./pages/OfficeCMS'));
+const Orders = React.lazy(() => import('./pages/Orders'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const Roles = React.lazy(() => import('./pages/Roles'));
+const ProgressIcons = React.lazy(() => import('./pages/ProgressIcons'));
+const Support = React.lazy(() => import('./pages/Support'));
+const Earnings = React.lazy(() => import('./pages/Earnings'));
+const EarningsRedeems = React.lazy(() => import('./pages/EarningsRedeems'));
+const Employees = React.lazy(() => import('./pages/Employees'));
+const EmployeeDetail = React.lazy(() => import('./pages/EmployeeDetail'));
+const LegalPages = React.lazy(() => import('./pages/LegalPages'));
+const Tickets = React.lazy(() => import('./pages/Tickets'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
 import { initPushNotifications, setupForegroundHandler } from './services/pushService';
+
+// Lightweight Suspense fallback while a lazy route chunk loads (existing spinner style)
+const RouteLoadingFallback = () => (
+  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '32px', height: '32px',
+        border: '3px solid #e2e8f0', borderTopColor: '#6366f1',
+        borderRadius: '50%', animation: 'spin 1s linear infinite',
+        margin: '0 auto 12px'
+      }} />
+      <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Loading...</p>
+    </div>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+);
 
 // Branding Context — shared across app (preloader + login + anywhere)
 const BrandingContext = createContext({
@@ -453,7 +471,8 @@ const App = () => {
           <NotificationClickHandler />
           <PushNotificationManager />
           <div className="App">
-            <Routes>
+            <Suspense fallback={<RouteLoadingFallback />}>
+<Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginForm />} />
           
@@ -611,6 +630,7 @@ const App = () => {
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
+</Suspense>
         </div>
       </Router>
         </BrandedPreloader>

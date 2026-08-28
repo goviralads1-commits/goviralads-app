@@ -15,10 +15,13 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/gva-icon-192.png" />
     <link rel="apple-touch-icon" href="/gva-icon-192.png" />
     
-    <!-- Fonts -->
+    <!-- Fonts — non-render-blocking: stylesheet loads async, noscript fallback for no-JS -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    </noscript>
     
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
@@ -27,8 +30,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="GVA Admin" />
     
-    <!-- Preload critical resources -->
-    <link rel="preload" href="/src/main.tsx" as="script" crossorigin />
+    <!-- Broken dev-path preload removed: /src/main.tsx does not exist in production builds -->
   </head>
   <body>
     <div id="root">

@@ -53,6 +53,20 @@ const Tasks = () => {
   // Trash system
   const [showTrash, setShowTrash] = useState(false);
   const [trashLoading, setTrashLoading] = useState(null); // taskId being trashed/restored
+
+  // Compact filter UI: number of non-default secondary filters (badge).
+  // Search is excluded — it stays visible in the compact row.
+  const activeSecondaryCount =
+    (filters.status !== 'ALL' ? 1 : 0) +
+    (filters.priority !== 'ALL' ? 1 : 0) +
+    (filters.clientId !== 'ALL' ? 1 : 0) +
+    (filters.sort !== 'newest' ? 1 : 0) +
+    ((filters.fromDate || filters.toDate) ? 1 : 0) +
+    (showTrash ? 1 : 0);
+
+  // Secondary filter panel collapsed by default; auto-expanded only when
+  // non-default secondary filters are already active (discoverability).
+  const [showFilters, setShowFilters] = useState(activeSecondaryCount > 0);
   
   // Status change modal
   const [statusModal, setStatusModal] = useState({ open: false, task: null });
@@ -868,18 +882,17 @@ const Tasks = () => {
           )}
         </div>
 
-        {/* Filter Bar */}
+        {/* Filter Bar — compact: search + Filters toggle; secondary controls collapsible */}
         <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '12px',
-          padding: '20px',
+          padding: '12px 16px',
           backgroundColor: '#fff',
           borderRadius: '16px',
           marginBottom: '24px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
           border: '1px solid #f1f5f9'
         }}>
+          {/* Visible compact row: search + Filters toggle */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           {/* Search */}
           <div style={{flex: '1', minWidth: '200px'}}>
             <input
@@ -901,6 +914,53 @@ const Tasks = () => {
               onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
             />
           </div>
+
+          {/* Filters toggle with active-filter badge */}
+          <button
+            onClick={() => setShowFilters(prev => !prev)}
+            aria-expanded={showFilters}
+            style={{
+              padding: '10px 16px',
+              minHeight: '44px',
+              borderRadius: '10px',
+              border: activeSecondaryCount > 0 ? '2px solid #6366f1' : '2px solid #e2e8f0',
+              backgroundColor: activeSecondaryCount > 0 ? '#eef2ff' : '#f8fafc',
+              color: activeSecondaryCount > 0 ? '#6366f1' : '#64748b',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Filters
+            {activeSecondaryCount > 0 && (
+              <span style={{
+                minWidth: '20px', height: '20px', borderRadius: '10px',
+                backgroundColor: '#6366f1', color: '#fff',
+                fontSize: '11px', fontWeight: '700',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 6px'
+              }}>
+                {activeSecondaryCount}
+              </span>
+            )}
+            <span aria-hidden="true">{showFilters ? '▲' : '▼'}</span>
+          </button>
+          </div>
+
+          {/* Collapsible secondary filters — existing controls, unchanged behavior */}
+          {showFilters && (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '12px',
+            paddingTop: '12px',
+            marginTop: '12px',
+            borderTop: '1px solid #f1f5f9'
+          }}>
 
           {/* Status Filter */}
           <select
@@ -1035,6 +1095,8 @@ const Tasks = () => {
           >
             🗑️ {showTrash ? 'Exit Trash' : 'Show Trash'}
           </button>
+          </div>
+          )}
         </div>
 
         {/* Trash Banner */}

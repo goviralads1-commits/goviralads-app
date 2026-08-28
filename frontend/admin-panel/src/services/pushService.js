@@ -1,8 +1,8 @@
 // Push Notification Service for Admin Panel
 // Production-level implementation with full debugging
 
-import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+// NOTE: Firebase SDK is loaded via dynamic import (see loadFirebaseModules)
+// so the login page never downloads the messaging bundle.
 import api from './api';
 
 // Firebase config from environment
@@ -18,6 +18,24 @@ const firebaseConfig = {
 // Firebase instances
 let app = null;
 let messaging = null;
+
+// Lazy Firebase SDK loader — modules are downloaded only when push
+// initialization actually runs (after authentication).
+let firebaseModulesPromise = null;
+const loadFirebaseModules = () => {
+  if (!firebaseModulesPromise) {
+    firebaseModulesPromise = Promise.all([
+      import('firebase/app'),
+      import('firebase/messaging'),
+    ]).then(([appMod, messagingMod]) => ({
+      initializeApp: appMod.initializeApp,
+      getMessaging: messagingMod.getMessaging,
+      getToken: messagingMod.getToken,
+      onMessage: messagingMod.onMessage,
+    }));
+  }
+  return firebaseModulesPromise;
+};
 
 // Check if Firebase is configured
 const isFirebaseConfigured = () => {
@@ -35,30 +53,38 @@ const isFirebaseConfigured = () => {
   return configured;
 };
 
-// Initialize Firebase (singleton)
+// Initialize Firebase (singleton, async due to dynamic SDK import)
+let initPromise = null;
 const initFirebase = () => {
   if (app) {
     console.log('[Push] Firebase already initialized');
-    return { app, messaging };
-  }
-  
-  if (!isFirebaseConfigured()) {
-    console.error('[Push] Firebase NOT configured - check .env variables');
-    return { app: null, messaging: null };
+    return Promise.resolve({ app, messaging });
   }
 
-  try {
-    console.log('[Push] Initializing Firebase...');
-    app = initializeApp(firebaseConfig);
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      messaging = getMessaging(app);
-      console.log('[Push] Firebase messaging initialized');
-    }
-    return { app, messaging };
-  } catch (error) {
-    console.error('[Push] Firebase init error:', error);
-    return { app: null, messaging: null };
+  if (!isFirebaseConfigured()) {
+    console.error('[Push] Firebase NOT configured - check .env variables');
+    return Promise.resolve({ app: null, messaging: null });
   }
+
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        console.log('[Push] Initializing Firebase...');
+        const { initializeApp, getMessaging } = await loadFirebaseModules();
+        app = initializeApp(firebaseConfig);
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+          messaging = getMessaging(app);
+          console.log('[Push] Firebase messaging initialized');
+        }
+        return { app, messaging };
+      } catch (error) {
+        console.error('[Push] Firebase init error:', error);
+        initPromise = null; // Do not cache failure — allow retry on next call
+        return { app: null, messaging: null };
+      }
+    })();
+  }
+  return initPromise;
 };
 
 // Request notification permission
@@ -122,7 +148,7 @@ export const generateToken = async () => {
     }
 
     // Initialize Firebase
-    const { messaging: msg } = initFirebase();
+    const { messaging: msg } = await initFirebase();
     if (!msg) {
       throw new Error('Firebase messaging not available');
     }
@@ -147,6 +173,7 @@ export const generateToken = async () => {
       tokenOptions.serviceWorkerRegistration = swRegistration;
     }
 
+    const { getToken } = await loadFirebaseModules();
     const fcmToken = await getToken(msg, tokenOptions);
     
     if (fcmToken) {
@@ -294,32 +321,47 @@ export const isPushEnabled = () => {
 };
 
 // Setup foreground message handler
+// Returns an unsubscribe function immediately; the actual Firebase listener is
+// attached once the dynamically imported SDK resolves (post-login only).
 export const setupForegroundHandler = (onMessageCallback) => {
-  const { messaging: msg } = initFirebase();
-  if (!msg) return () => {};
+  let unsubscribe = null;
+  let disposed = false;
 
-  return onMessage(msg, (payload) => {
-    console.log('[Push] Foreground message received:', payload);
-    
-    // Backend sends data-only messages — read from payload.data
-    // Show browser notification if page is not focused
-    if (document.hidden && Notification.permission === 'granted') {
-      const title = payload.data?.title || 'New Message - Go Viral Ads';
-      const body = payload.data?.body || 'You have a new message';
-      
-      new Notification(title, {
-        body,
-        icon: '/icon-192.png',
-        tag: 'message-notification',
-        data: payload.data
-      });
-    }
-    
-    // Call custom handler
-    if (onMessageCallback) {
-      onMessageCallback(payload);
-    }
+  initFirebase().then(({ messaging: msg }) => {
+    if (disposed || !msg) return;
+    return loadFirebaseModules();
+  }).then((modules) => {
+    if (disposed || !modules || !messaging) return;
+    unsubscribe = modules.onMessage(messaging, (payload) => {
+      console.log('[Push] Foreground message received:', payload);
+
+      // Backend sends data-only messages — read from payload.data
+      // Show browser notification if page is not focused
+      if (document.hidden && Notification.permission === 'granted') {
+        const title = payload.data?.title || 'New Message - Go Viral Ads';
+        const body = payload.data?.body || 'You have a new message';
+
+        new Notification(title, {
+          body,
+          icon: '/icon-192.png',
+          tag: 'message-notification',
+          data: payload.data
+        });
+      }
+
+      // Call custom handler
+      if (onMessageCallback) {
+        onMessageCallback(payload);
+      }
+    });
+  }).catch((err) => {
+    console.error('[Push] Foreground handler setup failed (non-fatal):', err.message);
   });
+
+  return () => {
+    disposed = true;
+    if (typeof unsubscribe === 'function') unsubscribe();
+  };
 };
 
 // Initialize push notifications (call after login)
