@@ -161,6 +161,11 @@ const TaskDetail = () => {
       setOriginalTask(taskData);
       
       // Initialize form data
+      // WORKING-DAY DEADLINE SYSTEM: pre-fill End Date + End Time from the
+      // authoritative deadline value (deadline || endDate — the same value
+      // every serializer exposes). Saving writes both fields back, so manual
+      // edits stay the single source of truth and are never recalculated.
+      const endSource = taskData.deadline || taskData.endDate;
       setFormData({
         title: taskData.title || '',
         description: taskData.description || '',
@@ -170,8 +175,8 @@ const TaskDetail = () => {
         status: taskData.status || 'PENDING',
         progress: taskData.progress || 0,
         startDate: taskData.startDate ? taskData.startDate.split('T')[0] : '',
-        endDate: taskData.endDate ? taskData.endDate.split('T')[0] : '',
-        endTime: taskData.endDate && taskData.endDate.includes('T') ? taskData.endDate.split('T')[1].slice(0, 5) : '',
+        endDate: endSource ? endSource.split('T')[0] : '',
+        endTime: endSource && endSource.includes('T') ? endSource.split('T')[1].slice(0, 5) : '',
         // Milestone & Progress Config
         milestones: taskData.milestones || [],
         autoCompletionCap: taskData.autoCompletionCap || 100,
@@ -291,6 +296,8 @@ const TaskDetail = () => {
   // Check for changes
   useEffect(() => {
     if (originalTask) {
+      // Authoritative end value = deadline || endDate (working-day deadline system)
+      const origEnd = originalTask.deadline || originalTask.endDate;
       const changed = 
         formData.title !== (originalTask.title || '') ||
         formData.description !== (originalTask.description || '') ||
@@ -300,8 +307,8 @@ const TaskDetail = () => {
         formData.status !== (originalTask.status || 'PENDING') ||
         formData.progress !== (originalTask.progress || 0) ||
         formData.startDate !== (originalTask.startDate ? originalTask.startDate.split('T')[0] : '') ||
-        formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '') ||
-        formData.endTime !== (originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '') ||
+        formData.endDate !== (origEnd ? origEnd.split('T')[0] : '') ||
+        formData.endTime !== (origEnd && origEnd.includes('T') ? origEnd.split('T')[1].slice(0, 5) : '') ||
         JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' }) ||
         formData.assignedTo !== (originalTask.assignedTo || '') ||
         JSON.stringify(assignedUsers) !== JSON.stringify(originalAssignedUsers) ||
@@ -397,12 +404,20 @@ const TaskDetail = () => {
     // datetime. Follows the existing form convention (server ISO split on 'T',
     // i.e. UTC), so date-only legacy values (UTC midnight) keep working and
     // preserving either part works both ways.
-    const originalEndDay = originalTask.endDate ? originalTask.endDate.split('T')[0] : '';
-    const originalEndTime = originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '';
+    // WORKING-DAY DEADLINE SYSTEM: compare against the authoritative value
+    // (deadline || endDate) and write BOTH fields back on save. An
+    // auto-calculated deadline is replaced only when the admin deliberately
+    // edits it here, and a stale deadline can never win over the manual value
+    // in the `deadline || endDate` chain.
+    const endSourceVal = originalTask.deadline || originalTask.endDate;
+    const originalEndDay = endSourceVal ? endSourceVal.split('T')[0] : '';
+    const originalEndTime = endSourceVal && endSourceVal.includes('T') ? endSourceVal.split('T')[1].slice(0, 5) : '';
     if (formData.endDate !== originalEndDay || formData.endTime !== originalEndTime) {
-      payload.endDate = formData.endDate
+      const newEndValue = formData.endDate
         ? new Date(`${formData.endDate}T${formData.endTime || '00:00'}:00Z`).toISOString()
         : null;
+      payload.endDate = newEndValue;
+      payload.deadline = newEndValue;
     }
     
     // Milestone & Progress Config - Always include if changed
@@ -481,8 +496,8 @@ const TaskDetail = () => {
         status: originalTask.status || 'PENDING',
         progress: originalTask.progress || 0,
         startDate: originalTask.startDate ? originalTask.startDate.split('T')[0] : '',
-        endDate: originalTask.endDate ? originalTask.endDate.split('T')[0] : '',
-        endTime: originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '',
+        endDate: (originalTask.deadline || originalTask.endDate) ? (originalTask.deadline || originalTask.endDate).split('T')[0] : '',
+        endTime: (originalTask.deadline || originalTask.endDate) && (originalTask.deadline || originalTask.endDate).includes('T') ? (originalTask.deadline || originalTask.endDate).split('T')[1].slice(0, 5) : '',
         milestones: originalTask.milestones || [],
         autoCompletionCap: originalTask.autoCompletionCap || 100,
         icon: originalTask.icon || ''
@@ -503,8 +518,8 @@ const TaskDetail = () => {
         status: originalTask.status || 'PENDING',
         progress: originalTask.progress || 0,
         startDate: originalTask.startDate ? originalTask.startDate.split('T')[0] : '',
-        endDate: originalTask.endDate ? originalTask.endDate.split('T')[0] : '',
-        endTime: originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '',
+        endDate: (originalTask.deadline || originalTask.endDate) ? (originalTask.deadline || originalTask.endDate).split('T')[0] : '',
+        endTime: (originalTask.deadline || originalTask.endDate) && (originalTask.deadline || originalTask.endDate).includes('T') ? (originalTask.deadline || originalTask.endDate).split('T')[1].slice(0, 5) : '',
         milestones: originalTask.milestones || [],
         autoCompletionCap: originalTask.autoCompletionCap || 100,
         icon: originalTask.icon || ''

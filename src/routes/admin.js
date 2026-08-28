@@ -1508,6 +1508,8 @@ router.get('/tasks/:taskId', async (req, res) => {
         defaultAssignedUsers: task.defaultAssignedUsers || [],
         defaultCommissionRoles: task.defaultCommissionRoles || [],
         defaultCostBreakdown: task.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
+        // WORKING-DAY DEADLINE SYSTEM: plan delivery duration (null for legacy plans)
+        deliveryDuration: task.deliveryDuration ?? null,
       }
     });
   } catch (err) {
@@ -1675,6 +1677,22 @@ router.patch('/tasks/:taskId', async (req, res) => {
       for (const r of updates.defaultCommissionRoles) {
         if (!r.role || !r.role.trim()) return res.status(400).json({ error: 'VALIDATION FAILED: Commission role name cannot be empty.' });
         if ((Number(r.percentage) || 0) < 0) return res.status(400).json({ error: 'VALIDATION FAILED: Commission role percentage cannot be negative.' });
+      }
+    }
+
+    // WORKING-DAY DEADLINE SYSTEM: validate plan Delivery Time (positive whole
+    // working days, or cleared). Normalized here so the generic field apply
+    // below stores a clean value. Manual deadline edits pass through untouched.
+    if (updates.deliveryDuration !== undefined) {
+      if (updates.deliveryDuration === null || updates.deliveryDuration === '') {
+        updates.deliveryDuration = null;
+      } else {
+        const dd = Number(updates.deliveryDuration);
+        if (!Number.isInteger(dd) || dd < 1) {
+          return res.status(400).json({ error: 'VALIDATION FAILED: Delivery Time must be a positive whole number of working days.' });
+        }
+        updates.deliveryDuration = dd;
+        updates.deliveryDurationUnit = 'WORKING_DAYS';
       }
     }
 
@@ -2529,7 +2547,9 @@ router.post('/tasks/assign', async (req, res) => {
       // PLAN DEFAULT COMMISSION & COST (Step 3)
       defaultAssignedUsers,
       defaultCostBreakdown,
-      defaultCommissionRoles
+      defaultCommissionRoles,
+      // WORKING-DAY DEADLINE SYSTEM: plan Delivery Time (working days)
+      deliveryDuration
     } = payload;
 
     // --- HARD BRANCH: PLAN (PRODUCT LISTING) ---
@@ -2571,6 +2591,16 @@ router.post('/tasks/assign', async (req, res) => {
         for (const r of defaultCommissionRoles) {
           if (!r.role || !r.role.trim()) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Commission role name cannot be empty.' });
           if ((Number(r.percentage) || 0) < 0) return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Commission role percentage cannot be negative.' });
+        }
+      }
+
+      // 2e. Validate deliveryDuration (working-day deadline system) — optional,
+      // positive whole working days. Legacy plans may omit it entirely.
+      let planDeliveryDuration = null;
+      if (deliveryDuration !== undefined && deliveryDuration !== null && deliveryDuration !== '') {
+        planDeliveryDuration = Number(deliveryDuration);
+        if (!Number.isInteger(planDeliveryDuration) || planDeliveryDuration < 1) {
+          return res.status(400).json({ error: 'PLAN VALIDATION FAILED: Delivery Time must be a positive whole number of working days.' });
         }
       }
 
@@ -2616,7 +2646,10 @@ router.post('/tasks/assign', async (req, res) => {
         // PLAN DEFAULT COMMISSION & COST (Step 3)
         ...(defaultAssignedUsers && Array.isArray(defaultAssignedUsers) && defaultAssignedUsers.length > 0 ? { defaultAssignedUsers: defaultAssignedUsers.filter(u => u.userId && u.percentage > 0) } : {}),
         ...(defaultCommissionRoles && Array.isArray(defaultCommissionRoles) && defaultCommissionRoles.length > 0 ? { defaultCommissionRoles: defaultCommissionRoles.filter(r => r.role && r.role.trim() && r.percentage > 0) } : {}),
-        ...(defaultCostBreakdown ? { defaultCostBreakdown } : {})
+        ...(defaultCostBreakdown ? { defaultCostBreakdown } : {}),
+        // WORKING-DAY DEADLINE SYSTEM: plan delivery duration (null = legacy, no auto deadline)
+        deliveryDuration: planDeliveryDuration,
+        deliveryDurationUnit: 'WORKING_DAYS'
       });
 
       console.log('[FORENSIC] ========== PLAN CREATED ==========');
@@ -3000,6 +3033,29 @@ router.patch('/tasks/:taskId/approve', async (req, res) => {
     if (internalNotes !== undefined) task.internalNotes = internalNotes.trim();
     if (publicNotes !== undefined) task.publicNotes = publicNotes.trim();
     if (specialInstructions !== undefined) task.specialInstructions = specialInstructions.trim();
+
+    // WORKING-DAY DEADLINE SYSTEM (auto, backend-authoritative): when the admin
+    // approves without supplying an end date and the task carries a snapshotted
+    // delivery duration, compute the deadline from startDate + working calendar
+    // (weekends + OfficeConfig holidays skipped, 18:00 IST, Day-1 convention
+    // documented in utils/workingDays.js). Only task.deadline is written —
+    // endDate is never touched here so AUTO progress behavior is unchanged.
+    // An admin-supplied endDate is a MANUAL override and is never recomputed.
+    // Runs once at approval only — never recalculated afterwards.
+    if (!endDate && task.deliveryDuration && task.startDate) {
+      try {
+        const { calcWorkingDayDeadline } = require('../utils/workingDays');
+        const officeCfg = await OfficeConfig.getConfig();
+        const computedDeadline = calcWorkingDayDeadline(task.startDate, task.deliveryDuration, officeCfg.holidays || []);
+        if (computedDeadline) {
+          task.deadline = computedDeadline;
+          console.log(`[WORKING-DAY DEADLINE] Task ${task._id}: auto deadline ${computedDeadline.toISOString()} (${task.deliveryDuration} working days from ${task.startDate})`);
+        }
+      } catch (dlErr) {
+        // Fail safe: approval must never fail because of deadline calc
+        console.error('[WORKING-DAY DEADLINE] approve calc failed:', dlErr.message);
+      }
+    }
 
     // Transition to ACTIVE
     task.status = TASK_STATUS.ACTIVE;
@@ -3940,6 +3996,16 @@ router.post('/orders/:orderId/approve', async (req, res) => {
     
     // Create tasks for each item in the order
     const createdTaskIds = [];
+
+    // WORKING-DAY DEADLINE SYSTEM: load the working calendar once for all
+    // tasks created by this approval (order tasks start immediately = now).
+    let workingDayHolidays = [];
+    try {
+      const officeCfg = await OfficeConfig.getConfig();
+      workingDayHolidays = officeCfg.holidays || [];
+    } catch (holErr) {
+      console.error('[WORKING-DAY DEADLINE] holiday load failed:', holErr.message);
+    }
     
     // Auto-populate assignedUsers from client's team (if not provided in request and not reviewed by admin)
     let orderTeamAssignedUsers = [];
@@ -3982,6 +4048,20 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           ...(item.planSnapshot?.defaultCommissionRoles?.length ? { defaultCommissionRoles: item.planSnapshot.defaultCommissionRoles } : {}),
           // INTERNAL: Snapshot commission base amount (₹) from plan
           ...(item.planSnapshot?.commissionBaseAmount ? { commissionBaseAmount: item.planSnapshot.commissionBaseAmount } : {}),
+          // WORKING-DAY DEADLINE SYSTEM: snapshot plan delivery duration and
+          // compute the deadline now (order tasks start at approval time).
+          // Only task.deadline is set — endDate stays untouched.
+          ...(item.planSnapshot?.deliveryDuration
+            ? {
+                deliveryDuration: item.planSnapshot.deliveryDuration,
+                deliveryDurationUnit: 'WORKING_DAYS',
+                ...((() => {
+                  const { calcWorkingDayDeadline } = require('../utils/workingDays');
+                  const d = calcWorkingDayDeadline(new Date(), item.planSnapshot.deliveryDuration, workingDayHolidays);
+                  return d ? { deadline: d } : {};
+                })()),
+              }
+            : {}),
         };
         
         const task = await Task.create([taskData], { session });
@@ -6687,6 +6767,39 @@ router.patch('/office-config', async (req, res) => {
         isEnabled: item.isEnabled !== false,
         order: Number.isFinite(Number(item.order)) ? Number(item.order) : idx
       }));
+    }
+
+    // WORKING-DAY DEADLINE SYSTEM: holiday calendar — validated separately.
+    // Calendar dates (YYYY-MM-DD) only; invalid or duplicate dates rejected.
+    if (updates.holidays !== undefined) {
+      if (!Array.isArray(updates.holidays)) {
+        return res.status(400).json({ error: 'holidays must be an array' });
+      }
+      if (updates.holidays.length > 200) {
+        return res.status(400).json({ error: 'Maximum 200 holidays allowed' });
+      }
+      const seenDates = new Set();
+      const cleanedHolidays = [];
+      for (const h of updates.holidays) {
+        const dateStr = String(h?.date || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          return res.status(400).json({ error: 'Each holiday needs a valid date in YYYY-MM-DD format' });
+        }
+        const parsed = new Date(`${dateStr}T00:00:00Z`);
+        if (isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dateStr) {
+          return res.status(400).json({ error: `Invalid calendar date: ${dateStr}` });
+        }
+        if (seenDates.has(dateStr)) {
+          return res.status(400).json({ error: `Duplicate holiday date: ${dateStr}` });
+        }
+        seenDates.add(dateStr);
+        cleanedHolidays.push({
+          id: String(h.id || `hol-${dateStr}`),
+          date: dateStr,
+          name: String(h?.name || '').trim().slice(0, 80)
+        });
+      }
+      config.holidays = cleanedHolidays;
     }
     
     config.lastUpdatedBy = req.user._id;

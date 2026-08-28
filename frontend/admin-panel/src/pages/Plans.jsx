@@ -81,6 +81,7 @@ const Plans = () => {
     categoryId: '',
     progressTarget: 100,
     quantity: '',
+    deliveryDuration: '',
     showQuantityToClient: true,
     showCreditsToClient: true,
     isActivePlan: true,
@@ -162,7 +163,7 @@ const Plans = () => {
   const resetForm = () => {
     setFormData({
       title: '', description: '', creditCost: '', offerPrice: '', originalPrice: '',
-      categoryId: '', progressTarget: 100, quantity: '', showQuantityToClient: true,
+      categoryId: '', progressTarget: 100, quantity: '', deliveryDuration: '', showQuantityToClient: true,
       showCreditsToClient: true, isActivePlan: true, publicNotes: '', planMedia: [],
       isFeatured: false, isPopular: false, isNew: false, visibility: 'PUBLIC', allowedClients: [],
       requireClientContent: false,
@@ -193,6 +194,11 @@ const Plans = () => {
       setTimeout(() => setToast(null), 3000);
       return;
     }
+    if (formData.deliveryDuration !== '' && (!Number.isInteger(Number(formData.deliveryDuration)) || Number(formData.deliveryDuration) < 1)) {
+      setToast({ type: 'error', message: 'Delivery Time must be a positive whole number of working days' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
 
     setCreating(true);
     try {
@@ -207,6 +213,7 @@ const Plans = () => {
         progressTarget: Number(formData.progressTarget) || 100,
         categoryId: formData.categoryId || null,
         quantity: formData.quantity ? Number(formData.quantity) : undefined,
+        deliveryDuration: formData.deliveryDuration === '' ? null : Number(formData.deliveryDuration),
         showQuantityToClient: formData.showQuantityToClient,
         showCreditsToClient: formData.showCreditsToClient,
         isActivePlan: formData.isActivePlan,
@@ -905,6 +912,29 @@ const Plans = () => {
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Target Goal (Internal)</label>
                 <input type="number" value={formData.progressTarget} onChange={(e) => handleInputChange('progressTarget', e.target.value)} style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
                 <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0' }}>Used internally for tracking. Not shown to clients.</p>
+              </div>
+
+              {/* WORKING-DAY DEADLINE SYSTEM: Delivery Time (working days) */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Delivery Time</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={formData.deliveryDuration}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || (Number.isInteger(Number(v)) && Number(v) >= 1)) {
+                        handleInputChange('deliveryDuration', v);
+                      }
+                    }}
+                    placeholder="e.g. 2"
+                    style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap' }}>Working Days</span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0' }}>Deadlines for purchased tasks are auto-calculated in working days (weekends and holidays skipped, 6:00 PM). Leave empty for no auto deadline.</p>
               </div>
 
               {/* Visibility Controls */}

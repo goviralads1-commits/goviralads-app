@@ -47,6 +47,20 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // WORKING-DAY DEADLINE SYSTEM: Plan delivery duration snapshot.
+    // Copied from the Plan at purchase/order-approval time so later Plan
+    // edits never retroactively change existing tasks. Null for legacy
+    // plans/tasks (no auto deadline is invented for them).
+    deliveryDuration: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
+    deliveryDurationUnit: {
+      type: String,
+      enum: ['WORKING_DAYS'],
+      default: 'WORKING_DAYS',
+    },
     status: {
       type: String,
       enum: Object.values(TASK_STATUS),

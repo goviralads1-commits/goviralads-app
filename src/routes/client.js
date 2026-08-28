@@ -1947,6 +1947,10 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       ...(plan.defaultCommissionRoles?.length ? { defaultCommissionRoles: plan.defaultCommissionRoles } : {}),
       // INTERNAL: Snapshot commission base amount (₹) from plan
       ...(plan.commissionBaseAmount ? { commissionBaseAmount: plan.commissionBaseAmount } : {}),
+      // WORKING-DAY DEADLINE SYSTEM: snapshot plan delivery duration so later
+      // Plan edits never change this task. Deadline itself is computed at
+      // approval time, when the admin sets the start date.
+      ...(plan.deliveryDuration ? { deliveryDuration: plan.deliveryDuration, deliveryDurationUnit: 'WORKING_DAYS' } : {}),
     });
 
     return res.status(201).json({
@@ -2104,6 +2108,8 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
         progress: task.progress,
         status: TASK_STATUS.PENDING_APPROVAL,
         deadline: task.deadline,
+        // WORKING-DAY DEADLINE SYSTEM: snapshot plan delivery duration
+        deliveryDuration: task.deliveryDuration || null,
         planId: task._id,
         // CLIENT ASSIGNMENT
         clientId: clientId,
@@ -3799,6 +3805,8 @@ router.post('/purchase-cart', async (req, res) => {
           defaultCostBreakdown: plan.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
           // INTERNAL: Commission basis in ₹ (admin-only, never exposed to client)
           commissionBaseAmount: plan.commissionBaseAmount || null,
+          // WORKING-DAY DEADLINE SYSTEM: plan delivery duration snapshot (null for legacy plans)
+          deliveryDuration: plan.deliveryDuration || null,
         },
         inputs: item.inputs || [],
       });

@@ -79,6 +79,8 @@ const orderItemSchema = new mongoose.Schema({
   planSnapshot: {
     description: { type: String, default: '' },
     creditCost: { type: Number, default: 0 },
+    // WORKING-DAY DEADLINE SYSTEM: plan delivery duration snapshot (null for legacy plans)
+    deliveryDuration: { type: Number, default: null },
     publicNotes: { type: String, default: '' },
     progressMode: { type: String, default: 'AUTO' },
     progressTarget: { type: Number, default: 100 },

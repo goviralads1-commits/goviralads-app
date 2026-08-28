@@ -45,6 +45,8 @@ const PlanDetail = () => {
     publicNotes: '',
     planMedia: [],
     countdownEndDate: '',
+    // WORKING-DAY DEADLINE SYSTEM: plan Delivery Time (working days)
+    deliveryDuration: '',
     // Section assignments
     isFeatured: false,
     isPopular: false,
@@ -114,6 +116,8 @@ const PlanDetail = () => {
         publicNotes: planData.publicNotes || '',
         planMedia: planData.planMedia || [],
         countdownEndDate: planData.countdownEndDate ? planData.countdownEndDate.split('T')[0] : '',
+        // WORKING-DAY DEADLINE SYSTEM: plan Delivery Time (working days)
+        deliveryDuration: planData.deliveryDuration ?? '',
         // Section assignments
         isFeatured: planData.isFeatured ?? false,
         isPopular: planData.isPopular ?? false,
@@ -281,6 +285,9 @@ const PlanDetail = () => {
         isActivePlan: formData.isActivePlan,
         publicNotes: formData.publicNotes,
         countdownEndDate: formData.countdownEndDate || null,
+        // WORKING-DAY DEADLINE SYSTEM: Delivery Time — positive whole working
+        // days, or null to clear (backend validates and normalizes)
+        deliveryDuration: formData.deliveryDuration === '' ? null : Number(formData.deliveryDuration),
         // Section assignments
         isFeatured: formData.isFeatured,
         isPopular: formData.isPopular,
@@ -584,6 +591,29 @@ const PlanDetail = () => {
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Quantity</label>
               <input type="number" value={formData.quantity} onChange={(e) => handleInputChange('quantity', e.target.value)} placeholder="Optional" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
+            </div>
+
+            {/* WORKING-DAY DEADLINE SYSTEM: Delivery Time (working days) */}
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Delivery Time</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.deliveryDuration}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || (Number.isInteger(Number(v)) && Number(v) >= 1)) {
+                      handleInputChange('deliveryDuration', v);
+                    }
+                  }}
+                  placeholder="e.g. 2"
+                  style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }}
+                />
+                <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap' }}>Working Days</span>
+              </div>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0' }}>Deadlines for purchased tasks are auto-calculated in working days (weekends and holidays skipped, 6:00 PM). Leave empty for no auto deadline.</p>
             </div>
 
             {/* Milestones Editor — reused from TaskDetail.jsx */}

@@ -48,6 +48,14 @@ const headerNavItemSchema = new mongoose.Schema({
   order: { type: Number, default: 0 }
 });
 
+// WORKING-DAY DEADLINE SYSTEM: admin-managed holiday calendar entries.
+// Calendar dates only (YYYY-MM-DD) — never hard-coded; managed via Admin Panel.
+const holidaySchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  date: { type: String, required: true }, // YYYY-MM-DD
+  name: { type: String, default: '' }
+});
+
 const officeConfigSchema = new mongoose.Schema({
   // Singleton identifier
   configType: { type: String, default: 'OFFICE_CONFIG', unique: true },
@@ -68,6 +76,9 @@ const officeConfigSchema = new mongoose.Schema({
 
   // Public Header Navigation (admin-configurable, max 4 shown publicly)
   headerNavItems: [headerNavItemSchema],
+
+  // WORKING-DAY DEADLINE SYSTEM: configurable holiday calendar (empty = none)
+  holidays: [holidaySchema],
   
   // Updates Section Config
   updatesSectionConfig: {

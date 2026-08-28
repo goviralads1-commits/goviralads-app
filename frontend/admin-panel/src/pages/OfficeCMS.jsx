@@ -15,6 +15,9 @@ const OfficeCMS = () => {
   const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', gradient: '', imageUrl: '', ctaText: '', ctaLink: '', ctaLinkType: 'internal' });
   // Local drafts for header navigation item edits (persisted only when Save is clicked)
   const [navDrafts, setNavDrafts] = useState({});
+  // WORKING-DAY DEADLINE SYSTEM: holiday calendar form state
+  const [holidayDate, setHolidayDate] = useState('');
+  const [holidayName, setHolidayName] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -48,6 +51,42 @@ const OfficeCMS = () => {
       showToast('error', 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // WORKING-DAY DEADLINE SYSTEM: holiday calendar handlers (working calendar)
+  const handleAddHoliday = async () => {
+    if (!holidayDate) {
+      showToast('error', 'Pick a date for the holiday');
+      return;
+    }
+    const existing = config?.holidays || [];
+    if (existing.some(h => h.date === holidayDate)) {
+      showToast('error', 'That holiday date already exists');
+      return;
+    }
+    try {
+      const res = await api.patch('/admin/office-config', {
+        holidays: [...existing, { id: `hol-${holidayDate}`, date: holidayDate, name: holidayName.trim() }]
+      });
+      setConfig(res.data.config);
+      setHolidayDate('');
+      setHolidayName('');
+      showToast('success', 'Holiday added');
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to add holiday');
+    }
+  };
+
+  const handleRemoveHoliday = async (id) => {
+    try {
+      const res = await api.patch('/admin/office-config', {
+        holidays: (config?.holidays || []).filter(h => h.id !== id)
+      });
+      setConfig(res.data.config);
+      showToast('success', 'Holiday removed');
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to remove holiday');
     }
   };
 
@@ -289,6 +328,7 @@ const OfficeCMS = () => {
               { id: 'featured', label: '⭐ Featured Plans' },
               { id: 'buttons', label: '🔘 Buttons' },
               { id: 'navigation', label: '🧭 Header Nav' },
+              { id: 'holidays', label: '📅 Holidays' },
             ].map(tab => {
               const isActive = activeTab === tab.id;
               return (
@@ -642,6 +682,54 @@ const OfficeCMS = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* HOLIDAYS TAB — WORKING-DAY DEADLINE SYSTEM working calendar.
+            Weekends (Sat/Sun) are always non-working; dates listed here are
+            additionally skipped when auto-calculating task deadlines. */}
+        {activeTab === 'holidays' && (
+          <div>
+            <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 8px 0' }}>Holiday Calendar</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0' }}>
+                Task deadlines are auto-calculated in working days: Monday–Friday, skipping the holidays listed here. Deadlines land at 6:00 PM on the last working day.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Date</label>
+                  <input type="date" value={holidayDate} onChange={e => setHolidayDate(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px' }} />
+                </div>
+                <div style={{ flex: '1 1 200px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>Name (optional)</label>
+                  <input type="text" maxLength={80} value={holidayName} onChange={e => setHolidayName(e.target.value)} placeholder="e.g. Office closure" style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', boxSizing: 'border-box' }} />
+                </div>
+                <button onClick={handleAddHoliday} disabled={!holidayDate} style={{ padding: '12px 24px', minHeight: '44px', backgroundColor: holidayDate ? '#6366f1' : '#e2e8f0', color: holidayDate ? '#fff' : '#94a3b8', borderRadius: '12px', border: 'none', fontWeight: '600', cursor: holidayDate ? 'pointer' : 'default' }}>
+                  + Add Holiday
+                </button>
+              </div>
+            </div>
+
+            {(config?.holidays || []).length === 0 ? (
+              <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '48px 24px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>📅</div>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>No holidays configured. Only weekends are skipped when calculating deadlines.</p>
+              </div>
+            ) : (
+              <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '8px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
+                {[...(config?.holidays || [])].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(h => (
+                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '14px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', minWidth: '110px' }}>{h.date}</span>
+                      <span style={{ fontSize: '14px', color: '#475569' }}>{h.name || <em style={{ color: '#94a3b8' }}>No name</em>}</span>
+                    </div>
+                    <button onClick={() => handleRemoveHoliday(h.id)} style={{ padding: '8px 14px', minHeight: '40px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
