@@ -553,6 +553,7 @@ router.get('/tasks/:taskId', async (req, res) => {
     let needsSave = false;
     let currentStatus = task.status;
     let currentProgress = task.progress;
+    const storedProgress = task.progress || 0; // pre-recalc value for downward status sync
     let currentMilestones = task.milestones || [];
 
     // Auto-start scheduled tasks if startDate has passed
@@ -619,6 +620,12 @@ router.get('/tasks/:taskId', async (req, res) => {
       } else if (currentProgress > 0 && currentStatus === 'PENDING') {
         task.status = 'ACTIVE';
         currentStatus = 'ACTIVE';
+        needsSave = true;
+      } else if (currentProgress < 100 && currentStatus === 'COMPLETED' && storedProgress >= 100) {
+        // DOWNWARD SYNC: progress dropped back below 100% — COMPLETED
+        // ("Delivered") must not persist. Revert to existing active/scheduled status.
+        task.status = currentProgress > 0 ? 'ACTIVE' : 'PENDING';
+        currentStatus = task.status;
         needsSave = true;
       }
     }
@@ -2237,6 +2244,7 @@ router.get('/tasks', async (req, res) => {
       let needsSave = false;
       let currentStatus = t.status;
       let currentProgress = t.progress;
+      const storedProgress = t.progress || 0; // pre-recalc value for downward status sync
       let currentMilestones = t.milestones || [];
 
       // FIX #2: Auto-start scheduled tasks if startDate has passed
@@ -2304,6 +2312,12 @@ router.get('/tasks', async (req, res) => {
         } else if (currentProgress > 0 && currentStatus === 'PENDING') {
           t.status = 'ACTIVE';
           currentStatus = 'ACTIVE';
+          needsSave = true;
+        } else if (currentProgress < 100 && currentStatus === 'COMPLETED' && storedProgress >= 100) {
+          // DOWNWARD SYNC: progress dropped back below 100% — COMPLETED
+          // ("Delivered") must not persist. Revert to existing active/scheduled status.
+          t.status = currentProgress > 0 ? 'ACTIVE' : 'PENDING';
+          currentStatus = t.status;
           needsSave = true;
         }
       }

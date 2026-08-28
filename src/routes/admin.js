@@ -1789,6 +1789,11 @@ router.patch('/tasks/:taskId', async (req, res) => {
           }
         } else if (currentProgress > 0 && task.status === 'PENDING') {
           task.status = 'ACTIVE';
+        } else if (currentProgress < 100 && task.status === 'COMPLETED' && oldProgress >= 100) {
+          // DOWNWARD SYNC: progress was moved back below 100% — a COMPLETED
+          // ("Delivered") task must not keep showing as delivered.
+          // Revert to the existing active/scheduled status (no new statuses).
+          task.status = currentProgress > 0 ? 'ACTIVE' : 'PENDING';
         }
       }
     }

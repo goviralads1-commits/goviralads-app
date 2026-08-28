@@ -133,6 +133,30 @@ const Tasks = () => {
     return '#8b5cf6';
   };
 
+  // Deadline formatting — same safe logic as TaskDetail (shared display convention)
+  const formatDeadline = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const dayMonth = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${dayMonth}, ${time}`;
+  };
+
+  const getRemainingLabel = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const diff = d.getTime() - Date.now();
+    if (diff <= 0) return 'Deadline passed';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} left`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} left`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} left`;
+  };
+
   // Skeleton Loader
   if (loading) {
     return (
@@ -410,7 +434,48 @@ const Tasks = () => {
                         </div>
                       )}
 
-                      {/* Progress — existing value, slim presentation */}
+                      {/* Progress — existing value, slim presentation.
+                          COMMISSION tasks show the authoritative backend deadline
+                          instead of the percentage bar (same value shown on the
+                          detail page). NON-COMMISSION tasks keep the bar, untouched. */}
+                      {task.isAssignedUser ? (
+                        (() => {
+                          const deadlineValue = task.deadline || task.endDate;
+                          const deadlineLabel = deadlineValue ? formatDeadline(deadlineValue) : null;
+                          const remainingLabel = deadlineValue ? getRemainingLabel(deadlineValue) : null;
+                          const overdue = remainingLabel === 'Deadline passed';
+                          return (
+                            <div style={{
+                              marginTop: milestones.length > 0 ? '10px' : '12px',
+                              padding: '10px 12px', borderRadius: '10px',
+                              backgroundColor: overdue ? '#fffbeb' : '#eef2ff',
+                              border: overdue ? '1px solid #fde68a' : '1px solid #e0e7ff',
+                              display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap'
+                            }}>
+                              <span style={{ fontSize: '16px', lineHeight: 1, flexShrink: 0 }}>{'\u23F1'}</span>
+                              <div style={{ flex: 1, minWidth: '110px' }}>
+                                <p style={{ fontSize: '9px', fontWeight: '700', color: overdue ? '#92400e' : '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                                  Deadline
+                                </p>
+                                <p style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', margin: '1px 0 0' }}>
+                                  {deadlineLabel || 'No deadline set'}
+                                </p>
+                              </div>
+                              {remainingLabel && (
+                                <span style={{
+                                  fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap',
+                                  padding: '3px 8px', borderRadius: '100px',
+                                  backgroundColor: overdue ? '#fef3c7' : '#fff',
+                                  color: overdue ? '#92400e' : '#4f46e5',
+                                  border: overdue ? '1px solid #fde68a' : '1px solid #e0e7ff'
+                                }}>
+                                  {remainingLabel}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()
+                      ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: milestones.length > 0 ? '10px' : '12px' }}>
                         <div style={{ flex: 1, height: '6px', backgroundColor: '#f1f5f9', borderRadius: '999px', overflow: 'hidden' }}>
                           <div style={{
@@ -423,6 +488,7 @@ const Tasks = () => {
                           {Math.round(progress)}%{progress > 100 ? ' 🎉' : ''}
                         </span>
                       </div>
+                      )}
                     </>
                   )}
 

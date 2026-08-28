@@ -102,6 +102,7 @@ const TaskDetail = () => {
     progress: 0,
     startDate: '',
     endDate: '',
+    endTime: '',
     // Milestone & Progress Config
     milestones: [],
     autoCompletionCap: 100,
@@ -170,6 +171,7 @@ const TaskDetail = () => {
         progress: taskData.progress || 0,
         startDate: taskData.startDate ? taskData.startDate.split('T')[0] : '',
         endDate: taskData.endDate ? taskData.endDate.split('T')[0] : '',
+        endTime: taskData.endDate && taskData.endDate.includes('T') ? taskData.endDate.split('T')[1].slice(0, 5) : '',
         // Milestone & Progress Config
         milestones: taskData.milestones || [],
         autoCompletionCap: taskData.autoCompletionCap || 100,
@@ -299,6 +301,7 @@ const TaskDetail = () => {
         formData.progress !== (originalTask.progress || 0) ||
         formData.startDate !== (originalTask.startDate ? originalTask.startDate.split('T')[0] : '') ||
         formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '') ||
+        formData.endTime !== (originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '') ||
         JSON.stringify(formData.progressIcon) !== JSON.stringify(originalTask.progressIcon || { type: 'default', value: '' }) ||
         formData.assignedTo !== (originalTask.assignedTo || '') ||
         JSON.stringify(assignedUsers) !== JSON.stringify(originalAssignedUsers) ||
@@ -390,8 +393,16 @@ const TaskDetail = () => {
     if (formData.startDate !== (originalTask.startDate ? originalTask.startDate.split('T')[0] : '')) {
       payload.startDate = formData.startDate || null;
     }
-    if (formData.endDate !== (originalTask.endDate ? originalTask.endDate.split('T')[0] : '')) {
-      payload.endDate = formData.endDate || null;
+    // End Date + End Time: reuse the existing endDate field, stored as a full
+    // datetime. Follows the existing form convention (server ISO split on 'T',
+    // i.e. UTC), so date-only legacy values (UTC midnight) keep working and
+    // preserving either part works both ways.
+    const originalEndDay = originalTask.endDate ? originalTask.endDate.split('T')[0] : '';
+    const originalEndTime = originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '';
+    if (formData.endDate !== originalEndDay || formData.endTime !== originalEndTime) {
+      payload.endDate = formData.endDate
+        ? new Date(`${formData.endDate}T${formData.endTime || '00:00'}:00Z`).toISOString()
+        : null;
     }
     
     // Milestone & Progress Config - Always include if changed
@@ -471,6 +482,7 @@ const TaskDetail = () => {
         progress: originalTask.progress || 0,
         startDate: originalTask.startDate ? originalTask.startDate.split('T')[0] : '',
         endDate: originalTask.endDate ? originalTask.endDate.split('T')[0] : '',
+        endTime: originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '',
         milestones: originalTask.milestones || [],
         autoCompletionCap: originalTask.autoCompletionCap || 100,
         icon: originalTask.icon || ''
@@ -492,6 +504,7 @@ const TaskDetail = () => {
         progress: originalTask.progress || 0,
         startDate: originalTask.startDate ? originalTask.startDate.split('T')[0] : '',
         endDate: originalTask.endDate ? originalTask.endDate.split('T')[0] : '',
+        endTime: originalTask.endDate && originalTask.endDate.includes('T') ? originalTask.endDate.split('T')[1].slice(0, 5) : '',
         milestones: originalTask.milestones || [],
         autoCompletionCap: originalTask.autoCompletionCap || 100,
         icon: originalTask.icon || ''
@@ -2126,6 +2139,15 @@ const TaskDetail = () => {
                       type="date"
                       value={formData.endDate}
                       onChange={(e) => handleInputChange('endDate', e.target.value)}
+                      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>End Time</label>
+                    <input
+                      type="time"
+                      value={formData.endTime}
+                      onChange={(e) => handleInputChange('endTime', e.target.value)}
                       style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
                     />
                   </div>
