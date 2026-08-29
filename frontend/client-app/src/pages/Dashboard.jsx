@@ -234,52 +234,57 @@ const Dashboard = () => {
 
       <div style={{ maxWidth: '960px', margin: '0 auto', padding: '0 20px 100px' }}>
         
-        {/* HERO SECTION — Gradient Card */}
-        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)', borderRadius: '0 0 28px 28px', padding: '28px 24px 24px', marginBottom: '20px', position: 'relative', overflow: 'hidden' }}>
+        {/* HERO SECTION — Compact gradient card (no oversized hero) */}
+        <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)', borderRadius: '0 0 24px 24px', padding: '20px 20px 18px', marginBottom: '20px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(99,102,241,0.2)' }} />
           <div style={{ position: 'absolute', bottom: '-20px', left: '-20px', width: '100px', height: '100px', borderRadius: '50%', background: 'rgba(139,92,246,0.15)' }} />
-          <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: '0 0 4px 0', position: 'relative', zIndex: 1 }}>Welcome back,</p>
-          <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#fff', margin: '0 0 16px 0', letterSpacing: '-0.3px', position: 'relative', zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getDisplayName()} 👋</h1>
+          <p style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.7)', margin: '0 0 2px 0', position: 'relative', zIndex: 1 }}>Welcome back,</p>
+          <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#fff', margin: '0 0 12px 0', letterSpacing: '-0.3px', position: 'relative', zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getDisplayName()} 👋</h1>
           
           {/* Wallet Balance Card — the ONLY place credits are displayed on the dashboard.
               Three distinct states: loading ('…'), genuine zero (0 credits), failed request (retry). */}
-          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '18px', padding: '16px 18px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '12px 14px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</p>
+                <p style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.6)', margin: '0 0 2px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</p>
                 {walletError ? (
-                  <p style={{ fontSize: '13.5px', fontWeight: '600', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Couldn't load your credits</p>
+                  <p style={{ fontSize: '13px', fontWeight: '600', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Couldn't load your credits</p>
                 ) : (
-                  <p style={{ fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.15 }}>
-                    {walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '…'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span>
+                  <p style={{ fontSize: 'clamp(20px, 5vw, 24px)', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+                    {walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '…'} <span style={{fontSize: '13px', opacity: 0.7}}>credits</span>
                   </p>
                 )}
                 {walletError && (
-                  <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>Check your connection and try again.</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '3px 0 0 0' }}>Check your connection and try again.</p>
                 )}
               </div>
               {walletError ? (
-                <button onClick={retryWallet} style={{ padding: '9px 18px', background: '#fff', border: 'none', borderRadius: '10px', color: '#312e81', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <button onClick={retryWallet} style={{ padding: '8px 14px', background: '#fff', border: 'none', borderRadius: '10px', color: '#312e81', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   ↻ Retry
                 </button>
               ) : (
-                <button onClick={() => navigate('/wallet')} style={{ padding: '9px 18px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <button onClick={() => navigate('/wallet')} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   Recharge Wallet
                 </button>
               )}
             </div>
             {!walletError && walletData && (walletData.subscriptionCredits > 0 || walletData.walletCredits > 0) && (
-              <div style={{ display: 'flex', gap: '24px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px', paddingTop: '9px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap' }}>
                 {walletData.subscriptionCredits > 0 && (
-                  <div>
-                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Plan Credits</p>
-                    <p style={{ fontSize: '14px', fontWeight: '700', color: '#a5b4fc', margin: 0 }}>{walletData.subscriptionCredits.toLocaleString()}</p>
-                  </div>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>Plan </span>
+                    <span style={{ fontWeight: '700', color: '#a5b4fc' }}>{walletData.subscriptionCredits.toLocaleString()}</span>
+                  </span>
                 )}
-                <div>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Credits Wallet</p>
-                  <p style={{ fontSize: '14px', fontWeight: '700', color: '#86efac', margin: 0 }}>{(walletData.walletCredits || 0).toLocaleString()} credits</p>
-                </div>
+                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.75)' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)' }}>Wallet </span>
+                  <span style={{ fontWeight: '700', color: '#86efac' }}>{(walletData.walletCredits || 0).toLocaleString()}</span>
+                </span>
+                {walletData.subscriptionExpiresAt && (
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginLeft: 'auto' }}>
+                    Plan valid until {new Date(walletData.subscriptionExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                )}
               </div>
             )}
           </div>

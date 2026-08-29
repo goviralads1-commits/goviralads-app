@@ -973,6 +973,19 @@ const Support = () => {
           <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>Your conversations</p>
         </div>
 
+        {/* Support Availability notice — informational only; ticket/chat functionality untouched */}
+        <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '14px', padding: '12px 14px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          <span style={{ fontSize: '16px', lineHeight: 1.4 }}>🕐</span>
+          <div>
+            <p style={{ fontSize: '13px', fontWeight: '700', color: '#0c4a6e', margin: '0 0 3px 0' }}>Support Availability</p>
+            <p style={{ fontSize: '12.5px', color: '#075985', margin: 0, lineHeight: 1.55 }}>
+              Our support team is mostly active during working hours, Monday to Friday.
+              Messages received outside working hours, on weekends, or during declared holidays may be responded to on the next working day.
+              We appreciate your patience and will get back to you as soon as possible.
+            </p>
+          </div>
+        </div>
+
         {loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#22c55e', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
