@@ -61,6 +61,9 @@ const Plans = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Search is collapsed by default; the header icon button expands it
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef(null);
   
   // Debounce search query
   useEffect(() => {
@@ -301,7 +304,7 @@ const Plans = () => {
               transform: selectedCategory === 'ALL' ? 'scale(1.02)' : 'scale(1)'
             }}
           >
-            <div style={{ 
+            <div className="cat-icon" style={{ 
               width: '52px', height: '52px', borderRadius: '16px',
               background: selectedCategory === 'ALL' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -347,7 +350,7 @@ const Plans = () => {
                   transform: isSelected ? 'scale(1.02)' : 'scale(1)'
                 }}
               >
-                <div style={{ 
+                <div className="cat-icon" style={{ 
                   width: '52px', height: '52px', borderRadius: '16px',
                   backgroundColor: isSelected ? themeColor : '#f1f5f9',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -386,20 +389,47 @@ const Plans = () => {
         </div>
         
         {/* RIGHT CONTENT AREA - Marketplace Experience */}
-        <div className="plans-content" style={{ flex: 1, padding: '28px 24px', paddingBottom: '120px', minWidth: 0 }}>
+        <div className="plans-content" style={{ flex: 1, padding: '24px 24px', paddingBottom: '120px', minWidth: 0 }}>
           
           {/* Header Section */}
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <div>
                 <h1 style={{ fontSize: 'clamp(18px, 5vw, 26px)', fontWeight: '700', color: '#0f172a', margin: 0, letterSpacing: '-0.025em' }}>Marketplace</h1>
-                <p style={{ fontSize: '14px', color: '#64748b', margin: '6px 0 0', fontWeight: '500' }}>
+                <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0', fontWeight: '500' }}>
                   {selectedCategory === 'ALL' ? `${plans.length} plans available` : `${plans.length} in ${categories.find(c => (c.id || c._id) === selectedCategory)?.name || 'category'}`}
                 </p>
               </div>
               
-              {/* View Toggle */}
-              <div style={{ display: 'flex', gap: '4px', backgroundColor: '#ffffff', borderRadius: '14px', padding: '5px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
+              {/* Header Controls: Search Toggle + View Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Search toggle — search field is collapsed by default */}
+                <button
+                  type="button"
+                  aria-label={searchOpen ? 'Close search' : 'Search plans'}
+                  aria-expanded={searchOpen}
+                  onClick={() => {
+                    const opening = !searchOpen;
+                    setSearchOpen(opening);
+                    if (opening) setTimeout(() => searchInputRef.current?.focus(), 60);
+                  }}
+                  style={{
+                    width: '44px', height: '44px', borderRadius: '12px', flexShrink: 0,
+                    border: '1px solid #e2e8f0', cursor: 'pointer',
+                    backgroundColor: (searchOpen || searchQuery) ? '#eff6ff' : '#ffffff',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={(searchOpen || searchQuery) ? '#3b82f6' : '#64748b'} strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                  </svg>
+                </button>
+
+                {/* View Toggle */}
+                <div style={{ display: 'flex', gap: '4px', backgroundColor: '#ffffff', borderRadius: '14px', padding: '5px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>
                 {['grid', 'list'].map(mode => (
                   <button
                     key={mode}
@@ -424,30 +454,49 @@ const Plans = () => {
                     )}
                   </button>
                 ))}
+                </div>
               </div>
             </div>
             
-            {/* Search Bar */}
-            <div style={{ position: 'relative' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)' }}>
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search plans..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%', padding: '16px 18px 16px 52px', fontSize: '15px',
-                  border: '2px solid #e2e8f0', borderRadius: '16px', backgroundColor: '#ffffff',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.04)', outline: 'none',
-                  transition: 'all 0.2s', fontWeight: '500'
-                }}
-                onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 4px 20px rgba(59, 130, 246, 0.15)'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = '0 4px 16px rgba(0,0,0,0.04)'; }}
-              />
-            </div>
+            {/* Search Bar — collapsed by default, revealed via the icon button above */}
+            {searchOpen && (
+              <div className="search-reveal" style={{ position: 'relative' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }}>
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                </svg>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search plans..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%', padding: '12px 44px 12px 44px', fontSize: '15px',
+                    border: '2px solid #e2e8f0', borderRadius: '14px', backgroundColor: '#ffffff',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.04)', outline: 'none',
+                    transition: 'all 0.2s', fontWeight: '500', boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 4px 20px rgba(59, 130, 246, 0.15)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = '0 4px 16px rgba(0,0,0,0.04)'; }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                      width: '28px', height: '28px', borderRadius: '50%', border: 'none',
+                      backgroundColor: '#f1f5f9', color: '#64748b', fontSize: '13px', fontWeight: '700',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         {plans.length === 0 ? (
           <div style={{ backgroundColor: '#fff', borderRadius: '24px', padding: '60px 24px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
@@ -833,6 +882,8 @@ const Plans = () => {
         @keyframes shimmer { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes searchReveal { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .search-reveal { animation: searchReveal 0.18s ease-out; }
         
         /* Hide scrollbar on sidebar - Premium feel */
         .category-rail::-webkit-scrollbar {
@@ -867,7 +918,7 @@ const Plans = () => {
             flex-direction: column !important;
           }
           
-          /* Sidebar horizontal scroll */
+          /* Sidebar horizontal scroll — compact premium rail */
           .category-rail {
             position: relative !important;
             top: 0 !important;
@@ -878,27 +929,36 @@ const Plans = () => {
             max-height: none !important;
             border-right: none !important;
             border-bottom: 1px solid #eef2f6 !important;
-            padding: 16px !important;
+            padding: 10px 12px !important;
             display: flex !important;
             flex-direction: row !important;
-            gap: 10px !important;
+            gap: 8px !important;
             overflow-x: auto !important;
             overflow-y: hidden !important;
             -webkit-overflow-scrolling: touch !important;
             box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
           }
           
-          /* Category items compact on mobile */
+          /* Category items compact on mobile — 4 visible at ~360px width */
           .category-rail > div {
             flex-shrink: 0 !important;
             margin: 0 !important;
-            padding: 12px 10px !important;
-            min-width: 75px !important;
+            padding: 8px 8px !important;
+            min-width: 70px !important;
+            border-radius: 14px !important;
           }
           
-          /* Content area mobile spacing */
+          /* Smaller category icons keep items tight without losing hierarchy */
+          .category-rail .cat-icon {
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 12px !important;
+            margin-bottom: 6px !important;
+          }
+          
+          /* Content area mobile spacing — tighter top, bottom-nav clearance kept */
           .plans-content {
-            padding: 20px 16px 140px !important;
+            padding: 16px 16px 140px !important;
           }
           
           /* Grid 2 columns - clean responsive */
