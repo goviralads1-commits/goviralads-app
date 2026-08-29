@@ -27,7 +27,7 @@ const Register = React.lazy(() => import('./pages/Register'));
 const Earnings = React.lazy(() => import('./pages/Earnings'));
 const EarningsLedgerPage = React.lazy(() => import('./pages/EarningsLedger'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
-import { initPushNotifications, setupForegroundHandler, enablePushNotifications } from './services/pushService';
+import { initPushNotifications, setupForegroundHandler, enablePushNotifications, getNotificationStatus, fetchPendingEnableReminder, resolveEnableReminder } from './services/pushService';
 
 // Lightweight Suspense fallback while a lazy route chunk loads (existing spinner style)
 const RouteLoadingFallback = () => (
@@ -276,6 +276,8 @@ const NotificationPermissionPrompt = () => {
     const maybeShow = () => {
       try {
         if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+        // Never stack two prompts: the admin-initiated pending reminder takes precedence
+        if (sessionStorage.getItem('gvaEnableReminderActive') === 'true') return;
         const dismissedAt = Number(localStorage.getItem('gvaNotifPromptDismissedAt') || 0);
         if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return; // suppressed
         setVisible(true);
@@ -342,6 +344,120 @@ const NotificationPermissionPrompt = () => {
             </button>
             <button
               onClick={handleLater}
+              disabled={busy}
+              style={{
+                padding: '8px 14px', borderRadius: '10px', border: '1px solid #e2e8f0',
+                backgroundColor: '#fff', color: '#64748b', fontSize: '12.5px', fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Pending "enable notifications" reminder from the admin (server-side pending
+// state — never depends on push delivery). ONE lightweight check per session,
+// post-auth only, fire-and-forget. Shown only when delivery is NOT healthy.
+// "Turn On" reuses the existing trusted enable flow (browser permission is
+// requested ONLY from this explicit tap). "Later" suppresses for the rest of
+// this session; the reminder persists server-side until resolved.
+let enableReminderCheckedThisSession = false;
+const EnableNotificationsReminder = () => {
+  const { isLoggedIn } = useAuth();
+  const [reminder, setReminder] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [deniedHint, setDeniedHint] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn || enableReminderCheckedThisSession) return;
+    enableReminderCheckedThisSession = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (getNotificationStatus() === 'healthy') return; // already healthy — never nag
+        const pending = await fetchPendingEnableReminder();
+        if (!cancelled && pending) {
+          try { sessionStorage.setItem('gvaEnableReminderActive', 'true'); } catch (e) {}
+          setReminder(pending);
+        }
+      } catch (e) {
+        // Reminder check must never break the app
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
+
+  const hideForSession = () => {
+    try { sessionStorage.setItem('gvaEnableReminderDismissed', 'true'); } catch (e) {}
+    try { sessionStorage.removeItem('gvaEnableReminderActive'); } catch (e) {}
+    setReminder(null);
+  };
+
+  const handleTurnOn = async () => {
+    setBusy(true);
+    try {
+      await enablePushNotifications(); // existing flow: permission (user gesture) + token + healthy report
+      if (reminder?.reminderId) resolveEnableReminder(reminder.reminderId);
+      try { sessionStorage.removeItem('gvaEnableReminderActive'); } catch (e) {}
+      setReminder(null);
+    } catch (err) {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+        setDeniedHint(true); // guidance only — never re-request a denied permission
+      } else {
+        hideForSession(); // transient failure — don't nag again this session
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!reminder || !isLoggedIn) return null;
+  try { if (sessionStorage.getItem('gvaEnableReminderDismissed') === 'true') return null; } catch (e) {}
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: '20px', right: '20px', zIndex: 1201,
+      maxWidth: '340px', backgroundColor: '#fff', borderRadius: '16px',
+      boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)', border: '1px solid #fde68a',
+      padding: '18px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+        <div style={{
+          width: '38px', height: '38px', borderRadius: '12px', flexShrink: 0,
+          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px'
+        }}>🔕</div>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>Notifications are off</p>
+          <p style={{ margin: '0 0 12px 0', fontSize: '12.5px', lineHeight: '1.5', color: '#64748b' }}>
+            Turn them on so you don't miss important updates.
+          </p>
+          {deniedHint && (
+            <p style={{ margin: '0 0 12px 0', fontSize: '11.5px', lineHeight: '1.5', color: '#b91c1c', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 10px' }}>
+              Your browser is blocking notifications. Click the lock/tune icon in the address bar →
+              Site settings → Notifications → Allow, then reload this page.
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleTurnOn}
+              disabled={busy}
+              style={{
+                padding: '8px 16px', borderRadius: '10px', border: 'none',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: '#fff', fontSize: '12.5px', fontWeight: '700',
+                cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1,
+              }}
+            >
+              {busy ? 'Enabling...' : 'Turn On Notifications'}
+            </button>
+            <button
+              onClick={hideForSession}
               disabled={busy}
               style={{
                 padding: '8px 14px', borderRadius: '10px', border: '1px solid #e2e8f0',
@@ -439,6 +555,7 @@ const AppShell = () => {
           </Suspense>
           <CookieConsent />
           <NotificationPermissionPrompt />
+          <EnableNotificationsReminder />
         </div>
       </Router>
     </CartProvider>

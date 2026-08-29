@@ -25,6 +25,7 @@ const { getNotificationsForUser, markNotificationAsRead, markAllNotificationsAsR
 const { authenticateJWT } = require('../middleware/auth');
 const { requireClient } = require('../middleware/authorization');
 const DeviceToken = require('../models/DeviceToken');
+const Notification = require('../models/Notification');
 const CommissionLog = require('../models/CommissionLog');
 const pushNotificationService = require('../services/pushNotificationService');
 const EarningsLedger = require('../models/EarningsLedger');
@@ -4308,6 +4309,84 @@ router.patch('/push-state', async (req, res) => {
   } catch (err) {
     console.error('[PUSH] Save push state error:', err.message);
     return res.status(500).json({ error: 'Failed to save push state' });
+  }
+});
+
+// ================== PENDING "ENABLE NOTIFICATIONS" REMINDER ==================
+// The reminder created by the admin (ENABLE_NOTIFICATIONS_REMINDER notification)
+// is SERVER-SIDE PENDING state — it never depends on push delivery, survives
+// logout/login, and is surfaced once after the client signs in.
+// SECURITY: both endpoints live behind authenticateJWT + requireClient and are
+// scoped strictly to req.user's own account — a client can never read or
+// resolve another client's reminder.
+const ENABLE_REMINDER_FRESH_MS = 3 * 24 * 60 * 60 * 1000; // mirrors admin-side freshness
+
+// GET /client/enable-notifications-reminder
+// Lightweight post-login check: is there an unresolved reminder AND is this
+// client's delivery currently not verified-healthy?
+router.get('/enable-notifications-reminder', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Already verified healthy (recent report + active token)? Never nag.
+    const user = await User.findById(userId).select('preferences').exec();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const reported = user.preferences?.pushState || null;
+    const updatedAt = user.preferences?.pushStateUpdatedAt || null;
+    const activeTokenCount = await DeviceToken.countDocuments({ userId, isActive: true });
+    const age = updatedAt ? Date.now() - new Date(updatedAt).getTime() : Infinity;
+    const verifiedHealthy = reported === 'healthy'
+      && Number.isFinite(age) && age >= 0 && age < ENABLE_REMINDER_FRESH_MS
+      && activeTokenCount > 0;
+    if (verifiedHealthy) {
+      return res.json({ hasPendingReminder: false });
+    }
+
+    const reminder = await Notification.findOne({
+      recipientId: userId,
+      type: NOTIFICATION_TYPES.ENABLE_NOTIFICATIONS_REMINDER,
+      isRead: false,
+    }).sort({ createdAt: -1 }).select('_id title message createdAt').exec();
+
+    if (!reminder) return res.json({ hasPendingReminder: false });
+    return res.json({
+      hasPendingReminder: true,
+      reminderId: reminder._id,
+      title: reminder.title,
+      message: reminder.message,
+      sentAt: reminder.createdAt,
+    });
+  } catch (err) {
+    console.error('[PUSH] Pending reminder check error:', err.message);
+    // Never block the client app because of this check
+    return res.json({ hasPendingReminder: false });
+  }
+});
+
+// POST /client/enable-notifications-reminder/:reminderId/resolve
+// Marks the pending reminder resolved (client turned notifications back on).
+// Only the recipient themselves can resolve their own reminder.
+router.post('/enable-notifications-reminder/:reminderId/resolve', async (req, res) => {
+  try {
+    const { reminderId } = req.params;
+    if (!mongoose.isValidObjectId(reminderId)) {
+      return res.status(400).json({ error: 'Invalid reminder id' });
+    }
+    const reminder = await Notification.findOne({
+      _id: reminderId,
+      recipientId: req.user.id,
+      type: NOTIFICATION_TYPES.ENABLE_NOTIFICATIONS_REMINDER,
+    }).exec();
+    if (!reminder) return res.status(404).json({ error: 'Reminder not found' });
+    if (!reminder.isRead) {
+      reminder.isRead = true;
+      reminder.readAt = new Date();
+      await reminder.save();
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[PUSH] Resolve reminder error:', err.message);
+    return res.status(500).json({ error: 'Failed to resolve reminder' });
   }
 });
 

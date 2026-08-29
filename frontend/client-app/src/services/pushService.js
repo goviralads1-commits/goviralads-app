@@ -379,6 +379,67 @@ export const reportPushState = async (force = false) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Permission drift detection (manual browser OFF must be caught)
+// If the user disables notifications in browser/site settings, the app detects
+// the real Notification.permission state the next time it loads or the tab
+// becomes visible again, invalidates the stale local token, and reports the
+// true state to the backend — so the admin never keeps seeing a stale
+// "ON / Healthy". Fire-and-forget; never blocks rendering; never loops
+// (reportPushState dedupes same-state reports).
+// ---------------------------------------------------------------------------
+export const checkPermissionDrift = async () => {
+  try {
+    if (!localStorage.getItem('token')) return; // not authenticated — nothing to sync
+    const current = getNotificationStatus();
+    let lastState = null;
+    try { lastState = JSON.parse(localStorage.getItem('gvaPushStateReport') || 'null')?.state; } catch (e) { lastState = null; }
+    if (lastState === current) return; // no drift
+
+    // Delivery became unavailable — drop the now-useless local token reference
+    if (current === 'denied' || current === 'disabled' || current === 'unsupported') {
+      localStorage.removeItem('fcmToken');
+      localStorage.setItem('gvaPushTokenRefreshAt', '0');
+    }
+    await reportPushState(true); // forced report — backend dedupes + alerts only on real transition
+    console.log('[Push] Permission drift detected and reported:', lastState, '->', current);
+  } catch (e) {
+    // Drift detection must never break the app
+  }
+};
+
+let driftListenerRegistered = false;
+const registerDriftListener = () => {
+  if (driftListenerRegistered || typeof document === 'undefined') return;
+  driftListenerRegistered = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkPermissionDrift();
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Pending "enable notifications" reminder (created server-side by admin)
+// Both calls are scoped to the signed-in client's own account by the backend.
+// ---------------------------------------------------------------------------
+export const fetchPendingEnableReminder = async () => {
+  try {
+    if (!localStorage.getItem('token')) return null;
+    const res = await api.get('/client/enable-notifications-reminder');
+    return res.data?.hasPendingReminder ? res.data : null;
+  } catch (e) {
+    return null; // non-fatal — reminder UI simply stays hidden
+  }
+};
+
+export const resolveEnableReminder = async (reminderId) => {
+  try {
+    if (!reminderId) return;
+    await api.post(`/client/enable-notifications-reminder/${reminderId}/resolve`);
+  } catch (e) {
+    // Non-fatal — reminder simply stays pending until next successful resolve
+  }
+};
+
 // Setup foreground message handler
 // Returns an unsubscribe function immediately; the actual Firebase listener is
 // attached once the dynamically imported SDK resolves (post-login only).
@@ -433,6 +494,10 @@ export const initPushNotifications = async () => {
       console.log('[Push] Not authenticated, skipping');
       return;
     }
+
+    // Detect manual browser permission changes since the last visit (non-blocking)
+    registerDriftListener();
+    checkPermissionDrift();
 
     // Check if user has explicitly disabled push notifications
     if (localStorage.getItem('pushNotificationsEnabled') === 'false') {

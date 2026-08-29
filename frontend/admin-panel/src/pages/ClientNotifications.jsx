@@ -15,7 +15,8 @@ import Header from '../components/Header';
 // ============================================================================
 
 const STATUS_META = {
-  healthy:       { label: 'ON / Healthy',        tone: 'on',      desc: 'Notifications are enabled and delivery should work.' },
+  healthy:       { label: 'ON / Healthy',        tone: 'on',      desc: 'Recently verified: browser permission granted and an active device token exists.' },
+  unverified:    { label: 'Unknown / Not recently verified', tone: 'warn', desc: 'Notifications were enabled before, but we have not recently verified the browser state. The client may have turned them off since — not shown as ON until re-verified.' },
   unreported:    { label: 'ON (legacy client)',  tone: 'on',      desc: 'Active device token present; client has not reported browser state yet.' },
   denied:        { label: 'OFF / Denied',        tone: 'off',     desc: 'Client blocked notifications in browser settings. Only the client can re-allow them.' },
   disabled:      { label: 'OFF / Disabled',      tone: 'off',     desc: 'Client turned push notifications off in the app.' },
@@ -114,7 +115,7 @@ const ClientNotifications = () => {
         ...prev,
         [selected.id]: { ...(prev[selected.id] || {}), lastReminderAt: now },
       }));
-      showToast('Reminder sent — the client will get it in-app and by email');
+      showToast('Reminder created — the client will see it in-app at next sign-in and by email');
     } catch (err) {
       showToast(err.response?.data?.error || 'Failed to send reminder', 'error');
     } finally {
@@ -201,7 +202,7 @@ const ClientNotifications = () => {
               <p style={{ fontSize: '13px', color: tone.text, margin: 0, lineHeight: 1.55 }}>{meta.desc}</p>
               {selectedStatus?.reportedAt && (
                 <p style={{ fontSize: '11.5px', color: tone.text, opacity: 0.75, margin: '8px 0 0 0' }}>
-                  Reported by client app: {formatDate(selectedStatus.reportedAt)}
+                  Last verified: {formatDate(selectedStatus.reportedAt)}
                 </p>
               )}
             </div>
@@ -228,14 +229,15 @@ const ClientNotifications = () => {
                     boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
                   }}
                 >
-                  {reminding ? 'Sending…' : '🔔 Remind to Enable Notifications'}
+                  {reminding ? 'Creating…' : '🔔 Remind to Enable Notifications'}
                 </button>
               )
             )}
             {selectedStatus?.needsAttention && (
               <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: '12px 0 0 0', lineHeight: 1.5 }}>
-                The reminder is delivered in-app and by email with a “Turn On Notifications” action.
-                It never changes browser permission — only the client can allow notifications in their browser.
+                The reminder is created server-side and shown in-app the next time the client signs in
+                (plus email) with a “Turn On Notifications” action. It does not depend on push delivery
+                and never changes browser permission — only the client can allow notifications in their browser.
               </p>
             )}
 

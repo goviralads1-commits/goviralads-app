@@ -28,12 +28,29 @@ router.use(authenticateJWT);
 router.use(requireAdmin);
 
 const REMINDER_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+// A client-reported 'healthy' state is only trusted for this window. Clients
+// re-report at most every 24h while visiting, so a healthy report older than
+// this means we have NOT recently verified actual browser permission + token,
+// and the client may have disabled notifications in browser settings since.
+const HEALTHY_FRESHNESS_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 // Derive a safe delivery-health status for a client.
-// reported = client-reported browser state (may be null if never reported)
-// hasToken = at least one active DeviceToken exists
-function derivePushStatus(reported, hasToken) {
-  if (reported === 'healthy' && hasToken) return 'healthy';
+// reported   = client-reported browser state (may be null if never reported)
+// hasToken   = at least one active DeviceToken exists
+// reportedAt = when the client last reported its state (may be null)
+//
+// SOURCE OF TRUTH: "healthy" requires ALL THREE of (1) a RECENT client report,
+// (2) that report being 'healthy' (real browser permission granted at report
+// time), and (3) an active device token. A stale 'healthy' flag or a token
+// alone NEVER counts as ON — that combination is reported as 'unverified'.
+function derivePushStatus(reported, hasToken, reportedAt) {
+  if (reported === 'healthy') {
+    const age = reportedAt ? Date.now() - new Date(reportedAt).getTime() : Infinity;
+    const fresh = Number.isFinite(age) && age >= 0 && age < HEALTHY_FRESHNESS_MS;
+    if (fresh && hasToken) return 'healthy';
+    // Stale report, or report without an active token — never claim ON
+    return 'unverified';
+  }
   if (reported === 'denied') return 'denied';
   if (reported === 'disabled') return 'disabled';
   if (reported === 'unsupported') return 'unsupported';
@@ -86,10 +103,11 @@ router.get('/client-push-status', async (req, res) => {
     const statuses = clients.map((c) => {
       const reported = c.preferences?.pushState || null;
       const hasActiveToken = tokenSet.has(String(c._id));
-      const status = derivePushStatus(reported, hasActiveToken);
-      // Reminders are only meaningful for clients whose delivery is known-bad or
-      // missing entirely — never for healthy or legacy unreported-with-token clients.
-      const needsAttention = status !== 'healthy' && status !== 'unreported';
+      const status = derivePushStatus(reported, hasActiveToken, c.preferences?.pushStateUpdatedAt);
+      // Reminders are only meaningful for clients whose delivery is KNOWN-bad or
+      // missing entirely. 'unverified' / 'unreported' are honest "not sure" states —
+      // we never nag a client we cannot confidently say is offline.
+      const needsAttention = status !== 'healthy' && status !== 'unreported' && status !== 'unverified';
       return {
         clientId: String(c._id),
         identifier: c.identifier,
@@ -137,10 +155,10 @@ router.post('/clients/:clientId/remind-enable-notifications', async (req, res) =
       }
     }
 
-    // Never remind clients whose notifications are already healthy
+    // Never remind clients whose notifications are verified healthy right now
     const activeTokenCount = await DeviceToken.countDocuments({ userId: client._id, isActive: true });
     const reported = client.preferences?.pushState || null;
-    if (derivePushStatus(reported, activeTokenCount > 0) === 'healthy') {
+    if (derivePushStatus(reported, activeTokenCount > 0, client.preferences?.pushStateUpdatedAt) === 'healthy') {
       return res.status(400).json({ error: 'Notifications are already enabled for this client' });
     }
 
@@ -155,6 +173,12 @@ router.post('/clients/:clientId/remind-enable-notifications', async (req, res) =
       return res.status(429).json({ error: 'A reminder was already sent within the last 7 days' });
     }
 
+    // Server-side reminder: this Notification record IS the pending reminder.
+    // It survives logout/login and is surfaced in-app the next time the client
+    // signs in (GET /client/enable-notifications-reminder) — it NEVER relies on
+    // push delivery (a client who is OFF cannot receive push by definition).
+    // Email is sent because that channel is actually available; push is not
+    // attempted and no push delivery is ever claimed.
     await createNotification({
       recipientId: client._id,
       type: NOTIFICATION_TYPES.ENABLE_NOTIFICATIONS_REMINDER,
@@ -163,8 +187,8 @@ router.post('/clients/:clientId/remind-enable-notifications', async (req, res) =
       notifyByEmail: true,
     });
 
-    console.log(`[PUSH STATUS] Reminder sent to client ${client._id} by ${caller._id}`);
-    return res.json({ success: true, message: 'Reminder sent to client' });
+    console.log(`[PUSH STATUS] Reminder created for client ${client._id} by ${caller._id}`);
+    return res.json({ success: true, message: 'Reminder created — the client will see it the next time they sign in' });
   } catch (err) {
     console.error('[PUSH STATUS] Remind error:', err.message);
     return res.status(500).json({ error: 'Failed to send reminder' });
