@@ -374,9 +374,9 @@ const Wallet = () => {
         </div>
       )}
       
-      <div style={{maxWidth: '1200px', margin: '0 auto', padding: '24px', boxSizing: 'border-box'}}>
+      <div className="wallet-page" style={{maxWidth: '1200px', margin: '0 auto', padding: '24px', boxSizing: 'border-box'}}>
         {/* Balance Card */}
-        <div style={{
+        <div className="balance-card" style={{
           background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
           borderRadius: '24px',
           padding: 'clamp(20px, 5vw, 32px) 24px',
@@ -393,10 +393,10 @@ const Wallet = () => {
               style={{cursor: 'help', opacity: 0.7, fontSize: '14px'}}
             >ⓘ</span>
           </div>
-          <p style={{fontSize: 'clamp(24px, 8vw, 42px)', fontWeight: '800', margin: '0 0 20px 0'}}>{walletData?.totalCredits || walletData?.balance || 0} <span style={{fontSize: '20px', opacity: 0.8}}>credits</span></p>
+          <p className="balance-amount" style={{fontSize: 'clamp(24px, 8vw, 42px)', fontWeight: '800', margin: '0 0 20px 0'}}>{walletData?.totalCredits || walletData?.balance || 0} <span style={{fontSize: '20px', opacity: 0.8}}>credits</span></p>
 
           {/* Credit Breakdown */}
-          <div style={{display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '16px'}}>
+          <div className="balance-breakdown" style={{display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '16px'}}>
             {/* Subscription Credits Row */}
             {(walletData?.subscriptionCredits > 0 || walletData?.subscriptionExpiresAt) && (() => {
               const subCredits = walletData?.subscriptionCredits || 0;
@@ -436,6 +436,8 @@ const Wallet = () => {
             </p>
           )}
 
+          {/* Primary actions — stacked on desktop, side-by-side on mobile */}
+          <div className="balance-actions">
           {/* Add Money Button */}
           <button
             onClick={() => isAuthenticated() ? setShowAddMoneyModal(true) : navigate('/login')}
@@ -469,7 +471,7 @@ const Wallet = () => {
               return (
                 <>
                   {/* Subscription Credits Info */}
-                  <div style={{
+                  <div className="sub-info-box" style={{
                     marginTop: '10px',
                     width: '100%',
                     maxWidth: '100%',
@@ -540,6 +542,7 @@ const Wallet = () => {
               </button>
             );
           })()}
+          </div>
         </div>
 
         {/* Subscription Plans - Premium Product Cards */}
@@ -1416,6 +1419,57 @@ const Wallet = () => {
           )}
         </div>
       </div>
+
+      {/* Mobile-only compaction — desktop layout untouched */}
+      <style>{`
+        @media (max-width: 640px) {
+          .wallet-page {
+            padding: 16px !important;
+          }
+          .balance-card {
+            padding: 16px !important;
+            margin-bottom: 16px !important;
+            border-radius: 20px !important;
+          }
+          .balance-card .balance-amount {
+            font-size: 30px !important;
+            margin: 0 0 12px 0 !important;
+          }
+          .balance-card .balance-breakdown {
+            gap: 6px !important;
+            padding-top: 10px !important;
+          }
+          /* Primary actions side-by-side: Recharge + Buy Credits in one row */
+          .balance-card .balance-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .balance-card .balance-actions > button {
+            flex: 1 1 140px;
+            margin-top: 12px !important;
+            padding: 12px 8px !important;
+            font-size: 13px !important;
+            border-radius: 12px !important;
+          }
+          /* Subscription info box: tighter, full row inside actions */
+          .balance-card .balance-actions .sub-info-box {
+            flex: 1 1 100%;
+            margin-top: 12px !important;
+            padding: 10px 14px !important;
+          }
+          .balance-card .sub-info-box > div:first-child {
+            font-size: 13px !important;
+            margin-bottom: 2px !important;
+          }
+          .balance-card .sub-info-box > div:nth-child(2) {
+            font-size: 12px !important;
+          }
+          .balance-card .sub-info-box > div:last-child {
+            margin-top: 2px !important;
+          }
+        }
+      `}</style>
 
       {/* Add Money Modal */}
       {showAddMoneyModal && (
