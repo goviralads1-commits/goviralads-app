@@ -334,6 +334,7 @@ const adminRoutes = require('./routes/admin');
 const adminSubscriptionRoutes = require('./routes/adminSubscriptions');
 const adminEmployeeRoutes = require('./routes/adminEmployees');
 const adminClientDataRoutes = require('./routes/adminClientData');
+const adminAnalyticsRoutes = require('./routes/adminAnalytics');
 const adminNotificationStatusRoutes = require('./routes/adminNotificationStatus');
 
 // Import task service for automatic progress updates
@@ -372,6 +373,8 @@ app.get('/health/media', (_req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/client', clientRoutes);
+// Client-scoped Business Analytics (read-only) — mounted before the generic /admin router
+app.use('/admin/analytics', adminAnalyticsRoutes);
 app.use('/admin', adminRoutes);
 app.use('/admin/subscriptions', adminSubscriptionRoutes);
 app.use('/admin/employees', adminEmployeeRoutes);

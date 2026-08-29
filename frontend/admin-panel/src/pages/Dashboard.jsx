@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
@@ -29,6 +29,13 @@ const Dashboard = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  // Client filter (WHO) — '' means All Clients; otherwise the selected client's User ObjectId
+  const [clientFilter, setClientFilter] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
+  const clientDropdownRef = useRef(null);
+  // Analytics-only loading flag so switching client/date never shows stale numbers
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   // Drill-down modal state
   const [drillModal, setDrillModal] = useState(null); // { type: 'commission'|'tasks'|'revenue', title, items }
   const [drillLoading, setDrillLoading] = useState(false);
@@ -154,17 +161,76 @@ const Dashboard = () => {
     }
   };
 
+  // Date dropdown options — the same set as before (All Time / Today / 7d / 15d / 30d / Month / Custom)
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dateOptions = [
+    { value: 'alltime', label: 'All Time' },
+    { value: 'today', label: 'Today' },
+    { value: '7days', label: '7 Days' },
+    { value: '15days', label: '15 Days' },
+    { value: '30days', label: '30 Days' },
+    ...MONTH_NAMES.map((m, i) => ({ value: `month-${i}`, label: m })),
+    { value: 'custom', label: 'Custom…' },
+  ];
+
+  const handleDateDropdownChange = (value) => {
+    if (value === 'custom') {
+      setShowDatePicker(prev => !prev);
+      return;
+    }
+    setShowDatePicker(false);
+    applyDateFilter(value);
+  };
+
+  const selectedClient = clientFilter ? clients.find(c => c.id === clientFilter) : null;
+  const filteredClients = clients.filter(c => (c.identifier || '').toLowerCase().includes(clientSearch.toLowerCase()));
+
+  // Close the client dropdown on outside click
+  useEffect(() => {
+    if (!clientDropdownOpen) return;
+    const onDocClick = (e) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) setClientDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [clientDropdownOpen]);
+
+  // Analytics fetch is scoped by BOTH filters (WHO + WHEN) against the same query logic.
+  // analyticsReqRef guards against stale responses so Client A's numbers can never
+  // render after Client B was selected.
+  const analyticsReqRef = useRef(0);
+  const loadAnalytics = useCallback(async () => {
+    const reqId = ++analyticsReqRef.current;
+    setAnalyticsLoading(true);
+    try {
+      const params = buildFilterParams();
+      const res = clientFilter
+        ? await api.get('/admin/analytics/client', { params: { ...params, clientId: clientFilter } })
+        : await api.get('/admin/analytics', { params });
+      if (reqId === analyticsReqRef.current) setAnalytics(res.data || null);
+    } catch (err) {
+      if (reqId === analyticsReqRef.current) setAnalytics(null);
+    } finally {
+      if (reqId === analyticsReqRef.current) setAnalyticsLoading(false);
+    }
+  }, [dateFilter, clientFilter]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
+
   const fetchData = useCallback(async () => {
     try {
       const params = buildFilterParams();
-      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, analyticsRes, pendingRes, officeConfigRes] = await Promise.all([
+      // Analytics is fetched separately by loadAnalytics (client+date scoped); everything else
+      // on this dashboard is office-wide admin data and keeps its existing endpoints.
+      const [overviewRes, noticesRes, clientsRes, plansRes, tasksRes, commissionsRes, pendingRes, officeConfigRes] = await Promise.all([
         api.get('/admin/reports/overview'),
         api.get('/admin/notices'),
         api.get('/admin/clients'),
         api.get('/admin/plans').catch(() => ({ data: { plans: [] } })),
         api.get('/admin/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/admin/commissions', { params }).catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [], userSummary: [], isMainAdmin: false } })),
-        api.get('/admin/analytics', { params }).catch(() => ({ data: null })),
         api.get('/admin/pending-clients').catch(() => ({ data: { clients: [] } })),
         api.get('/admin/office-config').catch(() => ({ data: { config: null } })),
       ]);
@@ -182,7 +248,6 @@ const Dashboard = () => {
         userSummary: cd.userSummary || [],
         isMainAdmin: cd.isMainAdmin || false,
       });
-      if (analyticsRes.data) setAnalytics(analyticsRes.data);
       setOfficeConfig(officeConfigRes.data?.config);
     } catch (err) {
       setError('Failed to load dashboard data');
@@ -201,6 +266,43 @@ const Dashboard = () => {
     setDrillLoading(true);
     try {
       const params = buildFilterParams();
+      if (clientFilter) {
+        // Selected-client mode: drill-downs come from the same client-scoped query logic
+        const res = await api.get('/admin/analytics/client/drill', { params: { ...params, clientId: clientFilter, type } });
+        let items = [];
+        if (type === 'commission') {
+          items = (res.data?.logs || []).map(l => ({
+            user: 'Staff',
+            amount: l.amount || 0,
+            task: l.taskTitle || 'N/A',
+            date: l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+          }));
+        } else if (type === 'tasks') {
+          items = (res.data?.tasks || []).map(t => ({
+            name: t.title || 'N/A',
+            client: selectedClient?.identifier || 'N/A',
+            cost: t.creditCost || 0,
+            date: t.updatedAt ? new Date(t.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+          }));
+        } else if (type === 'revenue') {
+          items = [
+            ...(res.data?.transactions || []).map(t => ({
+              label: `Recharge ${t.type}`,
+              amount: t.amount || 0,
+              client: selectedClient?.identifier || '—',
+              date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+            })),
+            ...(res.data?.orders || []).map(o => ({
+              label: `Order ${o.orderId || ''}`,
+              amount: o.totalAmount || 0,
+              client: selectedClient?.identifier || '—',
+              date: o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+            }))
+          ];
+        }
+        setDrillModal({ type, title, items, loading: false });
+        return;
+      }
       if (type === 'commission') {
         const res = await api.get('/admin/commissions', { params });
         const logs = (res.data?.logs || []).map(l => ({
@@ -447,39 +549,77 @@ const Dashboard = () => {
         </div>
 
         {/* BUSINESS ANALYTICS SECTION */}
-        {analytics && (
+        {(analytics || analyticsLoading) && (
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>📊 Business Analytics</h3>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                {['alltime', 'today', '7days', '15days', '30days'].map(t => (
-                  <button key={t} onClick={() => applyDateFilter(t)} style={{
-                    padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: 'none',
-                    background: dateFilter.type === t ? '#6366f1' : '#f1f5f9',
-                    color: dateFilter.type === t ? '#fff' : '#64748b'
-                  }}>{t === 'alltime' ? 'All Time' : t === 'today' ? 'Today' : t === '7days' ? '7 Days' : t === '15days' ? '15 Days' : '30 Days'}</button>
-                ))}
-                <select
-                  value={dateFilter.type.startsWith('month-') ? dateFilter.type : ''}
-                  onChange={e => { if (e.target.value) applyDateFilter(e.target.value); }}
-                  style={{
-                    padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                    border: dateFilter.type.startsWith('month-') ? 'none' : '1px solid #e2e8f0',
-                    background: dateFilter.type.startsWith('month-') ? '#6366f1' : '#fff',
-                    color: dateFilter.type.startsWith('month-') ? '#fff' : '#64748b'
-                  }}
-                >
-                  <option value=''>Month...</option>
-                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => (
-                    <option key={i} value={`month-${i}`}>{m}</option>
-                  ))}
-                </select>
-                <button onClick={() => setShowDatePicker(!showDatePicker)} style={{
-                  padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                  border: dateFilter.type === 'custom' ? '2px solid #6366f1' : '1px solid #e2e8f0',
-                  background: dateFilter.type === 'custom' ? '#eef2ff' : '#fff',
-                  color: dateFilter.type === 'custom' ? '#6366f1' : '#64748b'
-                }}>Custom</button>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>📊 Business Analytics{selectedClient && <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', backgroundColor: '#eef2ff', padding: '3px 8px', borderRadius: '6px', marginLeft: '8px' }}>{selectedClient.identifier}</span>}</h3>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Client filter — WHO */}
+                <div ref={clientDropdownRef} style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => { setClientDropdownOpen(o => !o); setClientSearch(''); }}
+                    style={{
+                      padding: '7px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                      border: clientFilter ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                      background: clientFilter ? '#eef2ff' : '#fff',
+                      color: clientFilter ? '#6366f1' : '#64748b',
+                      display: 'flex', alignItems: 'center', gap: '6px', maxWidth: '180px'
+                    }}
+                  >
+                    <span style={{ fontSize: '12px' }}>👤</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedClient ? selectedClient.identifier : 'All Clients'}</span>
+                    <span style={{ fontSize: '9px', opacity: 0.7 }}>▼</span>
+                  </button>
+                  {clientDropdownOpen && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: '240px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(15,23,42,0.12)', zIndex: 50, overflow: 'hidden' }}>
+                      <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                        <input
+                          autoFocus
+                          value={clientSearch}
+                          onChange={e => setClientSearch(e.target.value)}
+                          placeholder="Search name / email…"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12.5px', outline: 'none' }}
+                        />
+                      </div>
+                      <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                        <button
+                          onClick={() => { setClientFilter(''); setClientDropdownOpen(false); }}
+                          style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12.5px', fontWeight: clientFilter ? '500' : '700', cursor: 'pointer', border: 'none', background: clientFilter ? '#fff' : '#f8fafc', color: '#0f172a' }}
+                        >
+                          All Clients
+                        </button>
+                        {filteredClients.map(c => (
+                          <button
+                            key={c.id}
+                            onClick={() => { setClientFilter(c.id); setClientDropdownOpen(false); }}
+                            style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12.5px', fontWeight: clientFilter === c.id ? '700' : '500', cursor: 'pointer', border: 'none', background: clientFilter === c.id ? '#eef2ff' : '#fff', color: clientFilter === c.id ? '#6366f1' : '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          >
+                            {c.identifier}
+                          </button>
+                        ))}
+                        {filteredClients.length === 0 && (
+                          <p style={{ padding: '10px 12px', fontSize: '12px', color: '#94a3b8', margin: 0 }}>No clients match</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Date filter — WHEN (compact dropdown, same options as before) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '13px' }}>🗓️</span>
+                  <select
+                    value={dateFilter.type}
+                    onChange={e => handleDateDropdownChange(e.target.value)}
+                    style={{
+                      padding: '7px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                      border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', maxWidth: '150px'
+                    }}
+                  >
+                    {dateOptions.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>{dateFilter.label}</span>
               </div>
             </div>
@@ -492,6 +632,19 @@ const Dashboard = () => {
                 <button onClick={() => setShowDatePicker(false)} style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b' }}>Cancel</button>
               </div>
             )}
+            {analyticsLoading ? (
+              /* Skeleton while client/date-scoped analytics load — prevents showing the
+                 previous selection's numbers under the new selection */
+              <div>
+                <style>{`@keyframes gvaPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                  {[1,2,3,4,5,6,7,8].map(i => (
+                    <div key={i} style={{ height: '110px', backgroundColor: '#e2e8f0', borderRadius: '16px', animation: 'gvaPulse 1.5s infinite' }} />
+                  ))}
+                </div>
+                <div style={{ height: '90px', backgroundColor: '#e2e8f0', borderRadius: '12px', animation: 'gvaPulse 1.5s infinite' }} />
+              </div>
+            ) : analytics && (<>
             <div className="analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
               {/* Row 1: Task Metrics */}
               {/* Total Tasks */}
@@ -568,7 +721,8 @@ const Dashboard = () => {
               </div>
 
               {/* Row 3: Operational Metrics */}
-              {/* Active Clients — current-state metric, not date-filtered */}
+              {/* Active Clients — current-state, cross-client metric; hidden in single-client mode */}
+              {analytics.metrics?.activeClients != null && (
               <div style={{ background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '16px' }}>👥</span>
@@ -577,6 +731,7 @@ const Dashboard = () => {
                 <p style={{ fontSize: '11px', opacity: 0.85, margin: 0 }}>Active Clients <span style={{ fontSize: '9px', opacity: 0.7 }}>(Now)</span></p>
                 <p style={{ fontSize: '9px', opacity: 0.6, margin: '2px 0 0 0' }}>Current state — not date-filtered</p>
               </div>
+              )}
               {/* Upcoming Renewal — forward-looking, not date-filtered */}
               <div style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '16px', padding: '16px', color: '#fff' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
@@ -695,6 +850,7 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
+            </>)}
           </div>
         )}
 
