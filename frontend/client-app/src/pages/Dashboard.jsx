@@ -47,6 +47,7 @@ const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [] });
   const [walletData, setWalletData] = useState(null);
+  const [walletError, setWalletError] = useState(false); // distinguishes a FAILED wallet fetch from a genuine zero balance
   const [loading, setLoading] = useState(true);
   const [currentBanner, setCurrentBanner] = useState(0);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -61,7 +62,9 @@ const Dashboard = () => {
         api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
         api.get('/client/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } })),
-        api.get('/client/wallet').catch(() => ({ data: { balance: 0, walletCredits: 0, subscriptionCredits: 0 } }))
+        // Wallet is tracked separately so a failed request is never shown as "0 credits".
+        // limit=1 uses the endpoint's existing pagination param — the dashboard never reads transactions.
+        api.get('/client/wallet?limit=1').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
       ]);
       setConfig(configRes.data.config);
       setFeaturedPlans(configRes.data.featuredPlans || []);
@@ -72,7 +75,13 @@ const Dashboard = () => {
         overallTaskCount: commRes.data?.overallTaskCount || 0,
         logs: (commRes.data?.logs || []).slice(0, 5)
       });
-      setWalletData(walletRes.data || null);
+      if (walletRes.ok) {
+        setWalletData(walletRes.data || null);
+        setWalletError(false);
+      } else {
+        setWalletData(null);
+        setWalletError(true);
+      }
     } catch (err) {
       // Silent fail - show empty states
     } finally {
@@ -96,6 +105,17 @@ const Dashboard = () => {
   const showToast = (type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  // Retry ONLY the wallet fetch on failure (user-triggered; never re-hits the other endpoints)
+  const retryWallet = async () => {
+    try {
+      const res = await api.get('/client/wallet?limit=1');
+      setWalletData(res.data || null);
+      setWalletError(false);
+    } catch (e) {
+      setWalletError(true);
+    }
   };
 
   const handleViewNotice = async (notice) => {
@@ -221,23 +241,39 @@ const Dashboard = () => {
           <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: '0 0 4px 0', position: 'relative', zIndex: 1 }}>Welcome back,</p>
           <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#fff', margin: '0 0 16px 0', letterSpacing: '-0.3px', position: 'relative', zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getDisplayName()} 👋</h1>
           
-          {/* Wallet Balance Card */}
-          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '14px 16px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {/* Wallet Balance Card — the ONLY place credits are displayed on the dashboard.
+              Three distinct states: loading ('…'), genuine zero (0 credits), failed request (retry). */}
+          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: '18px', padding: '16px 18px', border: '1px solid rgba(255,255,255,0.15)', position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 3px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</p>
-                <p style={{ fontSize: 'clamp(20px, 6vw, 26px)', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>{walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '...'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span></p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '0 0 4px 0', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Credits</p>
+                {walletError ? (
+                  <p style={{ fontSize: '13.5px', fontWeight: '600', color: 'rgba(255,255,255,0.85)', margin: 0 }}>Couldn't load your credits</p>
+                ) : (
+                  <p style={{ fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: '800', color: '#fff', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.15 }}>
+                    {walletData ? (walletData.balance ?? ((walletData.walletCredits || 0) + (walletData.subscriptionCredits || 0))).toLocaleString() : '…'} <span style={{fontSize: '14px', opacity: 0.7}}>credits</span>
+                  </p>
+                )}
+                {walletError && (
+                  <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0' }}>Check your connection and try again.</p>
+                )}
               </div>
-              <button onClick={() => navigate('/wallet')} style={{ padding: '9px 16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                Recharge Wallet
-              </button>
+              {walletError ? (
+                <button onClick={retryWallet} style={{ padding: '9px 18px', background: '#fff', border: 'none', borderRadius: '10px', color: '#312e81', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  ↻ Retry
+                </button>
+              ) : (
+                <button onClick={() => navigate('/wallet')} style={{ padding: '9px 18px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  Recharge Wallet
+                </button>
+              )}
             </div>
-            {walletData && (walletData.subscriptionCredits > 0 || walletData.walletCredits > 0) && (
-              <div style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            {!walletError && walletData && (walletData.subscriptionCredits > 0 || walletData.walletCredits > 0) && (
+              <div style={{ display: 'flex', gap: '24px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap' }}>
                 {walletData.subscriptionCredits > 0 && (
                   <div>
                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: '0 0 2px 0' }}>Plan Credits</p>
-                    <p style={{ fontSize: '14px', fontWeight: '700', color: '#a5b4fc', margin: 0 }}>{walletData.subscriptionCredits}</p>
+                    <p style={{ fontSize: '14px', fontWeight: '700', color: '#a5b4fc', margin: 0 }}>{walletData.subscriptionCredits.toLocaleString()}</p>
                   </div>
                 )}
                 <div>
@@ -249,21 +285,22 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* STATS STRIP */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '24px' }}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+        {/* STATS STRIP — compact tap-through summary (2 cols on mobile, 4 on wider screens).
+            Each card opens the Tasks page, so it acts as navigation rather than duplicating the sections below. */}
+        <div className="gva-stats-grid" style={{ marginBottom: '24px' }}>
+          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
             <p style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{tasks.length}</p>
             <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total</p>
           </div>
-          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
             <p style={{ fontSize: '20px', fontWeight: '800', color: '#22c55e', margin: '0 0 2px 0' }}>{activeTasks.length}</p>
             <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Active</p>
           </div>
-          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
             <p style={{ fontSize: '20px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>{allCompletedCount}</p>
             <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Done</p>
           </div>
-          <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
             <p style={{ fontSize: '20px', fontWeight: '800', color: '#f59e0b', margin: '0 0 2px 0' }}>{pendingTasks.length}</p>
             <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pending</p>
           </div>
@@ -346,7 +383,7 @@ const Dashboard = () => {
               View All →
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {activeTasks.slice(0, 3).map(task => (
               <div 
                 key={task.id || task._id} 
@@ -381,12 +418,12 @@ const Dashboard = () => {
             <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Pending Review</h3>
             <span style={{ backgroundColor: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700' }}>{pendingTasks.length}</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {pendingTasks.map(task => (
               <div 
                 key={task.id || task._id} 
                 onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #fef3c7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
+                style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', fontSize: '20px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', flexShrink: 0 }}>{task.icon || '📝'}</span>
@@ -437,7 +474,7 @@ const Dashboard = () => {
             </button>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+          <div className="gva-plans-grid">
             {featuredPlans.slice(0, config?.featuredPlansConfig?.displayCount || 4).map((plan, idx) => {
               const coverMedia = plan.planMedia?.[0];
               const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
@@ -521,15 +558,15 @@ const Dashboard = () => {
               View All →
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {completedTasks.map(task => (
               <div 
                 key={task.id || task._id} 
                 onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '14px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
+                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '10px 14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ width: '40px', height: '40px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px', fontSize: '20px', background: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
+                  <span style={{ width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '17px', background: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
                     <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ''}</p>
@@ -556,7 +593,7 @@ const Dashboard = () => {
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{config?.updatesSectionConfig?.emptyText || 'No updates at the moment'}</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {updates.map(notice => (
                 <div 
                   key={notice.id} 
@@ -604,7 +641,7 @@ const Dashboard = () => {
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{config?.requirementsSectionConfig?.emptyText || 'All caught up! No requirements pending.'}</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {requirements.map(notice => (
                 <div 
                   key={notice.id} 
@@ -654,7 +691,7 @@ const Dashboard = () => {
               <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>{promotionsSectionConfig.emptyText}</p>
             </div>
           ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {promotions.map(notice => (
               <div 
                 key={notice.id} 
@@ -798,7 +835,19 @@ const Dashboard = () => {
         </div>
       )}
 
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+      <style>{`
+        /* Responsive grids: mobile-first 2 columns, expanding on wider screens.
+           Featured plans go 4-up on desktop so cards don't consume excessive vertical space. */
+        .gva-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .gva-plans-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        @media (min-width: 640px) {
+          .gva-stats-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        }
+        @media (min-width: 768px) {
+          .gva-plans-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
     </div>
   );
 };
