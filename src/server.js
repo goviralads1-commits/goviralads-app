@@ -333,6 +333,7 @@ const clientRoutes = require('./routes/client');
 const adminRoutes = require('./routes/admin');
 const adminSubscriptionRoutes = require('./routes/adminSubscriptions');
 const adminEmployeeRoutes = require('./routes/adminEmployees');
+const adminClientDataRoutes = require('./routes/adminClientData');
 
 // Import task service for automatic progress updates
 const { updateTaskProgressAutomatically, calculateProgressFromTimeline } = require('./services/taskService');
@@ -373,6 +374,8 @@ app.use('/client', clientRoutes);
 app.use('/admin', adminRoutes);
 app.use('/admin/subscriptions', adminSubscriptionRoutes);
 app.use('/admin/employees', adminEmployeeRoutes);
+// MAIN ADMIN ONLY destructive client-data operations (preview / single-client delete / fresh start)
+app.use('/admin/client-data', adminClientDataRoutes);
 
 // Initialize default legal pages
 async function ensureLegalPages() {

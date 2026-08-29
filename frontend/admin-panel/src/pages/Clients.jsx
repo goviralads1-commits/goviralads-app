@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import { getPermissions } from '../services/authService';
 
 const Clients = () => {
   const navigate = useNavigate();
+  // SECURITY: default-deny until permissions load — destructive controls stay hidden for managers
+  const isMainAdmin = getPermissions()?.isMainAdmin === true;
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -16,6 +19,19 @@ const Clients = () => {
   const [resetTarget, setResetTarget] = useState(null); // { id, identifier, name }
   const [resetPhrase, setResetPhrase] = useState('');
   const [resetting, setResetting] = useState(false);
+
+  // Permanent delete (single client) state — MAIN ADMIN ONLY
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, identifier, name }
+  const [deletePhrase, setDeletePhrase] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  // Fresh Start state — MAIN ADMIN ONLY
+  const [freshStartModal, setFreshStartModal] = useState(false);
+  const [freshPreview, setFreshPreview] = useState(null);
+  const [freshPreviewLoading, setFreshPreviewLoading] = useState(false);
+  const [freshPhrase, setFreshPhrase] = useState('');
+  const [freshRunning, setFreshRunning] = useState(false);
+  const [freshResult, setFreshResult] = useState(null);
 
   useEffect(() => {
     if (toast) {
@@ -44,6 +60,11 @@ const Clients = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const refreshClientList = async () => {
+    const response = await api.get('/admin/users?role=CLIENT&limit=100');
+    setClients(response.data.users || []);
+  };
+
   const handleResetClient = async () => {
     if (!resetTarget) return;
     const expected = `RESET ${resetTarget.identifier}`;
@@ -66,6 +87,71 @@ const Clients = () => {
       showToast(err.response?.data?.error || 'Failed to reset client data', 'error');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!deleteTarget) return;
+    const expected = `DELETE ${deleteTarget.identifier}`;
+    if (deletePhrase !== expected) {
+      showToast(`Phrase must be exactly: ${expected}`, 'error');
+      return;
+    }
+    try {
+      setDeleting(true);
+      const res = await api.delete(`/admin/client-data/clients/${deleteTarget.id}`, {
+        data: { confirmPhrase: deletePhrase },
+      });
+      showToast(res.data.message || 'Client permanently deleted');
+      setDeleteTarget(null);
+      setDeletePhrase('');
+      await refreshClientList();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Permanent deletion failed', 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openFreshStart = async () => {
+    setFreshStartModal(true);
+    setFreshResult(null);
+    setFreshPhrase('');
+    setFreshPreview(null);
+    setFreshPreviewLoading(true);
+    try {
+      const res = await api.get('/admin/client-data/preview');
+      setFreshPreview(res.data);
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to load fresh-start preview', 'error');
+      setFreshStartModal(false);
+    } finally {
+      setFreshPreviewLoading(false);
+    }
+  };
+
+  const closeFreshStart = () => {
+    if (freshRunning) return; // never allow closing mid-deletion
+    setFreshStartModal(false);
+    setFreshPreview(null);
+    setFreshPhrase('');
+    setFreshResult(null);
+  };
+
+  const handleFreshStart = async () => {
+    if (!freshPreview || freshPhrase !== freshPreview.freshStartPhrase) return;
+    try {
+      setFreshRunning(true);
+      const res = await api.post('/admin/client-data/fresh-start', {
+        confirmPhrase: freshPreview.freshStartPhrase,
+      });
+      setFreshResult(res.data);
+      setFreshPhrase('');
+      await refreshClientList();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Fresh start failed', 'error');
+    } finally {
+      setFreshRunning(false);
     }
   };
 
@@ -201,6 +287,23 @@ const Clients = () => {
               >
                 🗑 Reset Test Data
               </button>
+
+              {isMainAdmin && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget({ id: client.id, identifier: client.identifier, name: client.name });
+                  }}
+                  style={{
+                    marginTop: '8px', width: '100%', padding: '8px',
+                    backgroundColor: '#7f1d1d', color: '#fff',
+                    fontSize: '12px', fontWeight: '600', borderRadius: '8px',
+                    border: '1px solid #7f1d1d', cursor: 'pointer',
+                  }}
+                >
+                  ⛔ Permanently Delete Client
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -215,6 +318,35 @@ const Clients = () => {
               style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
             >
               + Add First Client
+            </button>
+          </div>
+        )}
+
+        {/* MAIN ADMIN ONLY — Destructive client data controls (separated danger zone) */}
+        {isMainAdmin && (
+          <div style={{
+            marginTop: '40px', backgroundColor: '#fff', borderRadius: '16px',
+            border: '2px dashed #ef4444', padding: '24px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+              <span style={{ fontSize: '20px' }}>⚠️</span>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#991b1b', margin: 0 }}>DANGER ZONE — Main Admin Only</h2>
+            </div>
+            <p style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', margin: '0 0 16px 0' }}>
+              Fresh Start permanently deletes <strong>all existing CLIENT accounts</strong> and their client-owned records
+              (wallets, transactions, orders, tasks, tickets, notifications, etc.).
+              ADMIN/staff accounts, Employees, Plans, marketplace and all business configuration remain untouched.
+            </p>
+            <button
+              onClick={openFreshStart}
+              style={{
+                padding: '12px 24px', borderRadius: '10px', border: 'none',
+                background: 'linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)',
+                color: '#fff', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(153, 27, 27, 0.3)',
+              }}
+            >
+              🔥 Fresh Start — Remove All Existing Clients
             </button>
           </div>
         )}
@@ -380,6 +512,203 @@ const Clients = () => {
                 {resetting ? 'Resetting...' : '🗑 Reset All Data'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent Delete Client Confirmation Modal — MAIN ADMIN ONLY */}
+      {deleteTarget && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget && !deleting) { setDeleteTarget(null); setDeletePhrase(''); } }}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: '16px' }}
+        >
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '24px' }}>⛔</span>
+              <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#7f1d1d', margin: 0 }}>PERMANENT CLIENT DELETION</h2>
+            </div>
+
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
+              <p style={{ fontSize: '13px', color: '#991b1b', margin: 0, lineHeight: '1.5' }}>
+                <strong>Target:</strong> {deleteTarget.name ? `${deleteTarget.name} (${deleteTarget.identifier})` : deleteTarget.identifier}
+              </p>
+            </div>
+
+            <p style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', margin: '0 0 12px 0' }}>
+              This <strong>permanently deletes the client account itself</strong> plus every record owned by it:
+              wallet, wallet transactions, orders, tasks, tickets, notifications, invoices, receipts,
+              subscription and recharge history, and device tokens.
+            </p>
+            <p style={{ fontSize: '13px', color: '#991b1b', fontWeight: '600', lineHeight: '1.6', margin: '0 0 16px 0' }}>
+              Unlike "Reset Test Data", the login account is removed forever. This cannot be undone.
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>
+                Type <code style={{ backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>DELETE {deleteTarget.identifier}</code> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deletePhrase}
+                onChange={(e) => setDeletePhrase(e.target.value)}
+                placeholder={`DELETE ${deleteTarget.identifier}`}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: '10px',
+                  border: `2px solid ${deletePhrase === `DELETE ${deleteTarget.identifier}` ? '#10b981' : '#e2e8f0'}`,
+                  fontSize: '14px', fontWeight: '600', outline: 'none', boxSizing: 'border-box',
+                  fontFamily: 'monospace',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => { setDeleteTarget(null); setDeletePhrase(''); }}
+                disabled={deleting}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', cursor: deleting ? 'not-allowed' : 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePermanentDelete}
+                disabled={deleting || deletePhrase !== `DELETE ${deleteTarget.identifier}`}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '10px', border: 'none',
+                  background: 'linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)',
+                  color: '#fff', fontSize: '14px', fontWeight: '600',
+                  cursor: (deleting || deletePhrase !== `DELETE ${deleteTarget.identifier}`) ? 'not-allowed' : 'pointer',
+                  opacity: (deleting || deletePhrase !== `DELETE ${deleteTarget.identifier}`) ? 0.5 : 1,
+                }}
+              >
+                {deleting ? 'Deleting...' : '⛔ Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fresh Start Confirmation Modal — MAIN ADMIN ONLY */}
+      {freshStartModal && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) closeFreshStart(); }}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70, padding: '16px' }}
+        >
+          <div style={{ backgroundColor: '#fff', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            {freshResult ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '24px' }}>✅</span>
+                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#166534', margin: 0 }}>FRESH START COMPLETE</h2>
+                </div>
+                <p style={{ fontSize: '14px', color: '#0f172a', fontWeight: '600', margin: '0 0 16px 0' }}>{freshResult.message}</p>
+                {freshResult.verification && (
+                  <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
+                    <p style={{ fontSize: '12px', fontWeight: '700', color: '#166534', margin: '0 0 8px 0' }}>POST-DELETION VERIFICATION</p>
+                    <ul style={{ fontSize: '12px', color: '#334155', margin: 0, paddingLeft: '18px', lineHeight: '1.8' }}>
+                      <li>Captured clients remaining: <strong>{freshResult.verification.capturedClientsRemaining}</strong></li>
+                      <li>Protected admin intact: <strong>{freshResult.verification.protectedAdminIntact ? 'YES' : 'CHECK FAILED'}</strong></li>
+                      <li>Employees intact: <strong>{freshResult.verification.employeesIntact}</strong></li>
+                      <li>Marketplace plans intact: <strong>{freshResult.verification.marketplacePlansIntact}</strong></li>
+                      <li>Categories intact: <strong>{freshResult.verification.categoriesIntact}</strong></li>
+                      <li>Credit plans intact: <strong>{freshResult.verification.creditPlansIntact}</strong></li>
+                      <li>Notice embedded client refs remaining (documents kept): <strong>{freshResult.verification.noticeReferencesRemaining?.responses + freshResult.verification.noticeReferencesRemaining?.viewedBy + freshResult.verification.noticeReferencesRemaining?.targetClients || 0}</strong></li>
+                    </ul>
+                  </div>
+                )}
+                <button
+                  onClick={closeFreshStart}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '24px' }}>🔥</span>
+                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#7f1d1d', margin: 0 }}>FRESH START — REMOVE ALL EXISTING CLIENTS</h2>
+                </div>
+
+                <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '13px', color: '#991b1b', margin: 0, lineHeight: '1.6' }}>
+                    Delete all existing CLIENT accounts and their client-owned records.
+                    ADMIN/staff and business data will remain.
+                  </p>
+                </div>
+
+                {freshPreviewLoading && (
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>Loading exact counts…</p>
+                )}
+
+                {freshPreview && (
+                  <>
+                    <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
+                      <p style={{ fontSize: '13px', margin: '0 0 10px 0', color: '#0f172a' }}>
+                        <strong style={{ fontSize: '20px', color: '#dc2626' }}>{freshPreview.clientCount}</strong>
+                        <strong> CLIENT account(s)</strong> will be permanently deleted.
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px', color: '#475569' }}>
+                        <span>Wallets: <strong>{freshPreview.before.wallets}</strong></span>
+                        <span>Wallet transactions: <strong>{freshPreview.before.walletTransactions}</strong></span>
+                        <span>Orders: <strong>{freshPreview.before.orders}</strong></span>
+                        <span>Client tasks: <strong>{freshPreview.before.clientTasks}</strong></span>
+                        <span>Tickets: <strong>{freshPreview.before.tickets}</strong></span>
+                        <span>Notifications: <strong>{freshPreview.before.notifications}</strong></span>
+                        <span>Invoices: <strong>{freshPreview.before.invoices}</strong></span>
+                        <span>Receipts: <strong>{freshPreview.before.receipts}</strong></span>
+                        <span>Subscriptions: <strong>{freshPreview.before.userSubscriptions}</strong></span>
+                        <span>Recharge requests: <strong>{freshPreview.before.rechargeRequests}</strong></span>
+                      </div>
+                      <p style={{ fontSize: '11px', color: '#64748b', margin: '10px 0 0 0' }}>
+                        Protected admin verified: <code>{freshPreview.protectedAdminId}</code> — excluded from every deletion set.
+                        Clients signing up after you confirm are never affected (deletion uses the captured ID snapshot only).
+                      </p>
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>
+                        Type <code style={{ backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>{freshPreview.freshStartPhrase}</code> to confirm:
+                      </label>
+                      <input
+                        type="text"
+                        value={freshPhrase}
+                        onChange={(e) => setFreshPhrase(e.target.value)}
+                        placeholder={freshPreview.freshStartPhrase}
+                        style={{
+                          width: '100%', padding: '12px 14px', borderRadius: '10px',
+                          border: `2px solid ${freshPhrase === freshPreview.freshStartPhrase ? '#10b981' : '#e2e8f0'}`,
+                          fontSize: '14px', fontWeight: '600', outline: 'none', boxSizing: 'border-box',
+                          fontFamily: 'monospace',
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={closeFreshStart}
+                    disabled={freshRunning}
+                    style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: '14px', fontWeight: '600', cursor: freshRunning ? 'not-allowed' : 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleFreshStart}
+                    disabled={freshRunning || freshPreviewLoading || !freshPreview || freshPhrase !== (freshPreview && freshPreview.freshStartPhrase)}
+                    style={{
+                      flex: 1, padding: '12px', borderRadius: '10px', border: 'none',
+                      background: 'linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%)',
+                      color: '#fff', fontSize: '14px', fontWeight: '700',
+                      cursor: (freshRunning || freshPreviewLoading || !freshPreview || freshPhrase !== freshPreview.freshStartPhrase) ? 'not-allowed' : 'pointer',
+                      opacity: (freshRunning || freshPreviewLoading || !freshPreview || freshPhrase !== freshPreview.freshStartPhrase) ? 0.5 : 1,
+                    }}
+                  >
+                    {freshRunning ? 'Deleting all captured clients...' : '🔥 Execute Fresh Start'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
