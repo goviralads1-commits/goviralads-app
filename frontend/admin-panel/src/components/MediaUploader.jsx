@@ -24,6 +24,7 @@ const MediaUploader = ({
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   // Detect if URL is video
   const detectMediaType = (url) => {
@@ -36,6 +37,12 @@ const MediaUploader = ({
       /\.mov$/i
     ];
     return videoPatterns.some(pattern => pattern.test(url)) ? 'video' : 'image';
+  };
+
+  // Direct-playable video URL (mp4/webm or Cloudinary video) — safe for inline <video> preview
+  const isDirectVideoUrl = (url) => {
+    if (!url) return false;
+    return /\.(mp4|webm)(\?.*)?$/i.test(url) || /\/video\/upload\//.test(url);
   };
 
   // Validate image URL
@@ -171,6 +178,53 @@ const MediaUploader = ({
     }
   };
 
+  // Handle video file upload (optional Plan explainer video)
+  const handleVideoFileUpload = async (file) => {
+    if (!file) return;
+
+    // Validate file type (server re-validates via MIME whitelist)
+    const allowedTypes = ['video/mp4', 'video/webm'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Only MP4 and WebM videos are allowed.');
+      return;
+    }
+
+    // Validate file size (50MB — matches server limit)
+    if (file.size > 50 * 1024 * 1024) {
+      setError('Video too large. Maximum 50MB allowed.');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+
+      // timeout: 0 — large uploads must not be cut by the default 30s axios timeout
+      const res = await api.post('/upload/plan-video', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0
+      });
+
+      if (res.data.url) {
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.goviralads.com';
+        const fullVideoUrl = res.data.url.startsWith('http')
+          ? res.data.url
+          : `${API_BASE_URL}${res.data.url}`;
+
+        onChange([...media, { type: 'video', url: fullVideoUrl }]);
+        setMediaType('video');
+      }
+    } catch (err) {
+      console.error('Video upload error:', err);
+      setError('Video upload failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Get YouTube thumbnail
   const getYouTubeThumbnail = (url) => {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
@@ -206,6 +260,14 @@ const MediaUploader = ({
                     alt="" 
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => e.target.style.display = 'none'}
+                  />
+                ) : isDirectVideoUrl(item.url) ? (
+                  <video
+                    src={item.url}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#0f172a' }}
                   />
                 ) : (
                   <div style={{
@@ -306,6 +368,19 @@ const MediaUploader = ({
             style={{ display: 'none' }}
           />
 
+          {/* Hidden file input for video upload */}
+          <input
+            type="file"
+            accept="video/mp4,video/webm"
+            ref={videoInputRef}
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) handleVideoFileUpload(file);
+              e.target.value = ''; // Reset input
+            }}
+            style={{ display: 'none' }}
+          />
+
           {/* Image Upload Mode */}
           {mediaType === 'image' ? (
             <>
@@ -356,6 +431,52 @@ const MediaUploader = ({
           ) : (
             /* Video URL Mode */
             <>
+              {/* Upload video file (optional Plan explainer video) */}
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  marginBottom: '12px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: uploading ? '#94a3b8' : '#7c3aed',
+                  background: uploading ? '#f1f5f9' : '#fff',
+                  border: '2px solid',
+                  borderColor: uploading ? '#e2e8f0' : '#7c3aed',
+                  borderRadius: '10px',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {uploading ? (
+                  <span style={{ animation: 'pulse 1s infinite' }}>Uploading video...</span>
+                ) : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="23 7 16 12 23 17 23 7" strokeLinecap="round" strokeLinejoin="round" />
+                      <rect x="1" y="5" width="15" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>Upload Plan Video (MP4/WebM)</span>
+                  </>
+                )}
+              </button>
+              <p style={{
+                fontSize: '11px',
+                color: '#94a3b8',
+                margin: '0 0 12px 0',
+                textAlign: 'center',
+                lineHeight: 1.5
+              }}>
+                Recommended: 1280×960 (4:3 landscape) • H.264 MP4 • 24–30 FPS • 60–90 sec • ~3–4 Mbps (15–30 MB) • Max 50MB
+              </p>
+
               <div style={{ marginBottom: '12px' }}>
                 <input
                   ref={inputRef}

@@ -35,6 +35,7 @@ const PlanDetail = () => {
     creditCost: 0,
     offerPrice: '',
     originalPrice: '',
+    commissionBaseAmount: '',
     categoryId: '',
     progressTarget: 100,
     milestones: [],
@@ -106,6 +107,7 @@ const PlanDetail = () => {
         creditCost: planData.creditCost || 0,
         offerPrice: planData.offerPrice || '',
         originalPrice: planData.originalPrice || '',
+        commissionBaseAmount: planData.commissionBaseAmount || '',
         categoryId: planData.categoryId || '',
         progressTarget: planData.progressTarget || 100,
         milestones: planData.milestones || [],
@@ -230,6 +232,52 @@ const PlanDetail = () => {
     }
   };
 
+  // Handle optional Plan explainer video upload (MP4/WebM → Cloudinary video)
+  const handleVideoUpload = async (index, file) => {
+    if (!file) return;
+
+    // Validate file type (server re-validates via MIME whitelist)
+    const allowedTypes = ['video/mp4', 'video/webm'];
+    if (!allowedTypes.includes(file.type)) {
+      setToast({ type: 'error', message: 'Invalid file type. Only MP4 and WebM videos allowed.' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    // Validate file size (50MB — matches server limit)
+    if (file.size > 50 * 1024 * 1024) {
+      setToast({ type: 'error', message: 'Video too large. Maximum 50MB allowed.' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+
+      // timeout: 0 — large uploads must not be cut by the default 30s axios timeout
+      const res = await api.post('/upload/plan-video', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0
+      });
+
+      if (res.data.url) {
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.goviralads.com';
+        const fullVideoUrl = res.data.url.startsWith('http')
+          ? res.data.url
+          : `${API_BASE_URL}${res.data.url}`;
+
+        handleMediaChange(index, 'url', fullVideoUrl);
+        setToast({ type: 'success', message: 'Video uploaded successfully' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      console.error('Video upload error:', err);
+      setToast({ type: 'error', message: 'Video upload failed: ' + (err.response?.data?.error || err.message) });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
   // Default Commission Roles handlers (legacy - read only)
   const addCommissionRole = () => {
     setDefaultCommissionRoles(prev => [...prev, { role: '', employeeId: '', percentage: 0 }]);
@@ -276,6 +324,7 @@ const PlanDetail = () => {
         creditCost: Number(formData.creditCost) || 0,
         offerPrice: formData.offerPrice ? Number(formData.offerPrice) : undefined,
         originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
+        commissionBaseAmount: formData.commissionBaseAmount ? Number(formData.commissionBaseAmount) : null,
         categoryId: formData.categoryId || null,
         progressTarget: Number(formData.progressTarget) || 100,
         milestones: formData.milestones,
@@ -453,6 +502,9 @@ const PlanDetail = () => {
                 + Add Media
               </button>
             </div>
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '-8px 0 16px 0', lineHeight: 1.5 }}>
+              Video recommended: 1280×960 (4:3 landscape) • H.264 MP4 • 24–30 FPS • 60–90 sec • 15–30 MB • Max 50MB. Keep an image too — it's used as the video poster/fallback.
+            </p>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
               {formData.planMedia.map((media, idx) => (
@@ -463,11 +515,14 @@ const PlanDetail = () => {
                       media.type === 'video' ? (
                         (() => {
                           const embedUrl = getVideoEmbedUrl(media.url);
-                          return embedUrl?.includes('embed') || embedUrl?.includes('player.vimeo') ? (
-                            <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none' }} allowFullScreen />
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b', color: '#fff', fontSize: '24px' }}>🎬</div>
-                          );
+                          if (embedUrl?.includes('embed') || embedUrl?.includes('player.vimeo')) {
+                            return <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none' }} allowFullScreen />;
+                          }
+                          // Direct mp4/webm/Cloudinary video — inline muted preview (metadata only)
+                          if (/\.(mp4|webm)(\?.*)?$/i.test(media.url || '') || /\/video\/upload\//.test(media.url || '')) {
+                            return <video src={media.url} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#1e293b' }} />;
+                          }
+                          return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b', color: '#fff', fontSize: '24px' }}>🎬</div>;
                         })()
                       ) : (
                         <img src={media.url} alt={`Media ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
@@ -518,7 +573,33 @@ const PlanDetail = () => {
                         </label>
                       </>
                     ) : (
-                      <input type="text" placeholder="Paste URL..." value={media.url} onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                      <>
+                        <input 
+                          type="file" 
+                          accept="video/mp4,video/webm" 
+                          onChange={(e) => { handleVideoUpload(idx, e.target.files[0]); e.target.value = ''; }} 
+                          style={{ display: 'none' }} 
+                          id={`video-upload-${idx}`}
+                        />
+                        <label 
+                          htmlFor={`video-upload-${idx}`}
+                          style={{ 
+                            display: 'block', 
+                            width: '100%', 
+                            padding: '8px', 
+                            fontSize: '13px', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '6px', 
+                            textAlign: 'center', 
+                            backgroundColor: '#f8fafc', 
+                            cursor: 'pointer',
+                            marginBottom: '8px'
+                          }}
+                        >
+                          {media.url ? '🔄 Replace Video' : '🎬 Upload Video (MP4/WebM)'}
+                        </label>
+                        <input type="text" placeholder="...or paste video URL" value={media.url} onChange={(e) => handleMediaChange(idx, 'url', e.target.value)} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '6px', boxSizing: 'border-box' }} />
+                      </>
                     )}
                   </div>
                 </div>
@@ -580,6 +661,13 @@ const PlanDetail = () => {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a', marginBottom: '8px' }}>Strike-through (Credits)</label>
               <input type="number" value={formData.originalPrice} onChange={(e) => handleInputChange('originalPrice', e.target.value)} placeholder="Original price" style={{ width: '100%', padding: '14px 16px', fontSize: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none' }} />
             </div>
+          </div>
+
+          {/* Commission Value (₹) — INTERNAL / ADMIN-ONLY */}
+          <div style={{ marginBottom: '24px', padding: '16px 20px', backgroundColor: '#fef3c7', borderRadius: '12px', border: '2px solid #f59e0b' }}>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#92400e', marginBottom: '4px' }}>🔒 Commission Value (₹) — Internal Only</label>
+            <p style={{ fontSize: '12px', color: '#a16207', margin: '0 0 10px' }}>The ₹ amount used as the basis for commission calculation. Client never sees this. Leave empty to use credit-based calculation.</p>
+            <input type="number" value={formData.commissionBaseAmount} onChange={(e) => handleInputChange('commissionBaseAmount', e.target.value)} placeholder="e.g. 400" min="0" style={{ width: '200px', padding: '12px 16px', fontSize: '15px', border: '2px solid #f59e0b', borderRadius: '10px', outline: 'none', backgroundColor: '#fffbeb' }} />
           </div>
 
           {/* Target & Quantity */}

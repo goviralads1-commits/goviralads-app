@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
@@ -16,6 +16,9 @@ const PlanDetail = () => {
   const [toast, setToast] = useState(null);
   const [currentMediaIdx, setCurrentMediaIdx] = useState(0);
   const [addedToCart, setAddedToCart] = useState(false);
+  // URL of a video that failed to load/play — falls back to the image (no retries)
+  const [failedVideoUrl, setFailedVideoUrl] = useState(null);
+  const primaryVideoRef = useRef(null);
 
   const fetchPlan = useCallback(async () => {
     try {
@@ -33,6 +36,17 @@ const PlanDetail = () => {
   useEffect(() => {
     fetchPlan();
   }, [fetchPlan]);
+
+  // One-shot muted autoplay attempt for the current direct video.
+  // Failure-safe: if the browser blocks autoplay, the catch is a no-op and the
+  // poster + native play control remain usable. Never retries aggressively.
+  useEffect(() => {
+    const el = primaryVideoRef.current;
+    if (!el) return;
+    el.muted = true; // guard against React's muted-attribute quirk
+    const p = el.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  }, [plan, currentMediaIdx, failedVideoUrl]);
 
   // Check if already in cart when plan loads
   useEffect(() => {
@@ -114,6 +128,16 @@ const PlanDetail = () => {
   }
 
   const mediaArray = Array.isArray(plan.planMedia) ? plan.planMedia : [];
+  // VIDEO-FIRST: when the plan has a video, move the first video to position 0 so it
+  // becomes the primary media. Image-only plans keep the exact same array/rendering.
+  const firstVideoIdx = mediaArray.findIndex(m => m?.type === 'video');
+  const orderedMedia = firstVideoIdx > 0
+    ? [mediaArray[firstVideoIdx], ...mediaArray.slice(0, firstVideoIdx), ...mediaArray.slice(firstVideoIdx + 1)]
+    : mediaArray;
+  // Poster/fallback image: the existing plan image (first image media, else featureImage)
+  const posterImage = (mediaArray.find(m => m?.type === 'image' && m?.url)?.url) || plan.featureImage || null;
+  const currentMedia = orderedMedia[currentMediaIdx];
+  const currentVideoFailed = currentMedia?.type === 'video' && failedVideoUrl && currentMedia.url === failedVideoUrl;
   const countdown = formatCountdown(plan.countdownEndDate);
   const hasDiscount = plan.offerPrice && plan.creditCost && plan.offerPrice < plan.creditCost;
   const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.creditCost) * 100) : 0;
@@ -161,25 +185,50 @@ const PlanDetail = () => {
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: '20px' 
         }}>
           <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', backgroundColor: '#f8f9fa' }}>
-            {mediaArray.length > 0 ? (
+            {orderedMedia.length > 0 ? (
               <>
-                {mediaArray[currentMediaIdx]?.type === 'video' ? (
+                {currentMedia?.type === 'video' && !currentVideoFailed ? (
                   (() => {
-                    const embedUrl = getVideoEmbedUrl(mediaArray[currentMediaIdx].url);
+                    const embedUrl = getVideoEmbedUrl(currentMedia.url);
                     if (embedUrl?.includes('embed') || embedUrl?.includes('player.vimeo')) {
                       return <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none' }} allowFullScreen />;
                     }
-                    return <video src={embedUrl} controls style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+                    // Direct video: muted autoplay, inline, native controls, existing image as poster.
+                    // preload="metadata" keeps initial bytes minimal; CDN streams the rest via range requests.
+                    return (
+                      <video
+                        key={embedUrl}
+                        ref={primaryVideoRef}
+                        src={embedUrl}
+                        poster={posterImage || undefined}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        controls
+                        preload="metadata"
+                        onError={() => setFailedVideoUrl(currentMedia.url)}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
+                      />
+                    );
                   })()
+                ) : currentVideoFailed && posterImage && posterImage !== currentMedia?.url ? (
+                  // Video failed to load/play — graceful fallback to the existing image
+                  <img src={posterImage} alt={plan.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : currentVideoFailed ? (
+                  // Video failed and no separate image exists — keep the placeholder, never a broken box
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e9ecef' }}>
+                    <span style={{ fontSize: '80px', opacity: 0.4 }}>📦</span>
+                  </div>
                 ) : (
-                  <img src={mediaArray[currentMediaIdx]?.url} alt={plan.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                  <img src={orderedMedia[currentMediaIdx]?.url} alt={plan.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                 )}
                 
                 {/* Navigation Arrows */}
-                {mediaArray.length > 1 && (
+                {orderedMedia.length > 1 && (
                   <>
                     <button 
-                      onClick={() => setCurrentMediaIdx(prev => prev > 0 ? prev - 1 : mediaArray.length - 1)} 
+                      onClick={() => setCurrentMediaIdx(prev => prev > 0 ? prev - 1 : orderedMedia.length - 1)} 
                       style={{ 
                         position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', 
                         width: '44px', height: '44px', borderRadius: '50%', 
@@ -192,7 +241,7 @@ const PlanDetail = () => {
                       </svg>
                     </button>
                     <button 
-                      onClick={() => setCurrentMediaIdx(prev => prev < mediaArray.length - 1 ? prev + 1 : 0)} 
+                      onClick={() => setCurrentMediaIdx(prev => prev < orderedMedia.length - 1 ? prev + 1 : 0)} 
                       style={{ 
                         position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', 
                         width: '44px', height: '44px', borderRadius: '50%', 
@@ -208,9 +257,9 @@ const PlanDetail = () => {
                 )}
                 
                 {/* Dots Navigation */}
-                {mediaArray.length > 1 && (
+                {orderedMedia.length > 1 && (
                   <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '10px' }}>
-                    {mediaArray.map((_, idx) => (
+                    {orderedMedia.map((_, idx) => (
                       <button 
                         key={idx} 
                         onClick={() => setCurrentMediaIdx(idx)} 
@@ -226,13 +275,13 @@ const PlanDetail = () => {
                 )}
                 
                 {/* Media Counter */}
-                {mediaArray.length > 1 && (
+                {orderedMedia.length > 1 && (
                   <div style={{ 
                     position: 'absolute', top: '16px', left: '16px', 
                     backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', 
                     padding: '8px 14px', borderRadius: '12px', fontSize: '13px', fontWeight: '600' 
                   }}>
-                    {currentMediaIdx + 1}/{mediaArray.length}
+                    {currentMediaIdx + 1}/{orderedMedia.length}
                   </div>
                 )}
               </>

@@ -525,8 +525,9 @@ const Plans = () => {
               const currentMediaIdx = activeMediaIndex[plan.id] || 0;
               const coverMedia = mediaArray[currentMediaIdx] || mediaArray[0];
               const isVideo = coverMedia?.type === 'video';
-              // Use thumbnail for videos, direct URL for images
-              const displayUrl = coverMedia ? getMediaDisplayUrl(coverMedia) : (plan.featureImage || null);
+              // Use thumbnail for videos, direct URL for images; fall back to featureImage
+              // when a video thumbnail cannot be derived (never renders a broken cover)
+              const displayUrl = coverMedia ? (getMediaDisplayUrl(coverMedia) || plan.featureImage || null) : (plan.featureImage || null);
               const hasDiscount = plan.offerPrice && plan.creditCost && plan.offerPrice < plan.creditCost;
               const discountPercent = hasDiscount ? Math.round((1 - plan.offerPrice / plan.creditCost) * 100) : 0;
               const saveAmount = hasDiscount ? (plan.creditCost - plan.offerPrice) : 0;

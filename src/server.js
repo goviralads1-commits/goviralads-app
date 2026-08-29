@@ -105,7 +105,7 @@ if (cloudinaryConfigured) {
 }
 
 // Helper: upload a single file buffer to Cloudinary, returns secure_url
-const uploadBufferToCloudinary = (buffer, folder = 'goviralads/chat') => {
+const uploadBufferToCloudinary = (buffer, folder = 'goviralads/chat', resourceType = 'image') => {
   return new Promise((resolve, reject) => {
     if (!cloudinaryConfigured) {
       return reject(new Error('Cloudinary not configured - missing env vars'));
@@ -114,7 +114,7 @@ const uploadBufferToCloudinary = (buffer, folder = 'goviralads/chat') => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: folder,
-        resource_type: 'image',
+        resource_type: resourceType,
       },
       (error, result) => {
         if (error) {
@@ -205,6 +205,45 @@ app.post('/upload/plan-image', authenticateJWT, planUpload.single('image'), asyn
 // ============== PROGRESS ICON UPLOAD ENDPOINT ==============
 const { requireAdmin } = require('./middleware/authorization');
 const { ProgressIconLibrary } = require('./models/ProgressIconLibrary');
+
+// ============== PLAN VIDEO UPLOAD ENDPOINT ==============
+// Optional explanatory video for Plans. Reuses the existing Cloudinary
+// infrastructure (same as plan images) with resource_type 'video'.
+// Admin-only; MIME whitelist + size limit enforced server-side by multer.
+const planVideoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB hard cap
+  fileFilter: (req, file, cb) => {
+    const allowed = ['video/mp4', 'video/webm'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Invalid file type. Only MP4 and WebM videos are allowed.'));
+  }
+});
+
+app.post('/upload/plan-video', authenticateJWT, requireAdmin, (req, res, next) => {
+  // Intercept multer errors per-route (size/type) so clients get a clean JSON error
+  planVideoUpload.single('video')(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE'
+        ? 'Video too large. Maximum 50MB allowed.'
+        : (err.message || 'Video upload rejected');
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const url = await uploadBufferToCloudinary(req.file.buffer, 'goviralads/plan-videos', 'video');
+    return res.status(200).json({ url });
+  } catch (err) {
+    console.error('[PLAN VIDEO UPLOAD] Error:', err.message);
+    return res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+});
 
 // Multer config for progress icons (smaller size limit)
 const iconUpload = multer({
