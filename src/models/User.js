@@ -81,6 +81,15 @@ const userSchema = new mongoose.Schema(
       inAppNotifications: { type: Boolean, default: true },
       pushNotifications: { type: Boolean, default: true },
       marketingEmails: { type: Boolean, default: false },
+      // Browser push state reported by the client app (never treated as ON by itself —
+      // delivery health always also requires an active DeviceToken).
+      // Values: healthy | token_missing | not_requested | denied | disabled | unsupported
+      pushState: {
+        type: String,
+        enum: ['healthy', 'token_missing', 'not_requested', 'denied', 'disabled', 'unsupported'],
+        default: null,
+      },
+      pushStateUpdatedAt: { type: Date, default: null },
       defaultDeductionMode: { 
         type: String, 
         enum: ['AUTO', 'SUBSCRIPTION_ONLY', 'WALLET_ONLY'], 

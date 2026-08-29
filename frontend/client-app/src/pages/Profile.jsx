@@ -936,7 +936,14 @@ const Profile = () => {
                   <p style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Push Notifications</p>
                   <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Receive instant notifications on your device</p>
                   {Notification.permission === 'denied' && (
-                    <p style={{ fontSize: '11px', color: '#dc2626', margin: '4px 0 0 0' }}>⚠️ Blocked in browser settings</p>
+                    <div style={{ marginTop: '8px', padding: '10px 12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px' }}>
+                      <p style={{ fontSize: '11.5px', color: '#991b1b', margin: '0 0 4px 0', fontWeight: '700' }}>⚠️ Notifications are blocked in your browser</p>
+                      <p style={{ fontSize: '11px', color: '#b91c1c', margin: 0, lineHeight: '1.5' }}>
+                        Browsers don't allow us to re-enable this automatically. Click the lock/tune icon
+                        in your address bar → Site settings → Notifications → Allow, then reload this page
+                        and switch this toggle on.
+                      </p>
+                    </div>
                   )}
                 </div>
                 <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '28px' }}>

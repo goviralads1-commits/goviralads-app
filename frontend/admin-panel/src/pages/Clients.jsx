@@ -33,6 +33,10 @@ const Clients = () => {
   const [freshRunning, setFreshRunning] = useState(false);
   const [freshResult, setFreshResult] = useState(null);
 
+  // Client push-notification delivery health (read-only visibility + remind action)
+  const [pushStatuses, setPushStatuses] = useState({}); // { [clientId]: { status, needsAttention, lastReminderAt } }
+  const [remindingId, setRemindingId] = useState(null);
+
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -52,7 +56,20 @@ const Clients = () => {
       }
     };
 
+    // Non-blocking: push delivery health is supplementary — never blocks the list
+    const fetchPushStatuses = async () => {
+      try {
+        const res = await api.get('/admin/client-push-status');
+        const map = {};
+        (res.data.statuses || []).forEach((s) => { map[s.clientId] = s; });
+        setPushStatuses(map);
+      } catch (err) {
+        console.warn('Push status unavailable (non-fatal):', err.message);
+      }
+    };
+
     fetchData();
+    fetchPushStatuses();
   }, []);
 
   const showToast = (message, type = 'success') => {
@@ -63,6 +80,24 @@ const Clients = () => {
   const refreshClientList = async () => {
     const response = await api.get('/admin/users?role=CLIENT&limit=100');
     setClients(response.data.users || []);
+  };
+
+  // Intentional "remind client to enable notifications" action — sends an in-app/email
+  // reminder only. Never touches browser permission (only the client/browser can grant it).
+  const handleRemindEnableNotifications = async (client) => {
+    try {
+      setRemindingId(client.id);
+      await api.post(`/admin/clients/${client.id}/remind-enable-notifications`);
+      showToast('Reminder sent to client');
+      setPushStatuses((prev) => ({
+        ...prev,
+        [client.id]: { ...(prev[client.id] || {}), lastReminderAt: new Date().toISOString() },
+      }));
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to send reminder', 'error');
+    } finally {
+      setRemindingId(null);
+    }
   };
 
   const handleResetClient = async () => {
@@ -251,13 +286,34 @@ const Clients = () => {
                   <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#0f172a', margin: '0 0 4px 0' }}>{client.name || client.identifier}</h3>
                   <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>{client.identifier}</p>
                 </div>
-                <span style={{
-                  padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
-                  backgroundColor: client.status === 'ACTIVE' ? '#dcfce7' : '#fee2e2',
-                  color: client.status === 'ACTIVE' ? '#166534' : '#991b1b',
-                }}>
-                  {client.status}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                  <span style={{
+                    padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
+                    backgroundColor: client.status === 'ACTIVE' ? '#dcfce7' : '#fee2e2',
+                    color: client.status === 'ACTIVE' ? '#166534' : '#991b1b',
+                  }}>
+                    {client.status}
+                  </span>
+                  {/* Push delivery health — shown only when notifications may not reach the client */}
+                  {pushStatuses[client.id]?.needsAttention && (
+                    <span
+                      title={
+                        pushStatuses[client.id].status === 'denied' ? 'Client blocked browser notifications' :
+                        pushStatuses[client.id].status === 'disabled' ? 'Client turned notifications off' :
+                        pushStatuses[client.id].status === 'unsupported' ? 'Device/browser does not support notifications' :
+                        pushStatuses[client.id].status === 'not_requested' ? 'Client has not allowed notifications yet' :
+                        pushStatuses[client.id].status === 'token_missing' ? 'Permission granted but device token missing' :
+                        'No active notification channel for this client'
+                      }
+                      style={{
+                        padding: '3px 10px', borderRadius: '20px', fontSize: '10.5px', fontWeight: '600',
+                        backgroundColor: '#fef3c7', color: '#92400e', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      🔕 Notifications off
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -287,6 +343,29 @@ const Clients = () => {
               >
                 🗑 Reset Test Data
               </button>
+
+              {/* Remind to enable notifications — only when delivery is known-unavailable */}
+              {pushStatuses[client.id]?.needsAttention && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemindEnableNotifications(client);
+                  }}
+                  disabled={remindingId === client.id || !!pushStatuses[client.id]?.lastReminderAt}
+                  style={{
+                    marginTop: '8px', width: '100%', padding: '8px',
+                    backgroundColor: pushStatuses[client.id]?.lastReminderAt ? '#f1f5f9' : '#fffbeb',
+                    color: pushStatuses[client.id]?.lastReminderAt ? '#94a3b8' : '#92400e',
+                    fontSize: '12px', fontWeight: '600', borderRadius: '8px',
+                    border: `1px solid ${pushStatuses[client.id]?.lastReminderAt ? '#e2e8f0' : '#fcd34d'}`,
+                    cursor: (remindingId === client.id || pushStatuses[client.id]?.lastReminderAt) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {remindingId === client.id ? 'Sending...'
+                    : pushStatuses[client.id]?.lastReminderAt ? '🔔 Reminder sent (7-day cooldown)'
+                    : '🔔 Remind to enable notifications'}
+                </button>
+              )}
 
               {isMainAdmin && (
                 <button

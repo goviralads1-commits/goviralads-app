@@ -27,7 +27,7 @@ const Register = React.lazy(() => import('./pages/Register'));
 const Earnings = React.lazy(() => import('./pages/Earnings'));
 const EarningsLedgerPage = React.lazy(() => import('./pages/EarningsLedger'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
-import { initPushNotifications, setupForegroundHandler } from './services/pushService';
+import { initPushNotifications, setupForegroundHandler, enablePushNotifications } from './services/pushService';
 
 // Lightweight Suspense fallback while a lazy route chunk loads (existing spinner style)
 const RouteLoadingFallback = () => (
@@ -260,6 +260,104 @@ const PushNotificationManager = () => {
   return null;
 };
 
+// Lightweight in-app notification permission prompt (permission UX pass).
+// Shown ONLY when: logged in, browser permission is still 'default' (undecided),
+// and the user has not dismissed it within the last 7 days. The native browser
+// permission request is triggered ONLY by the explicit "Allow" click — never
+// automatically on page load. Never shown to granted/healthy or denied users.
+const NotificationPermissionPrompt = () => {
+  const { isLoggedIn } = useAuth();
+  const [visible, setVisible] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const maybeShow = () => {
+      try {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+        const dismissedAt = Number(localStorage.getItem('gvaNotifPromptDismissedAt') || 0);
+        if (Date.now() - dismissedAt < 7 * 24 * 60 * 60 * 1000) return; // suppressed
+        setVisible(true);
+      } catch (e) {
+        // Never let prompt logic break the app
+      }
+    };
+
+    const handler = () => maybeShow();
+    window.addEventListener('gva-push-permission-needed', handler);
+    return () => window.removeEventListener('gva-push-permission-needed', handler);
+  }, [isLoggedIn]);
+
+  const handleEnable = async () => {
+    setBusy(true);
+    try {
+      await enablePushNotifications();
+    } catch (err) {
+      // Denied or failed — hide prompt; Profile settings keep re-enable guidance
+      console.warn('[Push] Enable from prompt failed:', err.message);
+    } finally {
+      setBusy(false);
+      setVisible(false);
+    }
+  };
+
+  const handleLater = () => {
+    try { localStorage.setItem('gvaNotifPromptDismissedAt', String(Date.now())); } catch (e) {}
+    setVisible(false);
+  };
+
+  if (!visible || !isLoggedIn) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: '20px', right: '20px', zIndex: 1200,
+      maxWidth: '340px', backgroundColor: '#fff', borderRadius: '16px',
+      boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)', border: '1px solid #e2e8f0',
+      padding: '18px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+        <div style={{
+          width: '38px', height: '38px', borderRadius: '12px', flexShrink: 0,
+          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px'
+        }}>🔔</div>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>Stay on top of your projects</p>
+          <p style={{ margin: '0 0 12px 0', fontSize: '12.5px', lineHeight: '1.5', color: '#64748b' }}>
+            Get instant updates for orders, tasks, payments and reminders — even when this tab is closed.
+          </p>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleEnable}
+              disabled={busy}
+              style={{
+                padding: '8px 16px', borderRadius: '10px', border: 'none',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                color: '#fff', fontSize: '12.5px', fontWeight: '700',
+                cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1,
+              }}
+            >
+              {busy ? 'Enabling...' : 'Allow Notifications'}
+            </button>
+            <button
+              onClick={handleLater}
+              disabled={busy}
+              style={{
+                padding: '8px 14px', borderRadius: '10px', border: '1px solid #e2e8f0',
+                backgroundColor: '#fff', color: '#64748b', fontSize: '12.5px', fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // App shell — renders Router immediately so public routes (login) are never blocked
 const AppShell = () => {
   return (
@@ -340,6 +438,7 @@ const AppShell = () => {
           </Routes>
           </Suspense>
           <CookieConsent />
+          <NotificationPermissionPrompt />
         </div>
       </Router>
     </CartProvider>

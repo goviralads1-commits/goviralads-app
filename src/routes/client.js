@@ -4240,6 +4240,77 @@ router.patch('/push-preference', async (req, res) => {
   }
 });
 
+// PATCH /client/push-state - Client-reported browser push state (permission UX pass)
+// States: healthy | token_missing | not_requested | denied | disabled | unsupported
+// Alerts main admin(s) ONLY on an actual transition into an unavailable state
+// (denied / disabled / unsupported) — never duplicates for repeated same-state reports.
+const CLIENT_PUSH_STATES = ['healthy', 'token_missing', 'not_requested', 'denied', 'disabled', 'unsupported'];
+const CLIENT_PUSH_UNAVAILABLE = ['denied', 'disabled', 'unsupported'];
+
+router.patch('/push-state', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { state } = req.body || {};
+
+    if (!CLIENT_PUSH_STATES.includes(state)) {
+      return res.status(400).json({ error: 'Invalid push state' });
+    }
+
+    const user = await User.findById(clientId).select('identifier preferences');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const previousState = user.preferences?.pushState || null;
+    if (previousState === state) {
+      // No change — do not write, do not re-alert
+      return res.json({ success: true, changed: false });
+    }
+
+    user.preferences = user.preferences || {};
+    user.preferences.pushState = state;
+    user.preferences.pushStateUpdatedAt = new Date();
+    await user.save();
+
+    console.log(`[PUSH] Push state for client ${clientId}: ${previousState || '(none)'} -> ${state}`);
+
+    // Notify main admin(s) only when delivery becomes unavailable
+    if (CLIENT_PUSH_UNAVAILABLE.includes(state)) {
+      try {
+        const mainAdmins = await User.find({
+          role: 'ADMIN',
+          customRole: null,
+          isDeleted: { $ne: true },
+        }).select('_id').exec();
+
+        const reason = state === 'denied'
+          ? 'blocked browser notifications in their browser settings'
+          : state === 'disabled'
+            ? 'turned off push notifications in the app'
+            : 'is on a device/browser that does not support notifications';
+
+        for (const adminUser of mainAdmins) {
+          await createNotification({
+            recipientId: adminUser._id,
+            type: NOTIFICATION_TYPES.CLIENT_NOTIFICATIONS_DISABLED,
+            title: 'Client Notifications Unavailable',
+            message: `Client ${user.identifier} has ${reason}. Push reminders may not reach them until they re-enable notifications.`,
+            relatedEntity: { entityType: 'USER', entityId: user._id },
+          });
+        }
+      } catch (alertErr) {
+        // Alerting is non-critical — never fail the state report because of it
+        console.error('[PUSH] Admin alert for push state failed (non-fatal):', alertErr.message);
+      }
+    }
+
+    return res.json({ success: true, changed: true });
+  } catch (err) {
+    console.error('[PUSH] Save push state error:', err.message);
+    return res.status(500).json({ error: 'Failed to save push state' });
+  }
+});
+
 // GET /client/my-commissions - Client sees their own commission logs (history) + ledger balance
 router.get('/my-commissions', async (req, res) => {
   try {

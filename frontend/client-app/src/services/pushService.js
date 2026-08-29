@@ -266,6 +266,7 @@ export const disablePushNotifications = async () => {
     localStorage.removeItem('fcmToken');
     localStorage.setItem('pushNotificationsEnabled', 'false');
     console.log('[Push] ✅ Notifications disabled successfully');
+    reportPushState(true); // inform backend delivery is now disabled
     return true;
   } catch (error) {
     console.error('[Push] Disable FAILED:', {
@@ -276,6 +277,7 @@ export const disablePushNotifications = async () => {
     // Still clear local state even if backend fails
     localStorage.removeItem('fcmToken');
     localStorage.setItem('pushNotificationsEnabled', 'false');
+    reportPushState(true); // inform backend delivery is now disabled
     return false;
   }
 };
@@ -307,6 +309,8 @@ export const enablePushNotifications = async () => {
     }
     
     console.log('[Push] ========== ENABLE PUSH SUCCESS ==========');
+    localStorage.setItem('gvaPushTokenRefreshAt', String(Date.now()));
+    reportPushState(true); // inform backend the delivery is healthy again
     return true;
   } catch (error) {
     console.error('[Push] ========== ENABLE PUSH FAILED ==========');
@@ -325,6 +329,54 @@ export const isPushEnabled = () => {
   
   console.log('[Push] isPushEnabled check:', { enabled, hasToken, permission, result });
   return result;
+};
+
+// ---------------------------------------------------------------------------
+// Notification delivery state machine (permission UX pass)
+// States: healthy | token_missing | not_requested | denied | disabled | unsupported
+// This reflects the ACTUAL browser + token state — never just a saved flag.
+// ---------------------------------------------------------------------------
+export const getNotificationStatus = () => {
+  try {
+    if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
+      return 'unsupported';
+    }
+    if (localStorage.getItem('pushNotificationsEnabled') === 'false') return 'disabled';
+    const permission = Notification.permission;
+    if (permission === 'denied') return 'denied';
+    if (permission === 'default') return 'not_requested';
+    // granted
+    return localStorage.getItem('fcmToken') ? 'healthy' : 'token_missing';
+  } catch (e) {
+    return 'unsupported';
+  }
+};
+
+// Report delivery state to the backend (authenticated, fire-and-forget).
+// Throttled: at most one request per 24h per unchanged state — healthy clients
+// generate ZERO extra API calls on repeat visits.
+export const reportPushState = async (force = false) => {
+  try {
+    const authToken = localStorage.getItem('token');
+    if (!authToken) return; // not logged in — nothing to report
+
+    const state = getNotificationStatus();
+    const key = 'gvaPushStateReport';
+    let last = null;
+    try { last = JSON.parse(localStorage.getItem(key)); } catch (e) { last = null; }
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    if (!force && last && last.state === state && (Date.now() - (last.at || 0)) < DAY_MS) {
+      return; // already reported this state recently
+    }
+
+    await api.patch('/client/push-state', { state });
+    localStorage.setItem(key, JSON.stringify({ state, at: Date.now() }));
+    console.log('[Push] State reported to backend:', state);
+  } catch (e) {
+    // Non-fatal: state reporting must never break the app
+    console.warn('[Push] State report failed (non-fatal):', e.message);
+  }
 };
 
 // Setup foreground message handler
@@ -385,39 +437,61 @@ export const initPushNotifications = async () => {
     // Check if user has explicitly disabled push notifications
     if (localStorage.getItem('pushNotificationsEnabled') === 'false') {
       console.log('[Push] User has disabled push - skipping');
+      reportPushState();
+      return;
+    }
+
+    // Unsupported browser/device — report once (throttled), never prompt
+    if (typeof Notification === 'undefined') {
+      reportPushState();
       return;
     }
 
     // Check if already have a valid token
     const existingToken = localStorage.getItem('fcmToken');
     if (existingToken && Notification.permission === 'granted') {
-      // Always call generateToken() (Firebase SDK getToken()) instead of re-sending the
-      // cached localStorage token. FCM tokens can rotate silently; Firebase SDK returns
-      // the current valid token (same or new) and we save it fresh to the backend.
+      // Healthy path: NO popup, NO repeated registration. Refresh the token via
+      // Firebase SDK at most once per 24h (tokens can rotate silently).
+      const lastRefresh = Number(localStorage.getItem('gvaPushTokenRefreshAt') || 0);
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      if (Date.now() - lastRefresh < DAY_MS) {
+        console.log('[Push] Healthy — skipping token refresh (last refresh < 24h ago)');
+        reportPushState();
+        return;
+      }
       console.log('[Push] Existing token found — refreshing via Firebase SDK (getToken)...');
       try {
         await generateToken();
+        localStorage.setItem('gvaPushTokenRefreshAt', String(Date.now()));
         console.log('[Push] ✅ Token refreshed and re-registered');
       } catch (e) {
         console.warn('[Push] Token refresh failed:', e.message);
       }
+      reportPushState();
       return;
     }
 
-    // Request permission if not yet granted
+    // Permission not decided yet: NEVER auto-trigger the native browser prompt.
+    // Signal the app to show our own lightweight in-app prompt instead — the
+    // native request only happens from the user's explicit "Allow" action.
     if (Notification.permission === 'default') {
-      console.log('[Push] First time - requesting permission...');
-      const permission = await requestPermission();
-      if (permission === 'granted') {
-        await generateToken();
-      }
+      console.log('[Push] Permission undecided - signaling in-app prompt');
+      window.dispatchEvent(new CustomEvent('gva-push-permission-needed'));
     } else if (Notification.permission === 'granted') {
+      // Granted but no token stored (e.g. fresh device) — repair silently
       console.log('[Push] Permission granted, generating token...');
-      await generateToken();
+      try {
+        await generateToken();
+        localStorage.setItem('gvaPushTokenRefreshAt', String(Date.now()));
+      } catch (e) {
+        console.warn('[Push] Token generation failed:', e.message);
+      }
     } else {
-      console.log('[Push] Permission denied by user');
+      // denied — never re-request; Profile shows re-enable guidance
+      console.log('[Push] Permission denied by user — not re-requesting');
     }
-    
+
+    reportPushState();
     console.log('[Push] ========== AUTO INIT COMPLETE ==========');
   } catch (error) {
     console.error('[Push] Auto-init error (non-fatal):', error.message);

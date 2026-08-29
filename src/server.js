@@ -334,6 +334,7 @@ const adminRoutes = require('./routes/admin');
 const adminSubscriptionRoutes = require('./routes/adminSubscriptions');
 const adminEmployeeRoutes = require('./routes/adminEmployees');
 const adminClientDataRoutes = require('./routes/adminClientData');
+const adminNotificationStatusRoutes = require('./routes/adminNotificationStatus');
 
 // Import task service for automatic progress updates
 const { updateTaskProgressAutomatically, calculateProgressFromTimeline } = require('./services/taskService');
@@ -376,6 +377,8 @@ app.use('/admin/subscriptions', adminSubscriptionRoutes);
 app.use('/admin/employees', adminEmployeeRoutes);
 // MAIN ADMIN ONLY destructive client-data operations (preview / single-client delete / fresh start)
 app.use('/admin/client-data', adminClientDataRoutes);
+// Client push delivery health visibility + intentional re-enable reminders (read-only + in-app reminder)
+app.use('/admin', adminNotificationStatusRoutes);
 
 // Initialize default legal pages
 async function ensureLegalPages() {
@@ -775,6 +778,22 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// Deactivate device tokens unused for 30+ days (flag-only, never deletes documents).
+// Runs once at boot and then every 24 hours. Failures never affect the server.
+function startDeviceTokenCleanupJob() {
+  const DeviceToken = require('./models/DeviceToken');
+  const runCleanup = async () => {
+    try {
+      const result = await DeviceToken.deactivateOldTokens();
+      console.log(`[Push] Stale device token cleanup: ${result.modifiedCount || 0} deactivated`);
+    } catch (err) {
+      console.error('[Push] Device token cleanup error (non-fatal):', err.message);
+    }
+  };
+  runCleanup();
+  setInterval(runCleanup, 24 * 60 * 60 * 1000);
+}
+
 const PORT = process.env.PORT || 3000;
 
 async function start() {
@@ -801,6 +820,9 @@ async function start() {
 
     // Send subscription expiry reminders every 12 hours
     startSubscriptionReminderJob();
+
+    // Deactivate stale device tokens (30 days unused) — keeps push delivery reliable
+    startDeviceTokenCleanupJob();
     
     app.listen(PORT, () => {
       console.log('Backend live');
