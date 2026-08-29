@@ -70,7 +70,10 @@ const Notifications = () => {
     const entityType = notif.relatedEntity?.entityType;
     const entityId = notif.relatedEntity?.entityId;
     
-    if (entityType === 'ORDER') {
+    if (notif.type === 'ENABLE_NOTIFICATIONS_REMINDER') {
+      // Admin "turn on notifications" reminder → deep-link into the existing enable flow
+      navigate('/profile?enablePush=1');
+    } else if (entityType === 'ORDER') {
       navigate('/orders');
     } else if (entityType === 'TASK' && entityId) {
       navigate(`/tasks/${entityId}?scrollToChat=true`);

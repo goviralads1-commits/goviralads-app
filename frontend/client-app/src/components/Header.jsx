@@ -338,7 +338,10 @@ const Header = ({ title }) => {
     const entityType = notif.relatedEntity?.entityType;
     
     // Navigate based on entity type
-    if (entityType === 'ORDER') {
+    if (notif.type === 'ENABLE_NOTIFICATIONS_REMINDER') {
+      // Admin "turn on notifications" reminder → deep-link into the existing enable flow
+      navigate('/profile?enablePush=1');
+    } else if (entityType === 'ORDER') {
       navigate(`/orders?orderId=${entityId}`);
     } else if (entityType === 'TASK') {
       navigate(`/tasks/${entityId}?scrollToChat=true`);

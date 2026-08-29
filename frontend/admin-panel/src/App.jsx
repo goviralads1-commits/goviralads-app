@@ -34,6 +34,7 @@ const EarningsRedeems = React.lazy(() => import('./pages/EarningsRedeems'));
 const Employees = React.lazy(() => import('./pages/Employees'));
 const EmployeeDetail = React.lazy(() => import('./pages/EmployeeDetail'));
 const LegalPages = React.lazy(() => import('./pages/LegalPages'));
+const ClientNotifications = React.lazy(() => import('./pages/ClientNotifications'));
 const Tickets = React.lazy(() => import('./pages/Tickets'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 import { initPushNotifications, setupForegroundHandler } from './services/pushService';
@@ -610,6 +611,11 @@ const App = () => {
           <Route path="/legal-pages" element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <LegalPages />
+            </ProtectedRoute>
+          } />
+          <Route path="/client-notifications" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <ClientNotifications />
             </ProtectedRoute>
           } />
           <Route path="/tickets" element={

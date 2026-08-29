@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Header from '../components/Header';
 import { getCurrentUser, logout } from '../services/authService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { isPushEnabled, enablePushNotifications, disablePushNotifications } from '../services/pushService';
 
 const Profile = () => {
@@ -41,12 +41,26 @@ const Profile = () => {
   // Push notification state
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  // "Turn On Notifications" entry point — shown only when arriving via the
+  // admin reminder deep link (/profile?enablePush=1). Never shown otherwise,
+  // so clients with notifications already ON are never nagged.
+  const location = useLocation();
+  const [enablePushPrompt, setEnablePushPrompt] = useState(false);
 
   useEffect(() => {
     console.log('[SETTINGS TAB] Component mounted');
     fetchProfile();
     // Check push notification status
     setPushEnabled(isPushEnabled());
+    // Reminder deep link: jump straight to Settings and show the one-tap action
+    try {
+      if (new URLSearchParams(location.search).get('enablePush') === '1') {
+        setActiveTab('settings');
+        setEnablePushPrompt(true);
+      }
+    } catch (e) {
+      // Never let deep-link parsing break the page
+    }
   }, []);
 
   // Auto-dismiss toast
@@ -929,6 +943,55 @@ const Profile = () => {
                   </span>
                 </label>
               </div>
+
+              {/* Turn On Notifications — reminder deep-link entry (existing enable flow).
+                  The browser permission request happens ONLY from this explicit tap.
+                  If permission is already granted we just re-confirm/register — never re-ask.
+                  If permission is denied, the guidance box below explains browser steps. */}
+              {enablePushPrompt && (
+                pushEnabled ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '14px 16px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', marginBottom: '12px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#166534', margin: 0 }}>✅ Your notifications are already turned on.</p>
+                    <button onClick={() => setEnablePushPrompt(false)} style={{ padding: '6px 12px', borderRadius: '8px', border: 'none', backgroundColor: '#dcfce7', color: '#166534', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>Dismiss</button>
+                  </div>
+                ) : (typeof Notification !== 'undefined' && Notification.permission === 'denied') ? (
+                  <div style={{ padding: '14px 16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', marginBottom: '12px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b', margin: '0 0 4px 0' }}>⚠️ Notifications are blocked in your browser</p>
+                    <p style={{ fontSize: '12px', color: '#b91c1c', margin: 0, lineHeight: 1.5 }}>
+                      We can't re-enable them automatically. Click the lock/tune icon in your address bar →
+                      Site settings → Notifications → Allow, then reload this page.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ padding: '16px', backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '12px', marginBottom: '12px' }}>
+                    <p style={{ fontSize: '14px', fontWeight: '700', color: '#92400e', margin: '0 0 4px 0' }}>🔔 Don't miss important updates</p>
+                    <p style={{ fontSize: '12.5px', color: '#b45309', margin: '0 0 12px 0', lineHeight: 1.5 }}>
+                      Orders, tasks, payments and reminders may not reach you while notifications are off.
+                    </p>
+                    <button
+                      onClick={async () => {
+                        setPushLoading(true);
+                        try {
+                          await enablePushNotifications();
+                          setPushEnabled(true);
+                          setEnablePushPrompt(false);
+                          setToast({ type: 'success', message: 'Push notifications enabled!' });
+                        } catch (err) {
+                          // Denied/failed — guidance above/below explains next steps; never force the browser prompt
+                          setPushEnabled(isPushEnabled());
+                          setToast({ type: 'error', message: err.message || 'Could not enable notifications' });
+                        } finally {
+                          setPushLoading(false);
+                        }
+                      }}
+                      disabled={pushLoading}
+                      style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: pushLoading ? 'wait' : 'pointer', opacity: pushLoading ? 0.7 : 1, boxShadow: '0 4px 12px rgba(245,158,11,0.3)' }}
+                    >
+                      {pushLoading ? 'Enabling...' : 'Turn On Notifications'}
+                    </button>
+                  </div>
+                )
+              )}
 
               {/* Push Notifications Toggle */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: pushEnabled ? '#f0fdf4' : '#f8fafc', borderRadius: '12px', marginTop: '12px', border: pushEnabled ? '2px solid #86efac' : '2px solid transparent' }}>

@@ -463,6 +463,9 @@ const Header = ({ title }) => {
                     <Link to="/legal-pages" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
                       <span style={{ fontSize: '16px' }}>📄</span> Content Management
                     </Link>
+                    <Link to="/client-notifications" onClick={() => setShowProfileMenu(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: '10px', textDecoration: 'none', color: '#374151', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' }}>
+                      <span style={{ fontSize: '16px' }}>🔔</span> Client Notifications
+                    </Link>
                     {isMainAdmin && (
                       <>
                         <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '8px 0' }} />

@@ -503,6 +503,41 @@ async function triggerNotificationEmail(notifData) {
           </html>
         `
       });
+} else if (type === NOTIFICATION_TYPES.ENABLE_NOTIFICATIONS_REMINDER) {
+      // Client reminder to re-enable push notifications (sent by admin via
+      // Profile dropdown → Client Notifications). Links straight into the
+      // existing enable flow: /profile?enablePush=1
+      const enableUrl = dashboardUrl + '/profile?enablePush=1';
+      const safeTitle = escapeHtml(notifData.title || 'Turn On Notifications');
+      const safeMessage = escapeHtml(notifData.message || 'Enable notifications to receive important updates.');
+      await emailService.send({
+        to: recipientEmail,
+        subject: `🔔 Turn On Notifications - Go Viral Ads`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">🔔 Stay Updated</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">${safeTitle}</h2>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${safeMessage}</p>
+                <a href="${enableUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                  Turn On Notifications
+                </a>
+                <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 16px 0 0 0;">Your browser will ask for permission once — you stay in full control.</p>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      });
     } else {
       // Generic notification email
       await emailService.send({
