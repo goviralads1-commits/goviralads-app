@@ -205,7 +205,6 @@ const Dashboard = () => {
   // post-completion edits (chat messages, approvals, admin edits) — so no period-based
   // "completed on/within date" metric is rendered. Only the honest all-time count is shown.
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED').slice(0, 3); // Show only recent 3
-  const allCompletedCount = tasks.filter(t => t.status === 'COMPLETED').length;
   const user = getCurrentUser();
 
   // Derive display name: prefer stored name fields, fallback to email parsing
@@ -345,26 +344,9 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* STATS STRIP — compact tap-through summary (2 cols on mobile, 4 on wider screens).
-            Each card opens the Tasks page, so it acts as navigation rather than duplicating the sections below. */}
-        <div className="gva-stats-grid" style={{ marginBottom: '24px' }}>
-          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-            <p style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '0 0 2px 0' }}>{tasks.length}</p>
-            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Total</p>
-          </div>
-          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-            <p style={{ fontSize: '20px', fontWeight: '800', color: '#22c55e', margin: '0 0 2px 0' }}>{activeTasks.length}</p>
-            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Active</p>
-          </div>
-          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-            <p style={{ fontSize: '20px', fontWeight: '800', color: '#6366f1', margin: '0 0 2px 0' }}>{allCompletedCount}</p>
-            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Done</p>
-          </div>
-          <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 8px', textAlign: 'center', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-            <p style={{ fontSize: '20px', fontWeight: '800', color: '#f59e0b', margin: '0 0 2px 0' }}>{pendingTasks.length}</p>
-            <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pending</p>
-          </div>
-        </div>
+        {/* OLD STATS STRIP REMOVED (presentation only): its Total/Active/Done/Pending numbers are
+            already represented by the Work Summary cards, the Active Tasks section and the
+            Recently Completed section. Underlying task data/navigation is untouched. */}
 
         {/* WORK SUMMARY — client-owned analytics only (hidden for logged-out visitors).
             Orders/dashboard-summary failures never become fake zeros: affected values show
@@ -375,7 +357,7 @@ const Dashboard = () => {
             Orders Completed is likewise omitted: no backend path ever sets an order to
             COMPLETED, so that card could only ever display a misleading permanent zero.
             Commission Generated is deliberately NOT a card here — the existing Earnings strip
-            below remains the single place that displays the client's earned commission. */}
+            immediately below remains the single place that displays the client's earned commission. */}
         {isAuthenticated() && (
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
@@ -409,14 +391,28 @@ const Dashboard = () => {
               <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>In progress right now</p>
             </div>
           </div>
+        </div>
+        )}
 
-          {dashStats?.recentActivity?.last7Days && (
-            <div style={{ marginTop: '12px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #eef2f7', padding: '10px 14px', display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12.5px', color: '#475569' }}>
-              <span style={{ fontWeight: '600', color: '#0f172a' }}>Recent Activity <span style={{ fontWeight: '400', color: '#94a3b8' }}>(last 7 days)</span></span>
-              <span><b style={{ color: '#0f172a' }}>{(dashStats.recentActivity.last7Days.spending || 0).toLocaleString()}</b> credits spent</span>
-              <span><b style={{ color: '#0f172a' }}>{dashStats.recentActivity.last7Days.tasksCreated || 0}</b> new tasks created</span>
+        {/* COMMISSION GENERATED — the existing Earnings strip, repositioned to its place in the
+            approved sequence (after work metrics, before the banner). Same real client data from
+            /client/my-commissions (req.user.id-scoped); no duplicate commission value is created.
+            Hidden when the client has no commission history (never a fake zero). */}
+        {commissionData.overallTaskCount > 0 && (
+        <div onClick={() => navigate('/earnings-ledger')} style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', borderRadius: '16px', padding: '16px 20px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: '18px' }}>💰</span>
             </div>
-          )}
+            <div>
+              <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 2px 0', fontWeight: '600' }}>Commission Generated</p>
+              <p style={{ fontSize: '20px', fontWeight: '800', color: '#166534', margin: 0 }}>{(commissionData.overallTotal || 0).toLocaleString()} credits</p>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '11px', color: '#16a34a', margin: '0 0 2px 0', fontWeight: '600' }}>{commissionData.overallTaskCount} tasks</p>
+            <p style={{ fontSize: '12px', color: '#15803d', margin: 0, fontWeight: '700' }}>completed</p>
+          </div>
         </div>
         )}
 
@@ -479,6 +475,25 @@ const Dashboard = () => {
             ))}
           </div>
           )}
+        </div>
+        )}
+
+        {/* RECENT ACTIVITY — real client-owned data from the existing /client/dashboard
+            reporting endpoint (req.user.id-scoped). Shown only when the data genuinely exists;
+            failures keep the Work Summary retry bar, never invent values. */}
+        {isAuthenticated() && dashStats?.recentActivity?.last7Days && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '14px' }}>🕒</span>
+            </div>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recent Activity</h3>
+            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>last 7 days</span>
+          </div>
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #eef2f7', padding: '12px 14px', display: 'flex', gap: '18px', flexWrap: 'wrap', fontSize: '12.5px', color: '#475569' }}>
+            <span><b style={{ color: '#0f172a' }}>{(dashStats.recentActivity.last7Days.spending || 0).toLocaleString()}</b> credits spent</span>
+            <span><b style={{ color: '#0f172a' }}>{dashStats.recentActivity.last7Days.tasksCreated || 0}</b> new tasks created</span>
+          </div>
         </div>
         )}
 
@@ -553,21 +568,42 @@ const Dashboard = () => {
         </div>
         )}
 
-        {/* EARNINGS STRIP — Boost banner */}
-        {commissionData.overallTaskCount > 0 && (
-        <div onClick={() => navigate('/earnings-ledger')} style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', borderRadius: '16px', padding: '16px 20px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: '18px' }}>💰</span>
+        {/* EARNINGS STRIP moved above the banner (position 8 in the approved sequence) —
+            relabeled "Commission Generated"; same single source of truth, no duplicate. */}
+
+        {/* RECENTLY COMPLETED TASKS (position 12 — before Featured Plans per approved sequence) */}
+        {completedTasks.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #94a3b8, #64748b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: '14px' }}>✅</span>
+              </div>
+              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recently Completed</h3>
             </div>
-            <div>
-              <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 2px 0', fontWeight: '600' }}>Total Earned</p>
-              <p style={{ fontSize: '20px', fontWeight: '800', color: '#166534', margin: 0 }}>{(commissionData.overallTotal || 0).toLocaleString()} credits</p>
-            </div>
+            <button onClick={() => navigate('/tasks')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
+              View All →
+            </button>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '11px', color: '#16a34a', margin: '0 0 2px 0', fontWeight: '600' }}>{commissionData.overallTaskCount} tasks</p>
-            <p style={{ fontSize: '12px', color: '#15803d', margin: 0, fontWeight: '700' }}>completed</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {completedTasks.map(task => (
+              <div 
+                key={task.id || task._id} 
+                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
+                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '10px 14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '17px', background: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                    {/* Audit: no date shown — Task has no completedAt field and updatedAt is
+                        mutated by unrelated post-completion edits (messages/approvals/admin edits). */}
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed</p>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#16a34a', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '8px' }}>Done</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         )}
@@ -658,42 +694,7 @@ const Dashboard = () => {
         </div>
         )}
 
-        {/* RECENTLY COMPLETED TASKS */}
-        {completedTasks.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #94a3b8, #64748b)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: '14px' }}>✅</span>
-              </div>
-              <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Recently Completed</h3>
-            </div>
-            <button onClick={() => navigate('/tasks')} style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}>
-              View All →
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {completedTasks.map(task => (
-              <div 
-                key={task.id || task._id} 
-                onClick={() => navigate(`/tasks/${task.id || task._id}`)}
-                style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '10px 14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', border: '1px solid #eef2f7', cursor: 'pointer', transition: 'box-shadow 0.2s ease' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '17px', background: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
-                    {/* Audit: no date shown — Task has no completedAt field and updatedAt is
-                        mutated by unrelated post-completion edits (messages/approvals/admin edits). */}
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed</p>
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#16a34a', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '8px' }}>Done</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        )}
+        {/* RECENTLY COMPLETED moved above Featured Plans (position 12 in the approved sequence). */}
 
         {/* UPDATES SECTION */}
         {updatesSection.isEnabled && (
@@ -954,11 +955,9 @@ const Dashboard = () => {
       <style>{`
         /* Responsive grids: mobile-first 2 columns, expanding on wider screens.
            Featured plans go 4-up on desktop so cards don't consume excessive vertical space. */
-        .gva-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .gva-plans-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .gva-analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         @media (min-width: 640px) {
-          .gva-stats-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
           .gva-analytics-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
         }
         @media (min-width: 768px) {
