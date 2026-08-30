@@ -301,5 +301,76 @@ router.get('/client/drill', async (req, res) => {
   }
 });
 
+// ---------- GET /admin/analytics/client/timeline ----------
+// Date-wise workflow events for ONE selected client: orders (by order createdAt) and
+// tasks (by startDate / endDate), scoped to the same date range as the rest of
+// Business Analytics. Strictly read-only.
+//
+// HONESTY NOTES (verified against models — do not change without a data-model review):
+//  - Task has NO reliable completion timestamp (no completedAt; updatedAt changes on
+//    unrelated edits like chat/approvals), so this endpoint never produces a
+//    "completed on" event. endDate is returned as the END DATE together with the
+//    task's CURRENT status; the UI must not present it as a completion date.
+//  - Tasks whose startDate is null produce no START event: the existing system
+//    defines no fallback (auto-start and AUTO progress both require startDate).
+router.get('/client/timeline', async (req, res) => {
+  try {
+    const auth = await resolveAuthorizedClient(req);
+    if (auth.status) return res.status(auth.status).json({ error: auth.error });
+    const { clientId } = auth;
+
+    const { startDate, endDate } = req.query;
+    const { createdAtFilter } = buildDateFilters(startDate, endDate);
+
+    // Same inclusive UTC boundaries as buildDateFilters, applied to Task.startDate /
+    // Task.endDate instead of createdAt — one date convention across analytics.
+    const rangeFilter = {};
+    if (startDate) rangeFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
+    if (endDate) rangeFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
+    const hasRange = Object.keys(rangeFilter).length > 0;
+
+    // Same task base as /admin/analytics/client (exclude plan listings and soft-deleted)
+    const taskBase = { isDeleted: { $ne: true }, isListedInPlans: { $ne: true }, clientId };
+    // A task belongs on the timeline when its START or END date falls inside the range
+    const taskDateScope = hasRange
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }] }
+      : {};
+
+    const [orders, tasks] = await Promise.all([
+      Order.find({ clientId, ...createdAtFilter })
+        .sort({ createdAt: 1 })
+        .select('orderId totalAmount orderStatus createdAt items.planTitle')
+        .lean(),
+      Task.find({ ...taskBase, ...taskDateScope })
+        .sort({ startDate: 1 })
+        .select('title status startDate endDate creditCost')
+        .limit(500)
+        .lean()
+    ]);
+
+    res.json({
+      scope: { clientId: clientId.toString() },
+      range: { startDate: startDate || null, endDate: endDate || null },
+      orders: orders.map(o => ({
+        orderId: o.orderId || '',
+        totalAmount: o.totalAmount || 0,
+        orderStatus: o.orderStatus,
+        createdAt: o.createdAt,
+        services: (o.items || []).map(i => i.planTitle).filter(Boolean)
+      })),
+      tasks: tasks.map(t => ({
+        title: t.title || 'Task',
+        status: t.status,
+        startDate: t.startDate || null,
+        endDate: t.endDate || null,
+        creditCost: t.creditCost || 0
+      }))
+    });
+  } catch (err) {
+    console.error('Client timeline error:', err);
+    res.status(500).json({ error: 'Failed to load client timeline' });
+  }
+});
+
 module.exports = router;
 
