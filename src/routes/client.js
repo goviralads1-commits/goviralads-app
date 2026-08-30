@@ -2659,13 +2659,19 @@ router.get('/insights/timeline', async (req, res) => {
     // outside. One batched server-side query; the clientId (= req.user.id, never
     // client-supplied) base filter still ANDs over the whole $or, so completion
     // ids belonging to other clients can never surface here.
-    const completedInRangeIds = hasRange
-      ? await Notification.find({
+    let completedInRangeIds = [];
+    if (hasRange) {
+      try {
+        completedInRangeIds = await Notification.find({
           type: 'TASK_COMPLETED',
           'relatedEntity.entityType': 'TASK',
           createdAt: rangeFilter,
-        }).distinct('relatedEntity.entityId')
-      : [];
+        }).distinct('relatedEntity.entityId');
+      } catch (err) {
+        console.error('Timeline completedInRangeIds query failed:', err.message);
+        completedInRangeIds = [];
+      }
+    }
     const taskDateScope = hasRange
       ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
       : {};
