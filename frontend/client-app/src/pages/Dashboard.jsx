@@ -48,6 +48,10 @@ const Dashboard = () => {
   const [commissionData, setCommissionData] = useState({ overallTotal: 0, overallTaskCount: 0, logs: [] });
   const [walletData, setWalletData] = useState(null);
   const [walletError, setWalletError] = useState(false); // distinguishes a FAILED wallet fetch from a genuine zero balance
+  const [orders, setOrders] = useState([]);
+  const [ordersError, setOrdersError] = useState(false); // failed orders fetch must never render as fake zeros
+  const [dashStats, setDashStats] = useState(null);
+  const [dashStatsError, setDashStatsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentBanner, setCurrentBanner] = useState(0);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -57,14 +61,22 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, noticesRes, tasksRes, commRes, walletRes] = await Promise.all([
+      const [configRes, noticesRes, tasksRes, commRes, walletRes, ordersRes, dashRes] = await Promise.all([
         api.get(isAuthenticated() ? '/client/office-config' : '/public/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
         api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
         api.get('/client/tasks').catch(() => ({ data: { tasks: [] } })),
         api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } })),
         // Wallet is tracked separately so a failed request is never shown as "0 credits".
         // limit=1 uses the endpoint's existing pagination param — the dashboard never reads transactions.
-        api.get('/client/wallet?limit=1').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+        api.get('/client/wallet?limit=1').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false })),
+        // Client-owned analytics (existing endpoints, auth-scoped by req.user.id on the server).
+        // Fetched only when logged in; failures are tracked, never rendered as zeros.
+        isAuthenticated()
+          ? api.get('/client/orders').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+          : Promise.resolve({ ok: true, data: { orders: [] } }),
+        isAuthenticated()
+          ? api.get('/client/dashboard').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+          : Promise.resolve({ ok: true, data: null })
       ]);
       setConfig(configRes.data.config);
       setFeaturedPlans(configRes.data.featuredPlans || []);
@@ -81,6 +93,20 @@ const Dashboard = () => {
       } else {
         setWalletData(null);
         setWalletError(true);
+      }
+      if (ordersRes.ok) {
+        setOrders(ordersRes.data?.orders || []);
+        setOrdersError(false);
+      } else {
+        setOrders([]);
+        setOrdersError(true);
+      }
+      if (dashRes.ok) {
+        setDashStats(dashRes.data || null);
+        setDashStatsError(false);
+      } else {
+        setDashStats(null);
+        setDashStatsError(true);
       }
     } catch (err) {
       // Silent fail - show empty states
@@ -107,8 +133,14 @@ const Dashboard = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Retry ONLY the wallet fetch on failure (user-triggered; never re-hits the other endpoints)
+  // Retry ONLY the wallet fetch on failure (user-triggered; never re-hits the other endpoints).
+  // Logged-out visitors can never load a wallet here (401 by design) — route them to the
+  // Wallet page (sign-in flow) instead of looping a request that will always fail.
   const retryWallet = async () => {
+    if (!isAuthenticated()) {
+      navigate('/wallet');
+      return;
+    }
     try {
       const res = await api.get('/client/wallet?limit=1');
       setWalletData(res.data || null);
@@ -116,6 +148,19 @@ const Dashboard = () => {
     } catch (e) {
       setWalletError(true);
     }
+  };
+
+  // Retry ONLY the analytics endpoints (orders + dashboard summary) — user-triggered;
+  // never re-fetches banners/notices/plans/tasks.
+  const retryAnalytics = async () => {
+    const [ordersRes, dashRes] = await Promise.all([
+      api.get('/client/orders').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false })),
+      api.get('/client/dashboard').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+    ]);
+    if (ordersRes.ok) { setOrders(ordersRes.data?.orders || []); setOrdersError(false); }
+    else { setOrders([]); setOrdersError(true); }
+    if (dashRes.ok) { setDashStats(dashRes.data || null); setDashStatsError(false); }
+    else { setDashStats(null); setDashStatsError(true); }
   };
 
   const handleViewNotice = async (notice) => {
@@ -151,9 +196,14 @@ const Dashboard = () => {
   const requirements = notices.filter(n => n.type === 'REQUIREMENT').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
   const promotions = notices.filter(n => n.type === 'PROMOTION').sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
 
-  // Filter tasks by status
+  // Filter tasks by status (backend semantics: PENDING = scheduled — the backend auto-starts
+  // a PENDING task to ACTIVE once its startDate passes; ACTIVE = in progress).
   const pendingTasks = tasks.filter(t => t.status === 'PENDING_APPROVAL');
-  const activeTasks = tasks.filter(t => ['ACTIVE', 'IN_PROGRESS', 'PENDING', 'SCHEDULED'].includes(t.status));
+  const scheduledTasks = tasks.filter(t => t.status === 'PENDING');
+  const activeTasks = tasks.filter(t => ['ACTIVE', 'IN_PROGRESS', 'SCHEDULED'].includes(t.status));
+  // NOTE (audit): Task has NO completedAt field and updatedAt is bumped by unrelated
+  // post-completion edits (chat messages, approvals, admin edits) — so no period-based
+  // "completed on/within date" metric is rendered. Only the honest all-time count is shown.
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED').slice(0, 3); // Show only recent 3
   const allCompletedCount = tasks.filter(t => t.status === 'COMPLETED').length;
   const user = getCurrentUser();
@@ -172,10 +222,15 @@ const Dashboard = () => {
       .trim() || 'User';
   };
 
-  // Get banners from config or fallback
-  const banners = config?.banners?.length > 0 ? config.banners : [
-    { id: 'default1', title: 'Premium Services', subtitle: 'Get started with our top plans', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', ctaText: 'Explore Now', ctaLink: '/plans', ctaLinkType: 'internal' }
-  ];
+  // Banners come ONLY from the admin-managed OfficeConfig — no hardcoded replacement.
+  // If the admin disables/removes every banner, the section is hidden entirely.
+  const banners = config?.banners || [];
+
+  // Order metrics from the existing /client/orders endpoint.
+  // Audit: only statuses actually written by the backend are shown. PENDING_APPROVAL is
+  // the real pending status (default at order creation). COMPLETED is never set by any
+  // code path today, so no "Orders Completed" metric is rendered (never a fake/always-0 card).
+  const pendingOrders = orders.filter(o => o.orderStatus === 'PENDING_APPROVAL');
 
   // Get sections config
   const getSectionConfig = (type) => config?.sections?.find(s => s.type === type) || { isEnabled: true, title: type };
@@ -255,12 +310,12 @@ const Dashboard = () => {
                   </p>
                 )}
                 {walletError && (
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '3px 0 0 0' }}>Check your connection and try again.</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', margin: '3px 0 0 0' }}>{isAuthenticated() ? 'Check your connection and try again.' : 'Sign in to see your balance.'}</p>
                 )}
               </div>
               {walletError ? (
                 <button onClick={retryWallet} style={{ padding: '8px 14px', background: '#fff', border: 'none', borderRadius: '10px', color: '#312e81', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  ↻ Retry
+                  {isAuthenticated() ? '↻ Retry' : 'Open Wallet'}
                 </button>
               ) : (
                 <button onClick={() => navigate('/wallet')} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -310,6 +365,60 @@ const Dashboard = () => {
             <p style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pending</p>
           </div>
         </div>
+
+        {/* WORK SUMMARY — client-owned analytics only (hidden for logged-out visitors).
+            Orders/dashboard-summary failures never become fake zeros: affected values show
+            "—" and an inline retry bar appears; the rest of the page keeps working.
+            AUDIT-ENFORCED: no period-based completion metrics are rendered — the Task model
+            has no completedAt field and updatedAt is mutated by unrelated post-completion
+            edits, so no existing source can honestly answer "completed within period".
+            Orders Completed is likewise omitted: no backend path ever sets an order to
+            COMPLETED, so that card could only ever display a misleading permanent zero.
+            Commission Generated is deliberately NOT a card here — the existing Earnings strip
+            below remains the single place that displays the client's earned commission. */}
+        {isAuthenticated() && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '14px' }}>📊</span>
+            </div>
+            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Work Summary</h3>
+          </div>
+
+          {(ordersError || dashStatsError) && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '10px 14px', marginBottom: '12px' }}>
+              <p style={{ fontSize: '12.5px', color: '#b91c1c', margin: 0, fontWeight: '600' }}>Some analytics couldn't be loaded.</p>
+              <button onClick={retryAnalytics} style={{ padding: '6px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>↻ Retry</button>
+            </div>
+          )}
+
+          <div className="gva-analytics-grid">
+            <div onClick={() => navigate('/orders')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 14px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
+              <p style={{ fontSize: '20px', fontWeight: '800', color: ordersError ? '#94a3b8' : '#f59e0b', margin: '0 0 2px 0' }}>{ordersError ? '—' : pendingOrders.length}</p>
+              <p style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pending Orders</p>
+              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>Awaiting approval</p>
+            </div>
+            <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 14px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
+              <p style={{ fontSize: '20px', fontWeight: '800', color: '#0ea5e9', margin: '0 0 2px 0' }}>{scheduledTasks.length}</p>
+              <p style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Scheduled Tasks</p>
+              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>Queued, not started yet</p>
+            </div>
+            <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 14px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
+              <p style={{ fontSize: '20px', fontWeight: '800', color: '#22c55e', margin: '0 0 2px 0' }}>{activeTasks.length}</p>
+              <p style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Active / In Progress</p>
+              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>In progress right now</p>
+            </div>
+          </div>
+
+          {dashStats?.recentActivity?.last7Days && (
+            <div style={{ marginTop: '12px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #eef2f7', padding: '10px 14px', display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12.5px', color: '#475569' }}>
+              <span style={{ fontWeight: '600', color: '#0f172a' }}>Recent Activity <span style={{ fontWeight: '400', color: '#94a3b8' }}>(last 7 days)</span></span>
+              <span><b style={{ color: '#0f172a' }}>{(dashStats.recentActivity.last7Days.spending || 0).toLocaleString()}</b> credits spent</span>
+              <span><b style={{ color: '#0f172a' }}>{dashStats.recentActivity.last7Days.tasksCreated || 0}</b> new tasks created</span>
+            </div>
+          )}
+        </div>
+        )}
 
         {/* BANNER CAROUSEL */}
         {banners.length > 0 && (
@@ -574,7 +683,9 @@ const Dashboard = () => {
                   <span style={{ width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', fontSize: '17px', background: '#f1f5f9', flexShrink: 0 }}>{task.icon || '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : ''}</p>
+                    {/* Audit: no date shown — Task has no completedAt field and updatedAt is
+                        mutated by unrelated post-completion edits (messages/approvals/admin edits). */}
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>Completed</p>
                   </div>
                   <span style={{ fontSize: '11px', fontWeight: '700', color: '#16a34a', backgroundColor: '#dcfce7', padding: '4px 10px', borderRadius: '8px' }}>Done</span>
                 </div>
@@ -845,8 +956,10 @@ const Dashboard = () => {
            Featured plans go 4-up on desktop so cards don't consume excessive vertical space. */
         .gva-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .gva-plans-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .gva-analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         @media (min-width: 640px) {
           .gva-stats-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+          .gva-analytics-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
         }
         @media (min-width: 768px) {
           .gva-plans-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
