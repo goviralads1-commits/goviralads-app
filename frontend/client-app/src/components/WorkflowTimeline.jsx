@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
-import { isAuthenticated } from '../services/authService';
+import { getCurrentUser } from '../services/authService';
 
 // CLIENT WORKFLOW TIMELINE — the same rising-bar insight graph as the Admin Office
 // Business Analytics, scoped strictly to the authenticated client (the server ignores
@@ -72,7 +72,11 @@ const WorkflowTimeline = () => {
 
   const load = useCallback(async () => {
     const reqId = ++reqRef.current;
-    if (!isAuthenticated() || !hasRange) {
+    // Gate on an actual user session, not just a token key: a stale/expired token
+    // during the login handshake would otherwise fire a request that 401s and renders
+    // a misleading "failed to load" state (and triggers the api interceptor's logout
+    // redirect mid-render). Same contract as the dashboard's other scoped calls.
+    if (!getCurrentUser() || !hasRange) {
       setTimeline(null);
       setLoading(false);
       return;
@@ -136,7 +140,9 @@ const WorkflowTimeline = () => {
   const firstEventDay = Object.keys(timelineEvents).sort()[0] || null;
   const activeDay = selectedDate || firstEventDay;
 
-  if (!isAuthenticated()) return null;
+  // No user session yet (guest or mid-login): render nothing instead of a request
+  // that can only 401.
+  if (!getCurrentUser()) return null;
 
   return (
     <div style={{ marginBottom: '24px' }}>
@@ -171,7 +177,7 @@ const WorkflowTimeline = () => {
         )}
 
         {/* Legend */}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px 10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
           {[{ color: '#f97316', label: 'Pending' }, { color: '#eab308', label: 'Scheduled' }, { color: '#3b82f6', label: 'Active' }, { color: '#22c55e', label: 'Completed' }].map(l => (
             <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
               <span style={{ width: '7px', height: '10px', borderRadius: '3px', background: l.color }} />{l.label}
@@ -208,13 +214,15 @@ const WorkflowTimeline = () => {
                     one rising bar per event, hollow END DATE bars, purple order bars,
                     horizontally scrollable date axis, no numeric Y labels. */}
                 <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                  <div style={{ width: '100px', flexShrink: 0 }}>
+                  {/* Stage-label gutter — compact but readable on narrow phones;
+                      labels are right-aligned to the plot edge so nothing collides. */}
+                  <div style={{ width: '92px', flexShrink: 0 }}>
                     {['COMPLETED', 'ACTIVE / IN PROGRESS', 'SCHEDULED', 'PENDING'].map(l => (
-                      <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '10px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.45, textAlign: 'right' }}>{l}</div>
+                      <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '8px', fontSize: '8px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.03em', lineHeight: 1.4, textAlign: 'right' }}>{l}</div>
                     ))}
                     <div style={{ height: '26px' }} />
                   </div>
-                  <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
+                  <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
                     <div style={{ position: 'relative', minWidth: timelineDays.reduce((w, d) => w + Math.max(26, (timelineGraph[d] || []).length * 6 + 8), 0), height: '146px' }}>
                       {[0, 30, 60, 90].map(y => (
                         <div key={y} style={{ position: 'absolute', left: 0, right: 0, top: y, borderTop: '1px dashed #e2e8f0' }} />

@@ -349,51 +349,20 @@ const Dashboard = () => {
             already represented by the Work Summary cards, the Active Tasks section and the
             Recently Completed section. Underlying task data/navigation is untouched. */}
 
-        {/* WORK SUMMARY — client-owned analytics only (hidden for logged-out visitors).
-            Orders/dashboard-summary failures never become fake zeros: affected values show
-            "—" and an inline retry bar appears; the rest of the page keeps working.
-            AUDIT-ENFORCED: no period-based completion metrics are rendered — the Task model
-            has no completedAt field and updatedAt is mutated by unrelated post-completion
-            edits, so no existing source can honestly answer "completed within period".
-            Orders Completed is likewise omitted: no backend path ever sets an order to
-            COMPLETED, so that card could only ever display a misleading permanent zero.
-            Commission Generated is deliberately NOT a card here — the existing Earnings strip
-            immediately below remains the single place that displays the client's earned commission. */}
-        {isAuthenticated() && (
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '14px' }}>📊</span>
-            </div>
-            <h3 style={{ fontSize: '17px', fontWeight: '700', color: '#0f172a', margin: 0 }}>Work Summary</h3>
-          </div>
-
-          {(ordersError || dashStatsError) && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '10px 14px', marginBottom: '12px' }}>
-              <p style={{ fontSize: '12.5px', color: '#b91c1c', margin: 0, fontWeight: '600' }}>Some analytics couldn't be loaded.</p>
-              <button onClick={retryAnalytics} style={{ padding: '6px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}>↻ Retry</button>
-            </div>
-          )}
-
-          <div className="gva-analytics-grid">
-            <div onClick={() => navigate('/orders')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 14px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-              <p style={{ fontSize: '20px', fontWeight: '800', color: ordersError ? '#94a3b8' : '#f59e0b', margin: '0 0 2px 0' }}>{ordersError ? '—' : pendingOrders.length}</p>
-              <p style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pending Orders</p>
-              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>Awaiting approval</p>
-            </div>
-            <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 14px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-              <p style={{ fontSize: '20px', fontWeight: '800', color: '#0ea5e9', margin: '0 0 2px 0' }}>{scheduledTasks.length}</p>
-              <p style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Scheduled Tasks</p>
-              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>Queued, not started yet</p>
-            </div>
-            <div onClick={() => navigate('/tasks')} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '12px 14px', border: '1px solid #eef2f7', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-              <p style={{ fontSize: '20px', fontWeight: '800', color: '#22c55e', margin: '0 0 2px 0' }}>{activeTasks.length}</p>
-              <p style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Active / In Progress</p>
-              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>In progress right now</p>
-            </div>
-          </div>
-        </div>
-        )}
+        {/* WORK SUMMARY REPLACED BY WORKFLOW TIMELINE (approved): the timeline is now the
+            primary workflow-insight block at this position; the old Pending Orders /
+            Scheduled / Active cards were removed to avoid duplicating the same information.
+            AUDIT-ENFORCED (still applies): no period-based completion metrics are rendered —
+            the Task model has no completedAt field and updatedAt is mutated by unrelated
+            post-completion edits, so no existing source can honestly answer "completed within
+            period". Commission Generated is deliberately NOT a card here — the existing
+            Earnings strip remains the single place that displays the client's earned commission. */}
+        {/* WORKFLOW TIMELINE — replaces the former Work Summary block at exactly its
+            position, as the primary workflow-insight block (approved placement).
+            Client-scoped rising-bar graph; data is strictly the authenticated
+            client's own (server uses req.user.id; no clientId from the frontend is
+            ever trusted). Hidden for guests. */}
+        {isAuthenticated() && <WorkflowTimeline />}
 
         {/* COMMISSION GENERATED — the existing Earnings strip, repositioned to its place in the
             approved sequence (after work metrics, before the banner). Same real client data from
@@ -481,7 +450,7 @@ const Dashboard = () => {
 
         {/* RECENT ACTIVITY — real client-owned data from the existing /client/dashboard
             reporting endpoint (req.user.id-scoped). Shown only when the data genuinely exists;
-            failures keep the Work Summary retry bar, never invent values. */}
+            on failure the section simply stays hidden, never inventing values. */}
         {isAuthenticated() && dashStats?.recentActivity?.last7Days && (
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
@@ -497,12 +466,6 @@ const Dashboard = () => {
           </div>
         </div>
         )}
-
-        {/* WORKFLOW TIMELINE — client-scoped rising-bar insight graph (orders, task
-            starts, end dates by date). Data is strictly the authenticated client's
-            own (server uses req.user.id; no clientId is ever trusted from the
-            frontend). Hidden for guests. */}
-        {isAuthenticated() && <WorkflowTimeline />}
 
         {/* ACTIVE TASKS */}
         {activeTasks.length > 0 && (

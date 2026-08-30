@@ -6,37 +6,54 @@ import api from './services/api';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoginForm from './components/LoginForm';
 import Header from './components/Header';
-// Pages are code-split: each route chunk loads only when navigated to
-const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const Clients = React.lazy(() => import('./pages/Clients'));
-const ClientDetail = React.lazy(() => import('./pages/ClientDetail'));
-const Recharges = React.lazy(() => import('./pages/Recharges'));
-const Tasks = React.lazy(() => import('./pages/Tasks'));
-const Reports = React.lazy(() => import('./pages/Reports'));
-const Notifications = React.lazy(() => import('./pages/Notifications'));
-const Plans = React.lazy(() => import('./pages/Plans'));
-const Categories = React.lazy(() => import('./pages/Categories'));
-const Profile = React.lazy(() => import('./pages/Profile'));
-const TaskDetail = React.lazy(() => import('./pages/TaskDetail'));
-const PlanDetail = React.lazy(() => import('./pages/PlanDetail'));
-const PlanPreview = React.lazy(() => import('./pages/PlanPreview'));
-const Wallet = React.lazy(() => import('./pages/Wallet'));
-const Billing = React.lazy(() => import('./pages/Billing'));
-const CreditPlans = React.lazy(() => import('./pages/CreditPlans'));
-const OfficeCMS = React.lazy(() => import('./pages/OfficeCMS'));
-const Orders = React.lazy(() => import('./pages/Orders'));
-const Settings = React.lazy(() => import('./pages/Settings'));
-const Roles = React.lazy(() => import('./pages/Roles'));
-const ProgressIcons = React.lazy(() => import('./pages/ProgressIcons'));
-const Support = React.lazy(() => import('./pages/Support'));
-const Earnings = React.lazy(() => import('./pages/Earnings'));
-const EarningsRedeems = React.lazy(() => import('./pages/EarningsRedeems'));
-const Employees = React.lazy(() => import('./pages/Employees'));
-const EmployeeDetail = React.lazy(() => import('./pages/EmployeeDetail'));
-const LegalPages = React.lazy(() => import('./pages/LegalPages'));
-const ClientNotifications = React.lazy(() => import('./pages/ClientNotifications'));
-const Tickets = React.lazy(() => import('./pages/Tickets'));
-const NotFound = React.lazy(() => import('./pages/NotFound'));
+// Pages are code-split: each route chunk loads only when navigated to.
+// lazyWithReload guards against a stale-shell failure mode: the service worker can
+// serve a cached index.html from an older deployment (offline/flaky network), whose
+// hashed chunk URLs may no longer exist. A failed chunk import throws during render
+// and would hit the ErrorBoundary — instead, retry ONCE with a hard reload so the
+// browser picks up the current shell. Real render errors are unaffected.
+const lazyWithReload = (loader) => React.lazy(() =>
+  loader().catch(() => {
+    if (!window.sessionStorage.getItem('gva-chunk-reload')) {
+      window.sessionStorage.setItem('gva-chunk-reload', '1');
+      window.location.reload();
+      // Keep Suspense pending while the reload happens instead of throwing.
+      return new Promise(() => {});
+    }
+    window.sessionStorage.removeItem('gva-chunk-reload');
+    throw new Error('Page chunk failed to load');
+  })
+);
+const Dashboard = lazyWithReload(() => import('./pages/Dashboard'));
+const Clients = lazyWithReload(() => import('./pages/Clients'));
+const ClientDetail = lazyWithReload(() => import('./pages/ClientDetail'));
+const Recharges = lazyWithReload(() => import('./pages/Recharges'));
+const Tasks = lazyWithReload(() => import('./pages/Tasks'));
+const Reports = lazyWithReload(() => import('./pages/Reports'));
+const Notifications = lazyWithReload(() => import('./pages/Notifications'));
+const Plans = lazyWithReload(() => import('./pages/Plans'));
+const Categories = lazyWithReload(() => import('./pages/Categories'));
+const Profile = lazyWithReload(() => import('./pages/Profile'));
+const TaskDetail = lazyWithReload(() => import('./pages/TaskDetail'));
+const PlanDetail = lazyWithReload(() => import('./pages/PlanDetail'));
+const PlanPreview = lazyWithReload(() => import('./pages/PlanPreview'));
+const Wallet = lazyWithReload(() => import('./pages/Wallet'));
+const Billing = lazyWithReload(() => import('./pages/Billing'));
+const CreditPlans = lazyWithReload(() => import('./pages/CreditPlans'));
+const OfficeCMS = lazyWithReload(() => import('./pages/OfficeCMS'));
+const Orders = lazyWithReload(() => import('./pages/Orders'));
+const Settings = lazyWithReload(() => import('./pages/Settings'));
+const Roles = lazyWithReload(() => import('./pages/Roles'));
+const ProgressIcons = lazyWithReload(() => import('./pages/ProgressIcons'));
+const Support = lazyWithReload(() => import('./pages/Support'));
+const Earnings = lazyWithReload(() => import('./pages/Earnings'));
+const EarningsRedeems = lazyWithReload(() => import('./pages/EarningsRedeems'));
+const Employees = React.lazy(() => import('./pages/Employees')); // WIP page — import line left untouched
+const EmployeeDetail = lazyWithReload(() => import('./pages/EmployeeDetail'));
+const LegalPages = lazyWithReload(() => import('./pages/LegalPages'));
+const ClientNotifications = lazyWithReload(() => import('./pages/ClientNotifications'));
+const Tickets = lazyWithReload(() => import('./pages/Tickets'));
+const NotFound = lazyWithReload(() => import('./pages/NotFound'));
 import { initPushNotifications, setupForegroundHandler } from './services/pushService';
 
 // Lightweight Suspense fallback while a lazy route chunk loads (existing spinner style)
