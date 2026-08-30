@@ -752,9 +752,9 @@ const Dashboard = () => {
                 task's current status; the data model has no reliable completion timestamp).
                 All existing Business Analytics cards below remain untouched. */}
             {(
-              <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+              <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '18px 16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
                 <style>{`@keyframes gvaTlPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
                   <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Timeline</h4>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {[{ color: '#f97316', label: 'Pending' }, { color: '#eab308', label: 'Scheduled' }, { color: '#3b82f6', label: 'Active' }, { color: '#22c55e', label: 'Completed' }].map(l => (
@@ -783,8 +783,8 @@ const Dashboard = () => {
                   <>
                     {/* In-range event counts — timeline-specific; the status/financial metric
                         cards below already own the standard Business Analytics numbers. */}
-                    <p style={{ fontSize: '11px', fontWeight: '500', color: '#94a3b8', margin: '0 0 8px 0' }}>
-                      {dateFilter.label} · {timelineSummary.orders} order{timelineSummary.orders === 1 ? '' : 's'} placed · {timelineSummary.starts} task start{timelineSummary.starts === 1 ? '' : 's'} · {timelineSummary.ends} task end{timelineSummary.ends === 1 ? '' : 's'}
+                    <p style={{ fontSize: '11px', fontWeight: '500', color: '#94a3b8', margin: '0 0 12px 0' }}>
+                      {timelineSummary.orders} order{timelineSummary.orders === 1 ? '' : 's'} placed · {timelineSummary.starts} task start{timelineSummary.starts === 1 ? '' : 's'} · {timelineSummary.ends} task end{timelineSummary.ends === 1 ? '' : 's'}
                       {timelineRangeTooLong && ' · showing first 366 days'}
                     </p>
                     {timelineDays.length === 0 ? (
@@ -799,10 +799,12 @@ const Dashboard = () => {
                             bar — busy dates widen their column instead of collapsing.
                             Horizontally scrollable on mobile; no numeric Y labels. */}
                         <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                          {/* Fixed stage labels */}
-                          <div style={{ width: '86px', flexShrink: 0 }}>
+                          {/* Fixed stage-label gutter — wide enough that every label is
+                              clean and right-aligned to the plot edge; ACTIVE / IN PROGRESS
+                              wraps to two intentional lines without colliding with bars. */}
+                          <div style={{ width: '100px', flexShrink: 0 }}>
                             {['COMPLETED', 'ACTIVE / IN PROGRESS', 'SCHEDULED', 'PENDING'].map(l => (
-                              <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '8px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</div>
+                              <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '10px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.45, textAlign: 'right' }}>{l}</div>
                             ))}
                             <div style={{ height: '26px' }} />
                           </div>
@@ -865,7 +867,7 @@ const Dashboard = () => {
                           </div>
                         </div>
                         {/* Day detail panel */}
-                        <div style={{ marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                        <div style={{ marginTop: '14px', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
                           {!activeTimelineDay ? (
                             <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No workflow events for {selectedClient ? selectedClient.identifier : 'this client'} in {dateFilter.label}. Events appear here as orders are placed and tasks start/end.</p>
                           ) : (timelineEvents[activeTimelineDay] || []).length === 0 ? (

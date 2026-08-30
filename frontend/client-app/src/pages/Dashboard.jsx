@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import WorkflowTimeline from '../components/WorkflowTimeline';
 import { getCurrentUser, isAuthenticated } from '../services/authService';
 
 // Helper: Extract video thumbnail URL
@@ -496,6 +497,12 @@ const Dashboard = () => {
           </div>
         </div>
         )}
+
+        {/* WORKFLOW TIMELINE — client-scoped rising-bar insight graph (orders, task
+            starts, end dates by date). Data is strictly the authenticated client's
+            own (server uses req.user.id; no clientId is ever trusted from the
+            frontend). Hidden for guests. */}
+        {isAuthenticated() && <WorkflowTimeline />}
 
         {/* ACTIVE TASKS */}
         {activeTasks.length > 0 && (

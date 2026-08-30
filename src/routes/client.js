@@ -2574,6 +2574,69 @@ router.get('/insights/tasks', async (req, res) => {
   }
 });
 
+// --- Workflow Timeline (date-wise ORDER -> START -> END insight graph) ---
+// Client-scoped by authenticateJWT + requireClient above: clientId is ALWAYS the
+// authenticated user's own id — never taken from the request body/query, so no
+// other client's orders/tasks can ever be exposed. Same event semantics and the
+// same inclusive UTC date-boundary convention as the admin analytics timelines:
+// order event = Order.createdAt, start = Task.startDate, end = Task.endDate shown
+// strictly as END DATE (the data model has no reliable completion timestamp; no
+// completedAt is invented and updatedAt is never used as a completion date).
+router.get('/insights/timeline', async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const { startDate, endDate } = req.query;
+
+    const createdAtFilter = {};
+    if (startDate) createdAtFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
+    if (endDate) createdAtFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
+
+    const rangeFilter = {};
+    if (startDate) rangeFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
+    if (endDate) rangeFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
+    const hasRange = Object.keys(rangeFilter).length > 0;
+
+    const taskBase = { clientId, isDeleted: { $ne: true }, isListedInPlans: { $ne: true } };
+    const taskDateScope = hasRange
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }] }
+      : {};
+
+    const [orders, tasks] = await Promise.all([
+      Order.find({ clientId, ...createdAtFilter })
+        .sort({ createdAt: 1 })
+        .select('orderId totalAmount orderStatus createdAt items.planTitle')
+        .limit(500)
+        .lean(),
+      Task.find({ ...taskBase, ...taskDateScope })
+        .sort({ startDate: 1 })
+        .select('title status startDate endDate creditCost')
+        .limit(500)
+        .lean()
+    ]);
+
+    res.json({
+      range: { startDate: startDate || null, endDate: endDate || null },
+      orders: orders.map(o => ({
+        orderId: o.orderId || '',
+        totalAmount: o.totalAmount || 0,
+        orderStatus: o.orderStatus,
+        createdAt: o.createdAt,
+        services: (o.items || []).map(i => i.planTitle).filter(Boolean)
+      })),
+      tasks: tasks.map(t => ({
+        title: t.title || 'Task',
+        status: t.status,
+        startDate: t.startDate || null,
+        endDate: t.endDate || null,
+        creditCost: t.creditCost || 0
+      }))
+    });
+  } catch (err) {
+    console.error('Client insights timeline error:', err);
+    res.status(500).json({ error: 'Failed to load workflow timeline' });
+  }
+});
+
 // --- Notification Routes (Phase 5) ---
 
 router.get('/notifications', async (req, res) => {
