@@ -39,6 +39,50 @@ const router = express.Router();
 router.use(authenticateJWT);
 router.use(requireClient);
 
+// GAP-FIX: the AUTO-mode completion transitions on client reads used to create NO
+// completion record, so the actual completion time was lost. Mirror the exact
+// notification conventions of the admin completion paths (admin.js): a
+// TASK_STATUS_CHANGED notification to the task owner and a TASK_COMPLETED
+// notification to the main admin. The persisted TASK_COMPLETED record is the
+// authoritative actual-completion timestamp consumed by the workflow timelines.
+// Only ever called at the real transition INTO COMPLETED (guarded by the caller).
+async function notifyAutoCompletion(task) {
+  if (!task || !task.clientId) return;
+  try {
+    await createNotification({
+      recipientId: task.clientId,
+      type: NOTIFICATION_TYPES.TASK_STATUS_CHANGED,
+      title: 'Task Completed',
+      message: `Your task "${task.title}" has been completed!`,
+      relatedEntity: {
+        entityType: ENTITY_TYPES.TASK,
+        entityId: task._id,
+      },
+      notifyByEmail: true,
+    });
+  } catch (notifErr) {
+    console.error('[AUTO-COMPLETE] Failed to notify client:', notifErr.message);
+  }
+  try {
+    const { mainAdminIdentifier } = require('../config');
+    const adminUser = await User.findOne({ identifier: mainAdminIdentifier }).exec();
+    if (adminUser) {
+      await createNotification({
+        recipientId: adminUser._id,
+        type: 'TASK_COMPLETED',
+        title: 'Task Completed',
+        message: `Task "${task.title}" has been completed.`,
+        relatedEntity: {
+          entityType: ENTITY_TYPES.TASK,
+          entityId: task._id,
+        },
+      });
+    }
+  } catch (notifErr) {
+    console.error('[AUTO-COMPLETE] Failed to notify admin:', notifErr.message);
+  }
+}
+
 router.get('/wallet', async (req, res) => {
   try {
     const clientId = req.user.id;
@@ -552,6 +596,7 @@ router.get('/tasks/:taskId', async (req, res) => {
     // === SAME PROCESSING LOGIC AS GET /tasks LIST ===
     const now = new Date();
     let needsSave = false;
+    let autoCompleted = false; // true only at the transition INTO COMPLETED
     let currentStatus = task.status;
     let currentProgress = task.progress;
     let currentMilestones = task.milestones || [];
@@ -617,6 +662,7 @@ router.get('/tasks/:taskId', async (req, res) => {
         task.status = 'COMPLETED';
         currentStatus = 'COMPLETED';
         needsSave = true;
+        autoCompleted = true;
       } else if (currentProgress > 0 && currentStatus === 'PENDING') {
         task.status = 'ACTIVE';
         currentStatus = 'ACTIVE';
@@ -635,6 +681,9 @@ router.get('/tasks/:taskId', async (req, res) => {
     if (needsSave) {
       await task.save();
       console.log(`[SINGLE-TASK SYNC] Task ${task._id} updated: status=${task.status}, progress=${task.progress}`);
+      // Record the actual completion time exactly once — only at the transition
+      // INTO COMPLETED (later reads of an already-COMPLETED task never re-fire).
+      if (autoCompleted) await notifyAutoCompletion(task);
     }
 
     // Log milestones for verification
@@ -2249,6 +2298,7 @@ router.get('/tasks', async (req, res) => {
 
     for (const t of tasks) {
       let needsSave = false;
+      let autoCompleted = false; // true only at the transition INTO COMPLETED
       let currentStatus = t.status;
       let currentProgress = t.progress;
       let currentMilestones = t.milestones || [];
@@ -2315,6 +2365,7 @@ router.get('/tasks', async (req, res) => {
           t.status = 'COMPLETED';
           currentStatus = 'COMPLETED';
           needsSave = true;
+          autoCompleted = true;
         } else if (currentProgress > 0 && currentStatus === 'PENDING') {
           t.status = 'ACTIVE';
           currentStatus = 'ACTIVE';
@@ -2333,6 +2384,9 @@ router.get('/tasks', async (req, res) => {
       if (needsSave) {
         await t.save();
         console.log(`[TASK SYNC] Task ${t._id} updated: status=${t.status}, progress=${t.progress}`);
+        // Record the actual completion time exactly once — only at the transition
+        // INTO COMPLETED (later reads of an already-COMPLETED task never re-fire).
+        if (autoCompleted) await notifyAutoCompletion(t);
       }
 
       processedTasks.push({
@@ -2580,8 +2634,10 @@ router.get('/insights/tasks', async (req, res) => {
 // other client's orders/tasks can ever be exposed. Same event semantics and the
 // same inclusive UTC date-boundary convention as the admin analytics timelines:
 // order event = Order.createdAt, start = Task.startDate, end = Task.endDate shown
-// strictly as END DATE (the data model has no reliable completion timestamp; no
-// completedAt is invented and updatedAt is never used as a completion date).
+// strictly as END DATE. The ACTUAL completion date is exposed as `completedAt`
+// from the earliest persisted TASK_COMPLETED notification per task (one batched
+// query — no N+1); tasks without that record report completedAt = null (no
+// legacy backfill, never derived from endDate or updatedAt).
 router.get('/insights/timeline', async (req, res) => {
   try {
     const clientId = req.user.id;
@@ -2597,8 +2653,21 @@ router.get('/insights/timeline', async (req, res) => {
     const hasRange = Object.keys(rangeFilter).length > 0;
 
     const taskBase = { clientId, isDeleted: { $ne: true }, isListedInPlans: { $ne: true } };
+    // A task belongs on the timeline when its START or END date falls inside the
+    // range, OR when its ACTUAL completion event (a TASK_COMPLETED notification
+    // createdAt inside the range) falls inside it — even if startDate/endDate are
+    // outside. One batched server-side query; the clientId (= req.user.id, never
+    // client-supplied) base filter still ANDs over the whole $or, so completion
+    // ids belonging to other clients can never surface here.
+    const completedInRangeIds = hasRange
+      ? await Notification.find({
+          type: 'TASK_COMPLETED',
+          'relatedEntity.entityType': 'TASK',
+          createdAt: rangeFilter,
+        }).distinct('relatedEntity.entityId')
+      : [];
     const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }] }
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
       : {};
 
     const [orders, tasks] = await Promise.all([
@@ -2614,6 +2683,23 @@ router.get('/insights/timeline', async (req, res) => {
         .lean()
     ]);
 
+    // ACTUAL COMPLETION TIMESTAMP — earliest TASK_COMPLETED notification per task
+    // in ONE batched query (no N+1). The task ids come from the client-scoped
+    // query above (req.user.id), so no other client's notifications are exposed.
+    // No record => completedAt stays null (never endDate/updatedAt, no backfill).
+    const completedAtByTask = new Map();
+    if (tasks.length > 0) {
+      const doneNotifs = await Notification.find({
+        type: 'TASK_COMPLETED',
+        'relatedEntity.entityType': 'TASK',
+        'relatedEntity.entityId': { $in: tasks.map(t => t._id) },
+      }).select('relatedEntity.entityId createdAt').sort({ createdAt: 1 }).lean();
+      for (const n of doneNotifs) {
+        const key = n.relatedEntity?.entityId?.toString();
+        if (key && !completedAtByTask.has(key)) completedAtByTask.set(key, n.createdAt);
+      }
+    }
+
     res.json({
       range: { startDate: startDate || null, endDate: endDate || null },
       orders: orders.map(o => ({
@@ -2628,6 +2714,8 @@ router.get('/insights/timeline', async (req, res) => {
         status: t.status,
         startDate: t.startDate || null,
         endDate: t.endDate || null,
+        // Actual completion event time (TASK_COMPLETED notification) or null.
+        completedAt: completedAtByTask.get(t._id.toString()) || null,
         creditCost: t.creditCost || 0
       }))
     });

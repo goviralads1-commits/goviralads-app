@@ -32,6 +32,7 @@ const Ticket = require('../models/Ticket');
 const UserSubscription = require('../models/UserSubscription');
 const { RechargeRequest } = require('../models/RechargeRequest');
 const CommissionLog = require('../models/CommissionLog');
+const Notification = require('../models/Notification');
 
 router.use(authenticateJWT);
 router.use(requireAdmin);
@@ -47,6 +48,27 @@ function buildDateFilters(startDate, endDate) {
     createdAtFilter: hasDateFilter ? { createdAt: dateFilter } : {},
     updatedAtFilter: hasDateFilter ? { updatedAt: dateFilter } : {},
   };
+}
+
+// ACTUAL COMPLETION TIMESTAMP for the timeline endpoints: the EARLIEST persisted
+// TASK_COMPLETED notification per task is the authoritative completion event time
+// (written at the completion transition by the admin completion paths and the
+// client AUTO-completion paths). ONE batched query per request — no N+1. Tasks
+// without such a record get completedAt = null: no legacy backfill, and never
+// derived from endDate or updatedAt.
+async function buildCompletedAtMap(tasks) {
+  const completedAtByTask = new Map();
+  if (!tasks || tasks.length === 0) return completedAtByTask;
+  const doneNotifs = await Notification.find({
+    type: 'TASK_COMPLETED',
+    'relatedEntity.entityType': 'TASK',
+    'relatedEntity.entityId': { $in: tasks.map(t => t._id) },
+  }).select('relatedEntity.entityId createdAt').sort({ createdAt: 1 }).lean();
+  for (const n of doneNotifs) {
+    const key = n.relatedEntity?.entityId?.toString();
+    if (key && !completedAtByTask.has(key)) completedAtByTask.set(key, n.createdAt);
+  }
+  return completedAtByTask;
 }
 
 // Resolve and authorize the target client. Returns { clientId } when allowed,
@@ -307,10 +329,13 @@ router.get('/client/drill', async (req, res) => {
 // Business Analytics. Strictly read-only.
 //
 // HONESTY NOTES (verified against models — do not change without a data-model review):
-//  - Task has NO reliable completion timestamp (no completedAt; updatedAt changes on
-//    unrelated edits like chat/approvals), so this endpoint never produces a
-//    "completed on" event. endDate is returned as the END DATE together with the
-//    task's CURRENT status; the UI must not present it as a completion date.
+//  - Task has NO on-document completion timestamp (no completedAt field; updatedAt
+//    changes on unrelated edits like chat/approvals). The ACTUAL completion date is
+//    taken from the earliest persisted TASK_COMPLETED notification per task and
+//    exposed as `completedAt`; tasks without that record report completedAt = null
+//    (no legacy backfill, never derived from endDate or updatedAt). endDate is
+//    returned as the END DATE together with the task's CURRENT status; the UI must
+//    not present it as a completion date.
 //  - Tasks whose startDate is null produce no START event: the existing system
 //    defines no fallback (auto-start and AUTO progress both require startDate).
 router.get('/client/timeline', async (req, res) => {
@@ -331,9 +356,20 @@ router.get('/client/timeline', async (req, res) => {
 
     // Same task base as /admin/analytics/client (exclude plan listings and soft-deleted)
     const taskBase = { isDeleted: { $ne: true }, isListedInPlans: { $ne: true }, clientId };
-    // A task belongs on the timeline when its START or END date falls inside the range
+    // A task belongs on the timeline when its START or END date falls inside the
+    // range, OR when its ACTUAL completion event (a TASK_COMPLETED notification
+    // createdAt inside the range) falls inside it — even if startDate/endDate are
+    // outside. One batched server-side query; the clientId base filter below still
+    // ANDs over the whole $or, so no other client's task can ever be included.
+    const completedInRangeIds = hasRange
+      ? await Notification.find({
+          type: 'TASK_COMPLETED',
+          'relatedEntity.entityType': 'TASK',
+          createdAt: rangeFilter,
+        }).distinct('relatedEntity.entityId')
+      : [];
     const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }] }
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
       : {};
 
     const [orders, tasks] = await Promise.all([
@@ -347,6 +383,10 @@ router.get('/client/timeline', async (req, res) => {
         .limit(500)
         .lean()
     ]);
+
+    // One batched lookup for the whole page — the task ids come from the
+    // client-scoped query above, so no other client's notifications are exposed.
+    const completedAtByTask = await buildCompletedAtMap(tasks);
 
     res.json({
       scope: { clientId: clientId.toString() },
@@ -363,6 +403,8 @@ router.get('/client/timeline', async (req, res) => {
         status: t.status,
         startDate: t.startDate || null,
         endDate: t.endDate || null,
+        // Actual completion event time (TASK_COMPLETED notification) or null.
+        completedAt: completedAtByTask.get(t._id.toString()) || null,
         creditCost: t.creditCost || 0
       }))
     });
@@ -401,8 +443,19 @@ router.get('/timeline', async (req, res) => {
     }
 
     const taskBase = { isDeleted: { $ne: true }, isListedInPlans: { $ne: true }, ...clientScope };
+    // Same inclusion rule as /client/timeline: START or END date in range, OR the
+    // ACTUAL completion event (TASK_COMPLETED notification createdAt) in range.
+    // One batched server-side query; the client-visibility clientScope base filter
+    // still ANDs over the whole $or, so the caller's existing scope is preserved.
+    const completedInRangeIds = hasRange
+      ? await Notification.find({
+          type: 'TASK_COMPLETED',
+          'relatedEntity.entityType': 'TASK',
+          createdAt: rangeFilter,
+        }).distinct('relatedEntity.entityId')
+      : [];
     const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }] }
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
       : {};
 
     const [orders, tasks] = await Promise.all([
@@ -417,6 +470,10 @@ router.get('/timeline', async (req, res) => {
         .limit(1000)
         .lean()
     ]);
+
+    // One batched lookup for the whole page — the task ids already obey the
+    // caller's client-visibility scope computed above.
+    const completedAtByTask = await buildCompletedAtMap(tasks);
 
     res.json({
       scope: { allClients: true },
@@ -433,6 +490,8 @@ router.get('/timeline', async (req, res) => {
         status: t.status,
         startDate: t.startDate || null,
         endDate: t.endDate || null,
+        // Actual completion event time (TASK_COMPLETED notification) or null.
+        completedAt: completedAtByTask.get(t._id.toString()) || null,
         creditCost: t.creditCost || 0
       }))
     });

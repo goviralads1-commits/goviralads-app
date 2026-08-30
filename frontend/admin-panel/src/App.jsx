@@ -13,16 +13,24 @@ import Header from './components/Header';
 // and would hit the ErrorBoundary — instead, retry ONCE with a hard reload so the
 // browser picks up the current shell. Real render errors are unaffected.
 const lazyWithReload = (loader) => React.lazy(() =>
-  loader().catch(() => {
-    if (!window.sessionStorage.getItem('gva-chunk-reload')) {
-      window.sessionStorage.setItem('gva-chunk-reload', '1');
-      window.location.reload();
-      // Keep Suspense pending while the reload happens instead of throwing.
-      return new Promise(() => {});
-    }
-    window.sessionStorage.removeItem('gva-chunk-reload');
-    throw new Error('Page chunk failed to load');
-  })
+  loader()
+    .then((mod) => {
+      // Successful load restores the retry budget: the flag only guards the single
+      // hard-reload attempt immediately after a failure, so it must not linger for
+      // the rest of the tab session and consume a later, unrelated chunk failure.
+      window.sessionStorage.removeItem('gva-chunk-reload');
+      return mod;
+    })
+    .catch(() => {
+      if (!window.sessionStorage.getItem('gva-chunk-reload')) {
+        window.sessionStorage.setItem('gva-chunk-reload', '1');
+        window.location.reload();
+        // Keep Suspense pending while the reload happens instead of throwing.
+        return new Promise(() => {});
+      }
+      window.sessionStorage.removeItem('gva-chunk-reload');
+      throw new Error('Page chunk failed to load');
+    })
 );
 const Dashboard = lazyWithReload(() => import('./pages/Dashboard'));
 const Clients = lazyWithReload(() => import('./pages/Clients'));
