@@ -9,6 +9,7 @@ import AttachSheet from '../components/chat/AttachSheet';
 import MediaBubble from '../components/chat/MediaBubble';
 import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
 import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES, deleteMedia } from '../components/chat/mediaUpload';
+import MilestoneQuickPanel from '../components/MilestoneQuickPanel';
 
 const TaskDetail = () => {
   const { taskId } = useParams();
@@ -2345,6 +2346,22 @@ const TaskDetail = () => {
                     style={{ width: '120px', padding: '10px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
                   />
                   <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>Maximum auto-progress percentage</p>
+                </div>
+
+                {/* MILESTONE QUICK CONTROL — the SAME reusable component as the task
+                    cards. Fast milestone-driven progress control; saves directly via
+                    PATCH and refreshes from the server response. The existing
+                    milestone editor below is preserved unchanged. */}
+                <div style={{ marginBottom: '16px' }}>
+                  <MilestoneQuickPanel
+                    task={task}
+                    onSaved={(updated) => {
+                      // Server response first, then the existing refetch flow keeps
+                      // task / originalTask / form state consistent.
+                      if (updated) setTask(prev => ({ ...prev, ...updated }));
+                      fetchTask();
+                    }}
+                  />
                 </div>
 
                 {/* Milestones Editor */}

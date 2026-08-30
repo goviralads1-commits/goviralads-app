@@ -4,6 +4,7 @@ import api from '../services/api';
 import Header from '../components/Header';
 import IconPicker from '../components/IconPicker';
 import ProgressWithFlag from '../components/ProgressWithFlag';
+import MilestoneQuickPanel from '../components/MilestoneQuickPanel';
 
 const Tasks = () => {
   const navigate = useNavigate();
@@ -46,6 +47,15 @@ const Tasks = () => {
   // Bulk selection state (Phase 7)
   const [selectedTasks, setSelectedTasks] = useState([]);
   const [bulkApproving, setBulkApproving] = useState(false);
+
+  // MILESTONE QUICK CONTROL — the PATCH response is the single source of truth:
+  // replace the row's server fields with the returned task (progress, milestones
+  // incl. server-derived reached/reachedAt, status, progressMode). No optimistic
+  // local fabrication.
+  const handleMilestoneSaved = (taskId, updatedTask) => {
+    if (!updatedTask) return;
+    setTasks(prev => prev.map(t => (t.id === taskId ? { ...t, ...updatedTask } : t)));
+  };
   
   // Quick filter tab (Phase 7)
   const [quickFilter, setQuickFilter] = useState('ALL');
@@ -1291,6 +1301,18 @@ const Tasks = () => {
                     progressIcon={task.progressIcon}
                   />
                 </div>
+
+                {/* Row 4.5: Milestone quick control — milestone-driven progress without
+                    opening the task. Normal client tasks only; plan/product rows
+                    (isListedInPlans) never get this control. */}
+                {!task.isListedInPlans && (
+                  <div style={{marginBottom: '16px'}}>
+                    <MilestoneQuickPanel
+                      task={task}
+                      onSaved={(updated) => handleMilestoneSaved(task.id, updated)}
+                    />
+                  </div>
+                )}
 
                 {/* Row 5: Price + Priority */}
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px'}}>
