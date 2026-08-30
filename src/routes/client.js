@@ -2695,14 +2695,18 @@ router.get('/insights/timeline', async (req, res) => {
     // No record => completedAt stays null (never endDate/updatedAt, no backfill).
     const completedAtByTask = new Map();
     if (tasks.length > 0) {
-      const doneNotifs = await Notification.find({
-        type: 'TASK_COMPLETED',
-        'relatedEntity.entityType': 'TASK',
-        'relatedEntity.entityId': { $in: tasks.map(t => t._id) },
-      }).select('relatedEntity.entityId createdAt').sort({ createdAt: 1 }).lean();
-      for (const n of doneNotifs) {
-        const key = n.relatedEntity?.entityId?.toString();
-        if (key && !completedAtByTask.has(key)) completedAtByTask.set(key, n.createdAt);
+      try {
+        const doneNotifs = await Notification.find({
+          type: 'TASK_COMPLETED',
+          'relatedEntity.entityType': 'TASK',
+          'relatedEntity.entityId': { $in: tasks.map(t => t._id) },
+        }).select('relatedEntity.entityId createdAt').sort({ createdAt: 1 }).lean();
+        for (const n of doneNotifs) {
+          const key = n.relatedEntity?.entityId?.toString();
+          if (key && !completedAtByTask.has(key)) completedAtByTask.set(key, n.createdAt);
+        }
+      } catch (err) {
+        console.error('Timeline completedAtByTask query failed:', err.message);
       }
     }
 
