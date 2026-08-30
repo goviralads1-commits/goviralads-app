@@ -230,9 +230,10 @@ const Dashboard = () => {
   const timelineReqRef = useRef(0);
   const loadTimeline = useCallback(async () => {
     const reqId = ++timelineReqRef.current;
-    // Timeline needs a client AND a concrete date range. All Time has no axis, so
-    // skip the request entirely instead of firing an unnecessary API call.
-    if (!clientFilter || !dateFilter.startDate || !dateFilter.endDate) {
+    // Timeline needs a concrete date range. All Time has no axis, so skip the
+    // request entirely instead of firing an unnecessary API call.
+    // All Clients = office-wide aggregate endpoint; specific client = scoped endpoint.
+    if (!dateFilter.startDate || !dateFilter.endDate) {
       setTimeline(null);
       setTimelineDate(null);
       return;
@@ -241,7 +242,9 @@ const Dashboard = () => {
     setTimelineError(false);
     try {
       const params = buildFilterParams();
-      const res = await api.get('/admin/analytics/client/timeline', { params: { ...params, clientId: clientFilter } });
+      const res = clientFilter
+        ? await api.get('/admin/analytics/client/timeline', { params: { ...params, clientId: clientFilter } })
+        : await api.get('/admin/analytics/timeline', { params });
       if (reqId === timelineReqRef.current) {
         setTimeline(res.data || null);
         setTimelineDate(null);
@@ -553,6 +556,17 @@ const Dashboard = () => {
     CANCELLED: { color: '#94a3b8', label: 'Cancelled' },
   };
   const TIMELINE_ORDER_COLOR = '#8b5cf6';
+  // Workflow graph lanes (bottom -> top): a task's bar rises to the lane of its CURRENT
+  // status, anchored at its startDate. endDate renders as a separate HOLLOW rising bar
+  // (END DATE) — never as a completion date (no reliable completion timestamp exists).
+  const STAGE_ORDER = ['PENDING', 'SCHEDULED', 'ACTIVE', 'COMPLETED'];
+  const STAGE_META = {
+    PENDING: { color: '#f97316', label: 'Pending', h: 26 },
+    SCHEDULED: { color: '#eab308', label: 'Scheduled', h: 56 },
+    ACTIVE: { color: '#3b82f6', label: 'Active / In Progress', h: 86 },
+    COMPLETED: { color: '#22c55e', label: 'Completed', h: 116 },
+  };
+  const TIMELINE_STATUS_LANE = { PENDING_APPROVAL: 'PENDING', PENDING: 'SCHEDULED', ACTIVE: 'ACTIVE', IN_PROGRESS: 'ACTIVE', COMPLETED: 'COMPLETED' };
   // Day keys are UTC day strings — the same convention as the backend date filters,
   // so an event is bucketed into exactly the day the server-side range includes.
   const utcDayKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
@@ -560,24 +574,31 @@ const Dashboard = () => {
 
   let timelineDays = [];
   const timelineEvents = {};
+  // day -> ordered list of INDIVIDUAL rising bars (every order / task start / task end
+  // keeps its own bar — same-date events are never collapsed into a single mark).
+  const timelineGraph = {};
   const timelineSummary = { orders: 0, starts: 0, ends: 0 };
   let timelineRangeTooLong = false;
-  if (clientFilter && timeline && dateFilter.startDate && dateFilter.endDate) {
+  if (timeline && dateFilter.startDate && dateFilter.endDate) {
     (timeline.orders || []).forEach((o) => {
       const day = utcDayKey(o.createdAt);
       if (!day) return;
       (timelineEvents[day] = timelineEvents[day] || []).push({ kind: 'order', order: o });
+      (timelineGraph[day] = timelineGraph[day] || []).push({ kind: 'order' });
       timelineSummary.orders += 1;
     });
     (timeline.tasks || []).forEach((t) => {
       const startDay = utcDayKey(t.startDate);
       const endDay = utcDayKey(t.endDate);
+      const lane = TIMELINE_STATUS_LANE[t.status]; // CANCELLED/LISTED plot no bar
       if (startDay) {
         (timelineEvents[startDay] = timelineEvents[startDay] || []).push({ kind: 'start', task: t });
+        if (lane) (timelineGraph[startDay] = timelineGraph[startDay] || []).push({ kind: 'start', lane });
         timelineSummary.starts += 1;
       }
       if (endDay) {
         (timelineEvents[endDay] = timelineEvents[endDay] || []).push({ kind: 'end', task: t });
+        if (lane) (timelineGraph[endDay] = timelineGraph[endDay] || []).push({ kind: 'end', lane });
         timelineSummary.ends += 1;
       }
     });
@@ -730,17 +751,23 @@ const Dashboard = () => {
                 ORDER (order createdAt) -> START (startDate) -> END (endDate, shown with the
                 task's current status; the data model has no reliable completion timestamp).
                 All existing Business Analytics cards below remain untouched. */}
-            {clientFilter && (
+            {(
               <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
                 <style>{`@keyframes gvaTlPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                   <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Timeline</h4>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {[{ color: TIMELINE_ORDER_COLOR, label: 'Order' }, { color: '#22c55e', label: 'Completed' }, { color: '#3b82f6', label: 'Active' }, { color: '#eab308', label: 'Scheduled' }, { color: '#f97316', label: 'Pending' }].map(l => (
+                    {[{ color: '#f97316', label: 'Pending' }, { color: '#eab308', label: 'Scheduled' }, { color: '#3b82f6', label: 'Active' }, { color: '#22c55e', label: 'Completed' }].map(l => (
                       <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
-                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: l.color }} />{l.label}
+                        <span style={{ width: '7px', height: '10px', borderRadius: '3px', background: l.color }} />{l.label}
                       </span>
                     ))}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
+                      <span style={{ width: '7px', height: '10px', borderRadius: '3px', border: '1.5px solid #64748b', boxSizing: 'border-box' }} />End date
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
+                      <span style={{ width: '7px', height: '10px', borderRadius: '3px 3px 0 0', background: TIMELINE_ORDER_COLOR }} />Order
+                    </span>
                   </div>
                 </div>
                 {timelineLoading ? (
@@ -764,32 +791,78 @@ const Dashboard = () => {
                       <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Invalid date range.</p>
                     ) : (
                       <>
-                        {/* Date axis — horizontally scrollable on mobile */}
-                        <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '6px' }}>
-                          {timelineDays.map(day => {
-                            const evs = timelineEvents[day] || [];
-                            const dObj = new Date(day + 'T00:00:00.000Z');
-                            const isSelected = day === activeTimelineDay;
-                            return (
-                              <button
-                                key={day}
-                                onClick={() => setTimelineDate(day)}
-                                style={{
-                                  minWidth: '38px', flexShrink: 0, padding: '6px 4px', borderRadius: '8px', cursor: 'pointer', textAlign: 'center',
-                                  border: isSelected ? '1px solid #6366f1' : '1px solid #f1f5f9',
-                                  background: isSelected ? '#eef2ff' : '#fff'
-                                }}
-                              >
-                                <p style={{ fontSize: '9px', fontWeight: '600', color: '#94a3b8', margin: 0, textTransform: 'uppercase' }}>{dObj.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</p>
-                                <p style={{ fontSize: '13px', fontWeight: '700', color: isSelected ? '#6366f1' : '#0f172a', margin: 0 }}>{dObj.getUTCDate()}</p>
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', height: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                  {evs.slice(0, 4).map((ev, i) => (
-                                    <span key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: ev.kind === 'order' ? TIMELINE_ORDER_COLOR : (TIMELINE_STATUS_META[ev.task.status]?.color || '#94a3b8') }} />
-                                  ))}
-                                </div>
-                              </button>
-                            );
-                          })}
+                        {/* WORKFLOW GRAPH — X: dates of the selected range; Y: workflow
+                            stages (bottom->top Pending/Scheduled/Active/Completed).
+                            Solid rising bars = tasks anchored at startDate, rising to the
+                            lane of their CURRENT status. Hollow bars = END DATE markers.
+                            Short purple bars = orders placed. Every event keeps its own
+                            bar — busy dates widen their column instead of collapsing.
+                            Horizontally scrollable on mobile; no numeric Y labels. */}
+                        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                          {/* Fixed stage labels */}
+                          <div style={{ width: '86px', flexShrink: 0 }}>
+                            {['COMPLETED', 'ACTIVE / IN PROGRESS', 'SCHEDULED', 'PENDING'].map(l => (
+                              <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '8px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{l}</div>
+                            ))}
+                            <div style={{ height: '26px' }} />
+                          </div>
+                          {/* Scrollable plot */}
+                          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
+                            <div style={{ position: 'relative', minWidth: timelineDays.reduce((w, d) => w + Math.max(26, (timelineGraph[d] || []).length * 6 + 8), 0), height: '146px' }}>
+                              {[0, 30, 60, 90].map(y => (
+                                <div key={y} style={{ position: 'absolute', left: 0, right: 0, top: y, borderTop: '1px dashed #e2e8f0' }} />
+                              ))}
+                              <div style={{ position: 'absolute', left: 0, right: 0, top: 120, borderTop: '1px solid #cbd5e1' }} />
+                              <div style={{ display: 'flex', position: 'absolute', left: 0, top: 0, bottom: 0 }}>
+                                {timelineDays.map(day => {
+                                  const bars = timelineGraph[day] || [];
+                                  const shown = bars.slice(0, 40);
+                                  // Bars narrow slightly as a date gets busier, and the
+                                  // date column itself WIDENS to fit every event — events
+                                  // are never collapsed into one bar or hidden behind a
+                                  // "+N" unless an extreme single-day count overflows.
+                                  const bw = shown.length <= 4 ? 5 : 3;
+                                  const bgap = shown.length <= 4 ? 2 : 1;
+                                  const colW = Math.max(26, bars.length * (bw + bgap) + 8);
+                                  const isSelected = day === activeTimelineDay;
+                                  const dObj = new Date(day + 'T00:00:00.000Z');
+                                  const nOrders = bars.filter(b => b.kind === 'order').length;
+                                  const nStarts = bars.filter(b => b.kind === 'start').length;
+                                  const nEnds = bars.filter(b => b.kind === 'end').length;
+                                  return (
+                                    <button
+                                      key={day}
+                                      onClick={() => setTimelineDate(day)}
+                                      title={`${dObj.getUTCDate()}: ${nOrders} orders · ${nStarts} starts · ${nEnds} ends`}
+                                      style={{ width: `${colW}px`, flexShrink: 0, position: 'relative', border: 'none', background: isSelected ? '#eef2ff' : 'transparent', cursor: 'pointer', padding: 0 }}
+                                    >
+                                      {/* Rising bars from the date axis — one bar per event:
+                                          solid = order placed / task started (rises to the
+                                          lane of the task's current status); hollow = task
+                                          END DATE. Multiple events on a date render as
+                                          separate adjacent bars, never collapsed. */}
+                                      {bars.length > 0 && (
+                                        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '120px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: `${bgap}px` }}>
+                                          {shown.map((b, i) => b.kind === 'order' ? (
+                                            <div key={i} style={{ width: `${Math.max(bw - 1, 2)}px`, height: '18px', background: TIMELINE_ORDER_COLOR, borderRadius: '2px 2px 0 0' }} />
+                                          ) : b.kind === 'start' ? (
+                                            <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META[b.lane].h}px`, background: STAGE_META[b.lane].color, borderRadius: '3px 3px 0 0' }} />
+                                          ) : (
+                                            <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META[b.lane].h}px`, border: `1.5px solid ${STAGE_META[b.lane].color}`, borderRadius: '3px 3px 0 0', boxSizing: 'border-box', background: 'transparent' }} />
+                                          ))}
+                                          {bars.length > 40 && (
+                                            <div style={{ width: `${bw}px`, height: '8px', background: '#cbd5e1', borderRadius: '3px 3px 0 0' }} title={`${bars.length - 40} more events`} />
+                                          )}
+                                        </div>
+                                      )}
+                                      {/* Day number */}
+                                      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: isSelected ? '700' : '500', color: isSelected ? '#6366f1' : '#94a3b8' }}>{dObj.getUTCDate()}</div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                         {/* Day detail panel */}
                         <div style={{ marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>

@@ -372,5 +372,75 @@ router.get('/client/timeline', async (req, res) => {
   }
 });
 
+// ---------- GET /admin/analytics/timeline ----------
+// Office-wide (ALL CLIENTS) workflow timeline: identical event semantics and the same
+// inclusive UTC date-boundary convention as /client/timeline, aggregated across the
+// clients the caller is allowed to see (main admin: all clients; other staff: only
+// clients already visible to them through task assignment — same rule as
+// resolveAuthorizedClient / GET /admin/clients). Strictly read-only.
+router.get('/timeline', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const { createdAtFilter } = buildDateFilters(startDate, endDate);
+
+    const rangeFilter = {};
+    if (startDate) rangeFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
+    if (endDate) rangeFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
+    const hasRange = Object.keys(rangeFilter).length > 0;
+
+    // Caller visibility scoping (server-side authoritative)
+    const caller = await User.findById(req.user.id).populate('customRole');
+    const isMainAdmin = caller && caller.role === 'ADMIN' && !caller.customRole;
+    let clientScope = {};
+    if (!isMainAdmin) {
+      const visibleIds = (await Task.distinct('clientId', { assignedTo: caller._id })).filter(Boolean);
+      if (visibleIds.length === 0) {
+        return res.json({ scope: { allClients: true }, range: { startDate: startDate || null, endDate: endDate || null }, orders: [], tasks: [] });
+      }
+      clientScope = { clientId: { $in: visibleIds } };
+    }
+
+    const taskBase = { isDeleted: { $ne: true }, isListedInPlans: { $ne: true }, ...clientScope };
+    const taskDateScope = hasRange
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }] }
+      : {};
+
+    const [orders, tasks] = await Promise.all([
+      Order.find({ ...clientScope, ...createdAtFilter })
+        .sort({ createdAt: 1 })
+        .select('orderId totalAmount orderStatus createdAt items.planTitle')
+        .limit(1000)
+        .lean(),
+      Task.find({ ...taskBase, ...taskDateScope })
+        .sort({ startDate: 1 })
+        .select('title status startDate endDate creditCost')
+        .limit(1000)
+        .lean()
+    ]);
+
+    res.json({
+      scope: { allClients: true },
+      range: { startDate: startDate || null, endDate: endDate || null },
+      orders: orders.map(o => ({
+        orderId: o.orderId || '',
+        totalAmount: o.totalAmount || 0,
+        orderStatus: o.orderStatus,
+        createdAt: o.createdAt,
+        services: (o.items || []).map(i => i.planTitle).filter(Boolean)
+      })),
+      tasks: tasks.map(t => ({
+        title: t.title || 'Task',
+        status: t.status,
+        startDate: t.startDate || null,
+        endDate: t.endDate || null,
+        creditCost: t.creditCost || 0
+      }))
+    });
+  } catch (err) {
+    console.error('Office timeline error:', err);
+    res.status(500).json({ error: 'Failed to load office timeline' });
+  }
+});
+
 module.exports = router;
 
