@@ -545,8 +545,10 @@ const Dashboard = () => {
 
   // ===== CLIENT WORKFLOW TIMELINE (date-wise ORDER -> START -> END view) =====
   // Status legend colors. endDate is displayed strictly as END DATE with the task's
-  // current status — the data model has no reliable completion timestamp, so no
-  // completion-date event is ever derived (never from updatedAt).
+  // current status — never as a completion date. The ACTUAL completion event is
+  // plotted only when the server provides completedAt (the persisted TASK_COMPLETED
+  // notification time); no completedAt => no completion bar (never from endDate or
+  // updatedAt).
   const TIMELINE_STATUS_META = {
     COMPLETED: { color: '#22c55e', label: 'Completed' },
     ACTIVE: { color: '#3b82f6', label: 'Active / In Progress' },
@@ -558,7 +560,8 @@ const Dashboard = () => {
   const TIMELINE_ORDER_COLOR = '#8b5cf6';
   // Workflow graph lanes (bottom -> top): a task's bar rises to the lane of its CURRENT
   // status, anchored at its startDate. endDate renders as a separate HOLLOW rising bar
-  // (END DATE) — never as a completion date (no reliable completion timestamp exists).
+  // (END DATE) — never as a completion date. An ACTUAL completion (completedAt) renders
+  // as a separate SOLID green bar rising to the COMPLETED lane.
   const STAGE_ORDER = ['PENDING', 'SCHEDULED', 'ACTIVE', 'COMPLETED'];
   const STAGE_META = {
     PENDING: { color: '#f97316', label: 'Pending', h: 26 },
@@ -577,9 +580,15 @@ const Dashboard = () => {
   // day -> ordered list of INDIVIDUAL rising bars (every order / task start / task end
   // keeps its own bar — same-date events are never collapsed into a single mark).
   const timelineGraph = {};
-  const timelineSummary = { orders: 0, starts: 0, ends: 0 };
+  const timelineSummary = { orders: 0, starts: 0, ends: 0, completed: 0 };
   let timelineRangeTooLong = false;
   if (timeline && dateFilter.startDate && dateFilter.endDate) {
+    // Each event is independent by ITS OWN DATE: a start/end/completed event is
+    // plotted/counted only when that specific date falls inside the selected
+    // range. A task included via its completion date can never contribute an
+    // out-of-range START or END DATE bar/count (dates stay available as detail
+    // context only).
+    const inTimelineRange = (day) => day >= dateFilter.startDate && day <= dateFilter.endDate;
     (timeline.orders || []).forEach((o) => {
       const day = utcDayKey(o.createdAt);
       if (!day) return;
@@ -591,15 +600,24 @@ const Dashboard = () => {
       const startDay = utcDayKey(t.startDate);
       const endDay = utcDayKey(t.endDate);
       const lane = TIMELINE_STATUS_LANE[t.status]; // CANCELLED/LISTED plot no bar
-      if (startDay) {
+      if (startDay && inTimelineRange(startDay)) {
         (timelineEvents[startDay] = timelineEvents[startDay] || []).push({ kind: 'start', task: t });
         if (lane) (timelineGraph[startDay] = timelineGraph[startDay] || []).push({ kind: 'start', lane });
         timelineSummary.starts += 1;
       }
-      if (endDay) {
+      if (endDay && inTimelineRange(endDay)) {
         (timelineEvents[endDay] = timelineEvents[endDay] || []).push({ kind: 'end', task: t });
         if (lane) (timelineGraph[endDay] = timelineGraph[endDay] || []).push({ kind: 'end', lane });
         timelineSummary.ends += 1;
+      }
+      // ACTUAL COMPLETION — plotted only when the server returned a real completedAt
+      // (TASK_COMPLETED notification time). Never falls back to endDate/updatedAt:
+      // no completedAt => no completion event.
+      const completedDay = utcDayKey(t.completedAt);
+      if (completedDay && inTimelineRange(completedDay)) {
+        (timelineEvents[completedDay] = timelineEvents[completedDay] || []).push({ kind: 'completed', task: t });
+        (timelineGraph[completedDay] = timelineGraph[completedDay] || []).push({ kind: 'completed' });
+        timelineSummary.completed += 1;
       }
     });
     // Date axis generated from the SELECTED range (inclusive on both ends)
@@ -784,7 +802,7 @@ const Dashboard = () => {
                     {/* In-range event counts — timeline-specific; the status/financial metric
                         cards below already own the standard Business Analytics numbers. */}
                     <p style={{ fontSize: '11px', fontWeight: '500', color: '#94a3b8', margin: '0 0 12px 0' }}>
-                      {timelineSummary.orders} order{timelineSummary.orders === 1 ? '' : 's'} placed · {timelineSummary.starts} task start{timelineSummary.starts === 1 ? '' : 's'} · {timelineSummary.ends} task end{timelineSummary.ends === 1 ? '' : 's'}
+                      {timelineSummary.orders} order{timelineSummary.orders === 1 ? '' : 's'} placed · {timelineSummary.starts} task start{timelineSummary.starts === 1 ? '' : 's'} · {timelineSummary.completed} completed · {timelineSummary.ends} task end{timelineSummary.ends === 1 ? '' : 's'}
                       {timelineRangeTooLong && ' · showing first 366 days'}
                     </p>
                     {timelineDays.length === 0 ? (
@@ -799,12 +817,13 @@ const Dashboard = () => {
                             bar — busy dates widen their column instead of collapsing.
                             Horizontally scrollable on mobile; no numeric Y labels. */}
                         <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                          {/* Fixed stage-label gutter — wide enough that every label is
-                              clean and right-aligned to the plot edge; ACTIVE / IN PROGRESS
-                              wraps to two intentional lines without colliding with bars. */}
-                          <div style={{ width: '100px', flexShrink: 0 }}>
+                          {/* Fixed stage-label gutter — compact so the plot gets more
+                              usable width; labels stay right-aligned to the plot edge
+                              and ACTIVE / IN PROGRESS wraps to two clean lines without
+                              colliding with bars. */}
+                          <div style={{ width: '80px', flexShrink: 0 }}>
                             {['COMPLETED', 'ACTIVE / IN PROGRESS', 'SCHEDULED', 'PENDING'].map(l => (
-                              <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '10px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.45, textAlign: 'right' }}>{l}</div>
+                              <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '6px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.45, textAlign: 'right' }}>{l}</div>
                             ))}
                             <div style={{ height: '26px' }} />
                           </div>
@@ -831,24 +850,28 @@ const Dashboard = () => {
                                   const nOrders = bars.filter(b => b.kind === 'order').length;
                                   const nStarts = bars.filter(b => b.kind === 'start').length;
                                   const nEnds = bars.filter(b => b.kind === 'end').length;
+                                  const nCompleted = bars.filter(b => b.kind === 'completed').length;
                                   return (
                                     <button
                                       key={day}
                                       onClick={() => setTimelineDate(day)}
-                                      title={`${dObj.getUTCDate()}: ${nOrders} orders · ${nStarts} starts · ${nEnds} ends`}
+                                      title={`${dObj.getUTCDate()}: ${nOrders} orders · ${nStarts} starts · ${nCompleted} completed · ${nEnds} ends`}
                                       style={{ width: `${colW}px`, flexShrink: 0, position: 'relative', border: 'none', background: isSelected ? '#eef2ff' : 'transparent', cursor: 'pointer', padding: 0 }}
                                     >
                                       {/* Rising bars from the date axis — one bar per event:
-                                          solid = order placed / task started (rises to the
-                                          lane of the task's current status); hollow = task
-                                          END DATE. Multiple events on a date render as
-                                          separate adjacent bars, never collapsed. */}
+                                          solid = order placed / task started / task ACTUALLY
+                                          COMPLETED (completedAt, always the green COMPLETED
+                                          lane); hollow = task END DATE (planned deadline).
+                                          Multiple events on a date render as separate adjacent
+                                          bars, never collapsed. */}
                                       {bars.length > 0 && (
                                         <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '120px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: `${bgap}px` }}>
                                           {shown.map((b, i) => b.kind === 'order' ? (
                                             <div key={i} style={{ width: `${Math.max(bw - 1, 2)}px`, height: '18px', background: TIMELINE_ORDER_COLOR, borderRadius: '2px 2px 0 0' }} />
                                           ) : b.kind === 'start' ? (
                                             <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META[b.lane].h}px`, background: STAGE_META[b.lane].color, borderRadius: '3px 3px 0 0' }} />
+                                          ) : b.kind === 'completed' ? (
+                                            <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META.COMPLETED.h}px`, background: STAGE_META.COMPLETED.color, borderRadius: '3px 3px 0 0' }} />
                                           ) : (
                                             <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META[b.lane].h}px`, border: `1.5px solid ${STAGE_META[b.lane].color}`, borderRadius: '3px 3px 0 0', boxSizing: 'border-box', background: 'transparent' }} />
                                           ))}
@@ -890,9 +913,10 @@ const Dashboard = () => {
                                   <div style={{ minWidth: 0, flex: 1 }}>
                                     <p style={{ fontSize: '12.5px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{ev.task.title}</p>
                                     {/* "End date" is reported honestly — it is the planned endDate with the
-                                        current status, never a claimed completion date. */}
+                                        current status, never a claimed completion date. "Completed" is the
+                                        actual completion time recorded by the server (completedAt). */}
                                     <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
-                                      {ev.kind === 'start' ? 'Started' : 'End date'} · Status: {TIMELINE_STATUS_META[ev.task.status]?.label || ev.task.status} · {(ev.task.creditCost || 0).toLocaleString('en-IN')} credits
+                                      {ev.kind === 'start' ? 'Started' : ev.kind === 'completed' ? `Completed ${fmtTimelineDate(ev.task.completedAt)}` : 'End date'} · Status: {TIMELINE_STATUS_META[ev.task.status]?.label || ev.task.status} · {(ev.task.creditCost || 0).toLocaleString('en-IN')} credits
                                     </p>
                                     <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Start: {fmtTimelineDate(ev.task.startDate)} → End: {fmtTimelineDate(ev.task.endDate)}</p>
                                   </div>
@@ -1190,9 +1214,9 @@ const Dashboard = () => {
                 </div>
                 <p style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Earners</p>
               </div>
-              {(analytics.topCommissionEarners || []).length > 0 ? (
+              {(analytics?.topCommissionEarners || []).length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {(analytics.topCommissionEarners || []).map((earner, idx) => (
+                  {(analytics?.topCommissionEarners || []).map((earner, idx) => (
                     <div key={earner.userId || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '12px', fontWeight: '500', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{idx + 1}. {earner.identifier}</span>
                       <span style={{ fontSize: '12px', fontWeight: '700', color: '#f59e0b', flexShrink: 0, paddingLeft: '6px' }}>{(earner.totalCommission || 0).toLocaleString('en-IN')}</span>
