@@ -63,7 +63,7 @@ const logEmailStatus = () => {
 logEmailStatus();
 
 // Send email helper using Resend API
-const sendEmail = async ({ to, subject, html, text }) => {
+const sendEmail = async ({ to, subject, html, text, from }, options = {}) => {
   console.log('[EMAIL SEND] ==========================================');
   console.log('[EMAIL SEND] SEND EMAIL ATTEMPT');
   console.log('[EMAIL SEND] ==========================================');
@@ -105,12 +105,12 @@ const sendEmail = async ({ to, subject, html, text }) => {
     });
     
     const { data, error } = await resend.emails.send({
-      from: `${fromName} <${fromEmail}>`,
+      from: from || `${fromName} <${fromEmail}>`,
       to: [to],
       subject,
       html,
       text: text || subject
-    });
+    }, options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined);
     
     if (error) {
       console.error('[EMAIL SEND] ❌ RESEND API RETURNED ERROR!');
@@ -120,6 +120,10 @@ const sendEmail = async ({ to, subject, html, text }) => {
       return { success: false, error: error.message, code: error.name };
     }
     
+    if (!data?.id) {
+      console.error('[EMAIL SEND] Provider acceptance could not be confirmed');
+      return { success: false, reason: 'provider_acceptance_unconfirmed' };
+    }
     console.log('[EMAIL SEND] ✅ SUCCESS! Email sent via Resend');
     console.log('[EMAIL SEND]   Message ID:', data?.id);
     console.log('[EMAIL SEND]   Full response:', JSON.stringify(data, null, 2));
@@ -380,7 +384,59 @@ const templates = {
 // NOTIFICATION FUNCTIONS
 // ============================================
 
+const freezeEmail = (payload) => ({
+  ...payload,
+  from: `${process.env.EMAIL_FROM_NAME || 'Go Viral Ads'} <${process.env.EMAIL_FROM || 'onboarding@resend.dev'}>`,
+  text: payload.text || payload.subject,
+});
+
+const buildSubscriptionReminder = (to, notifData) => {
+  const escapeHtml = (str) => {
+    if (!str || typeof str !== 'string') return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+  };
+  const renewUrl = (process.env.CLIENT_URL || 'https://goviralads.com') + '/wallet?scrollToSubscription=true';
+  const expiryDate = notifData.expiryDate || 'soon';
+  const planName = notifData.planName || 'Your subscription';
+  const safeEmailSubject = escapeHtml(notifData.customEmailSubject || '⏳ Your Plan is Expiring Soon — Go Viral Ads');
+  const safeEmailBodyText = escapeHtml(notifData.customEmailBody || notifData.message || 'Renew your plan now to continue uninterrupted service.');
+  return freezeEmail({
+    to,
+    subject: safeEmailSubject,
+    html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+              <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 32px; text-align: center;">
+                <h1 style="color: #fff; margin: 0; font-size: 24px;">⏳ Plan Expiring Soon</h1>
+              </div>
+              <div style="padding: 32px;">
+                <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 16px;">Your Plan is Expiring Soon</h2>
+                <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 16px; margin: 0 0 24px;">
+                  <p style="color: #92400e; font-size: 15px; font-weight: 600; margin: 0 0 6px;">${planName}</p>
+                  <p style="color: #92400e; font-size: 14px; margin: 0;">Expires: ${expiryDate}</p>
+                </div>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">${safeEmailBodyText}</p>
+                <a href="${renewUrl}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                  🔄 Renew Plan
+                </a>
+              </div>
+              <div style="padding: 16px 32px; background: #f8fafc; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">Go Viral Ads</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+  });
+};
+
 const emailService = {
+  buildTaskReminder: (to, data) => freezeEmail({ to, ...templates.taskReminder(data) }),
+  buildSubscriptionReminder,
   isConfigured: isEmailConfigured,
   isValidEmail: isValidEmail,
   

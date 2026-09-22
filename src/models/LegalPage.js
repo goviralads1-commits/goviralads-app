@@ -335,11 +335,13 @@ legalPageSchema.statics.ensureDefaults = async function() {
   ];
 
   for (const page of defaults) {
-    await this.findOneAndUpdate(
-      { slug: page.slug },
-      { $setOnInsert: page },
-      { upsert: true, new: true }
-    );
+    if (await this.exists({ slug: page.slug })) continue;
+    try {
+      await this.create(page);
+    } catch (err) {
+      if (err.code !== 11000 || !await this.exists({ slug: page.slug })) throw err;
+      console.log('[LEGAL SEED] Default page already created concurrently:', page.slug);
+    }
   }
 };
 

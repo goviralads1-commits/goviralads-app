@@ -1,70 +1,51 @@
 const User = require('./User');
-const { ROLES } = require('../config');
-const bcrypt = require('bcryptjs');
+const { ROLES, mainAdminIdentifier } = require('../config');
+const { hashPassword } = require('../services/passwordService');
 
-// HARDCODED ADMIN CREDENTIALS - ALWAYS USED
-const ADMIN_EMAIL = 'admin@goviralads.com';
-const ADMIN_PASSWORD = 'Admin@12345';
-const SALT_ROUNDS = 10;
-
-// FORCE RESET admin password on every server start
-async function ensureMainAdminSeed() {
-  const identifier = ADMIN_EMAIL.trim().toLowerCase();
-  
-  console.log('========================================');
-  console.log('[ADMIN SEED] FORCE RESET STARTING...');
-  console.log('[ADMIN SEED] Target email:', identifier);
-  console.log('[ADMIN SEED] Password to set:', ADMIN_PASSWORD);
-  console.log('========================================');
-
-  // Generate fresh bcrypt hash - ALWAYS
-  console.log('[ADMIN SEED] Generating bcrypt hash (10 rounds)...');
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, SALT_ROUNDS);
-  console.log('[ADMIN SEED] Hash generated:', passwordHash.substring(0, 20) + '...');
-
-  // Find existing admin
-  const existing = await User.findOne({ identifier }).exec();
-
-  if (existing) {
-    console.log('[ADMIN SEED] Admin user FOUND in database');
-    console.log('[ADMIN SEED] Current hash:', existing.passwordHash?.substring(0, 20) + '...');
-    console.log('[ADMIN SEED] OVERWRITING password hash NOW...');
-    
-    // FORCE UPDATE using direct assignment and save
-    existing.passwordHash = passwordHash;
-    existing.role = ROLES.ADMIN;
-    existing.status = 'ACTIVE';
-    
-    const saved = await existing.save();
-    
-    console.log('[ADMIN SEED] Save completed');
-    console.log('[ADMIN SEED] New hash after save:', saved.passwordHash?.substring(0, 20) + '...');
-    console.log('========================================');
-    console.log('ADMIN PASSWORD FORCE RESET SUCCESS');
-    console.log('Email: admin@goviralads.com');
-    console.log('Password: Admin@12345');
-    console.log('========================================');
-    return saved;
+function preserveExisting(user) {
+  if (user.role !== ROLES.ADMIN) {
+    throw new Error('ADMIN_BOOTSTRAP_IDENTITY_CONFLICT: existing account will not be modified');
   }
-
-  // Create new admin if not exists
-  console.log('[ADMIN SEED] Admin NOT FOUND - creating new user...');
-  const mainAdmin = await User.create({
-    identifier,
-    passwordHash,
-    role: ROLES.ADMIN,
-    status: 'ACTIVE',
-  });
-
-  console.log('[ADMIN SEED] Admin user CREATED');
-  console.log('========================================');
-  console.log('ADMIN USER CREATED SUCCESS');
-  console.log('Email: admin@goviralads.com');
-  console.log('Password: Admin@12345');
-  console.log('========================================');
-  return mainAdmin;
+  console.log('[ADMIN SEED] Existing admin preserved');
+  return user;
 }
 
-module.exports = {
-  ensureMainAdminSeed,
-};
+async function ensureMainAdminSeed() {
+  const identifier = mainAdminIdentifier.trim().toLowerCase();
+  let existing;
+  try {
+    existing = await User.findOne({ identifier }).exec();
+  } catch (_) {
+    throw new Error('ADMIN_BOOTSTRAP_LOOKUP_FAILED: unable to verify the existing account');
+  }
+  if (existing) return preserveExisting(existing);
+
+  const configuredIdentifier = process.env.MAIN_ADMIN_IDENTIFIER;
+  const password = process.env.MAIN_ADMIN_PASSWORD;
+  if (!configuredIdentifier || configuredIdentifier !== identifier || !password) {
+    throw new Error('ADMIN_BOOTSTRAP_CONFIG_REQUIRED: missing admin requires explicit MAIN_ADMIN_IDENTIFIER and MAIN_ADMIN_PASSWORD');
+  }
+  const bytes = Buffer.byteLength(password, 'utf8');
+  if (bytes < 16 || bytes > 72 || password !== password.trim()) {
+    throw new Error('ADMIN_BOOTSTRAP_PASSWORD_INVALID: use 16-72 UTF-8 bytes without surrounding whitespace');
+  }
+
+  try {
+    const passwordHash = await hashPassword(password);
+    const admin = await User.create({ identifier, passwordHash, role: ROLES.ADMIN, status: 'ACTIVE' });
+    console.log('[ADMIN SEED] Missing admin created from explicit bootstrap configuration');
+    return admin;
+  } catch (err) {
+    if (err.code === 11000) {
+      try {
+        const concurrent = await User.findOne({ identifier }).exec();
+        if (concurrent) return preserveExisting(concurrent);
+      } catch (_) {
+        // Do not expose database error details or credential-bearing values.
+      }
+    }
+    throw new Error('ADMIN_BOOTSTRAP_CREATE_FAILED: no existing authentication state was overwritten');
+  }
+}
+
+module.exports = { ensureMainAdminSeed };

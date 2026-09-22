@@ -4,7 +4,29 @@ const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
 const emailService = require('./emailService');
-const { createNotification, ENTITY_TYPES } = require('./notificationService');
+const { ENTITY_TYPES } = require('./notificationService');
+const { deliverReminder } = require('./reminderDeliveryService');
+
+// Manual triggers and cron callbacks share one in-flight run per job in this process.
+const guardJob = (name, work) => {
+  let inFlight = null;
+  return () => {
+    if (inFlight) return inFlight;
+    inFlight = Promise.resolve()
+      .then(work)
+      .catch(err => {
+        console.error(`[REMINDER] ${name} failed:`, err?.message || err);
+      })
+      .finally(() => { inFlight = null; });
+    return inFlight;
+  };
+};
+
+const scheduledJobs = new Map();
+const registerScheduler = (expression, work) => {
+  if (scheduledJobs.has(expression)) return;
+  scheduledJobs.set(expression, cron.schedule(expression, work));
+};
 
 // Reminder Settings (stored in-memory, can be moved to DB later)
 let reminderSettings = {
@@ -33,8 +55,28 @@ const updateSettings = (newSettings) => {
   console.log('[REMINDER] Settings updated:', reminderSettings);
 };
 
+async function deliverTaskEmail(task, now, daysLeft, plan) {
+  const day = now.toISOString().split('T')[0];
+  const setting = plan ? reminderSettings.planExpiry : reminderSettings.taskDeadline;
+  return deliverReminder({
+    scope: plan ? 'plan-expiry' : 'task-deadline', key: `${task._id}-${daysLeft}-${day}`,
+    recipientId: task.clientId._id, subjectId: task._id, entityCreatedAt: task.createdAt,
+    periodStart: new Date(day + 'T00:00:00.000Z'),
+    email: emailService.buildTaskReminder(task.clientId.identifier, {
+      taskTitle: plan ? `Plan: ${task.title}` : task.title,
+      deadline: new Date(task.deadline).toLocaleDateString(), daysLeft,
+      customMessage: setting.message, taskUrl: `http://localhost:5175/tasks/${task._id}`,
+    }),
+    eligible: async (recipientId) => !!await Task.exists({
+      _id: task._id, clientId: recipientId, mode: plan ? 'PLAN' : 'TASK',
+      deadline: { $eq: task.deadline, $gte: new Date() },
+      status: { $nin: ['COMPLETE', 'CANCELLED'] },
+    }) && !!await User.exists({ _id: recipientId }),
+  });
+}
+
 // 1) TASK DEADLINE REMINDER - Runs daily at 9 AM
-const checkTaskDeadlines = async () => {
+const checkTaskDeadlines = guardJob('Task deadline check', async () => {
   if (!reminderSettings.taskDeadline.enabled) return;
   
   try {
@@ -59,23 +101,16 @@ const checkTaskDeadlines = async () => {
       
       const daysLeft = Math.ceil((new Date(task.deadline) - now) / (1000 * 60 * 60 * 24));
       
-      await emailService.sendTaskReminder(task.clientId.identifier, {
-        taskTitle: task.title,
-        deadline: new Date(task.deadline).toLocaleDateString(),
-        daysLeft,
-        customMessage: reminderSettings.taskDeadline.message,
-        taskUrl: `http://localhost:5175/tasks/${task._id}`
-      });
-      
-      console.log(`[REMINDER] Sent deadline reminder to ${task.clientId.identifier} for task ${task.title}`);
+      const delivery = await deliverTaskEmail(task, now, daysLeft, false);
+      if (delivery.complete) console.log(`[REMINDER] Deadline reminder accepted for task ${task._id}`);
     }
   } catch (error) {
     console.error('[REMINDER] Error checking task deadlines:', error.message);
   }
-};
+});
 
 // 2) TASK OVERDUE DETECTION - Runs daily at 10 AM (Admin only, fire once)
-const checkOverdueTasks = async () => {
+const checkOverdueTasks = guardJob('Task overdue check', async () => {
   if (!reminderSettings.taskOverdue.enabled) return;
   
   try {
@@ -120,18 +155,22 @@ const checkOverdueTasks = async () => {
       
       // Notify Admin (in-app notification only)
       try {
-        await createNotification({
-          recipientId: adminUser._id,
-          type: 'TASK_OVERDUE',
-          title: 'Task Overdue',
-          message: `Task "${task.title}" for ${clientName} is ${daysOverdue} day(s) overdue.`,
-          relatedEntity: {
-            entityType: ENTITY_TYPES.TASK,
-            entityId: task._id,
+        const delivery = await deliverReminder({
+          scope: 'task-overdue', key: `${task._id}-${adminUser._id}`,
+          recipientId: adminUser._id, ownerClientId: task.clientId._id, subjectId: task._id,
+          // Existing visible notification history was checked above.
+          periodStart: new Date(), entityCreatedAt: task.createdAt,
+          notification: {
+            recipientId: adminUser._id, type: 'TASK_OVERDUE', title: 'Task Overdue',
+            message: `Task "${task.title}" for ${clientName} is ${daysOverdue} day(s) overdue.`,
+            relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
           },
-          notifyByEmail: false,
+          eligible: async () => !!await Task.exists({ _id: task._id,
+            clientId: task.clientId._id, endDate: { $lt: now },
+            status: { $nin: ['COMPLETED', 'CANCELLED'] },
+          }) && !!await User.exists({ _id: adminUser._id }),
         });
-        console.log(`[OVERDUE] Notified admin for task ${task._id} (${task.title})`);
+        if (delivery.complete) console.log(`[OVERDUE] Notified admin for task ${task._id}`);
       } catch (notifErr) {
         console.error('[OVERDUE] Failed to notify admin:', notifErr.message);
       }
@@ -139,10 +178,10 @@ const checkOverdueTasks = async () => {
   } catch (error) {
     console.error('[OVERDUE] Error checking overdue tasks:', error.message);
   }
-};
+});
 
 // 3) PLAN EXPIRY REMINDER - Runs daily at 8 AM
-const checkPlanExpiry = async () => {
+const checkPlanExpiry = guardJob('Plan expiry check', async () => {
   if (!reminderSettings.planExpiry.enabled) return;
   
   try {
@@ -167,23 +206,16 @@ const checkPlanExpiry = async () => {
       
       const daysLeft = Math.ceil((new Date(task.deadline) - now) / (1000 * 60 * 60 * 24));
       
-      await emailService.sendTaskReminder(task.clientId.identifier, {
-        taskTitle: `Plan: ${task.title}`,
-        deadline: new Date(task.deadline).toLocaleDateString(),
-        daysLeft,
-        customMessage: reminderSettings.planExpiry.message,
-        taskUrl: `http://localhost:5175/tasks/${task._id}`
-      });
-      
-      console.log(`[REMINDER] Sent plan expiry reminder to ${task.clientId.identifier}`);
+      const delivery = await deliverTaskEmail(task, now, daysLeft, true);
+      if (delivery.complete) console.log(`[REMINDER] Plan expiry reminder accepted for task ${task._id}`);
     }
   } catch (error) {
     console.error('[REMINDER] Error checking plan expiry:', error.message);
   }
-};
+});
 
 // 4) SCHEDULED TASK AUTO-START - Runs every 10 minutes
-const autoStartScheduledTasks = async () => {
+const autoStartScheduledTasks = guardJob('Task auto-start check', async () => {
   try {
     const now = new Date();
     
@@ -211,7 +243,7 @@ const autoStartScheduledTasks = async () => {
   } catch (error) {
     console.error('[CRON AUTO-START] Error auto-starting scheduled tasks:', error.message);
   }
-};
+});
 
 // 5) Already handled in ticket reply endpoints, but we export the function
 const sendTicketReplyEmail = async (ticket, replyMessage, recipientRole) => {
@@ -251,16 +283,16 @@ const startSchedulers = () => {
   console.log('[REMINDER] Starting reminder schedulers...');
   
   // Task deadline reminder - Daily at 9:00 AM
-  cron.schedule('0 9 * * *', checkTaskDeadlines);
+  registerScheduler('0 9 * * *', checkTaskDeadlines);
   
   // Task overdue reminder - Daily at 10:00 AM
-  cron.schedule('0 10 * * *', checkOverdueTasks);
+  registerScheduler('0 10 * * *', checkOverdueTasks);
   
   // Plan expiry reminder - Daily at 8:00 AM
-  cron.schedule('0 8 * * *', checkPlanExpiry);
+  registerScheduler('0 8 * * *', checkPlanExpiry);
   
   // Auto-start scheduled tasks - Every 10 minutes
-  cron.schedule('*/10 * * * *', autoStartScheduledTasks);
+  registerScheduler('*/10 * * * *', autoStartScheduledTasks);
   
   console.log('[REMINDER] Schedulers started successfully');
   console.log('[REMINDER] - Task deadlines: Daily at 9:00 AM');

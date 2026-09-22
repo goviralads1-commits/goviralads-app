@@ -781,6 +781,35 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// These guards are process-local; they do not provide durable delivery deduplication.
+const backgroundIntervals = new Map();
+
+function startBackgroundInterval(name, work, intervalMs) {
+  if (backgroundIntervals.has(name)) {
+    console.log(`[${name}] Background interval already registered`);
+    return;
+  }
+
+  let running = false;
+  const run = async () => {
+    if (running) {
+      console.log(`[${name}] Previous run still active; skipping overlapping run`);
+      return;
+    }
+    running = true;
+    try {
+      await work();
+    } catch (err) {
+      console.error(`[${name}] Background job error:`, err?.message || err);
+    } finally {
+      running = false;
+    }
+  };
+
+  backgroundIntervals.set(name, setInterval(run, intervalMs));
+  void run();
+}
+
 // Deactivate device tokens unused for 30+ days (flag-only, never deletes documents).
 // Runs once at boot and then every 24 hours. Failures never affect the server.
 function startDeviceTokenCleanupJob() {
@@ -793,8 +822,7 @@ function startDeviceTokenCleanupJob() {
       console.error('[Push] Device token cleanup error (non-fatal):', err.message);
     }
   };
-  runCleanup();
-  setInterval(runCleanup, 24 * 60 * 60 * 1000);
+  startBackgroundInterval('DEVICE CLEANUP', runCleanup, 24 * 60 * 60 * 1000);
 }
 
 const PORT = process.env.PORT || 3000;
@@ -806,6 +834,7 @@ async function start() {
     await ensureTestClient();  // Create test client user for development
     await ensureClientWallets();
         await ensureLegalPages();
+    await require('./services/reminderDeliveryService').initializeReminderDelivery();
     // await runPhase2SafetyChecks();
     // await runPhase3SafetyChecks(); // Temporarily disabled for auth testing
     
@@ -838,87 +867,34 @@ async function start() {
 
 // Expire subscriptions whose expiresAt has passed
 function startSubscriptionExpiryJob() {
-  const Wallet = require('./models/Wallet');
-  const { WalletTransaction, TRANSACTION_TYPES } = require('./models/WalletTransaction');
-  const { createNotification } = require('./services/notificationService');
-  const expireSubscriptions = async () => {
+  const { expireSubscriptions } = require('./services/subscriptionExpiryService');
+  const runExpiry = async () => {
     try {
-      // 1. Expire UserSubscription records (legacy)
-      const result = await UserSubscription.updateMany(
-        { isActive: true, expiresAt: { $lt: new Date() } },
-        { $set: { isActive: false, creditsRemaining: 0 } }
-      );
-      if (result.modifiedCount > 0) {
-        console.log(`[EXPIRY] Expired ${result.modifiedCount} subscription(s)`);
-      }
-
-      // 2. Reset wallet.subscriptionCredits for expired subscriptions
-      // B2: Include $ne: null to catch wallets with null expiry that shouldn't have active credits
-      // B1: Create ledger entry + notification for each expired wallet
-      const now = new Date();
-      const expiredWallets = await Wallet.find({
-        subscriptionExpiresAt: { $lt: now, $ne: null },
-        subscriptionCredits: { $gt: 0 },
-      }).exec();
-
-      for (const wallet of expiredWallets) {
-        const expiredCredits = wallet.subscriptionCredits || 0;
-
-        // B1: Create ledger entry for credit expiry
-        try {
-          await WalletTransaction.create({
-            walletId: wallet._id,
-            type: TRANSACTION_TYPES.SUBSCRIPTION_EXPIRED,
-            amount: 0,
-            credits: -expiredCredits,
-            description: `Subscription credits expired (${expiredCredits} credits)`,
-            referenceId: null,
-          });
-        } catch (txErr) {
-          console.error('[EXPIRY] Failed to create ledger entry:', txErr.message);
-        }
-
-        // B1: Notify client about expiry
-        try {
-          await createNotification({
-            recipientId: wallet.clientId,
-            title: 'Subscription Credits Expired',
-            message: `Your ${expiredCredits} subscription credits have expired. Please recharge to continue.`,
-            relatedEntity: { entityType: 'WALLET', entityId: wallet._id },
-          });
-        } catch (notifErr) {
-          console.error('[EXPIRY] Notification error:', notifErr.message);
-        }
-
-        // Reset credits
-        wallet.subscriptionCredits = 0;
-        await wallet.save();
-      }
-
-      if (expiredWallets.length > 0) {
-        console.log(`[EXPIRY] Reset subscriptionCredits on ${expiredWallets.length} wallet(s)`);
-      }
+      const result = await expireSubscriptions();
+      console.log(`[EXPIRY] Committed expiry for ${result.subscriptions} subscription(s), ${result.wallets} wallet(s)`);
     } catch (err) {
-      console.error('[EXPIRY] Subscription expiry job error:', err.message);
+      console.error('[EXPIRY] Transactional expiry failed; no non-transactional fallback:', err?.code || 'EXPIRY_FAILED');
     }
   };
 
   // Run immediately on startup, then every 60 minutes
-  expireSubscriptions();
-  setInterval(expireSubscriptions, 60 * 60 * 1000);
+  startBackgroundInterval('EXPIRY', runExpiry, 60 * 60 * 1000);
   console.log('Subscription expiry job started (every 60 minutes)');
 }
 
 // Configurable subscription renewal reminder job
 // Runs every 12 hours. Sends before-expiry and after-expiry reminders
 // based on admin-configured Settings.subscriptionReminders.
-// Idempotency guaranteed by ReminderLog unique reminderKey index.
+// Delivery uses the durable journal; ReminderLog retains the existing reporting contract.
 function startSubscriptionReminderJob() {
   const { ReminderLog, REMINDER_STATUS } = require('./models/ReminderLog');
   const Wallet = require('./models/Wallet');
+  const emailService = require('./services/emailService');
+  const { deliverReminder, initializeReminderDelivery } = require('./services/reminderDeliveryService');
 
   const sendReminders = async () => {
     try {
+      await initializeReminderDelivery('subscription');
       // 1. Load admin-configured reminder settings
       const settings = await Settings.getSettings();
       const config = settings.subscriptionReminders || {};
@@ -934,6 +910,26 @@ function startSubscriptionReminderJob() {
         console.log('[REMINDER] All reminder channels disabled');
         return;
       }
+
+      const deliverCurrentReminder = async (wallet, userSub, days, direction, notification) => {
+        const recipient = emailEnabled
+          ? await User.findById(wallet.clientId).select('email identifier').exec() : null;
+        if (emailEnabled && !recipient) return { complete: false };
+        return deliverReminder({
+          scope: 'subscription', key: `${userSub._id}-${direction}-${days}`,
+          recipientId: wallet.clientId, subjectId: userSub._id,
+          entityCreatedAt: userSub.createdAt,
+          periodStart: new Date(new Date(wallet.subscriptionExpiresAt).getTime() - 30 * 60 * 60 * 1000
+            + (direction === 'before' ? -days : days) * 24 * 60 * 60 * 1000),
+          notification: inAppEnabled ? notification : null,
+          email: emailEnabled ? emailService.buildSubscriptionReminder(recipient.email || recipient.identifier, notification) : null,
+          eligible: async (recipientId) => String(recipientId) === String(wallet.clientId)
+            && !!await Wallet.exists({ _id: wallet._id, clientId: recipientId,
+              subscriptionExpiresAt: wallet.subscriptionExpiresAt, currentPlanId: wallet.currentPlanId })
+            && !!await UserSubscription.exists({ _id: userSub._id,
+              isActive: direction === 'before' ? { $ne: false } : { $ne: true } }),
+        });
+      };
 
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1049,23 +1045,14 @@ function startSubscriptionReminderJob() {
               if (!inAppEnabled && emailEnabled) channel = 'EMAIL';
               else if (inAppEnabled && !emailEnabled) channel = 'IN_APP';
 
-              // Send via existing notification infrastructure
-              if (inAppEnabled) {
-                await createNotification({
-                  recipientId: wallet.clientId,
-                  title,
-                  message,
-                  type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
-                  relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
-                  notifyByEmail: emailEnabled,
-                  // Fix existing data gap: pass real values for email template
-                  planName: userSub.planName,
-                  expiryDate: expiryDateStr,
-                  // Custom email overrides (undefined = use existing defaults)
-                  customEmailSubject,
-                  customEmailBody,
-                });
-              }
+              const delivery = await deliverCurrentReminder(wallet, userSub, days, 'before', {
+                recipientId: wallet.clientId, title, message,
+                type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+                relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
+                planName: userSub.planName, expiryDate: expiryDateStr,
+                customEmailSubject, customEmailBody,
+              });
+              if (!delivery.complete) continue;
 
               // Log for idempotency
               await ReminderLog.create({
@@ -1177,22 +1164,14 @@ function startSubscriptionReminderJob() {
               if (!inAppEnabled && emailEnabled) channel = 'EMAIL';
               else if (inAppEnabled && !emailEnabled) channel = 'IN_APP';
 
-              if (inAppEnabled) {
-                await createNotification({
-                  recipientId: wallet.clientId,
-                  title,
-                  message,
-                  type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
-                  relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
-                  notifyByEmail: emailEnabled,
-                  // Fix existing data gap: pass real values for email template
-                  planName: userSub.planName,
-                  expiryDate: expiryDateStr,
-                  // Custom email overrides (undefined = use existing defaults)
-                  customEmailSubject,
-                  customEmailBody,
-                });
-              }
+              const delivery = await deliverCurrentReminder(wallet, userSub, days, 'after', {
+                recipientId: wallet.clientId, title, message,
+                type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+                relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
+                planName: userSub.planName, expiryDate: expiryDateStr,
+                customEmailSubject, customEmailBody,
+              });
+              if (!delivery.complete) continue;
 
               await ReminderLog.create({
                 recipientId: wallet.clientId,
@@ -1224,8 +1203,7 @@ function startSubscriptionReminderJob() {
   };
 
   // Run immediately on startup, then every 12 hours
-  sendReminders();
-  setInterval(sendReminders, 12 * 60 * 60 * 1000);
+  startBackgroundInterval('SUBSCRIPTION REMINDER', sendReminders, 12 * 60 * 60 * 1000);
   console.log('Subscription reminder job started (configurable, every 12 hours)');
 }
 
@@ -1256,10 +1234,8 @@ async function updateAllAutoProgress() {
 // Function to start automatic progress updates
 function startAutomaticProgressUpdates() {
   // Update progress immediately when server starts
-  updateAllAutoProgress();
-  
   // Then update every 10 minutes (600000 milliseconds)
-  setInterval(updateAllAutoProgress, 10 * 60 * 1000);
+  startBackgroundInterval('AUTO PROGRESS', updateAllAutoProgress, 10 * 60 * 1000);
   
   console.log('Automatic progress updates started (every 10 minutes)');
 }

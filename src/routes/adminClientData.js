@@ -137,6 +137,8 @@ async function executeScopedDeletion(clientIds, session) {
   const userSubs = await UserSubscription.find({ userId: inClients }, '_id').session(session).lean().exec();
   const subIds = userSubs.map(u => u._id);
 
+  await require('../services/reminderDeliveryService').cancelClientDeliveries(clientIds, session);
+
   // 1. Notifications
   summary.notifications = (await Notification.deleteMany({ recipientId: inClients }).session(session).exec()).deletedCount || 0;
   // 2. Device tokens

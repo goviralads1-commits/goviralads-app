@@ -101,7 +101,14 @@ const settingsSchema = new mongoose.Schema(
 settingsSchema.statics.getSettings = async function () {
   let settings = await this.findOne({ key: 'global' });
   if (!settings) {
-    settings = await this.create({ key: 'global' });
+    try {
+      settings = await this.create({ key: 'global' });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+      settings = await this.findOne({ key: 'global' });
+      if (!settings) throw err;
+      console.log('[SETTINGS] Global settings already created concurrently');
+    }
   }
   return settings;
 };

@@ -1162,6 +1162,8 @@ router.post('/clients/:clientId/reset-data', async (req, res) => {
         const ticketResult = await Ticket.deleteMany({ clientId }).session(session).exec();
         summary.ticketsDeleted = ticketResult.deletedCount || 0;
 
+        await require('../services/reminderDeliveryService').cancelClientDeliveries([clientId], session);
+
         // 15. Delete ReminderLogs (cascade from UserSubscriptions)
         if (subIds.length > 0) {
           const reminderResult = await ReminderLog.deleteMany(

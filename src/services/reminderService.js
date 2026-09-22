@@ -11,7 +11,8 @@
 const { Task } = require('../models/Task');
 const User = require('../models/User');
 const emailService = require('./emailService');
-const { createNotification, NOTIFICATION_TYPES, ENTITY_TYPES } = require('./notificationService');
+const { NOTIFICATION_TYPES, ENTITY_TYPES } = require('./notificationService');
+const { deliverReminder } = require('./reminderDeliveryService');
 
 // Default reminder settings (can be customized via admin)
 const DEFAULT_SETTINGS = {
@@ -21,7 +22,7 @@ const DEFAULT_SETTINGS = {
   enabled: true
 };
 
-// Track sent reminders to avoid duplicates (in-memory, should use DB in production)
+// Optional process-local cache; the durable journal is authoritative.
 const sentReminders = new Map();
 
 /**
@@ -91,27 +92,27 @@ const processTaskReminder = async (task, settings, clientAppUrl) => {
       taskUrl: `${clientAppUrl}/tasks/${task._id}`
     };
 
-    // Send email
-    const emailResult = await emailService.sendTaskReminder(email, reminderData);
-    
-    // Create in-app notification
-    await createNotification({
-      recipientId: task.clientId,
-      type: NOTIFICATION_TYPES.TASK_REMINDER,
-      title: `Task Reminder: ${daysLeft === 0 ? 'Due Today!' : `${daysLeft} days left`}`,
-      message: `"${task.title}" ${daysLeft === 0 ? 'is due today!' : `is due in ${daysLeft} days`}`,
-      relatedEntity: {
-        entityType: ENTITY_TYPES.TASK,
-        entityId: task._id
-      }
+    const delivery = await deliverReminder({
+      scope: 'task-deadline', key: reminderKey,
+      recipientId: task.clientId, subjectId: task._id, entityCreatedAt: task.createdAt,
+      periodStart: new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z'),
+      email: emailService.buildTaskReminder(email, reminderData),
+      notification: {
+        recipientId: task.clientId,
+        type: NOTIFICATION_TYPES.TASK_REMINDER,
+        title: `Task Reminder: ${daysLeft === 0 ? 'Due Today!' : `${daysLeft} days left`}`,
+        message: `"${task.title}" ${daysLeft === 0 ? 'is due today!' : `is due in ${daysLeft} days`}`,
+        relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
+      },
+      eligible: async (recipientId) => !!await Task.exists({
+        _id: task._id, clientId: recipientId,
+        status: { $in: ['ACTIVE', 'IN_PROGRESS', 'PENDING_APPROVAL'] },
+        deadline: { $eq: task.deadline, $gte: new Date() },
+      }) && !!await User.exists({ _id: recipientId }),
     });
-
-    // Mark as sent
-    sentReminders.set(reminderKey, true);
-    
-    console.log(`[REMINDER] Sent for task ${task._id} (${daysLeft} days left)`);
-    
-    return { success: true, taskId: task._id, daysLeft, emailResult };
+    if (delivery.complete) sentReminders.set(reminderKey, true);
+    return { success: delivery.complete, taskId: task._id, daysLeft,
+      emailResult: { success: delivery.complete } };
   } catch (err) {
     console.error(`[REMINDER] Failed for task ${task._id}:`, err.message);
     return { success: false, taskId: task._id, error: err.message };
@@ -121,7 +122,7 @@ const processTaskReminder = async (task, settings, clientAppUrl) => {
 /**
  * Run the reminder check for all active tasks
  */
-const runReminderCheck = async () => {
+const performReminderCheck = async () => {
   console.log('[REMINDER] Starting reminder check...');
   
   const settings = await getReminderSettings();
@@ -168,6 +169,20 @@ const runReminderCheck = async () => {
   return results;
 };
 
+// Share in-flight work with manual triggers without changing their error handling.
+let reminderCheckPromise = null;
+const runReminderCheck = () => {
+  if (reminderCheckPromise) return reminderCheckPromise;
+  reminderCheckPromise = Promise.resolve()
+    .then(performReminderCheck)
+    .finally(() => { reminderCheckPromise = null; });
+  return reminderCheckPromise;
+};
+
+const runScheduledReminderCheck = () => runReminderCheck().catch(err => {
+  console.error('[REMINDER] Scheduled reminder check failed:', err?.message || err);
+});
+
 /**
  * Clear old reminder keys (run daily)
  */
@@ -196,7 +211,7 @@ const startReminderScheduler = () => {
   cleanupReminderKeys();
 
   // Run immediately on start
-  runReminderCheck();
+  void runScheduledReminderCheck();
 
   // Run every 3 hours
   const THREE_HOURS = 3 * 60 * 60 * 1000;
@@ -205,7 +220,7 @@ const startReminderScheduler = () => {
     // Only run between 8am and 8pm
     if (hour >= 8 && hour <= 20) {
       cleanupReminderKeys();
-      runReminderCheck();
+      return runScheduledReminderCheck();
     }
   }, THREE_HOURS);
 
