@@ -501,13 +501,17 @@ const Tasks = () => {
                 </div>
 
                 {/* Footer: Commission/Credits/Quantity + chat + View Details.
-                    Commission (Phase 3) logic kept VERBATIM — shown ONLY to the
-                    task's commission recipient; falls back to Credits Used for
+                    Commission — shown ONLY to the task's commission recipient:
+                    settled (EarningsLedger-backed) => "Commission earned"; the
+                    pre-completion display-only projection of the SAME calculation
+                    => "Commission in process". Falls back to Credits Used for
                     task owners with the existing privacy gate. */}
                 <div style={{ borderTop: '1px solid #f1f5f9', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   {task.myCommission > 0 ? (
                     <span style={{ fontSize: '12px', fontWeight: '700', color: '#15803d', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>Commission</span>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>
+                        {task.commissionSettled === false ? 'Commission in process' : 'Commission earned'}
+                      </span>
                       ₹{Number(task.myCommission).toLocaleString('en-IN')}
                     </span>
                   ) : (

@@ -1677,10 +1677,19 @@ const TaskDetail = () => {
                 {/* Scope Quantity */}
                 {showQty && <Row label="Scope Quantity" value={task.quantity} />}
 
-                {/* Commission (Phase 3) — shown ONLY to the task's commission
-                    recipient; amount comes verbatim from the persisted
-                    EarningsLedger record. Falls back to existing Credits Used. */}
-                {showCommission && <Row label="Commission" value={'\u20B9' + Number(task.myCommission).toLocaleString('en-IN')} valueColor="#15803d" />}
+                {/* Commission — shown ONLY to the task's commission recipient.
+                    Settled (EarningsLedger-backed) => "Commission earned"; the
+                    pre-completion display-only projection of the SAME calculation
+                    => "Commission in process" (settlement itself is unchanged and
+                    still happens only at completion). Falls back to existing
+                    Credits Used for non-commission users. */}
+                {showCommission && (
+                  <Row
+                    label={task.commissionSettled === false ? 'Commission in process' : 'Commission earned'}
+                    value={'\u20B9' + Number(task.myCommission).toLocaleString('en-IN')}
+                    valueColor="#15803d"
+                  />
+                )}
                 {showCredits && <Row label="Credits Used" value={`${task.creditsUsed || task.creditCost || 0} credits`} valueColor="#15803d" />}
 
                 {/* Offer Price */}

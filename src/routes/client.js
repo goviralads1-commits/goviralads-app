@@ -35,8 +35,9 @@ const { computeCreditDelta } = require('../utils/transactionHelpers');
 const mediaStorage = require('../services/mediaStorageService');
 const { validateOrderInputs, orderContentFiles } = require('../utils/orderContent');
 // COMMISSION SETTLEMENT: shared completion settlement — the SAME calculation
-// and ledger writer as the admin completion paths.
-const { settleTaskCommissionOnCompletion } = require('../services/commissionService');
+// and ledger writer as the admin completion paths. projectUserCommission is
+// the read-only pre-completion preview of that SAME calculation (display-only).
+const { settleTaskCommissionOnCompletion, projectUserCommission } = require('../services/commissionService');
 
 const router = express.Router();
 
@@ -733,6 +734,28 @@ router.get('/tasks/:taskId', async (req, res) => {
       myCommission = null;
     }
 
+    // COMMISSION PRE-COMPLETION DISPLAY (display-only): before completion —
+    // and only while the task has never settled (commissionEarned == null) —
+    // project the authenticated user's own commission with the SAME
+    // calculation the settlement flow uses (computeCommissionAmounts in
+    // src/services/commissionService: one calculation, no duplicate). No
+    // writes, no ledger rows, no task mutation: actual settlement stays
+    // exactly on the existing completion flow. Non-commission users get
+    // null (no entry in the calculation), so non-commission tasks and owner
+    // displays are unchanged. Settled/completed tasks keep today's behavior.
+    let commissionSettled = myCommission !== null;
+    if (
+      myCommission === null
+      && task.commissionEarned == null
+      && ['PENDING', 'ACTIVE', 'PENDING_APPROVAL'].includes(currentStatus)
+    ) {
+      const projected = projectUserCommission(task, clientId);
+      if (projected !== null) {
+        myCommission = projected;
+        commissionSettled = false;
+      }
+    }
+
     return res.status(200).json({
       task: {
         id: task._id.toString(),
@@ -767,9 +790,12 @@ router.get('/tasks/:taskId', async (req, res) => {
           && task.allowAssignedMilestoneEdit === true
           && ['PENDING', 'ACTIVE'].includes(currentStatus),
         // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
-        // for this task from EarningsLedger, or null when none/zero. Never
-        // contains another recipient's amount.
+        // for this task — the settled EarningsLedger net after completion, or
+        // the display-only pre-completion projection. Never contains another
+        // recipient's amount. commissionSettled === false marks the projected
+        // "Commission in process" state; true is the ledger-backed amount.
         myCommission,
+        commissionSettled,
         // ORDER LINKAGE — expose the existing human-readable Order ID (Order.orderId)
         // via the existing Task.orderId -> Order.orderId relationship; null when the
         // task has no order. Additive, read-only; same pattern as the task-list
@@ -2417,6 +2443,9 @@ router.get('/tasks', async (req, res) => {
     // amounts, so a plain sum yields the correct net. Net <= 0 => null.
     // ONE aggregation for the whole list (no per-task queries).
     let commissionByTask = new Map();
+    // Ledger-backed (settled) commissions — drives the "Commission earned"
+    // vs display-only "Commission in process" label in the UI.
+    const settledByTask = new Map();
     try {
       const taskIds = tasks.map(t => t._id);
       if (taskIds.length > 0) {
@@ -2433,6 +2462,7 @@ router.get('/tasks', async (req, res) => {
         for (const row of rows || []) {
           if (row && row._id && typeof row.net === 'number' && row.net > 0) {
             commissionByTask.set(row._id.toString(), row.net);
+            settledByTask.set(row._id.toString(), true);
           }
         }
       }
@@ -2582,6 +2612,7 @@ router.get('/tasks', async (req, res) => {
             const ownAmount = settled.memberAmounts.get(clientId);
             if (typeof ownAmount === 'number' && ownAmount > 0) {
               commissionByTask.set(t._id.toString(), ownAmount);
+              settledByTask.set(t._id.toString(), true);
             }
           }
         } catch (settleErr) {
@@ -2596,6 +2627,26 @@ router.get('/tasks', async (req, res) => {
         // Record the actual completion time exactly once — only at the transition
         // INTO COMPLETED (later reads of an already-COMPLETED task never re-fire).
         if (autoCompleted) await notifyAutoCompletion(t);
+      }
+
+      // COMMISSION PRE-COMPLETION DISPLAY (display-only): same rule as the
+      // single-task endpoint — before completion, and only while the task has
+      // never settled (commissionEarned == null), project the authenticated
+      // user's own commission with the SAME calculation the settlement flow
+      // uses. No writes, no ledger rows; settlement stays exactly on the
+      // existing completion flow. Non-commission users get null.
+      let myCommission = commissionByTask.get(t._id.toString()) || null;
+      let commissionSettled = settledByTask.get(t._id.toString()) === true;
+      if (
+        myCommission === null
+        && t.commissionEarned == null
+        && ['PENDING', 'ACTIVE', 'PENDING_APPROVAL'].includes(currentStatus)
+      ) {
+        const projected = projectUserCommission(t, clientId);
+        if (projected !== null) {
+          myCommission = projected;
+          commissionSettled = false;
+        }
       }
 
       processedTasks.push({
@@ -2635,9 +2686,12 @@ router.get('/tasks', async (req, res) => {
           });
         })(),
         // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
-        // for this task from EarningsLedger, or null when none/zero. Never
-        // contains another recipient's amount.
-        myCommission: commissionByTask.get(t._id.toString()) || null,
+        // for this task — the settled EarningsLedger net after completion, or
+        // the display-only pre-completion projection. Never contains another
+        // recipient's amount. commissionSettled === false marks the projected
+        // "Commission in process" state; true is the ledger-backed amount.
+        myCommission,
+        commissionSettled,
         // PROGRESS ICON — expose the SAME existing field/source as the single-task
         // endpoint (additive, read-only) so the Task List can render the existing
         // platform icon via the existing PresetIcon system. Custom icon URLs come

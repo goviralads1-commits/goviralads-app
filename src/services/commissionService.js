@@ -13,7 +13,9 @@ const EarningsLedger = require('../models/EarningsLedger');
 // same commissionEarned guard, same CASE 1 (multi-assignment split) / CASE 2
 // (single-assign fallback) calculation, same commissionBaseAmount precedence,
 // same per-member error isolation. It mutates task.commissionEarned /
-// task.companyEarning only; the CALLER persists the task.
+// task.companyEarning only; the CALLER persists the task. projectUserCommission
+// is a read-only, display-only preview of the same calculation used for the
+// pre-settlement "Commission in process" display.
 //
 // Historical data is never touched: the commissionEarned guard means tasks
 // that already settled — including tasks completed in the past without
@@ -80,20 +82,17 @@ const uidOf = (u) => (u && u._id ? u._id : u);
 // Settle commission for a task at the moment it crosses INTO COMPLETED.
 // Returns { settled: boolean, memberAmounts: Map<userIdString, amount> } so
 // callers can surface the authenticated user's own share in the SAME response.
-async function settleTaskCommissionOnCompletion(task) {
-  const memberAmounts = new Map();
-
-  // Guard: only settle once. Tasks completed in the past without commission
-  // keep commissionEarned === null and are NOT re-settled here (no backfill).
-  if (task.commissionEarned !== null && task.commissionEarned !== undefined) {
-    return { settled: false, memberAmounts };
-  }
-
+//
+// Pure core of the EXISTING completion-flow commission calculation
+// (computeCommissionAmounts): no writes, no task mutation. Both the
+// settlement writer below and the read-only display preview
+// (projectUserCommission) consume this ONE calculation, so preview and
+// settlement amounts can never drift.
+function computeCommissionAmounts(task) {
   const validAssignedUsers = (task.assignedUsers || []).filter(u => u.userId && u.percentage > 0);
 
   if (validAssignedUsers.length > 0) {
     // CASE 1: Multi-assignment commission split
-    console.log(`[COMMISSION-SPLIT] Settling split for task ${task._id}`);
     // Use commissionBaseAmount (INR) if set, otherwise fall back to credit-based value
     let netValue;
     if (task.commissionBaseAmount && task.commissionBaseAmount > 0) {
@@ -104,64 +103,115 @@ async function settleTaskCommissionOnCompletion(task) {
       const totalCosts = (Number(costs.expenses) || 0) + (Number(costs.tax) || 0) + (Number(costs.other) || 0);
       netValue = Math.max(0, taskValue - totalCosts);
     }
-    let totalDistributed = 0;
-
-    for (const member of validAssignedUsers) {
-      const memberAmount = Math.round((member.percentage / 100) * netValue);
-      totalDistributed += memberAmount;
-      memberAmounts.set(uidOf(member.userId).toString(), memberAmount);
-      try {
-        await createCommissionWithLedger({
-          userId: uidOf(member.userId),
-          taskId: task._id,
-          taskTitle: task.title,
-          amount: memberAmount,
-          commissionType: 'percentage',
-          commissionValue: member.percentage,
-        });
-        console.log(`[COMMISSION-SPLIT] User ${uidOf(member.userId)} earned \u20b9${memberAmount} (${member.percentage}%)`);
-      } catch (logErr) {
-        console.error(`[COMMISSION-SPLIT] Failed to create log:`, logErr.message);
-      }
-    }
-
-    task.commissionEarned = totalDistributed;
-    task.companyEarning = Math.max(0, netValue - totalDistributed);
-    console.log(`[COMMISSION-SPLIT] Company earning \u20b9${task.companyEarning}, Total distributed \u20b9${totalDistributed}`);
-    return { settled: true, memberAmounts };
+    const entries = validAssignedUsers.map(member => {
+      const amount = Math.round((member.percentage / 100) * netValue);
+      return {
+        userId: uidOf(member.userId),
+        userIdStr: uidOf(member.userId).toString(),
+        amount,
+        commissionType: 'percentage',
+        commissionValue: member.percentage,
+      };
+    });
+    const totalDistributed = entries.reduce((sum, entry) => sum + entry.amount, 0);
+    return {
+      kind: 'split',
+      entries,
+      netValue,
+      totalDistributed,
+      companyEarning: Math.max(0, netValue - totalDistributed),
+    };
   }
 
   if (task.commissionValue > 0 && task.assignedTo) {
     // CASE 2: Fallback - existing single-assign logic
-    console.log(`[COMMISSION] Settling commission for task ${task._id}`);
     // Use commissionBaseAmount (INR) if set, otherwise fall back to credit-based value
     const taskValue = (task.commissionBaseAmount && task.commissionBaseAmount > 0) ? task.commissionBaseAmount : (task.creditsUsed || task.creditCost || 0);
-    if (task.commissionType === 'percentage') {
-      task.commissionEarned = Math.round((taskValue * task.commissionValue) / 100);
-    } else {
-      task.commissionEarned = task.commissionValue;
-    }
-    memberAmounts.set(uidOf(task.assignedTo).toString(), task.commissionEarned);
-    try {
-      await createCommissionWithLedger({
+    const earned = task.commissionType === 'percentage'
+      ? Math.round((taskValue * task.commissionValue) / 100)
+      : task.commissionValue;
+    return {
+      kind: 'single',
+      entries: [{
         userId: uidOf(task.assignedTo),
-        taskId: task._id,
-        taskTitle: task.title,
-        amount: task.commissionEarned,
+        userIdStr: uidOf(task.assignedTo).toString(),
+        amount: earned,
         commissionType: task.commissionType,
         commissionValue: task.commissionValue,
-      });
-      console.log(`[COMMISSION] Earned: \u20b9${task.commissionEarned} (${task.commissionType}: ${task.commissionValue})`);
-    } catch (logErr) {
-      console.error(`[COMMISSION] Failed to create log:`, logErr.message);
-    }
-    return { settled: true, memberAmounts };
+      }],
+      totalDistributed: earned,
+    };
   }
 
-  return { settled: false, memberAmounts };
+  return null;
+}
+
+// Read-only preview of one user's applicable commission BEFORE settlement
+// ("Commission in process" display). Uses the SAME calculation core as the
+// settlement writer — it never writes CommissionLog/EarningsLedger and never
+// mutates the task. Returns the user's projected amount, or null when the
+// user has no applicable commission on this task.
+function projectUserCommission(task, userId) {
+  if (!userId) return null;
+  const calc = computeCommissionAmounts(task);
+  if (!calc) return null;
+  const userIdStr = uidOf(userId).toString();
+  const entry = calc.entries.find(e => e.userIdStr === userIdStr);
+  return entry && typeof entry.amount === 'number' && entry.amount > 0 ? entry.amount : null;
+}
+
+async function settleTaskCommissionOnCompletion(task) {
+  const memberAmounts = new Map();
+
+  // Guard: only settle once. Tasks completed in the past without commission
+  // keep commissionEarned === null and are NOT re-settled here (no backfill).
+  if (task.commissionEarned !== null && task.commissionEarned !== undefined) {
+    return { settled: false, memberAmounts };
+  }
+
+  const calc = computeCommissionAmounts(task);
+  if (!calc) {
+    return { settled: false, memberAmounts };
+  }
+
+  if (calc.kind === 'split') {
+    console.log(`[COMMISSION-SPLIT] Settling split for task ${task._id}`);
+  } else {
+    console.log(`[COMMISSION] Settling commission for task ${task._id}`);
+  }
+
+  for (const entry of calc.entries) {
+    memberAmounts.set(entry.userIdStr, entry.amount);
+    try {
+      await createCommissionWithLedger({
+        userId: entry.userId,
+        taskId: task._id,
+        taskTitle: task.title,
+        amount: entry.amount,
+        commissionType: entry.commissionType,
+        commissionValue: entry.commissionValue,
+      });
+      if (calc.kind === 'split') {
+        console.log(`[COMMISSION-SPLIT] User ${entry.userId} earned \u20b9${entry.amount} (${entry.commissionValue}%)`);
+      } else {
+        console.log(`[COMMISSION] Earned: \u20b9${entry.amount} (${entry.commissionType}: ${entry.commissionValue})`);
+      }
+    } catch (logErr) {
+      console.error(calc.kind === 'split' ? `[COMMISSION-SPLIT] Failed to create log:` : `[COMMISSION] Failed to create log:`, logErr.message);
+    }
+  }
+
+  task.commissionEarned = calc.totalDistributed;
+  if (calc.kind === 'split') {
+    task.companyEarning = calc.companyEarning;
+    console.log(`[COMMISSION-SPLIT] Company earning \u20b9${calc.companyEarning}, Total distributed \u20b9${calc.totalDistributed}`);
+  }
+
+  return { settled: true, memberAmounts };
 }
 
 module.exports = {
   createCommissionWithLedger,
   settleTaskCommissionOnCompletion,
+  projectUserCommission,
 };
