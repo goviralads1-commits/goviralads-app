@@ -2978,17 +2978,34 @@ router.get('/insights/timeline', async (req, res) => {
   try {
     const clientId = req.user.id;
     const { startDate, endDate } = req.query;
-
-    const createdAtFilter = {};
-    if (startDate) createdAtFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
-    if (endDate) createdAtFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if ((startDate && (!datePattern.test(startDate) || Number.isNaN(Date.parse(`${startDate}T00:00:00.000Z`))))
+      || (endDate && (!datePattern.test(endDate) || Number.isNaN(Date.parse(`${endDate}T23:59:59.999Z`))))) {
+      return res.status(400).json({ error: 'startDate and endDate must use YYYY-MM-DD.' });
+    }
 
     const rangeFilter = {};
-    if (startDate) rangeFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
-    if (endDate) rangeFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
+    if (startDate) rangeFilter.$gte = new Date(`${startDate}T00:00:00.000Z`);
+    if (endDate) rangeFilter.$lte = new Date(`${endDate}T23:59:59.999Z`);
+    if (rangeFilter.$gte && rangeFilter.$lte && rangeFilter.$gte > rangeFilter.$lte) {
+      return res.status(400).json({ error: 'startDate cannot be after endDate.' });
+    }
     const hasRange = Object.keys(rangeFilter).length > 0;
+    // Unlike the old raw $gte/$lte object, this nests date operators under
+    // createdAt exactly as the working Admin timeline does.
+    const createdAtFilter = hasRange ? { createdAt: rangeFilter } : {};
 
-    const taskBase = { clientId, isDeleted: { $ne: true }, isListedInPlans: { $ne: true } };
+    // CLIENT-role working users can reach this route too. Scope Tasks on the
+    // server to ownership OR either existing assignment representation; order
+    // events remain ownership-only so assignments never reveal another client's order.
+    const taskBase = { isDeleted: { $ne: true }, isListedInPlans: { $ne: true } };
+    const taskVisibility = {
+      $or: [
+        { clientId },
+        { 'assignedUsers.userId': clientId },
+        { assignedTo: clientId },
+      ],
+    };
     // A task belongs on the timeline when its START or END date falls inside the
     // range, OR when its ACTUAL completion event (a TASK_COMPLETED notification
     // createdAt inside the range) falls inside it — even if startDate/endDate are
@@ -3009,8 +3026,11 @@ router.get('/insights/timeline', async (req, res) => {
       }
     }
     const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
-      : {};
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { deadline: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
+      : null;
+    const taskFilter = taskDateScope
+      ? { $and: [taskBase, taskVisibility, taskDateScope] }
+      : { $and: [taskBase, taskVisibility] };
 
     const [orders, tasks] = await Promise.all([
       Order.find({ clientId, ...createdAtFilter })
@@ -3018,12 +3038,27 @@ router.get('/insights/timeline', async (req, res) => {
         .select('orderId totalAmount orderStatus createdAt items.planTitle')
         .limit(500)
         .lean(),
-      Task.find({ ...taskBase, ...taskDateScope })
+      Task.find(taskFilter)
         .sort({ startDate: 1 })
-        .select('title status startDate endDate creditCost')
+        .select('title status startDate endDate deadline creditCost clientId')
         .limit(500)
         .lean()
     ]);
+
+    // Client names are required only for non-owner assigned-task cards. Resolve
+    // existing Task.clientId -> User.profile.name once for the whole response.
+    const clientNameById = new Map();
+    const assignedTaskClientIds = [...new Set(tasks
+      .filter(t => t.clientId && t.clientId.toString() !== clientId)
+      .map(t => t.clientId.toString()))];
+    if (assignedTaskClientIds.length > 0) {
+      try {
+        const clients = await User.find({ _id: { $in: assignedTaskClientIds } }).select('profile.name').lean();
+        for (const client of clients) clientNameById.set(client._id.toString(), client.profile?.name || null);
+      } catch (clientNameErr) {
+        console.error('Timeline client name lookup failed:', clientNameErr.message);
+      }
+    }
 
     // ACTUAL COMPLETION TIMESTAMP — earliest TASK_COMPLETED notification per task
     // in ONE batched query (no N+1). The task ids come from the client-scoped
@@ -3056,10 +3091,16 @@ router.get('/insights/timeline', async (req, res) => {
         services: (o.items || []).map(i => i.planTitle).filter(Boolean)
       })),
       tasks: tasks.map(t => ({
+        id: t._id.toString(),
         title: t.title || 'Task',
         status: t.status,
         startDate: t.startDate || null,
         endDate: t.endDate || null,
+        deadline: t.deadline || null,
+        // Only an assigned working user receives another client's display name.
+        clientName: t.clientId && t.clientId.toString() !== clientId
+          ? (clientNameById.get(t.clientId.toString()) || null)
+          : null,
         // Actual completion event time (TASK_COMPLETED notification) or null.
         completedAt: completedAtByTask.get(t._id.toString()) || null,
         creditCost: t.creditCost || 0

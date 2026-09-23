@@ -71,6 +71,32 @@ async function buildCompletedAtMap(tasks) {
   return completedAtByTask;
 }
 
+// Shared additive task mapper for existing admin timeline responses. One client
+// lookup per response prevents calendar rendering from causing N+1 queries.
+async function buildTimelineTaskPayload(tasks, completedAtByTask) {
+  const clientIds = [...new Set((tasks || []).filter(t => t.clientId).map(t => t.clientId.toString()))];
+  const clientNameById = new Map();
+  if (clientIds.length > 0) {
+    try {
+      const clients = await User.find({ _id: { $in: clientIds } }).select('profile.name').lean();
+      for (const client of clients) clientNameById.set(client._id.toString(), client.profile?.name || null);
+    } catch (clientNameErr) {
+      console.error('Timeline client name lookup failed:', clientNameErr.message);
+    }
+  }
+  return (tasks || []).map(t => ({
+    id: t._id.toString(),
+    title: t.title || 'Task',
+    status: t.status,
+    startDate: t.startDate || null,
+    endDate: t.endDate || null,
+    deadline: t.deadline || null,
+    clientName: t.clientId ? (clientNameById.get(t.clientId.toString()) || null) : null,
+    completedAt: completedAtByTask.get(t._id.toString()) || null,
+    creditCost: t.creditCost || 0,
+  }));
+}
+
 // Resolve and authorize the target client. Returns { clientId } when allowed,
 // or a { status, error } object the handler must return to the caller.
 async function resolveAuthorizedClient(req) {
@@ -369,7 +395,7 @@ router.get('/client/timeline', async (req, res) => {
         }).distinct('relatedEntity.entityId')
       : [];
     const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { deadline: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
       : {};
 
     const [orders, tasks] = await Promise.all([
@@ -379,7 +405,7 @@ router.get('/client/timeline', async (req, res) => {
         .lean(),
       Task.find({ ...taskBase, ...taskDateScope })
         .sort({ startDate: 1 })
-        .select('title status startDate endDate creditCost')
+        .select('title status startDate endDate deadline creditCost clientId')
         .limit(500)
         .lean()
     ]);
@@ -387,6 +413,7 @@ router.get('/client/timeline', async (req, res) => {
     // One batched lookup for the whole page — the task ids come from the
     // client-scoped query above, so no other client's notifications are exposed.
     const completedAtByTask = await buildCompletedAtMap(tasks);
+    const timelineTasks = await buildTimelineTaskPayload(tasks, completedAtByTask);
 
     res.json({
       scope: { clientId: clientId.toString() },
@@ -398,15 +425,7 @@ router.get('/client/timeline', async (req, res) => {
         createdAt: o.createdAt,
         services: (o.items || []).map(i => i.planTitle).filter(Boolean)
       })),
-      tasks: tasks.map(t => ({
-        title: t.title || 'Task',
-        status: t.status,
-        startDate: t.startDate || null,
-        endDate: t.endDate || null,
-        // Actual completion event time (TASK_COMPLETED notification) or null.
-        completedAt: completedAtByTask.get(t._id.toString()) || null,
-        creditCost: t.creditCost || 0
-      }))
+      tasks: timelineTasks
     });
   } catch (err) {
     console.error('Client timeline error:', err);
@@ -455,7 +474,7 @@ router.get('/timeline', async (req, res) => {
         }).distinct('relatedEntity.entityId')
       : [];
     const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
+      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { deadline: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
       : {};
 
     const [orders, tasks] = await Promise.all([
@@ -466,7 +485,7 @@ router.get('/timeline', async (req, res) => {
         .lean(),
       Task.find({ ...taskBase, ...taskDateScope })
         .sort({ startDate: 1 })
-        .select('title status startDate endDate creditCost')
+        .select('title status startDate endDate deadline creditCost clientId')
         .limit(1000)
         .lean()
     ]);
@@ -474,6 +493,7 @@ router.get('/timeline', async (req, res) => {
     // One batched lookup for the whole page — the task ids already obey the
     // caller's client-visibility scope computed above.
     const completedAtByTask = await buildCompletedAtMap(tasks);
+    const timelineTasks = await buildTimelineTaskPayload(tasks, completedAtByTask);
 
     res.json({
       scope: { allClients: true },
@@ -485,15 +505,7 @@ router.get('/timeline', async (req, res) => {
         createdAt: o.createdAt,
         services: (o.items || []).map(i => i.planTitle).filter(Boolean)
       })),
-      tasks: tasks.map(t => ({
-        title: t.title || 'Task',
-        status: t.status,
-        startDate: t.startDate || null,
-        endDate: t.endDate || null,
-        // Actual completion event time (TASK_COMPLETED notification) or null.
-        completedAt: completedAtByTask.get(t._id.toString()) || null,
-        creditCost: t.creditCost || 0
-      }))
+      tasks: timelineTasks
     });
   } catch (err) {
     console.error('Office timeline error:', err);

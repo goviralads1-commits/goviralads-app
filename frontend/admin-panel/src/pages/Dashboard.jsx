@@ -4,6 +4,7 @@ import api from '../services/api';
 import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
 import { useAuth } from '../App';
+import WorkflowCalendar from '../components/WorkflowCalendar';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -44,6 +45,7 @@ const Dashboard = () => {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState(false);
   const [timelineDate, setTimelineDate] = useState(null); // selected day key (YYYY-MM-DD, UTC)
+  const [timelineView, setTimelineView] = useState('timeline');
   const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -598,7 +600,7 @@ const Dashboard = () => {
     });
     (timeline.tasks || []).forEach((t) => {
       const startDay = utcDayKey(t.startDate);
-      const endDay = utcDayKey(t.endDate);
+      const endDay = utcDayKey(t.endDate || t.deadline);
       const lane = TIMELINE_STATUS_LANE[t.status]; // CANCELLED/LISTED plot no bar
       if (startDay && inTimelineRange(startDay)) {
         (timelineEvents[startDay] = timelineEvents[startDay] || []).push({ kind: 'start', task: t });
@@ -775,6 +777,9 @@ const Dashboard = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
                   <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Timeline</h4>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'inline-flex', gap: '3px', padding: '3px', borderRadius: '8px', background: '#f1f5f9' }}>
+                      {['timeline', 'calendar'].map(view => <button key={view} type="button" onClick={() => setTimelineView(view)} style={{ padding: '5px 9px', border: 'none', borderRadius: '6px', background: timelineView === view ? '#fff' : 'transparent', color: timelineView === view ? '#4f46e5' : '#64748b', boxShadow: timelineView === view ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '10.5px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{view}</button>)}
+                    </div>
                     {[{ color: '#f97316', label: 'Pending' }, { color: '#eab308', label: 'Scheduled' }, { color: '#3b82f6', label: 'Active' }, { color: '#22c55e', label: 'Completed' }].map(l => (
                       <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
                         <span style={{ width: '7px', height: '10px', borderRadius: '3px', background: l.color }} />{l.label}
@@ -797,6 +802,8 @@ const Dashboard = () => {
                   </div>
                 ) : !dateFilter.startDate || !dateFilter.endDate ? (
                   <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Select a date range (Today, 7 Days, Month or Custom) to see {selectedClient ? selectedClient.identifier : 'this client'}’s date-wise workflow.</p>
+                ) : timelineView === 'calendar' ? (
+                  <WorkflowCalendar tasks={timeline?.tasks || []} rangeStart={dateFilter.startDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
                 ) : (
                   <>
                     {/* In-range event counts — timeline-specific; the status/financial metric
@@ -918,7 +925,7 @@ const Dashboard = () => {
                                     <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
                                       {ev.kind === 'start' ? 'Started' : ev.kind === 'completed' ? `Completed ${fmtTimelineDate(ev.task.completedAt)}` : 'End date'} · Status: {TIMELINE_STATUS_META[ev.task.status]?.label || ev.task.status} · {(ev.task.creditCost || 0).toLocaleString('en-IN')} credits
                                     </p>
-                                    <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Start: {fmtTimelineDate(ev.task.startDate)} → End: {fmtTimelineDate(ev.task.endDate)}</p>
+                                    <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Start: {fmtTimelineDate(ev.task.startDate)} → End: {fmtTimelineDate(ev.task.endDate || ev.task.deadline)}</p>
                                   </div>
                                 </div>
                               ))}

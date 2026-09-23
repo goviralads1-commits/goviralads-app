@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { getCurrentUser } from '../services/authService';
+import WorkflowCalendar from './WorkflowCalendar';
 
 // CLIENT WORKFLOW TIMELINE — the same rising-bar insight graph as the Admin Office
 // Business Analytics, scoped strictly to the authenticated client (the server ignores
@@ -64,19 +65,21 @@ const WorkflowTimeline = () => {
   const isClientSession = () => getCurrentUser()?.role === 'CLIENT';
 
   const [rangeType, setRangeType] = useState('month');
+  const [view, setView] = useState('timeline');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [appliedCustomRange, setAppliedCustomRange] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   // Sequence protection: a slow response can never overwrite the UI after the
   // range was changed again (same pattern as the admin timeline).
   const reqRef = useRef(0);
 
-  const range = buildRange(rangeType, customStart, customEnd);
-  const hasRange = rangeType !== 'custom' || (customStart && customEnd);
+  const range = buildRange(rangeType, appliedCustomRange?.startDate, appliedCustomRange?.endDate);
+  const hasRange = rangeType !== 'custom' || Boolean(appliedCustomRange);
 
   const load = useCallback(async () => {
     const reqId = ++reqRef.current;
@@ -90,7 +93,7 @@ const WorkflowTimeline = () => {
       return;
     }
     setLoading(true);
-    setError(false);
+    setError('');
     try {
       const res = await api.get('/client/insights/timeline', { params: { startDate: range.startDate, endDate: range.endDate } });
       if (reqId === reqRef.current) {
@@ -100,7 +103,7 @@ const WorkflowTimeline = () => {
     } catch (err) {
       if (reqId === reqRef.current) {
         setTimeline(null);
-        setError(true);
+        setError(err.response?.data?.error || 'Timeline failed to load.');
       }
     } finally {
       if (reqId === reqRef.current) setLoading(false);
@@ -132,7 +135,7 @@ const WorkflowTimeline = () => {
     });
     (timeline.tasks || []).forEach((t) => {
       const startDay = utcDayKey(t.startDate);
-      const endDay = utcDayKey(t.endDate);
+      const endDay = utcDayKey(t.endDate || t.deadline);
       const lane = STATUS_LANE[t.status]; // CANCELLED tasks plot no bar
       if (startDay && inRange(startDay)) {
         (timelineEvents[startDay] = timelineEvents[startDay] || []).push({ kind: 'start', task: t });
@@ -184,7 +187,11 @@ const WorkflowTimeline = () => {
           {RANGE_OPTIONS.map(o => (
             <button
               key={o.value}
-              onClick={() => { setRangeType(o.value); setShowPicker(o.value === 'custom'); }}
+              onClick={() => {
+                setRangeType(o.value);
+                setShowPicker(o.value === 'custom');
+                if (o.value === 'custom') setAppliedCustomRange(null);
+              }}
               style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', cursor: 'pointer', border: rangeType === o.value ? '1px solid #6366f1' : '1px solid #e2e8f0', background: rangeType === o.value ? '#eef2ff' : '#fff', color: rangeType === o.value ? '#6366f1' : '#64748b' }}
             >
               {o.label}
@@ -193,14 +200,27 @@ const WorkflowTimeline = () => {
         </div>
         {showPicker && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
-            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12.5px' }} />
-            <span style={{ fontSize: '12.5px', color: '#94a3b8' }}>→</span>
-            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12.5px' }} />
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>
+              From
+              <input type="date" value={customStart} max={customEnd || undefined} onChange={e => setCustomStart(e.target.value)} style={{ display: 'block', marginTop: '4px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12.5px' }} />
+            </label>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>
+              To
+              <input type="date" value={customEnd} min={customStart || undefined} onChange={e => setCustomEnd(e.target.value)} style={{ display: 'block', marginTop: '4px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12.5px' }} />
+            </label>
+            <button type="button" disabled={!customStart || !customEnd} onClick={() => { setAppliedCustomRange({ startDate: customStart, endDate: customEnd }); setShowPicker(false); }} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #6366f1', background: customStart && customEnd ? '#6366f1' : '#e2e8f0', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: customStart && customEnd ? 'pointer' : 'not-allowed' }}>Apply</button>
+            <button type="button" onClick={() => { setCustomStart(''); setCustomEnd(''); setAppliedCustomRange(null); setRangeType('month'); setShowPicker(false); }} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>Clear</button>
           </div>
         )}
 
+        <div style={{ display: 'inline-flex', gap: '4px', padding: '3px', marginBottom: '12px', borderRadius: '9px', background: '#f1f5f9' }}>
+          {['timeline', 'calendar'].map(option => (
+            <button key={option} type="button" onClick={() => setView(option)} style={{ padding: '5px 10px', border: 'none', borderRadius: '7px', background: view === option ? '#fff' : 'transparent', color: view === option ? '#4f46e5' : '#64748b', boxShadow: view === option ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '11px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{option}</button>
+          ))}
+        </div>
+
         {/* Legend */}
-        <div style={{ display: 'flex', gap: '8px 10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
+        {view === 'timeline' && <div style={{ display: 'flex', gap: '8px 10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
           {[{ color: '#f97316', label: 'Pending' }, { color: '#eab308', label: 'Scheduled' }, { color: '#3b82f6', label: 'Active' }, { color: '#22c55e', label: 'Completed' }].map(l => (
             <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
               <span style={{ width: '7px', height: '10px', borderRadius: '3px', background: l.color }} />{l.label}
@@ -212,17 +232,19 @@ const WorkflowTimeline = () => {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
             <span style={{ width: '7px', height: '10px', borderRadius: '3px 3px 0 0', background: ORDER_COLOR }} />Order
           </span>
-        </div>
+        </div>}
 
         {loading ? (
           <div style={{ height: '120px', backgroundColor: '#f1f5f9', borderRadius: '10px', animation: 'gvaClientTlPulse 1.5s infinite' }} />
         ) : error ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <p style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>Timeline failed to load.</p>
+            <p style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{error}</p>
             <button onClick={load} style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b' }}>↻ Retry</button>
           </div>
         ) : !hasRange ? (
           <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Pick a start and end date to see your date-wise workflow.</p>
+        ) : view === 'calendar' ? (
+          <WorkflowCalendar tasks={timeline?.tasks || []} rangeStart={range.startDate} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
         ) : (
           <>
             <p style={{ fontSize: '11px', fontWeight: '500', color: '#94a3b8', margin: '0 0 12px 0' }}>
@@ -319,7 +341,7 @@ const WorkflowTimeline = () => {
                             <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
                               {ev.kind === 'start' ? 'Started' : ev.kind === 'completed' ? `Completed ${fmtDate(ev.task.completedAt)}` : 'End date'} · Status: {STATUS_META[ev.task.status]?.label || ev.task.status} · {(ev.task.creditCost || 0).toLocaleString('en-IN')} credits
                             </p>
-                            <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Start: {fmtDate(ev.task.startDate)} → End: {fmtDate(ev.task.endDate)}</p>
+                            <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Start: {fmtDate(ev.task.startDate)} → End: {fmtDate(ev.task.endDate || ev.task.deadline)}</p>
                           </div>
                         </div>
                       ))}
