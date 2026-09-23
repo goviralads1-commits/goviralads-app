@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { normalizeWorkflowTask } from './workflowTimelineTask';
 
 const STATUS_COLOR = {
   PENDING_APPROVAL: '#f97316',
@@ -34,9 +35,10 @@ const WorkflowCalendar = ({ tasks = [], rangeStart, selectedDate, onSelectDate }
       return dayKey(new Date(Date.UTC(focus.getUTCFullYear(), focus.getUTCMonth(), index - firstWeekday + 1)));
     });
     const events = new Map();
-    tasks.forEach(task => {
-      const start = toDate(task.startDate || task.endDate || task.deadline);
-      const due = toDate(task.endDate || task.deadline || task.startDate);
+    tasks.forEach(rawTask => {
+      const task = normalizeWorkflowTask(rawTask);
+      const start = toDate(task.calendarStartDate);
+      const due = toDate(task.calendarEndDate);
       if (!start || !due) return;
       const first = start <= due ? start : due;
       const last = start <= due ? due : start;

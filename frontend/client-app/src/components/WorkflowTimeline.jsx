@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { getCurrentUser } from '../services/authService';
 import WorkflowCalendar from './WorkflowCalendar';
+import { normalizeWorkflowTask, utcDayKey } from './workflowTimelineTask';
 
 // CLIENT WORKFLOW TIMELINE — the same rising-bar insight graph as the Admin Office
 // Business Analytics, scoped strictly to the authenticated client (the server ignores
@@ -19,7 +20,6 @@ const STAGE_META = {
   ACTIVE: { color: '#3b82f6', label: 'Active / In Progress', h: 86 },
   COMPLETED: { color: '#22c55e', label: 'Completed', h: 116 },
 };
-const STATUS_LANE = { PENDING_APPROVAL: 'PENDING', PENDING: 'SCHEDULED', ACTIVE: 'ACTIVE', IN_PROGRESS: 'ACTIVE', COMPLETED: 'COMPLETED' };
 const STATUS_META = {
   COMPLETED: { color: '#22c55e', label: 'Completed' },
   ACTIVE: { color: '#3b82f6', label: 'Active / In Progress' },
@@ -29,8 +29,6 @@ const STATUS_META = {
   CANCELLED: { color: '#94a3b8', label: 'Cancelled' },
 };
 const ORDER_COLOR = '#8b5cf6';
-// UTC day keys — the same convention as the server-side date boundaries.
-const utcDayKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—');
 const toISODate = (d) => d.toISOString().slice(0, 10);
 
@@ -133,27 +131,24 @@ const WorkflowTimeline = () => {
       (timelineGraph[day] = timelineGraph[day] || []).push({ kind: 'order' });
       summary.orders += 1;
     });
-    (timeline.tasks || []).forEach((t) => {
-      const startDay = utcDayKey(t.startDate);
-      const endDay = utcDayKey(t.endDate || t.deadline);
-      const lane = STATUS_LANE[t.status]; // CANCELLED tasks plot no bar
-      if (startDay && inRange(startDay)) {
-        (timelineEvents[startDay] = timelineEvents[startDay] || []).push({ kind: 'start', task: t });
-        if (lane) (timelineGraph[startDay] = timelineGraph[startDay] || []).push({ kind: 'start', lane });
+    (timeline.tasks || []).forEach((rawTask) => {
+      const task = normalizeWorkflowTask(rawTask);
+      if (task.startDay && inRange(task.startDay)) {
+        (timelineEvents[task.startDay] = timelineEvents[task.startDay] || []).push({ kind: 'start', task });
+        (timelineGraph[task.startDay] = timelineGraph[task.startDay] || []).push({ kind: 'start', lane: task.lane });
         summary.starts += 1;
       }
-      if (endDay && inRange(endDay)) {
-        (timelineEvents[endDay] = timelineEvents[endDay] || []).push({ kind: 'end', task: t });
-        if (lane) (timelineGraph[endDay] = timelineGraph[endDay] || []).push({ kind: 'end', lane });
+      if (task.endDay && inRange(task.endDay)) {
+        (timelineEvents[task.endDay] = timelineEvents[task.endDay] || []).push({ kind: 'end', task });
+        (timelineGraph[task.endDay] = timelineGraph[task.endDay] || []).push({ kind: 'end', lane: task.lane });
         summary.ends += 1;
       }
       // ACTUAL COMPLETION — plotted only when the server returned a real completedAt
       // (TASK_COMPLETED notification time). Never falls back to endDate/updatedAt:
       // no completedAt => no completion event.
-      const completedDay = utcDayKey(t.completedAt);
-      if (completedDay && inRange(completedDay)) {
-        (timelineEvents[completedDay] = timelineEvents[completedDay] || []).push({ kind: 'completed', task: t });
-        (timelineGraph[completedDay] = timelineGraph[completedDay] || []).push({ kind: 'completed' });
+      if (task.completedDay && inRange(task.completedDay)) {
+        (timelineEvents[task.completedDay] = timelineEvents[task.completedDay] || []).push({ kind: 'completed', task });
+        (timelineGraph[task.completedDay] = timelineGraph[task.completedDay] || []).push({ kind: 'completed' });
         summary.completed += 1;
       }
     });
