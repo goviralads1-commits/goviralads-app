@@ -581,14 +581,19 @@ router.get('/tasks/:taskId', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // Ensure the task belongs to the current client OR user is assigned operational user
+    // Ensure the task belongs to the current client OR user is assigned through
+    // either existing assignment field. Commission calculation already supports
+    // both assignedUsers (split) and assignedTo (single-assignee fallback), so
+    // the recipient must reach the same existing Task Detail UX in both cases.
     const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
-    const isAssignedUser = (task.assignedUsers || []).some(u => {
+    const isAssignedViaUsers = (task.assignedUsers || []).some(u => {
       if (!u.userId) return false;
       // Handle both populated and non-populated userId
       const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
       return userIdStr === clientId;
     });
+    const isAssignedViaAssignedTo = task.assignedTo && task.assignedTo.toString() === clientId;
+    const isAssignedUser = isAssignedViaUsers || isAssignedViaAssignedTo;
     
     if (!isTaskOwner && !isAssignedUser) {
       return res.status(403).json({ error: 'Access denied' });
@@ -978,13 +983,16 @@ router.patch('/tasks/:taskId/milestone', async (req, res) => {
       return res.status(404).json({ error: 'Task not found' });
     }
 
-    // Same ownership/assignment resolution as GET /tasks/:taskId
+    // Same ownership/assignment resolution as GET /tasks/:taskId. Both are
+    // existing task assignment fields; ownership remains an unconditional deny.
     const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
-    const isAssignedUser = (task.assignedUsers || []).some(u => {
+    const isAssignedViaUsers = (task.assignedUsers || []).some(u => {
       if (!u.userId) return false;
       const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
       return userIdStr === clientId;
     });
+    const isAssignedViaAssignedTo = task.assignedTo && task.assignedTo.toString() === clientId;
+    const isAssignedUser = isAssignedViaUsers || isAssignedViaAssignedTo;
 
     // Buyers/task owners NEVER get milestone control — regardless of the flag.
     if (isTaskOwner || !isAssignedUser) {
@@ -2426,7 +2434,8 @@ router.get('/tasks', async (req, res) => {
       isListedInPlans: { $ne: true },
       $or: [
         { clientId: clientId },  // Task owner
-        { 'assignedUsers.userId': clientId }  // Assigned operational user
+        { 'assignedUsers.userId': clientId }, // Split-assignment user
+        { assignedTo: clientId } // Existing single-assignment fallback user
       ]
     };
     console.log('Filter:', JSON.stringify(filter));
@@ -2675,15 +2684,18 @@ router.get('/tasks', async (req, res) => {
         offerPrice: t.offerPrice,
         originalPrice: t.originalPrice,
         countdownEndDate: t.countdownEndDate,
-        // Commission-only indicator: true when user is in assignedUsers but NOT the task owner
+        // Commission-only indicator: true for either existing assignment field,
+        // but never for the task owner/buyer.
         isAssignedUser: (() => {
           const isOwner = t.clientId && t.clientId.toString() === clientId;
           if (isOwner) return false;
-          return (t.assignedUsers || []).some(u => {
+          const isAssignedViaUsers = (t.assignedUsers || []).some(u => {
             if (!u.userId) return false;
             const uid = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
             return uid === clientId;
           });
+          const isAssignedViaAssignedTo = t.assignedTo && t.assignedTo.toString() === clientId;
+          return isAssignedViaUsers || isAssignedViaAssignedTo;
         })(),
         // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
         // for this task — the settled EarningsLedger net after completion, or
