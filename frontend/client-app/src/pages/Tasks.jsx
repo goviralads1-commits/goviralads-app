@@ -26,6 +26,8 @@ const Tasks = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [clientNameQuery, setClientNameQuery] = useState('');
+  const [selectedClientIds, setSelectedClientIds] = useState([]);
+  const [clientFilterOpen, setClientFilterOpen] = useState(false);
   // Compact task-list milestone control: uses the existing PATCH endpoint and
   // the existing server-computed canEditMilestone flag; no per-card fetches.
   const [changingMilestoneTaskId, setChangingMilestoneTaskId] = useState(null);
@@ -125,11 +127,34 @@ const Tasks = () => {
         break;
     }
 
+    if (selectedClientIds.length > 0) {
+      const selectedIds = new Set(selectedClientIds);
+      filtered = filtered.filter(t => t.isAssignedUser && t.clientId && selectedIds.has(t.clientId));
+    }
+
     const normalizedClientName = clientNameQuery.trim().toLocaleLowerCase();
     return normalizedClientName
       ? filtered.filter(t => (t.clientName || '').toLocaleLowerCase().includes(normalizedClientName))
       : filtered;
-  }, [tasks, activeFilter, fromDate, toDate, clientNameQuery]);
+  }, [tasks, activeFilter, fromDate, toDate, clientNameQuery, selectedClientIds]);
+
+  const authorizedClients = useMemo(() => {
+    const clientsById = new Map();
+    tasks.forEach((task) => {
+      if (task.isAssignedUser && task.clientId && !clientsById.has(task.clientId)) {
+        clientsById.set(task.clientId, { id: task.clientId, name: task.clientName || 'Client' });
+      }
+    });
+    return [...clientsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks]);
+
+  const toggleClientFilter = (clientId) => {
+    setSelectedClientIds((current) => (
+      current.includes(clientId)
+        ? current.filter((id) => id !== clientId)
+        : [...current, clientId]
+    ));
+  };
 
   const totalFiltered = filteredTasks.length;
   const hasClientNames = tasks.some(t => t.isAssignedUser && t.clientName);
@@ -307,7 +332,7 @@ const Tasks = () => {
             My Tasks
           </h1>
           <p style={{ fontSize: '14px', color: '#999', margin: '8px 0 0 0' }}>
-            {totalFiltered} task{totalFiltered !== 1 ? 's' : ''}{activeFilter !== 'all' ? ` (${tasks.length} total)` : ''}
+            {totalFiltered} task{totalFiltered !== 1 ? 's' : ''}{activeFilter !== 'all' || selectedClientIds.length > 0 ? ` (${tasks.length} total)` : ''}
           </p>
         </div>
 
@@ -332,6 +357,33 @@ const Tasks = () => {
               </option>
             ))}
           </select>
+
+          {authorizedClients.length > 0 && (
+            <div style={{ position: 'relative', display: 'inline-block', marginTop: '10px', marginLeft: '10px', verticalAlign: 'top' }}>
+              <button
+                type="button"
+                onClick={() => setClientFilterOpen((open) => !open)}
+                aria-expanded={clientFilterOpen}
+                style={{ minHeight: '42px', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '10px', background: selectedClientIds.length ? '#eff6ff' : '#fff', color: '#1e3a8a', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                Client{selectedClientIds.length ? ` (${selectedClientIds.length})` : ''}
+              </button>
+              {clientFilterOpen && (
+                <div style={{ position: 'absolute', zIndex: 20, top: '48px', left: 0, width: 'min(300px, calc(100vw - 56px))', maxHeight: '280px', overflowY: 'auto', padding: '10px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', boxShadow: '0 12px 24px rgba(15,23,42,0.16)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#334155' }}>Authorized clients</span>
+                    {selectedClientIds.length > 0 && <button type="button" onClick={() => setSelectedClientIds([])} style={{ padding: 0, border: 'none', background: 'transparent', color: '#2563eb', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>Clear</button>}
+                  </div>
+                  {authorizedClients.map((client) => (
+                    <label key={client.id} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 4px', color: '#1e293b', fontSize: '14px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={selectedClientIds.includes(client.id)} onChange={() => toggleClientFilter(client.id)} />
+                      <span>{client.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {activeFilter === 'customDate' && (
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px', maxWidth: '520px' }}>

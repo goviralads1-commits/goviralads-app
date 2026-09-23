@@ -2738,6 +2738,9 @@ router.get('/tasks', async (req, res) => {
         clientName: isAssignedUser && t.clientId
           ? (clientNameById.get(t.clientId.toString()) || null)
           : null,
+        // Expose the owner ID only for an already-authorized assigned task so
+        // the Task List can filter its already-loaded task data locally.
+        clientId: isAssignedUser && t.clientId ? t.clientId.toString() : null,
         // Server-authoritative list eligibility for the existing milestone
         // PATCH endpoint. No extra request is needed per card.
         canEditMilestone: (() => {
@@ -4947,10 +4950,55 @@ router.post('/enable-notifications-reminder/:reminderId/resolve', async (req, re
 router.get('/my-commissions', async (req, res) => {
   try {
     const clientId = req.user.id;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, clientId: requestedClientId, includeClients } = req.query;
+    const hasClientFilter = typeof requestedClientId === 'string' && requestedClientId.trim() !== '';
+
+    if (hasClientFilter && !mongoose.Types.ObjectId.isValid(requestedClientId)) {
+      return res.status(400).json({ error: 'Invalid client selection' });
+    }
+
+    // Commission users can only select clients whose tasks explicitly assign them.
+    // Both assignment forms remain supported; task ownership alone never grants
+    // access to another client's commission history.
+    const assignedTaskFilter = {
+      isListedInPlans: { $ne: true },
+      clientId: { $ne: null },
+      $or: [
+        { 'assignedUsers.userId': clientId },
+        { assignedTo: clientId },
+      ],
+    };
+
+    let authorizedClients = [];
+    let selectedTaskIds = null;
+    if (hasClientFilter || includeClients === 'true') {
+      const authorizedClientIds = await Task.distinct('clientId', assignedTaskFilter);
+      const authorizedClientIdSet = new Set(authorizedClientIds.map((id) => id.toString()));
+
+      if (hasClientFilter) {
+        if (!authorizedClientIdSet.has(requestedClientId)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+        selectedTaskIds = await Task.distinct('_id', {
+          ...assignedTaskFilter,
+          clientId: requestedClientId,
+        });
+      }
+
+      if (includeClients === 'true' && authorizedClientIds.length > 0) {
+        const clients = await User.find({ _id: { $in: authorizedClientIds } })
+          .select('profile.name')
+          .lean();
+        authorizedClients = clients.map((client) => ({
+          id: client._id.toString(),
+          name: client.profile?.name || 'Client',
+        })).sort((a, b) => a.name.localeCompare(b.name));
+      }
+    }
 
     // Build filter: always scoped to current user only
     const filter = { userId: clientId };
+    if (selectedTaskIds !== null) filter.taskId = { $in: selectedTaskIds };
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
@@ -4966,9 +5014,18 @@ router.get('/my-commissions', async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(500);
 
-    // Get ledger-based balance (single source of truth)
+    // Preserve the existing global balance calculation without a client filter.
+    // A selected client is task-scoped, so only task-linked commission ledger
+    // entries can be attributed safely; payouts and admin adjustments remain global.
+    const ledgerMatch = hasClientFilter
+      ? {
+          userId: new mongoose.Types.ObjectId(clientId),
+          sourceTaskId: { $in: selectedTaskIds },
+          type: { $in: ['COMMISSION_EARNED', 'COMMISSION_REVERSED'] },
+        }
+      : { userId: new mongoose.Types.ObjectId(clientId) };
     const [ledgerAgg] = await EarningsLedger.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(clientId) } },
+      { $match: ledgerMatch },
       { $group: { _id: null, balance: { $sum: '$amount' }, entries: { $sum: 1 } } }
     ]);
 
@@ -4988,6 +5045,8 @@ router.get('/my-commissions', async (req, res) => {
       })),
       overallTotal,
       overallTaskCount,
+      selectedClientId: hasClientFilter ? requestedClientId : null,
+      ...(includeClients === 'true' ? { authorizedClients } : {}),
     });
   } catch (err) {
     console.error('[CLIENT-COMMISSIONS] Fetch error:', err.message);

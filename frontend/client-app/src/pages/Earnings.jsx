@@ -7,6 +7,8 @@ const Earnings = () => {
   const [logs, setLogs] = useState([]);
   const [overallTotal, setOverallTotal] = useState(0);
   const [overallTaskCount, setOverallTaskCount] = useState(0);
+  const [authorizedClients, setAuthorizedClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -17,16 +19,21 @@ const Earnings = () => {
       const params = {};
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+      if (selectedClientId) params.clientId = selectedClientId;
+      // The endpoint batch-loads only clients authorized through an existing
+      // assignment, avoiding per-client or per-task requests.
+      params.includeClients = 'true';
       const res = await api.get('/client/my-commissions', { params });
       setLogs(res.data?.logs || []);
       setOverallTotal(res.data?.overallTotal || 0);
       setOverallTaskCount(res.data?.overallTaskCount || 0);
+      setAuthorizedClients(res.data?.authorizedClients || []);
     } catch (err) {
       console.error('Failed to fetch earnings:', err);
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedClientId]);
 
   useEffect(() => {
     fetchEarnings();
@@ -45,7 +52,7 @@ const Earnings = () => {
         <div style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', borderRadius: '16px', padding: '20px', border: '1px solid #bbf7d0', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 4px 0', fontWeight: '600' }}>Total Earned</p>
+              <p style={{ fontSize: '13px', color: '#15803d', margin: '0 0 4px 0', fontWeight: '600' }}>{selectedClientId ? 'Client Task Commission' : 'Total Earned'}</p>
               <p style={{ fontSize: '28px', fontWeight: '800', color: '#166534', margin: 0 }}>{overallTotal.toLocaleString()} credits</p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -55,8 +62,22 @@ const Earnings = () => {
           </div>
         </div>
 
-        {/* Date Filters */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'flex-end' }}>
+        {/* Existing date filters remain; the optional client filter composes with them. */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          {authorizedClients.length > 0 && (
+            <div style={{ flex: '1 1 180px' }}>
+              <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>Client</label>
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                aria-label="Filter earnings by authorized client"
+                style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box', backgroundColor: '#fff' }}
+              >
+                <option value="">All assigned clients</option>
+                {authorizedClients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </div>
+          )}
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', display: 'block', marginBottom: '4px' }}>From</label>
             <input
