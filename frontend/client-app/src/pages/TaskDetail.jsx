@@ -1142,6 +1142,13 @@ const TaskDetail = () => {
             {task.title}
           </h1>
 
+          {/* Assigned working users identify the existing Task.clientId owner. */}
+          {task.clientName && (
+            <div style={{ marginTop: '8px', fontSize: '13px', color: '#334155', fontWeight: '700', overflowWrap: 'anywhere' }}>
+              Client: {task.clientName}
+            </div>
+          )}
+
           {/* Meta row: Order ref + dates (existing fields only) */}
           {(task.orderCode || task.startDate || task.createdAt) && (
             <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11px', color: '#94a3b8', fontWeight: '500' }}>

@@ -22,7 +22,10 @@ const Tasks = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all'); // all | last7 | thisMonth | pending | completed
+  const [activeFilter, setActiveFilter] = useState('all'); // all | last7 | thisMonth | pending | completed | customDate
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [clientNameQuery, setClientNameQuery] = useState('');
   // Compact task-list milestone control: uses the existing PATCH endpoint and
   // the existing server-computed canEditMilestone flag; no per-card fetches.
   const [changingMilestoneTaskId, setChangingMilestoneTaskId] = useState(null);
@@ -82,31 +85,54 @@ const Tasks = () => {
     { key: 'thisMonth', label: 'This Month' },
     { key: 'pending', label: 'Pending' },
     { key: 'completed', label: 'Completed' },
+    { key: 'customDate', label: 'Custom Date', showCount: false },
   ];
 
-  // Filtered tasks based on active filter
+  // Existing list filtering stays client-side against the one task response.
+  // Custom Date uses the same createdAt source as Last 7 Days and This Month.
   const filteredTasks = useMemo(() => {
     const now = new Date();
+    let filtered = tasks;
+
     switch (activeFilter) {
       case 'last7': {
         const sevenDaysAgo = new Date(now);
         sevenDaysAgo.setDate(now.getDate() - 7);
-        return tasks.filter(t => new Date(t.createdAt) >= sevenDaysAgo);
+        filtered = filtered.filter(t => new Date(t.createdAt) >= sevenDaysAgo);
+        break;
       }
       case 'thisMonth': {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        return tasks.filter(t => new Date(t.createdAt) >= monthStart);
+        filtered = filtered.filter(t => new Date(t.createdAt) >= monthStart);
+        break;
       }
       case 'pending':
-        return tasks.filter(t => t.status === 'PENDING' || t.status === 'PENDING_APPROVAL');
+        filtered = filtered.filter(t => t.status === 'PENDING' || t.status === 'PENDING_APPROVAL');
+        break;
       case 'completed':
-        return tasks.filter(t => t.status === 'COMPLETED');
+        filtered = filtered.filter(t => t.status === 'COMPLETED');
+        break;
+      case 'customDate': {
+        const start = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
+        const end = toDate ? new Date(`${toDate}T23:59:59.999`) : null;
+        filtered = filtered.filter(t => {
+          const createdAt = new Date(t.createdAt);
+          return (!start || createdAt >= start) && (!end || createdAt <= end);
+        });
+        break;
+      }
       default:
-        return tasks;
+        break;
     }
-  }, [tasks, activeFilter]);
+
+    const normalizedClientName = clientNameQuery.trim().toLocaleLowerCase();
+    return normalizedClientName
+      ? filtered.filter(t => (t.clientName || '').toLocaleLowerCase().includes(normalizedClientName))
+      : filtered;
+  }, [tasks, activeFilter, fromDate, toDate, clientNameQuery]);
 
   const totalFiltered = filteredTasks.length;
+  const hasClientNames = tasks.some(t => t.isAssignedUser && t.clientName);
 
   // Memoized filter counts — avoid recalculating on every render
   const filterCounts = useMemo(() => {
@@ -302,10 +328,49 @@ const Tasks = () => {
           >
             {filters.map(f => (
               <option key={f.key} value={f.key}>
-                {f.label} ({filterCounts[f.key] ?? 0})
+                {f.showCount === false ? f.label : `${f.label} (${filterCounts[f.key] ?? 0})`}
               </option>
             ))}
           </select>
+
+          {activeFilter === 'customDate' && (
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px', maxWidth: '520px' }}>
+              <label style={{ flex: '1 1 180px', fontSize: '12px', fontWeight: '600', color: '#475569' }}>
+                From Date
+                <input
+                  type="date"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  style={{ width: '100%', minHeight: '42px', marginTop: '5px', padding: '8px 10px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '9px', fontSize: '14px', color: '#1a1a1a', background: '#fff' }}
+                />
+              </label>
+              <label style={{ flex: '1 1 180px', fontSize: '12px', fontWeight: '600', color: '#475569' }}>
+                To Date
+                <input
+                  type="date"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={(e) => setToDate(e.target.value)}
+                  style={{ width: '100%', minHeight: '42px', marginTop: '5px', padding: '8px 10px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '9px', fontSize: '14px', color: '#1a1a1a', background: '#fff' }}
+                />
+              </label>
+            </div>
+          )}
+
+          {hasClientNames && (
+            <label style={{ display: 'block', maxWidth: '520px', marginTop: '10px', fontSize: '12px', fontWeight: '600', color: '#475569' }}>
+              Client Name
+              <input
+                type="search"
+                value={clientNameQuery}
+                onChange={(e) => setClientNameQuery(e.target.value)}
+                placeholder="Search assigned tasks by client name"
+                aria-label="Filter assigned tasks by client name"
+                style={{ width: '100%', minHeight: '42px', marginTop: '5px', padding: '8px 10px', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '9px', fontSize: '14px', color: '#1a1a1a', background: '#fff' }}
+              />
+            </label>
+          )}
         </div>
 
         {/* Task Cards */}
@@ -382,6 +447,13 @@ const Tasks = () => {
                       {humanStatus.label}
                     </span>
                   </div>
+
+                  {/* Assigned working users identify the existing Task.clientId owner. */}
+                  {task.clientName && (
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#334155', fontWeight: '700', overflowWrap: 'anywhere' }}>
+                      Client: {task.clientName}
+                    </div>
+                  )}
 
                   {/* Row 2: Order ID + Date (existing sources) */}
                   {(task.orderCode || dateLabel) && (

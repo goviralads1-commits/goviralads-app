@@ -602,6 +602,17 @@ router.get('/tasks/:taskId', async (req, res) => {
     // Determine if this is an assigned user (not the task owner)
     // Assigned users should NOT see sensitive pricing/billing/internal data
     const isAssignedUserOnly = !isTaskOwner && isAssignedUser;
+    // The buyer name already lives on Task.clientId -> User.profile.name. Only
+    // expose it to an assigned working user so they can identify this task.
+    let clientName = null;
+    if (isAssignedUserOnly && task.clientId) {
+      try {
+        const client = await User.findById(task.clientId).select('profile.name').lean();
+        clientName = client?.profile?.name || null;
+      } catch (clientNameErr) {
+        console.error('[CLIENT-TASK] client name lookup failed:', clientNameErr.message);
+      }
+    }
 
     // === SAME PROCESSING LOGIC AS GET /tasks LIST ===
     const now = new Date();
@@ -786,6 +797,9 @@ router.get('/tasks/:taskId', async (req, res) => {
         updatedAt: task.updatedAt,
         // TASK OWNERSHIP INFO - needed for UI to show "My Task" vs "Assigned Task"
         isAssignedUser: isAssignedUserOnly,
+        // Existing Task.clientId -> User.profile.name, exposed only for the
+        // assigned working user; no duplicate client-name storage.
+        clientName,
         // ASSIGNED-USER MILESTONE CONTROL: server-computed edit permission for
         // THIS authenticated user. True ONLY for assigned (non-owner) users
         // when admin explicitly enabled it for this task AND the task is in
@@ -2487,6 +2501,23 @@ router.get('/tasks', async (req, res) => {
       commissionByTask = new Map();
     }
 
+    // === CLIENT NAME PRELOAD — ONE batch query for the whole list (no N+1) ===
+    // Resolves the existing Task.clientId -> User.profile.name relationship.
+    // Names are returned only for assigned working-user task views below.
+    let clientNameById = new Map();
+    try {
+      const clientIds = [...new Set(tasks.filter(t => t.clientId).map(t => t.clientId.toString()))];
+      if (clientIds.length > 0) {
+        const clients = await User.find({ _id: { $in: clientIds } }).select('profile.name').lean();
+        for (const client of clients || []) {
+          if (client?._id) clientNameById.set(client._id.toString(), client.profile?.name || null);
+        }
+      }
+    } catch (clientNameErr) {
+      console.error('[CLIENT-TASKS] client name preload failed:', clientNameErr.message);
+      clientNameById = new Map();
+    }
+
     // === ORDER CODE PRELOAD — ONE batch query for the whole list (no N+1) ===
     // Resolves the existing Task.orderId -> Order.orderId relationship. Same
     // source as a per-task Order.findById(), but preloaded in a single find.
@@ -2664,6 +2695,15 @@ router.get('/tasks', async (req, res) => {
         }
       }
 
+      const isTaskOwner = t.clientId && t.clientId.toString() === clientId;
+      const isAssignedViaUsers = (t.assignedUsers || []).some(u => {
+        if (!u.userId) return false;
+        const uid = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+        return uid === clientId;
+      });
+      const isAssignedViaAssignedTo = t.assignedTo && t.assignedTo.toString() === clientId;
+      const isAssignedUser = !isTaskOwner && (isAssignedViaUsers || isAssignedViaAssignedTo);
+
       processedTasks.push({
         id: t._id.toString(),
         title: t.title,
@@ -2692,17 +2732,12 @@ router.get('/tasks', async (req, res) => {
         countdownEndDate: t.countdownEndDate,
         // Commission-only indicator: true for either existing assignment field,
         // but never for the task owner/buyer.
-        isAssignedUser: (() => {
-          const isOwner = t.clientId && t.clientId.toString() === clientId;
-          if (isOwner) return false;
-          const isAssignedViaUsers = (t.assignedUsers || []).some(u => {
-            if (!u.userId) return false;
-            const uid = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
-            return uid === clientId;
-          });
-          const isAssignedViaAssignedTo = t.assignedTo && t.assignedTo.toString() === clientId;
-          return isAssignedViaUsers || isAssignedViaAssignedTo;
-        })(),
+        isAssignedUser,
+        // Existing Task.clientId -> User.profile.name, exposed only to the
+        // assigned working user; no duplicate client-name storage.
+        clientName: isAssignedUser && t.clientId
+          ? (clientNameById.get(t.clientId.toString()) || null)
+          : null,
         // Server-authoritative list eligibility for the existing milestone
         // PATCH endpoint. No extra request is needed per card.
         canEditMilestone: (() => {
