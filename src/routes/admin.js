@@ -26,6 +26,8 @@ const CreditPlan = require('../models/CreditPlan');
 const Coupon = require('../models/Coupon');
 const { SubscriptionRequest, SUBSCRIPTION_REQUEST_STATUS } = require('../models/SubscriptionRequest');
 const billingService = require('../services/billingService');
+// CommissionLog is still used directly by the analytics/earnings/delete
+// routes below (aggregates, listings, backfill, client deletion).
 const CommissionLog = require('../models/CommissionLog');
 const EarningsLedger = require('../models/EarningsLedger');
 const EarningsConfig = require('../models/EarningsConfig');
@@ -45,59 +47,17 @@ const UserSubscription = require('../models/UserSubscription');
 const { ReminderLog } = require('../models/ReminderLog');
 const mediaStorage = require('../services/mediaStorageService');
 const { orderContentFiles } = require('../utils/orderContent');
+// COMMISSION WRITER: shared transactional CommissionLog + EarningsLedger
+// creator (moved verbatim from this file into the service; also used by the
+// client-side auto-completion settlement).
+const { createCommissionWithLedger } = require('../services/commissionService');
 
 const router = express.Router();
 
-// Helper: Create CommissionLog + EarningsLedger entry (transactional with fallback)
-async function createCommissionWithLedger({ userId, taskId, taskTitle, amount, commissionType, commissionValue }) {
-  try {
-    const session = await mongoose.startSession();
-    try {
-      let commissionLog;
-      await session.withTransaction(async () => {
-        [commissionLog] = await CommissionLog.create([{
-          userId, taskId, taskTitle, amount, commissionType, commissionValue,
-        }], { session });
-        // Idempotency check: skip if ledger entry already exists for this user+task
-        const existingLedger = await EarningsLedger.findOne({
-          userId, sourceTaskId: taskId, type: 'COMMISSION_EARNED',
-        }).session(session);
-        if (!existingLedger) {
-          await EarningsLedger.create([{
-            userId,
-            type: 'COMMISSION_EARNED',
-            amount,
-            sourceTaskId: taskId,
-            sourceCommissionLogId: commissionLog._id,
-          }], { session });
-        }
-      });
-      return commissionLog;
-    } finally {
-      session.endSession();
-    }
-  } catch (txErr) {
-    // Fallback: non-transactional (environment may not support replica set)
-    console.warn('[EARNINGS-LEDGER] Transaction not supported \u2014 running in fallback mode (partial-financial-risk)');
-    const commissionLog = await CommissionLog.create({
-      userId, taskId, taskTitle, amount, commissionType, commissionValue,
-    });
-    // Idempotency check in fallback
-    const existingLedger = await EarningsLedger.findOne({
-      userId, sourceTaskId: taskId, type: 'COMMISSION_EARNED',
-    });
-    if (!existingLedger) {
-      await EarningsLedger.create({
-        userId,
-        type: 'COMMISSION_EARNED',
-        amount,
-        sourceTaskId: taskId,
-        sourceCommissionLogId: commissionLog._id,
-      });
-    }
-    return commissionLog;
-  }
-}
+// COMMISSION WRITER: createCommissionWithLedger was moved verbatim to
+// src/services/commissionService.js (single shared implementation for the
+// admin completion paths and the client auto-completion settlement) and is
+// imported above. reverseCommissionForTask stays local to the admin router.
 
 // Helper: Reverse commission for a task (used on task reopen)
 async function reverseCommissionForTask(taskId, reason) {
@@ -1512,6 +1472,14 @@ router.get('/tasks/:taskId', async (req, res) => {
         defaultAssignedUsers: task.defaultAssignedUsers || [],
         defaultCommissionRoles: task.defaultCommissionRoles || [],
         defaultCostBreakdown: task.defaultCostBreakdown || { expenses: 0, tax: 0, other: 0 },
+        // ASSIGNED-USER MILESTONE CONTROL: per-task admin toggle + last change record
+        allowAssignedMilestoneEdit: task.allowAssignedMilestoneEdit === true,
+        lastMilestoneChange: task.lastMilestoneChange ? {
+          by: task.lastMilestoneChange.by ? task.lastMilestoneChange.by.toString() : null,
+          at: task.lastMilestoneChange.at || null,
+          from: task.lastMilestoneChange.from || null,
+          to: task.lastMilestoneChange.to || null,
+        } : null,
         // WORKING-DAY DEADLINE SYSTEM: plan delivery duration (null for legacy plans)
         deliveryDuration: task.deliveryDuration ?? null,
       }
@@ -1698,6 +1666,14 @@ router.patch('/tasks/:taskId', async (req, res) => {
         updates.deliveryDuration = dd;
         updates.deliveryDurationUnit = 'WORKING_DAYS';
       }
+    }
+
+    // ASSIGNED-USER MILESTONE CONTROL: strict boolean toggle only. Gates the
+    // client milestone endpoint (PATCH /client/tasks/:taskId/milestone);
+    // changes no other task behavior. Buyers/task owners are excluded by the
+    // client endpoint itself regardless of this flag.
+    if (updates.allowAssignedMilestoneEdit !== undefined) {
+      updates.allowAssignedMilestoneEdit = updates.allowAssignedMilestoneEdit === true;
     }
 
     // Track if progress-related fields are being updated

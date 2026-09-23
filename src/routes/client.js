@@ -34,6 +34,9 @@ const EarningsRedeemRequest = require('../models/EarningsRedeemRequest');
 const { computeCreditDelta } = require('../utils/transactionHelpers');
 const mediaStorage = require('../services/mediaStorageService');
 const { validateOrderInputs, orderContentFiles } = require('../utils/orderContent');
+// COMMISSION SETTLEMENT: shared completion settlement — the SAME calculation
+// and ledger writer as the admin completion paths.
+const { settleTaskCommissionOnCompletion } = require('../services/commissionService');
 
 const router = express.Router();
 
@@ -680,6 +683,19 @@ router.get('/tasks/:taskId', async (req, res) => {
 
     // Save if any changes detected
     if (needsSave) {
+      // COMMISSION SETTLEMENT (current-flow fix): settle commission at the
+      // transition INTO COMPLETED using the SAME calculation and ledger
+      // writer as the admin completion paths (src/services/commissionService).
+      // Read-only for history — the commissionEarned guard inside the service
+      // means already-settled tasks, and tasks completed in the past without
+      // commission, are never touched. Failure never blocks the task view.
+      if (autoCompleted) {
+        try {
+          await settleTaskCommissionOnCompletion(task);
+        } catch (settleErr) {
+          console.error(`[SINGLE-TASK SYNC] Commission settlement failed for task ${task._id}:`, settleErr.message);
+        }
+      }
       await task.save();
       console.log(`[SINGLE-TASK SYNC] Task ${task._id} updated: status=${task.status}, progress=${task.progress}`);
       // Record the actual completion time exactly once — only at the transition
@@ -742,6 +758,14 @@ router.get('/tasks/:taskId', async (req, res) => {
         updatedAt: task.updatedAt,
         // TASK OWNERSHIP INFO - needed for UI to show "My Task" vs "Assigned Task"
         isAssignedUser: isAssignedUserOnly,
+        // ASSIGNED-USER MILESTONE CONTROL: server-computed edit permission for
+        // THIS authenticated user. True ONLY for assigned (non-owner) users
+        // when admin explicitly enabled it for this task AND the task is in
+        // an editable state. Task owners/buyers never receive true here
+        // regardless of the flag.
+        canEditMilestone: isAssignedUserOnly
+          && task.allowAssignedMilestoneEdit === true
+          && ['PENDING', 'ACTIVE'].includes(currentStatus),
         // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
         // for this task from EarningsLedger, or null when none/zero. Never
         // contains another recipient's amount.
@@ -768,7 +792,10 @@ router.get('/tasks/:taskId', async (req, res) => {
         originalPrice: isAssignedUserOnly ? undefined : task.originalPrice,
         countdownEndDate: isAssignedUserOnly ? undefined : task.countdownEndDate,
         // MILESTONES - CRITICAL FIX
+        // id: subdocument _id — REQUIRED by the assigned-user milestone
+        // dropdown (PATCH /client/tasks/:taskId/milestone selects by id).
         milestones: currentMilestones.map(m => ({
+          id: m._id ? m._id.toString() : undefined,
           name: m.name,
           percentage: m.percentage,
           color: m.color,
@@ -879,6 +906,166 @@ router.get('/tasks/:taskId', async (req, res) => {
   } catch (err) {
     console.error('[SINGLE-TASK ERROR]', err);
     return res.status(500).json({ error: 'Failed to retrieve task' });
+  }
+});
+
+// ======================================================================
+// ASSIGNED-USER MILESTONE CONTROL (admin-gated, per-task)
+// ======================================================================
+// The user ASSIGNED to this task as the commission/working user (a member
+// of task.assignedUsers who is NOT the task owner) may select one of the
+// task's EXISTING milestones — but ONLY when an admin has explicitly
+// enabled milestone editing for this task (task.allowAssignedMilestoneEdit).
+//
+// BACKEND AUTHORIZATION (mandatory — frontend hiding is never sufficient):
+//   1. Router guards: authenticateJWT + requireClient (role CLIENT only).
+//   2. Buyers/task owners are ALWAYS rejected, regardless of any flag.
+//   3. Only assigned (non-owner) users pass, and only when the admin flag
+//      is literally true for THIS task.
+//   4. Only PENDING/ACTIVE tasks are editable.
+//   5. milestoneId must reference one of this task's own milestones.
+//
+// Reuses the existing milestone/status semantics (milestone.percentage is
+// an absolute progress threshold — same rule as the admin
+// MilestoneQuickPanel): the request carries ONLY { milestoneId }, never
+// progress/reached/reachedAt; the server derives everything. On the first
+// successful edit an AUTO task switches to MANUAL so no automation (the
+// AUTO recalculation on client reads, the 10-minute AUTO progress job)
+// can overwrite the manual choice afterwards; the admin retains the full
+// existing control via the admin routes. lastMilestoneChange records
+// who/when/from/to (single slot, no new audit system). Crossing INTO
+// COMPLETED settles commission exactly like every other completion path
+// (shared commissionService).
+// ======================================================================
+router.patch('/tasks/:taskId/milestone', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const clientId = req.user.id;
+    const { milestoneId } = req.body || {};
+
+    if (!milestoneId || typeof milestoneId !== 'string') {
+      return res.status(400).json({ error: 'VALIDATION FAILED: milestoneId is required.' });
+    }
+
+    const task = await Task.findById(taskId).exec();
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Same ownership/assignment resolution as GET /tasks/:taskId
+    const isTaskOwner = task.clientId && task.clientId.toString() === clientId;
+    const isAssignedUser = (task.assignedUsers || []).some(u => {
+      if (!u.userId) return false;
+      const userIdStr = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+      return userIdStr === clientId;
+    });
+
+    // Buyers/task owners NEVER get milestone control — regardless of the flag.
+    if (isTaskOwner || !isAssignedUser) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Admin must have explicitly enabled milestone editing for THIS task.
+    if (task.allowAssignedMilestoneEdit !== true) {
+      return res.status(403).json({ error: 'Milestone editing is not enabled for this task.' });
+    }
+
+    // Only editable while scheduled or in progress.
+    if (!['PENDING', 'ACTIVE'].includes(task.status)) {
+      return res.status(409).json({ error: 'Milestones can only be changed while the task is scheduled or in progress.' });
+    }
+
+    const milestones = task.milestones || [];
+    const selected = milestones.find(m => m._id && m._id.toString() === milestoneId);
+    if (!selected) {
+      return res.status(400).json({ error: 'VALIDATION FAILED: Unknown milestone for this task.' });
+    }
+
+    // Record who changed what (single-slot record; computed BEFORE mutating).
+    const reachedBefore = milestones
+      .filter(m => m.reached)
+      .sort((a, b) => b.percentage - a.percentage)[0] || null;
+    task.lastMilestoneChange = {
+      by: clientId,
+      at: new Date(),
+      from: reachedBefore ? reachedBefore.name : null,
+      to: selected.name,
+    };
+
+    // AUTO lockout: the first manual edit switches the task to MANUAL so
+    // automatic progress recalculation can never overwrite this choice.
+    if (task.progressMode === 'AUTO') {
+      task.progressMode = 'MANUAL';
+    }
+    task.progress = selected.percentage;
+
+    // Reuse the existing milestone evaluation + status auto-sync semantics
+    // of the client GET routes (identical rules; server-derived state).
+    const now = new Date();
+    const currentProgress = task.progress;
+    let autoCompleted = false;
+
+    task.milestones = milestones.map(m => {
+      const shouldBeReached = currentProgress >= m.percentage;
+      if (shouldBeReached && !m.reached) {
+        return { ...m.toObject ? m.toObject() : m, reached: true, reachedAt: now };
+      } else if (!shouldBeReached && m.reached) {
+        return { ...m.toObject ? m.toObject() : m, reached: false, reachedAt: null };
+      }
+      return m.toObject ? m.toObject() : m;
+    });
+
+    if (task.status !== 'CANCELLED' && task.status !== 'PENDING_APPROVAL') {
+      if (currentProgress >= 100 && task.status !== 'COMPLETED') {
+        task.status = 'COMPLETED';
+        autoCompleted = true;
+      } else if (currentProgress > 0 && task.status === 'PENDING') {
+        task.status = 'ACTIVE';
+      } else if (currentProgress < 100 && task.status === 'COMPLETED') {
+        // DOWNWARD SYNC: same rule as the client GET routes.
+        task.status = currentProgress > 0 ? 'ACTIVE' : 'PENDING';
+      }
+    }
+
+    if (autoCompleted) {
+      // Same settlement as every other completion path (no history rewrite:
+      // guarded by commissionEarned inside the shared service).
+      try {
+        await settleTaskCommissionOnCompletion(task);
+      } catch (settleErr) {
+        console.error(`[MILESTONE CHANGE] Commission settlement failed for task ${task._id}:`, settleErr.message);
+      }
+    }
+
+    await task.save();
+    if (autoCompleted) await notifyAutoCompletion(task);
+
+    return res.status(200).json({
+      task: {
+        progress: task.progress,
+        progressMode: task.progressMode,
+        status: task.status,
+        milestones: task.milestones.map(m => ({
+          id: m._id ? m._id.toString() : undefined,
+          name: m.name,
+          percentage: m.percentage,
+          color: m.color,
+          reached: m.reached || false,
+          reachedAt: m.reachedAt || null,
+        })),
+        lastMilestoneChange: task.lastMilestoneChange ? {
+          by: task.lastMilestoneChange.by ? task.lastMilestoneChange.by.toString() : null,
+          at: task.lastMilestoneChange.at || null,
+          from: task.lastMilestoneChange.from || null,
+          to: task.lastMilestoneChange.to || null,
+        } : null,
+        canEditMilestone: task.allowAssignedMilestoneEdit === true
+          && ['PENDING', 'ACTIVE'].includes(task.status),
+      },
+    });
+  } catch (err) {
+    console.error('[MILESTONE CHANGE ERROR]', err);
+    return res.status(500).json({ error: 'Failed to update milestone' });
   }
 });
 
@@ -2378,6 +2565,27 @@ router.get('/tasks', async (req, res) => {
           t.status = currentProgress > 0 ? 'ACTIVE' : 'PENDING';
           currentStatus = t.status;
           needsSave = true;
+        }
+      }
+
+      // COMMISSION SETTLEMENT (current-flow fix): settle at the transition
+      // INTO COMPLETED using the SAME calculation and ledger writer as the
+      // admin completion paths. Read-only for history (commissionEarned
+      // guard — no backfill, no re-settlement). The settled amounts are
+      // merged into commissionByTask so THIS response already shows the
+      // authenticated user's own share (the list aggregation above ran
+      // before the sync loop).
+      if (autoCompleted) {
+        try {
+          const settled = await settleTaskCommissionOnCompletion(t);
+          if (settled.settled) {
+            const ownAmount = settled.memberAmounts.get(clientId);
+            if (typeof ownAmount === 'number' && ownAmount > 0) {
+              commissionByTask.set(t._id.toString(), ownAmount);
+            }
+          }
+        } catch (settleErr) {
+          console.error(`[TASK SYNC] Commission settlement failed for task ${t._id}:`, settleErr.message);
         }
       }
 

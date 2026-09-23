@@ -121,6 +121,8 @@ const TaskDetail = () => {
   const [originalCostBreakdown, setOriginalCostBreakdown] = useState({ expenses: 0, tax: 0, other: 0 });
   const [commissionCollapsed, setCommissionCollapsed] = useState(false);
   const [commissionRoleTemplates, setCommissionRoleTemplates] = useState([]); // from plan
+  // ASSIGNED-USER MILESTONE CONTROL: direct-save toggle in flight
+  const [togglingMilestoneEdit, setTogglingMilestoneEdit] = useState(false);
 
   const addTeamMember = () => {
     setAssignedUsers(prev => [...prev, { userId: '', percentage: 0 }]);
@@ -545,6 +547,30 @@ const TaskDetail = () => {
       setTimeout(() => setToast(null), 4000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ASSIGNED-USER MILESTONE CONTROL: per-task admin gate. Direct-save toggle
+  // (same immediate-PATCH pattern as MilestoneQuickPanel). Enabling lets the
+  // ASSIGNED commission/working user change the current milestone from their
+  // client task view; their first edit switches AUTO progress to MANUAL so
+  // automation can no longer overwrite it. The task owner/buyer is always
+  // excluded by the backend endpoint, regardless of this flag.
+  const handleToggleAssignedMilestoneEdit = async () => {
+    if (togglingMilestoneEdit) return;
+    const next = !(task?.allowAssignedMilestoneEdit === true);
+    setTogglingMilestoneEdit(true);
+    try {
+      await api.patch(`/admin/tasks/${taskId}`, { allowAssignedMilestoneEdit: next });
+      await fetchTask();
+      setToast({ type: 'success', message: next ? 'Assigned-user milestone editing enabled' : 'Assigned-user milestone editing disabled' });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      console.error('Milestone edit toggle error:', err.response?.data || err.message);
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to update milestone editing setting' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setTogglingMilestoneEdit(false);
     }
   };
 
@@ -2349,6 +2375,50 @@ const TaskDetail = () => {
                     style={{ width: '120px', padding: '10px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
                   />
                   <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>Maximum auto-progress percentage</p>
+                </div>
+
+                {/* ASSIGNED-USER MILESTONE CONTROL — per-task admin gate for the
+                    client milestone endpoint. Enabling lets the assigned
+                    commission/working user (never the task owner/buyer) select
+                    the current milestone from their task view; the backend
+                    endpoint enforces authorization and switches AUTO tasks to
+                    MANUAL on the first assigned-user edit. */}
+                <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: togglingMilestoneEdit ? 'wait' : 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={task?.allowAssignedMilestoneEdit === true}
+                      onChange={handleToggleAssignedMilestoneEdit}
+                      disabled={togglingMilestoneEdit}
+                      style={{ width: '18px', height: '18px', marginTop: '1px', cursor: 'pointer', accentColor: '#6366f1', flexShrink: 0 }}
+                    />
+                    <span>
+                      <span style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569' }}>Allow assigned user to change milestones</span>
+                      <span style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                        The assigned commission/working user can select the current milestone from their task view. Their first edit switches AUTO progress to MANUAL. The buyer/task owner can never change milestones.
+                      </span>
+                    </span>
+                  </label>
+                  {task?.lastMilestoneChange && (task.lastMilestoneChange.to || task.lastMilestoneChange.at) && (
+                    (() => {
+                      const lmc = task.lastMilestoneChange;
+                      const byId = lmc.by ? String(lmc.by) : '';
+                      const changerEmployee = byId ? employees.find(e => e.userId && String(e.userId) === byId) : null;
+                      const changerAssigned = byId
+                        ? (task.assignedUsers || []).find(u => u.userId && typeof u.userId === 'object' && String(u.userId._id) === byId)
+                        : null;
+                      const changerLabel = changerEmployee?.name
+                        || changerAssigned?.userId?.profile?.designation
+                        || (byId ? `User ${byId.slice(0, 8)}…` : 'assigned user');
+                      return (
+                        <p style={{ fontSize: '12px', color: '#64748b', margin: '10px 0 0 0', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                          Last milestone change: <strong style={{ color: '#475569' }}>{lmc.from || '—'} → {lmc.to || '—'}</strong>
+                          {lmc.at ? ` · ${new Date(lmc.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                          {lmc.by ? ` · by ${changerLabel}` : ''}
+                        </p>
+                      );
+                    })()
+                  )}
                 </div>
 
                 {/* MILESTONE QUICK CONTROL — the SAME reusable component as the task

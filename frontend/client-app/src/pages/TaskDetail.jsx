@@ -111,6 +111,9 @@ const TaskDetail = () => {
   const [showOnlyApprovals, setShowOnlyApprovals] = useState(false); // Approval filter toggle
   const [historyModalApproval, setHistoryModalApproval] = useState(null); // Approval history modal
   const [copyToast, setCopyToast] = useState(null); // Export proof toast
+  // ASSIGNED-USER MILESTONE CONTROL (admin-gated): change state + toast
+  const [changingMilestone, setChangingMilestone] = useState(false);
+  const [milestoneToast, setMilestoneToast] = useState(null);
   const discussionRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -177,6 +180,29 @@ const TaskDetail = () => {
       setLoading(false);
     }
   }, [taskId]);
+
+  // ASSIGNED-USER MILESTONE CONTROL (admin-gated): the assigned user
+  // selects a milestone; the server enforces the full authorization chain
+  // (owner rejection, assignment membership, per-task admin flag, task
+  // status) and switches AUTO tasks to MANUAL so automation never
+  // overwrites the manual milestone.
+  const handleMilestoneChange = async (e) => {
+    const milestoneId = e.target.value;
+    if (!milestoneId || changingMilestone) return;
+    setChangingMilestone(true);
+    try {
+      await api.patch(`/client/tasks/${taskId}/milestone`, { milestoneId });
+      setMilestoneToast({ type: 'success', message: 'Milestone updated' });
+      setTimeout(() => setMilestoneToast(null), 3000);
+      fetchTask();
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to update milestone';
+      setMilestoneToast({ type: 'error', message: errorMsg });
+      setTimeout(() => setMilestoneToast(null), 4000);
+    } finally {
+      setChangingMilestone(false);
+    }
+  };
 
   // Load more (older) messages
   const loadMoreMessages = async () => {
@@ -1160,10 +1186,11 @@ const TaskDetail = () => {
                 </p>
               </div>
             ) : task.isAssignedUser ? (
-              /* COMMISSION TASK — deadline-oriented presentation (existing
+              <>
+              {/* COMMISSION TASK — deadline-oriented presentation (existing
                  backend deadline only; never a calculated/invented date).
-                 Non-commission tasks keep ProgressWithFlag below, untouched. */
-              (() => {
+                 Non-commission tasks keep ProgressWithFlag below, untouched. */}
+              {(() => {
                 const deadlineValue = task.deadline || task.endDate;
                 const deadlineLabel = deadlineValue ? formatDeadline(deadlineValue) : null;
                 const remainingLabel = deadlineValue ? getRemainingLabel(deadlineValue) : null;
@@ -1197,7 +1224,42 @@ const TaskDetail = () => {
                     )}
                   </div>
                 );
-              })()
+              })()}
+              {/* ASSIGNED-USER MILESTONE CONTROL (admin-gated): native select
+                  over the EXISTING milestone definitions (absolute thresholds,
+                  ascending). Rendered ONLY when the server granted
+                  canEditMilestone for this task — the PATCH endpoint owns the
+                  authorization, AUTO-to-MANUAL switch and re-evaluation. */}
+              {task.canEditMilestone && (milestones || []).length > 0 && (
+                <div style={{
+                  marginTop: '10px', padding: '12px 14px',
+                  backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0'
+                }}>
+                  <label htmlFor="assigned-milestone-select" style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px 0' }}>
+                    Current Milestone
+                  </label>
+                  <select
+                    id="assigned-milestone-select"
+                    value={activeMilestone?.id || ''}
+                    onChange={handleMilestoneChange}
+                    disabled={changingMilestone}
+                    style={{ width: '100%', padding: '10px 12px', fontSize: '14px', fontWeight: '600', color: '#0f172a', backgroundColor: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '10px', outline: 'none', cursor: changingMilestone ? 'wait' : 'pointer' }}
+                  >
+                    <option value="">Select milestone</option>
+                    {[...milestones].sort((a, b) => a.percentage - b.percentage).map(m => (
+                      <option key={m.id || `${m.name}-${m.percentage}`} value={m.id}>
+                        {m.name}{typeof m.percentage === 'number' ? ` \u00B7 ${m.percentage}%` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {milestoneToast && (
+                    <p style={{ margin: '8px 0 0 0', fontSize: '12px', fontWeight: '600', color: milestoneToast.type === 'success' ? '#15803d' : '#b91c1c' }}>
+                      {milestoneToast.message}
+                    </p>
+                  )}
+                </div>
+              )}
+              </>
             ) : (
               <>
                 <ProgressWithFlag

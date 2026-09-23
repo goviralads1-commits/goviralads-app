@@ -143,6 +143,25 @@ const taskSchema = new mongoose.Schema(
       }],
       default: [],
     },
+    // ASSIGNED-USER MILESTONE CONTROL: admin-gated, per-task permission.
+    // When true, an ASSIGNED (non-owner) commission/working user may select
+    // one of the task's existing milestones via the client milestone
+    // endpoint. Task owners/buyers are ALWAYS excluded (backend-enforced
+    // in the route, regardless of this flag). Default false = existing
+    // behavior unchanged for every task.
+    allowAssignedMilestoneEdit: {
+      type: Boolean,
+      default: false,
+    },
+    // Single-slot record of the last assigned-user milestone change
+    // (who/when/from/to). Written ONLY by the client milestone endpoint;
+    // no new audit system.
+    lastMilestoneChange: {
+      by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      at: { type: Date, default: null },
+      from: { type: String, default: null },
+      to: { type: String, default: null },
+    },
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
