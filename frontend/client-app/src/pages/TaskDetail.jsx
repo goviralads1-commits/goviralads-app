@@ -1233,17 +1233,21 @@ const TaskDetail = () => {
               {task.canEditMilestone && (milestones || []).length > 0 && (
                 <div style={{
                   marginTop: '10px', padding: '12px 14px',
-                  backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0'
+                  backgroundColor: '#f0fdf4', borderRadius: '12px', border: '1px solid #86efac'
                 }}>
-                  <label htmlFor="assigned-milestone-select" style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px 0' }}>
-                    Current Milestone
+                  <label htmlFor="assigned-milestone-select" style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#166534', margin: '0 0 3px 0' }}>
+                    Update milestone
                   </label>
+                  <p style={{ fontSize: '11px', color: '#15803d', margin: '0 0 8px 0', lineHeight: 1.35 }}>
+                    Choose a milestone to update task progress.
+                  </p>
                   <select
                     id="assigned-milestone-select"
+                    aria-label="Update milestone"
                     value={activeMilestone?.id || ''}
                     onChange={handleMilestoneChange}
                     disabled={changingMilestone}
-                    style={{ width: '100%', padding: '10px 12px', fontSize: '14px', fontWeight: '600', color: '#0f172a', backgroundColor: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '10px', outline: 'none', cursor: changingMilestone ? 'wait' : 'pointer' }}
+                    style={{ width: '100%', padding: '10px 12px', fontSize: '14px', fontWeight: '600', color: '#0f172a', backgroundColor: '#fff', border: '1.5px solid #4ade80', borderRadius: '10px', outline: 'none', cursor: changingMilestone ? 'wait' : 'pointer' }}
                   >
                     <option value="">Select milestone</option>
                     {[...milestones].sort((a, b) => a.percentage - b.percentage).map(m => (
