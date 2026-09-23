@@ -64,6 +64,7 @@ async function notifyAutoCompletion(task) {
         entityId: task._id,
       },
       notifyByEmail: true,
+      notifyByPush: true,
     });
   } catch (notifErr) {
     console.error('[AUTO-COMPLETE] Failed to notify client:', notifErr.message);
@@ -394,6 +395,8 @@ router.post('/credit-plans/:id/purchase', async (req, res) => {
         title: 'Subscription Request Submitted',
         message: `Your request for ${plan.name} (₹${finalPrice}) has been submitted. Awaiting admin approval.`,
         relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: subRequest._id },
+        notifyByPush: true,
+        pushUrl: '/wallet?scrollToSubscription=true',
       });
     } catch (notifErr) {
       console.error('[SUB_REQ] Notification error:', notifErr.message);

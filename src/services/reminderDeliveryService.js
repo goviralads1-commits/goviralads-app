@@ -3,6 +3,7 @@ const { createHash, randomUUID } = require('crypto');
 const ReminderDelivery = require('../models/ReminderDelivery');
 const Notification = require('../models/Notification');
 const emailService = require('./emailService');
+const pushNotificationService = require('./pushNotificationService');
 
 // Resend retains keys for 24 hours. Stop retries an hour early; never extend this deadline.
 const RETRY_WINDOW_MS = 23 * 60 * 60 * 1000;
@@ -62,22 +63,26 @@ async function prepareDelivery(options, channel, payload) {
 }
 
 async function recordInApp(entry, eligible) {
-  if (entry.state !== 'PENDING') return entry.state === 'RECORDED';
+  if (entry.state !== 'PENDING') {
+    return { complete: entry.state === 'RECORDED', recordedNow: false };
+  }
   const session = await mongoose.startSession();
   try {
     return await session.withTransaction(async () => {
       const current = await ReminderDelivery.findById(entry._id).session(session).lean().exec();
-      if (!current || current.state !== 'PENDING') return current?.state === 'RECORDED';
+      if (!current || current.state !== 'PENDING') {
+        return { complete: current?.state === 'RECORDED', recordedNow: false };
+      }
       if (!await eligible(current.recipientId)) {
         await ReminderDelivery.updateOne({ _id: current._id, state: 'PENDING' },
           { $set: { state: 'CANCELLED', reason: 'NO_LONGER_ELIGIBLE' } }, { session });
-        return false;
+        return { complete: false, recordedNow: false };
       }
       const [notification] = await Notification.create([current.payload], { session });
       const result = await ReminderDelivery.updateOne({ _id: current._id, state: 'PENDING' },
         { $set: { state: 'RECORDED', notificationId: notification._id } }, { session });
       if (result.modifiedCount !== 1) throw new Error('REMINDER_CLAIM_LOST');
-      return true;
+      return { complete: true, recordedNow: true };
     });
   } finally {
     await session.endSession();
@@ -148,7 +153,25 @@ async function deliverReminder(options) {
   let complete = true;
   if (options.notification) {
     const entry = await prepareDelivery(options, 'IN_APP', options.notification);
-    complete = await recordInApp(entry, options.eligible) && complete;
+    const inAppResult = await recordInApp(entry, options.eligible);
+    complete = inAppResult.complete && complete;
+
+    // Push only for the newly committed reminder record. Replays/retries keep
+    // their existing idempotent in-app behavior without duplicating a push.
+    if (inAppResult.recordedNow && options.notification.notifyByPush) {
+      pushNotificationService.sendToUser(
+        options.notification.recipientId.toString(),
+        { title: options.notification.title, body: options.notification.message },
+        {
+          type: options.notification.type || 'reminder',
+          entityType: options.notification.relatedEntity?.entityType || '',
+          entityId: options.notification.relatedEntity?.entityId?.toString() || '',
+          url: options.notification.pushUrl || '/notifications',
+        }
+      ).catch((err) => {
+        console.error('[REMINDER PUSH] Error sending push (non-fatal):', err.message);
+      });
+    }
   }
   if (options.email) {
     const entry = await prepareDelivery(options, 'EMAIL', options.email);

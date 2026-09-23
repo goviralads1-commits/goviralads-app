@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const emailService = require('./emailService');
+const pushNotificationService = require('./pushNotificationService');
 const User = require('../models/User');
 
 // Safely escape user/admin text before inserting into HTML email templates
@@ -96,10 +97,32 @@ async function markAllNotificationsAsRead(userId) {
   return result.nModified;
 }
 
+const getClientPushUrl = (relatedEntity, explicitPushUrl) => {
+  if (explicitPushUrl) return explicitPushUrl;
+  const entityId = relatedEntity?.entityId?.toString();
+  switch (relatedEntity?.entityType) {
+    case ENTITY_TYPES.TASK: return entityId ? `/tasks/${entityId}` : '/tasks';
+    case ENTITY_TYPES.TICKET: return '/tickets';
+    case ENTITY_TYPES.WALLET:
+    case ENTITY_TYPES.RECHARGE_REQUEST: return '/wallet';
+    case ENTITY_TYPES.NOTICE: return '/dashboard';
+    case ENTITY_TYPES.ORDER: return '/orders';
+    case ENTITY_TYPES.SUBSCRIPTION: return '/wallet?scrollToSubscription=true';
+    default: return '/notifications';
+  }
+};
+
 async function createNotification(notificationData) {
-  const { notifyByEmail = false, customEmailSubject, customEmailBody, ...notifData } = notificationData;
+  const {
+    notifyByEmail = false,
+    notifyByPush = false,
+    pushUrl,
+    customEmailSubject,
+    customEmailBody,
+    ...notifData
+  } = notificationData;
   
-  // Create notification in database (without custom email fields — they don't belong in DB)
+  // Create notification in database (without delivery-only fields — they don't belong in DB)
   const notification = await Notification.create(notifData);
   
   // Log email trigger decision
@@ -114,6 +137,24 @@ async function createNotification(notificationData) {
     });
   } else if (notifyByEmail && !notifData.recipientId) {
     console.log('[NOTIF EMAIL] Email requested but no recipientId provided - skipping');
+  }
+
+  // Opt-in only: existing call sites choose push delivery explicitly, preventing
+  // duplicates for flows that already call pushNotificationService themselves.
+  if (notifyByPush && notifData.recipientId) {
+    const relatedEntity = notifData.relatedEntity || {};
+    pushNotificationService.sendToUser(
+      notifData.recipientId.toString(),
+      { title: notifData.title, body: notifData.message },
+      {
+        type: notifData.type || 'notification',
+        entityType: relatedEntity.entityType || '',
+        entityId: relatedEntity.entityId?.toString() || '',
+        url: getClientPushUrl(relatedEntity, pushUrl),
+      }
+    ).catch((err) => {
+      console.error('[NOTIF PUSH] Error sending push (non-fatal):', err.message);
+    });
   }
   
   return notification;

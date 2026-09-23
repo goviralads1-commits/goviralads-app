@@ -102,6 +102,8 @@ const processTaskReminder = async (task, settings, clientAppUrl) => {
         type: NOTIFICATION_TYPES.TASK_REMINDER,
         title: `Task Reminder: ${daysLeft === 0 ? 'Due Today!' : `${daysLeft} days left`}`,
         message: `"${task.title}" ${daysLeft === 0 ? 'is due today!' : `is due in ${daysLeft} days`}`,
+        notifyByPush: true,
+        pushUrl: `/tasks/${task._id}`,
         relatedEntity: { entityType: ENTITY_TYPES.TASK, entityId: task._id },
       },
       eligible: async (recipientId) => !!await Task.exists({

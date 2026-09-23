@@ -1048,6 +1048,8 @@ function startSubscriptionReminderJob() {
               const delivery = await deliverCurrentReminder(wallet, userSub, days, 'before', {
                 recipientId: wallet.clientId, title, message,
                 type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+                notifyByPush: true,
+                pushUrl: '/wallet?scrollToSubscription=true',
                 relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
                 planName: userSub.planName, expiryDate: expiryDateStr,
                 customEmailSubject, customEmailBody,
@@ -1167,6 +1169,8 @@ function startSubscriptionReminderJob() {
               const delivery = await deliverCurrentReminder(wallet, userSub, days, 'after', {
                 recipientId: wallet.clientId, title, message,
                 type: NOTIFICATION_TYPES.SUBSCRIPTION_EXPIRING,
+                notifyByPush: true,
+                pushUrl: '/wallet?scrollToSubscription=true',
                 relatedEntity: { entityType: 'SUBSCRIPTION', entityId: userSub._id },
                 planName: userSub.planName, expiryDate: expiryDateStr,
                 customEmailSubject, customEmailBody,

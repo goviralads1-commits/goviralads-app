@@ -282,6 +282,7 @@ router.post('/wallets/:clientId/adjust', async (req, res) => {
             entityType: ENTITY_TYPES.WALLET,
             entityId: wallet._id,
           },
+          notifyByPush: true,
         });
       } catch (err) {
         console.error('Failed to notify client of wallet adjustment:', err.message);
@@ -492,6 +493,7 @@ router.post('/recharge-requests/:id/approve', async (req, res) => {
           entityId: updatedRequest._id,
         },
         notifyByEmail: true, // Email trigger for important event
+        notifyByPush: true,
       });
     } catch (err) {
       console.error('Failed to notify client of recharge approval:', err.message);
@@ -599,6 +601,7 @@ router.post('/recharge-requests/:id/reject', async (req, res) => {
           entityId: updatedRequest._id,
         },
         notifyByEmail: true, // Email trigger for important event
+        notifyByPush: true,
       });
     } catch (err) {
       console.error('Failed to notify client of recharge rejection:', err.message);
@@ -890,6 +893,8 @@ router.post('/subscription-requests/:id/approve', async (req, res) => {
         message: `Your subscription request for ${updatedRequest.planName} has been approved. ${updatedRequest.totalCredits} credits added!`,
         relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: updatedRequest._id },
         notifyByEmail: true,
+        notifyByPush: true,
+        pushUrl: '/wallet?scrollToSubscription=true',
       });
     } catch (notifErr) {
       console.error('[SUB_REQ] Notification error:', notifErr.message);
@@ -958,6 +963,8 @@ router.post('/subscription-requests/:id/reject', async (req, res) => {
         message: `Your subscription request for ${request.planName} has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
         relatedEntity: { entityType: 'SUBSCRIPTION_REQUEST', entityId: request._id },
         notifyByEmail: true,
+        notifyByPush: true,
+        pushUrl: '/wallet?scrollToSubscription=true',
       });
     } catch (notifErr) {
       console.error('[SUB_REQ] Notification error:', notifErr.message);
@@ -1823,6 +1830,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
             },
             taskUrl: taskUrl,
             notifyByEmail: true,
+            notifyByPush: true,
           });
         } catch (notifErr) {
           console.error('[DELIVERY] Failed to notify client:', notifErr.message);
@@ -1850,6 +1858,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
             entityId: task._id,
           },
           notifyByEmail: true,
+          notifyByPush: true,
         });
       } catch (notifErr) {
         console.error('[TASK_COMPLETE] Failed to notify client:', notifErr.message);
@@ -1894,6 +1903,7 @@ router.patch('/tasks/:taskId', async (req, res) => {
                 entityId: task._id,
               },
               notifyByEmail: false,
+              notifyByPush: true,
             });
           } catch (notifErr) {
             console.error('[MILESTONE] Failed to notify client:', notifErr.message);
@@ -2417,6 +2427,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
             entityId: task._id,
           },
           notifyByEmail: true,
+          notifyByPush: true,
         });
       } catch (notifErr) {
         console.error('[TASK_COMPLETE] Failed to notify client:', notifErr.message);
@@ -2461,6 +2472,7 @@ router.patch('/tasks/:taskId/status', async (req, res) => {
                 entityId: task._id,
               },
               notifyByEmail: false,
+              notifyByPush: true,
             });
           } catch (notifErr) {
             console.error('[MILESTONE] Failed to notify client:', notifErr.message);
@@ -2727,6 +2739,7 @@ router.post('/tasks/assign', async (req, res) => {
           entityId: result.task._id,
         },
         notifyByEmail: true, // Email trigger for important event
+        notifyByPush: true,
       });
       console.log('[NOTIFICATION DEBUG] Notification created successfully:', notifResult._id, 'for recipient:', clientId);
     } catch (err) {
@@ -3075,6 +3088,7 @@ router.patch('/tasks/:taskId/approve', async (req, res) => {
           entityId: task._id,
         },
         notifyByEmail: true, // Email trigger for important event
+        notifyByPush: true,
       });
     } catch (err) {
       console.error('Failed to notify client of task approval:', err.message);
@@ -3154,6 +3168,7 @@ router.post('/tasks/:taskId/reject', async (req, res) => {
           entityId: task._id,
         },
         notifyByEmail: true,
+        notifyByPush: true,
       });
     } catch (err) {
       console.error('Failed to notify client of task rejection:', err.message);
@@ -4563,6 +4578,7 @@ router.post('/notices', async (req, res) => {
             entityId: notice._id,
           },
           notifyByEmail: true, // Email trigger for important event
+          notifyByPush: true,
         });
       }
       

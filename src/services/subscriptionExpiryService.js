@@ -3,6 +3,7 @@ const UserSubscription = require('../models/UserSubscription');
 const Wallet = require('../models/Wallet');
 const { WalletTransaction, TRANSACTION_TYPES } = require('../models/WalletTransaction');
 const Notification = require('../models/Notification');
+const pushNotificationService = require('./pushNotificationService');
 
 async function expireSubscriptions(now = new Date()) {
   const subscriptionFilter = { isActive: true, expiresAt: { $lt: now } };
@@ -21,6 +22,7 @@ async function expireSubscriptions(now = new Date()) {
     const session = await mongoose.startSession();
     try {
       const result = await session.withTransaction(async () => {
+        const pushNotifications = [];
         // Both original expiry predicates are evaluated again within the transaction.
         const expired = await UserSubscription.updateMany(
           { ...subscriptionFilter, userId: clientId },
@@ -55,12 +57,27 @@ async function expireSubscriptions(now = new Date()) {
             message: `Your ${expiredCredits} subscription credits have expired. Please recharge to continue.`,
             relatedEntity: { entityType: 'WALLET', entityId: wallet._id },
           }], { session });
+          pushNotifications.push({
+            recipientId: wallet.clientId.toString(),
+            title: 'Subscription Credits Expired',
+            message: `Your ${expiredCredits} subscription credits have expired. Please recharge to continue.`,
+            walletId: wallet._id.toString(),
+          });
           walletCount++;
         }
-        return { subscriptions: expired.modifiedCount || 0, wallets: walletCount };
+        return { subscriptions: expired.modifiedCount || 0, wallets: walletCount, pushNotifications };
       });
       totals.subscriptions += result.subscriptions;
       totals.wallets += result.wallets;
+      for (const notification of result.pushNotifications || []) {
+        pushNotificationService.sendToUser(
+          notification.recipientId,
+          { title: notification.title, body: notification.message },
+          { type: 'SUBSCRIPTION_EXPIRED', entityType: 'WALLET', entityId: notification.walletId, url: '/wallet' }
+        ).catch((err) => {
+          console.error('[SUBSCRIPTION EXPIRY PUSH] Error sending push (non-fatal):', err.message);
+        });
+      }
     } finally {
       await session.endSession();
     }
