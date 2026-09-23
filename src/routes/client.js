@@ -33,6 +33,7 @@ const EarningsConfig = require('../models/EarningsConfig');
 const EarningsRedeemRequest = require('../models/EarningsRedeemRequest');
 const { computeCreditDelta } = require('../utils/transactionHelpers');
 const mediaStorage = require('../services/mediaStorageService');
+const { validateOrderInputs, orderContentFiles } = require('../utils/orderContent');
 
 const router = express.Router();
 
@@ -3735,6 +3736,44 @@ router.get('/office-config', async (req, res) => {
 
 // --- Client Order Routes ---
 
+router.post('/order-content/upload-url', async (req, res) => {
+  try {
+    const { filename, size, mime } = req.body || {};
+    const result = await mediaStorage.issueOrderUpload({ clientId: req.user.id, filename, size, mime });
+    return res.set('Cache-Control', 'no-store').json(result);
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Unable to start upload' });
+  }
+});
+
+router.post('/order-content/validate', async (req, res) => {
+  try {
+    const attachment = await mediaStorage.validateOrderAttachment(req.user.id, req.body?.attachment);
+    return res.set('Cache-Control', 'no-store').json({ attachment });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Unable to verify upload' });
+  }
+});
+
+router.get('/orders/:orderId/content', async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.orderId)) return res.status(400).json({ error: 'Invalid order id' });
+    const order = await Order.findOne({ _id: req.params.orderId, clientId: req.user.id })
+      .select('clientId items.planTitle items.inputs.attachment').lean();
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const files = orderContentFiles(order);
+    res.set('Cache-Control', 'no-store');
+    if (req.query.key !== undefined) {
+      const attachment = files.find(file => file.key === req.query.key);
+      if (!attachment) return res.status(404).json({ error: 'File not found in this order' });
+      return res.json(await mediaStorage.issueOrderViewUrl(req.user.id, attachment, req.query.download === '1'));
+    }
+    return res.json({ files });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Unable to load order content' });
+  }
+});
+
 // GET /client/orders - Fetch client's own orders
 router.get('/orders', async (req, res) => {
   try {
@@ -3747,6 +3786,7 @@ router.get('/orders', async (req, res) => {
     }
     
     const orders = await Order.find(query)
+      .select('-items.inputs.attachment')
       .sort({ createdAt: -1 })
       .lean();
     
@@ -3892,35 +3932,8 @@ router.post('/purchase-cart', async (req, res) => {
     }
 
     // 3b. Validate required client inputs (per-quantity)
-    for (const item of items) {
-      const plan = planMap[item.planId];
-      if (!plan.requireLink && !plan.requireCustomInput) continue;
-
-      const quantity = Math.max(1, parseInt(item.quantity) || 1);
-      const itemInputs = item.inputs || [];
-
-      // Check array length matches quantity
-      if (itemInputs.length !== quantity) {
-        return res.status(400).json({ 
-          error: `Input count mismatch for ${plan.title}: expected ${quantity}, got ${itemInputs.length}` 
-        });
-      }
-
-      // Validate each unit's inputs
-      for (let i = 0; i < itemInputs.length; i++) {
-        const input = itemInputs[i];
-        if (plan.requireLink && (!input.link || !input.link.trim())) {
-          return res.status(400).json({ 
-            error: `Link is required for "${plan.title}" — Item ${i + 1}` 
-          });
-        }
-        if (plan.requireCustomInput && (!input.customInput || !input.customInput.trim())) {
-          return res.status(400).json({ 
-            error: `${plan.customInputLabel || 'Custom input'} is required for "${plan.title}" — Item ${i + 1}` 
-          });
-        }
-      }
-    }
+    const validatedInputs = await validateOrderInputs(items, clientId, mediaStorage.validateOrderAttachment);
+    items = items.map((item, index) => ({ ...item, inputs: validatedInputs[index] }));
 
     // 4. Build order items and calculate total price
     const orderItems = [];
@@ -4161,7 +4174,7 @@ router.post('/purchase-cart', async (req, res) => {
 
   } catch (err) {
     console.error('Order creation error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to create order' });
+    return res.status(err.status || 500).json({ error: err.message || 'Failed to create order' });
   } finally {
     // Always end the session
     session.endSession();

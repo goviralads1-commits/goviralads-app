@@ -343,7 +343,106 @@ const deleteMediaObject = async (task, key) => {
   return { key };
 };
 
+// Order content uses the same private bucket, direct PUT, and existing retention.
+// Unsubmitted/canceled objects are also removed by the bucket-wide lifecycle rule.
+const ORDER_MIME_TYPES = {
+  'video/mp4': { kind: 'video', ext: 'mp4' },
+  'video/webm': { kind: 'video', ext: 'webm' },
+  'application/pdf': { kind: 'file', ext: 'pdf' },
+  'text/plain': { kind: 'file', ext: 'txt' },
+  'image/jpeg': { kind: 'file', ext: 'jpg' },
+  'image/png': { kind: 'file', ext: 'png' },
+  'image/webp': { kind: 'file', ext: 'webp' },
+};
+const ORDER_KEY_REGEX = /^orders\/[0-9a-f]{24}\/[0-9a-f]{32}\.(mp4|webm|pdf|txt|jpg|png|webp)$/;
+
+const checkOrderUpload = (clientId, att) => {
+  if (!isEnabled()) throw new MediaError(403, 'Media uploads are disabled');
+  if (!isValidTaskId(clientId)) throw new MediaError(400, 'Invalid client id');
+  if (!att || typeof att !== 'object' || Array.isArray(att)) throw new MediaError(400, 'Invalid file');
+  const entry = Object.hasOwn(ORDER_MIME_TYPES, att.mime || '') && ORDER_MIME_TYPES[att.mime];
+  if (!entry) throw new MediaError(400, 'Supported files: MP4, WebM, PDF, TXT, JPG, PNG, WebP');
+  if (!Number.isSafeInteger(att.size) || att.size <= 0) throw new MediaError(400, 'Invalid file size');
+  const maxBytes = Math.min(getConfig().maxVideoMB, 500) * 1024 * 1024;
+  if (att.size > maxBytes) throw new MediaError(413, `File exceeds the ${maxBytes / 1024 / 1024} MB limit`);
+  return entry;
+};
+
+const issueOrderUpload = async ({ clientId, filename, size, mime }) => {
+  const entry = checkOrderUpload(clientId, { size, mime });
+  const s3 = getS3Client();
+  const { PutObjectCommand } = require('@aws-sdk/client-s3');
+  const key = `orders/${clientId}/${crypto.randomBytes(16).toString('hex')}.${entry.ext}`;
+  const uploadUrl = await s3.getSignedUrl(s3.client, new PutObjectCommand({
+    Bucket: s3.bucket, Key: key, ContentType: mime,
+  }), { expiresIn: UPLOAD_TTL_SEC });
+  return {
+    uploadUrl, expiresInSec: UPLOAD_TTL_SEC,
+    attachment: {
+      kind: entry.kind, key, name: sanitizeFilename(filename) || `content.${entry.ext}`,
+      size, mime, expiresAt: new Date(Date.now() + getConfig().retentionDays * 86400000),
+    },
+  };
+};
+
+const validateOrderAttachment = async (clientId, att) => {
+  const entry = checkOrderUpload(clientId, att);
+  // Owner comes from the authenticated client / persisted Order, never request body.
+  if (typeof att.key !== 'string' || !ORDER_KEY_REGEX.test(att.key) ||
+      !att.key.startsWith(`orders/${clientId}/`) || !att.key.endsWith(`.${entry.ext}`)) {
+    throw new MediaError(400, 'Invalid file ownership or key');
+  }
+  const s3 = getS3Client();
+  let head;
+  try {
+    head = await s3.client.send(new s3.HeadObjectCommand({ Bucket: s3.bucket, Key: att.key }));
+  } catch (err) {
+    if (err?.name === 'NotFound' || err?.$metadata?.httpStatusCode === 404) {
+      throw new MediaError(404, 'Uploaded file is missing or has expired');
+    }
+    throw new MediaError(502, 'Unable to verify uploaded file; retry validation');
+  }
+  if (head.ContentLength !== att.size || head.ContentType !== att.mime) {
+    throw new MediaError(400, 'Uploaded file size or type does not match');
+  }
+  // Anchor expiry to the stored object's age, not checkout/approval/retry time.
+  const uploadedAt = new Date(head.LastModified).getTime();
+  if (!Number.isFinite(uploadedAt)) throw new MediaError(502, 'Unable to verify file age');
+  const expiresAt = new Date(uploadedAt + getConfig().retentionDays * 86400000);
+  if (expiresAt.getTime() <= Date.now()) throw new MediaError(410, 'Uploaded file has expired');
+  return {
+    kind: entry.kind, key: att.key, name: sanitizeFilename(att.name) || `content.${entry.ext}`,
+    size: head.ContentLength, mime: head.ContentType, etag: head.ETag, expiresAt,
+  };
+};
+
+// Called only by explicit content actions after exact Order/Task membership checks.
+const issueOrderViewUrl = async (clientId, att, download = false) => {
+  const storedExpiry = new Date(att.expiresAt).getTime();
+  if (!Number.isFinite(storedExpiry) || storedExpiry <= Date.now()) {
+    throw new MediaError(410, 'File expired under the existing retention policy');
+  }
+  const verified = await validateOrderAttachment(clientId, att);
+  if (att.etag && verified.etag !== att.etag) throw new MediaError(410, 'Submitted file has changed');
+  const expiresInSec = Math.min(VIEW_TTL_SEC, Math.floor((Math.min(storedExpiry, +verified.expiresAt) - Date.now()) / 1000));
+  if (expiresInSec < 1) throw new MediaError(410, 'File has expired');
+  const s3 = getS3Client();
+  const { GetObjectCommand } = require('@aws-sdk/client-s3');
+  const canPreview = verified.kind === 'video' || verified.mime.startsWith('image/');
+  const disposition = download || !canPreview ? 'attachment' : 'inline';
+  const url = await s3.getSignedUrl(s3.client, new GetObjectCommand({
+    Bucket: s3.bucket, Key: verified.key,
+    ResponseContentType: verified.mime,
+    ResponseContentDisposition: `${disposition}; filename="${verified.name}"`,
+    ResponseCacheControl: 'private, no-store',
+  }), { expiresIn: expiresInSec });
+  return { url, expiresInSec };
+};
+
 module.exports = {
+  issueOrderUpload,
+  validateOrderAttachment,
+  issueOrderViewUrl,
   MediaError,
   isEnabled,
   getCapabilities,

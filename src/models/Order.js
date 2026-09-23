@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const orderContentAttachment = require('./orderContentAttachment');
 
 /**
  * ORDER STATUS FLOW:
@@ -106,6 +107,7 @@ const orderItemSchema = new mongoose.Schema({
     {
       link: { type: String, default: '' },
       customInput: { type: String, default: '' },
+      attachment: { type: orderContentAttachment, default: undefined, select: false },
     },
   ],
 }, { _id: false });

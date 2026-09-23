@@ -44,6 +44,7 @@ const { ClientEmployeeAssignment } = require('../models/ClientEmployeeAssignment
 const UserSubscription = require('../models/UserSubscription');
 const { ReminderLog } = require('../models/ReminderLog');
 const mediaStorage = require('../services/mediaStorageService');
+const { orderContentFiles } = require('../utils/orderContent');
 
 const router = express.Router();
 
@@ -1497,6 +1498,7 @@ router.get('/tasks/:taskId', async (req, res) => {
         commissionValue: task.commissionValue,
         commissionEarned: task.commissionEarned,
         // CLIENT INPUTS FROM ORDER
+        orderId: task.orderId?.toString() || null,
         clientInputs: task.clientInputs || [],
         customInputLabel: task.customInputLabel || '',
         // PLAN CLIENT INPUT CONFIG
@@ -3884,6 +3886,49 @@ router.get('/reports/clients/:clientId', async (req, res) => {
 
 // --- Order Management Routes ---
 
+// Metadata and signed URLs are loaded only from explicit content actions.
+router.get('/orders/:orderId/content', async (req, res) => {
+  try {
+    const caller = await User.findById(req.user.id).populate('customRole');
+    if (!caller || caller.customRole) return res.status(403).json({ error: 'Forbidden' });
+    if (!mongoose.isValidObjectId(req.params.orderId)) return res.status(400).json({ error: 'Invalid order id' });
+    const order = await Order.findById(req.params.orderId)
+      .select('clientId items.planTitle items.inputs.attachment').lean();
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const files = orderContentFiles(order);
+    res.set('Cache-Control', 'no-store');
+    if (req.query.key !== undefined) {
+      const attachment = files.find(file => file.key === req.query.key);
+      if (!attachment) return res.status(404).json({ error: 'File not found in this order' });
+      return res.json(await mediaStorage.issueOrderViewUrl(String(order.clientId), attachment, req.query.download === '1'));
+    }
+    return res.json({ files });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Unable to load order content' });
+  }
+});
+
+// Uses the same router-level admin access as existing task chat media.
+router.get('/tasks/:taskId/order-content', async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.taskId)) return res.status(400).json({ error: 'Invalid task id' });
+    const task = await Task.findById(req.params.taskId)
+      .select('clientId orderId title clientInputs.attachment').lean();
+    if (!task?.orderId) return res.status(404).json({ error: 'Order task not found' });
+    const files = (task.clientInputs || []).flatMap((input, unitIndex) =>
+      input.attachment ? [{ ...input.attachment, title: task.title, unitIndex }] : []);
+    res.set('Cache-Control', 'no-store');
+    if (req.query.key !== undefined) {
+      const attachment = files.find(file => file.key === req.query.key);
+      if (!attachment) return res.status(404).json({ error: 'File not found in this task' });
+      return res.json(await mediaStorage.issueOrderViewUrl(String(task.clientId), attachment, req.query.download === '1'));
+    }
+    return res.json({ files });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Unable to load task content' });
+  }
+});
+
 // GET /admin/orders - Fetch all orders with optional status filter
 router.get('/orders', async (req, res) => {
   try {
@@ -3910,6 +3955,7 @@ router.get('/orders', async (req, res) => {
     }
     
     const orders = await Order.find(query)
+      .select('-items.inputs.attachment')
       .populate('clientId', 'identifier email')
       .sort({ createdAt: -1 })
       .lean();
@@ -3986,7 +4032,7 @@ router.post('/orders/:orderId/approve', async (req, res) => {
     const { assignedTo, assignedUsers: reqAssignedUsers, commissionReviewed } = req.body || {};
     const adminId = req.user.id;
     
-    const order = await Order.findById(orderId).session(session);
+    const order = await Order.findById(orderId).select('+items.inputs.attachment').session(session);
     if (!order) {
       await session.abortTransaction();
       return res.status(404).json({ error: 'Order not found' });

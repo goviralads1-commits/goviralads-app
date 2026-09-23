@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const orderContentAttachment = require('./orderContentAttachment');
 
 const TASK_STATUS = Object.freeze({
   PENDING_APPROVAL: 'PENDING_APPROVAL',
@@ -369,6 +370,7 @@ const taskSchema = new mongoose.Schema(
     clientInputs: [{
       link: { type: String, default: '' },
       customInput: { type: String, default: '' },
+      attachment: { type: orderContentAttachment, default: undefined, select: false },
     }],
     // TASK DISCUSSION SYSTEM (Phase 6)
     // Client-Admin messaging within task context

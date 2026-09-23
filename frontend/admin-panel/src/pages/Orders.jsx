@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import OrderContentPanel from '../components/OrderContentPanel';
 
 const ORDER_STATUSES = ['ALL', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'COMPLETED'];
 
@@ -468,6 +469,11 @@ const Orders = () => {
                   ))}
                 </div>
               </div>
+
+              <OrderContentPanel
+                key={selectedOrder.id || selectedOrder._id}
+                resourceUrl={`/admin/orders/${selectedOrder.id || selectedOrder._id}/content`}
+              />
 
               {/* Order Total */}
               <div style={{

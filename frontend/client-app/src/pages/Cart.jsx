@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import api from '../services/api';
 import Header from '../components/Header';
+import OrderContentUpload from '../components/OrderContentUpload';
 
 const Cart = () => {
   const navigate = useNavigate();
@@ -13,6 +14,14 @@ const Cart = () => {
   const [walletBalance, setWalletBalance] = useState(null);
   const [itemInputs, setItemInputs] = useState({});
   const [modalItems, setModalItems] = useState([]);
+  const [uploadStates, setUploadStates] = useState({});
+  const updateUnitInput = (planId, unitIndex, changes) => {
+    setItemInputs(prev => {
+      const inputs = [...(prev[planId] || [])];
+      inputs[unitIndex] = { ...inputs[unitIndex], ...changes };
+      return { ...prev, [planId]: inputs };
+    });
+  };
 
   // Fetch wallet balance on mount
   React.useEffect(() => {
@@ -28,6 +37,7 @@ const Cart = () => {
   }, []);
 
   const handleProceedToCheckout = async () => {
+    setUploadStates({});
     if (cartItems.length === 0) {
       setToast({ type: 'error', message: 'Your cart is empty' });
       setTimeout(() => setToast(null), 3000);
@@ -80,11 +90,13 @@ const Cart = () => {
         inputs[item.id] = Array(qty).fill(null).map(() => ({ link: '', customInput: '' }));
       });
       setItemInputs(inputs);
+      setModalItems(cartItems);
       setShowConfirmModal(true);
     }
   };
 
   const handleConfirmPurchase = async () => {
+    if (purchasing || !isFormValid) return;
     setPurchasing(true);
 
     try {
@@ -99,6 +111,7 @@ const Cart = () => {
       setShowConfirmModal(false);
       setItemInputs({});
       setModalItems([]);
+      setUploadStates({});
       setPurchasing(false);
       clearCart();
 
@@ -120,9 +133,6 @@ const Cart = () => {
         navigate('/orders');
       }, 2000);
     } catch (err) {
-      setShowConfirmModal(false);
-      setItemInputs({});
-      setModalItems([]);
       setPurchasing(false);
 
       setToast({ 
@@ -136,16 +146,21 @@ const Cart = () => {
   const insufficientBalance = walletBalance !== null && walletBalance < cartTotal;
 
   // Validation: all required per-quantity inputs must be filled
-  const isFormValid = modalItems.every(item => {
-    if (!item.requireLink && !item.requireCustomInput) return true;
-    const qty = item.quantity || 1;
-    const planInputs = itemInputs[item.id] || [];
-    return planInputs.every(input => {
-      if (item.requireLink && !input.link?.trim()) return false;
-      if (item.requireCustomInput && !input.customInput?.trim()) return false;
-      return true;
+  const isFormValid = modalItems.length > 0 &&
+    Object.values(uploadStates).every(status => status === 'idle' || status === 'ready') &&
+    modalItems.every(item => {
+      const qty = item.quantity || 1;
+      const planInputs = itemInputs[item.id] || [];
+      return planInputs.length === qty && planInputs.every(input => {
+        const link = input.link?.trim();
+        if (link) {
+          try { if (!['http:', 'https:'].includes(new URL(link).protocol)) return false; }
+          catch (_) { return false; }
+        }
+        const fileReady = input.attachment && new Date(input.attachment.expiresAt).getTime() > Date.now();
+        return Boolean(link || input.customInput?.trim() || fileReady);
+      });
     });
-  });
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', paddingBottom: '140px' }}>
@@ -413,9 +428,6 @@ const Cart = () => {
                 requireCustomInput: item.requireCustomInput,
                 hasRequirements: item.requireLink || item.requireCustomInput
               });
-              const hasRequirements = item.requireLink || item.requireCustomInput;
-              if (!hasRequirements) return null;
-              
               const qty = item.quantity || 1;
               const planInputs = itemInputs[item.id] || [];
               
@@ -431,38 +443,38 @@ const Cart = () => {
                         Item {unitIndex + 1} of {qty}
                       </div>
                       
-                      {item.requireLink && (
-                        <input
-                          type="url"
-                          placeholder="Enter link"
-                          value={planInputs[unitIndex]?.link || ''}
-                          onChange={(e) => {
-                            const newInputs = [...planInputs];
-                            newInputs[unitIndex] = { ...newInputs[unitIndex], link: e.target.value };
-                            setItemInputs(prev => ({ ...prev, [item.id]: newInputs }));
-                          }}
-                          style={{ width: '100%', padding: '8px 10px', marginBottom: item.requireCustomInput ? '6px' : '0', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
+                      <p style={{ fontSize: '12px', color: '#64748b' }}>Provide at least one: a link, instructions, or an uploaded file.</p>
+                      <input
+                        type="url"
+                        aria-label="Content link"
+                        placeholder="Enter link"
+                        maxLength={2048}
+                        disabled={purchasing}
+                        value={planInputs[unitIndex]?.link || ''}
+                        onChange={e => updateUnitInput(item.id, unitIndex, { link: e.target.value })}
+                        style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' }}
+                      />
+                      <div style={{ marginTop: '8px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', display: 'block', marginBottom: '4px' }}>
+                          {item.customInputLabel || 'Instructions / suggestions'}
+                        </label>
+                        <textarea
+                          placeholder={item.customInputPlaceholder || 'Write your instructions here...'}
+                          maxLength={4000}
+                          disabled={purchasing}
+                          value={planInputs[unitIndex]?.customInput || ''}
+                          onChange={e => updateUnitInput(item.id, unitIndex, { customInput: e.target.value })}
+                          rows={4}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}
                         />
-                      )}
-                      
-                      {item.requireCustomInput && (
-                        <div style={{ marginTop: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', display: 'block', marginBottom: '4px' }}>
-                            {item.customInputLabel || 'Comment'}
-                          </label>
-                          <textarea
-                            placeholder={item.customInputPlaceholder || 'Write your comment here...'}
-                            value={planInputs[unitIndex]?.customInput || ''}
-                            onChange={(e) => {
-                              const newInputs = [...planInputs];
-                              newInputs[unitIndex] = { ...newInputs[unitIndex], customInput: e.target.value };
-                              setItemInputs(prev => ({ ...prev, [item.id]: newInputs }));
-                            }}
-                            rows={4}
-                            style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}
-                          />
-                        </div>
-                      )}
+                      </div>
+                      <OrderContentUpload
+                        disabled={purchasing}
+                        onChange={(attachment, status) => {
+                          updateUnitInput(item.id, unitIndex, { attachment });
+                          setUploadStates(prev => ({ ...prev, [`${item.id}:${unitIndex}`]: status }));
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -471,7 +483,7 @@ const Cart = () => {
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button 
-                onClick={() => { setShowConfirmModal(false); setItemInputs({}); setModalItems([]); }}
+                onClick={() => { setShowConfirmModal(false); setItemInputs({}); setModalItems([]); setUploadStates({}); }}
                 disabled={purchasing}
                 style={{ 
                   flex: 1, padding: '14px', backgroundColor: '#f1f3f5', color: '#495057', 

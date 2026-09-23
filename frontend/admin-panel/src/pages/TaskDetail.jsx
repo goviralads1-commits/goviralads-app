@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
+import OrderContentPanel from '../components/OrderContentPanel';
 import { PresetIcon, DefaultFlagIcon, PRESET_ICONS_CONFIG, getAllPresetKeys } from '../components/PresetIcons';
 import { useIconLibrary } from '../context/IconLibraryContext';
 // CHAT MEDIA (Phase 2C): reuse the audited Phase 2B admin chat components unchanged
@@ -1466,6 +1467,8 @@ const TaskDetail = () => {
             </div>
           </div>
         </div>
+
+        {task.orderId && <OrderContentPanel key={taskId} resourceUrl={`/admin/tasks/${taskId}/order-content`} />}
 
         {/* CLIENT INPUTS FROM ORDER */}
         {task.clientInputs && task.clientInputs.length > 0 && (
