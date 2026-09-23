@@ -2528,6 +2528,8 @@ router.post('/tasks/assign', async (req, res) => {
       defaultAssignedUsers,
       defaultCostBreakdown,
       defaultCommissionRoles,
+      // Plan default copied only to newly created task instances.
+      allowAssignedMilestoneEdit,
       // WORKING-DAY DEADLINE SYSTEM: plan Delivery Time (working days)
       deliveryDuration
     } = payload;
@@ -2625,6 +2627,9 @@ router.post('/tasks/assign', async (req, res) => {
         customInputPlaceholder: customInputPlaceholder || '',
         // PLAN DEFAULT COMMISSION & COST (Step 3)
         ...(defaultAssignedUsers && Array.isArray(defaultAssignedUsers) && defaultAssignedUsers.length > 0 ? { defaultAssignedUsers: defaultAssignedUsers.filter(u => u.userId && u.percentage > 0) } : {}),
+        // Default only for new tasks created from this Plan. Existing Tasks
+        // retain their independent override value.
+        allowAssignedMilestoneEdit: allowAssignedMilestoneEdit === true,
         ...(defaultCommissionRoles && Array.isArray(defaultCommissionRoles) && defaultCommissionRoles.length > 0 ? { defaultCommissionRoles: defaultCommissionRoles.filter(r => r.role && r.role.trim() && r.percentage > 0) } : {}),
         ...(defaultCostBreakdown ? { defaultCostBreakdown } : {}),
         // WORKING-DAY DEADLINE SYSTEM: plan delivery duration (null = legacy, no auto deadline)
@@ -4054,6 +4059,9 @@ router.post('/orders/:orderId/approve', async (req, res) => {
           progressTarget: item.planSnapshot?.progressTarget || 100,
           milestones: item.planSnapshot?.milestones || [],
           autoCompletionCap: item.planSnapshot?.autoCompletionCap || 100,
+          // Snapshot value from checkout: changing the Plan later never
+          // overwrites this Task's independent admin override.
+          allowAssignedMilestoneEdit: item.planSnapshot?.allowAssignedMilestoneEdit === true,
           isPurchased: true,
           orderId: order._id,
           categoryId: item.categoryId,

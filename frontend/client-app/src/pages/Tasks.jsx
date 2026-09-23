@@ -23,6 +23,10 @@ const Tasks = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('all'); // all | last7 | thisMonth | pending | completed
+  // Compact task-list milestone control: uses the existing PATCH endpoint and
+  // the existing server-computed canEditMilestone flag; no per-card fetches.
+  const [changingMilestoneTaskId, setChangingMilestoneTaskId] = useState(null);
+  const [milestoneFeedback, setMilestoneFeedback] = useState(null);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -43,6 +47,33 @@ const Tasks = () => {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  const handleListMilestoneChange = async (event, taskId) => {
+    event.stopPropagation();
+    const milestoneId = event.target.value;
+    if (!milestoneId || changingMilestoneTaskId) return;
+
+    setChangingMilestoneTaskId(taskId);
+    try {
+      const response = await api.patch(`/client/tasks/${taskId}/milestone`, { milestoneId });
+      const updatedTask = response.data.task;
+      // PATCH already derives progress/status/milestones and preserves all
+      // authorization/AUTO-to-MANUAL rules. Merge only its existing response
+      // into this card so no detail/media requests are introduced.
+      setTasks(prev => prev.map(task => (
+        (task.id || task._id) === taskId
+          ? { ...task, ...updatedTask, milestones: updatedTask.milestones || task.milestones }
+          : task
+      )));
+      setMilestoneFeedback({ taskId, type: 'success', message: 'Milestone updated' });
+      setTimeout(() => setMilestoneFeedback(null), 3000);
+    } catch (err) {
+      setMilestoneFeedback({ taskId, type: 'error', message: err.response?.data?.error || 'Failed to update milestone' });
+      setTimeout(() => setMilestoneFeedback(null), 4000);
+    } finally {
+      setChangingMilestoneTaskId(null);
+    }
+  };
 
   // Filter definitions
   const filters = [
@@ -427,6 +458,34 @@ const Tasks = () => {
                             <p style={{ fontSize: '10px', fontWeight: '600', color: focusMilestone.color || '#64748b', margin: '4px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {focusMilestone.name}{focusMilestone.percentage ? ` · ${focusMilestone.percentage}%` : ''}
                             </p>
+                          )}
+                          {/* Existing server authorization is authoritative. This
+                              compact selector appears only when the list API
+                              granted canEditMilestone, and submits only an
+                              existing milestone id to the existing PATCH route. */}
+                          {task.canEditMilestone && (
+                            <div onClick={(e) => e.stopPropagation()} style={{ marginTop: '9px', padding: '8px 10px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '9px' }}>
+                              <label htmlFor={`list-milestone-select-${task.id}`} style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#166534', marginBottom: '4px' }}>Current Milestone</label>
+                              <select
+                                id={`list-milestone-select-${task.id}`}
+                                aria-label="Update milestone"
+                                value={currentMilestone?.id || focusMilestone?.id || ''}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => handleListMilestoneChange(e, task.id || task._id)}
+                                disabled={changingMilestoneTaskId === (task.id || task._id)}
+                                style={{ width: '100%', padding: '7px 9px', fontSize: '12px', fontWeight: '600', color: '#166534', backgroundColor: '#fff', border: '1px solid #86efac', borderRadius: '7px', outline: 'none', cursor: changingMilestoneTaskId === (task.id || task._id) ? 'wait' : 'pointer' }}
+                              >
+                                <option value="">Select milestone</option>
+                                {sortedAsc.map(m => (
+                                  <option key={m.id || `${m.name}-${m.percentage}`} value={m.id}>
+                                    {m.name}{typeof m.percentage === 'number' ? ` · ${m.percentage}%` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              {milestoneFeedback?.taskId === (task.id || task._id) && (
+                                <p style={{ margin: '5px 0 0', fontSize: '10px', fontWeight: '600', color: milestoneFeedback.type === 'success' ? '#15803d' : '#b91c1c' }}>{milestoneFeedback.message}</p>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}

@@ -82,6 +82,7 @@ const Plans = () => {
     progressTarget: 100,
     quantity: '',
     deliveryDuration: '',
+    allowAssignedMilestoneEdit: false,
     showQuantityToClient: true,
     showCreditsToClient: true,
     isActivePlan: true,
@@ -163,7 +164,7 @@ const Plans = () => {
   const resetForm = () => {
     setFormData({
       title: '', description: '', creditCost: '', offerPrice: '', originalPrice: '',
-      categoryId: '', progressTarget: 100, quantity: '', deliveryDuration: '', showQuantityToClient: true,
+      categoryId: '', progressTarget: 100, quantity: '', deliveryDuration: '', allowAssignedMilestoneEdit: false, showQuantityToClient: true,
       showCreditsToClient: true, isActivePlan: true, publicNotes: '', planMedia: [],
       isFeatured: false, isPopular: false, isNew: false, visibility: 'PUBLIC', allowedClients: [],
       requireClientContent: false,
@@ -214,6 +215,7 @@ const Plans = () => {
         categoryId: formData.categoryId || null,
         quantity: formData.quantity ? Number(formData.quantity) : undefined,
         deliveryDuration: formData.deliveryDuration === '' ? null : Number(formData.deliveryDuration),
+        allowAssignedMilestoneEdit: formData.allowAssignedMilestoneEdit === true,
         showQuantityToClient: formData.showQuantityToClient,
         showCreditsToClient: formData.showCreditsToClient,
         isActivePlan: formData.isActivePlan,
@@ -1084,6 +1086,19 @@ const Plans = () => {
               <div style={{ backgroundColor: '#fffbeb', borderRadius: '16px', padding: '18px', marginBottom: '24px', border: '1px solid #fde68a' }}>
                 <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>💰 Default Commission Setup</h4>
                 <p style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>These defaults auto-apply to tasks created from this plan.</p>
+
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', padding: '10px', marginBottom: '14px', backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #fde68a', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.allowAssignedMilestoneEdit === true}
+                    onChange={(e) => handleInputChange('allowAssignedMilestoneEdit', e.target.checked)}
+                    style={{ width: '17px', height: '17px', marginTop: '1px', accentColor: '#6366f1', flexShrink: 0 }}
+                  />
+                  <span>
+                    <span style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#475569' }}>Allow assigned user to change milestones</span>
+                    <span style={{ display: 'block', fontSize: '11px', color: '#64748b', marginTop: '2px', lineHeight: 1.4 }}>New tasks created from this plan will allow the assigned user to change milestones. Individual tasks can still be overridden by admin.</span>
+                  </span>
+                </label>
 
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '10px' }}>Default Team Members</label>
                 {defaultAssignedUsers.map((member, idx) => {

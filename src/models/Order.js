@@ -87,6 +87,10 @@ const orderItemSchema = new mongoose.Schema({
     progressTarget: { type: Number, default: 100 },
     milestones: { type: Array, default: [] },
     autoCompletionCap: { type: Number, default: 100 },
+    // Snapshot the Plan's default milestone-edit policy. This is copied to a
+    // new Task only when the order is approved; later Plan edits never affect
+    // this pending order or any existing Task.
+    allowAssignedMilestoneEdit: { type: Boolean, default: false },
     customInputLabel: { type: String, default: '' },
     assignedUsers: { type: Array, default: [] },
     costBreakdown: {

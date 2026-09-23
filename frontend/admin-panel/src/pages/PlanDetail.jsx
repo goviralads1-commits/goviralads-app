@@ -48,6 +48,8 @@ const PlanDetail = () => {
     countdownEndDate: '',
     // WORKING-DAY DEADLINE SYSTEM: plan Delivery Time (working days)
     deliveryDuration: '',
+    // Default copied only to newly-created Tasks; existing Tasks stay unchanged.
+    allowAssignedMilestoneEdit: false,
     // Section assignments
     isFeatured: false,
     isPopular: false,
@@ -120,6 +122,8 @@ const PlanDetail = () => {
         countdownEndDate: planData.countdownEndDate ? planData.countdownEndDate.split('T')[0] : '',
         // WORKING-DAY DEADLINE SYSTEM: plan Delivery Time (working days)
         deliveryDuration: planData.deliveryDuration ?? '',
+        // Default copied only to new Tasks created from this Plan.
+        allowAssignedMilestoneEdit: planData.allowAssignedMilestoneEdit === true,
         // Section assignments
         isFeatured: planData.isFeatured ?? false,
         isPopular: planData.isPopular ?? false,
@@ -337,6 +341,8 @@ const PlanDetail = () => {
         // WORKING-DAY DEADLINE SYSTEM: Delivery Time — positive whole working
         // days, or null to clear (backend validates and normalizes)
         deliveryDuration: formData.deliveryDuration === '' ? null : Number(formData.deliveryDuration),
+        // This is a Plan default only. Existing Task overrides are never edited.
+        allowAssignedMilestoneEdit: formData.allowAssignedMilestoneEdit === true,
         // Section assignments
         isFeatured: formData.isFeatured,
         isPopular: formData.isPopular,
@@ -703,6 +709,23 @@ const PlanDetail = () => {
                 <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none' }}>Working Days</span>
               </div>
               <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0' }}>Deadlines for purchased tasks are auto-calculated using the office's configured working days (Mon–Fri by default; holidays always skipped), landing at 6:00 PM on the last working day. Leave empty for no automatic deadline.</p>
+            </div>
+
+            {/* Assigned-user milestone policy — a Plan default copied only to
+                tasks created after this Plan is saved. */}
+            <div style={{ gridColumn: '1 / -1', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.allowAssignedMilestoneEdit === true}
+                  onChange={(e) => handleInputChange('allowAssignedMilestoneEdit', e.target.checked)}
+                  style={{ width: '18px', height: '18px', marginTop: '1px', accentColor: '#6366f1', flexShrink: 0 }}
+                />
+                <span>
+                  <span style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>Allow assigned user to change milestones</span>
+                  <span style={{ display: 'block', fontSize: '12px', color: '#64748b', marginTop: '3px', lineHeight: 1.4 }}>New tasks created from this plan will allow the assigned user to change milestones. Individual tasks can still be overridden by admin.</span>
+                </span>
+              </label>
             </div>
 
             {/* Milestones Editor — reused from TaskDetail.jsx */}

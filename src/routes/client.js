@@ -2209,6 +2209,9 @@ router.post('/plans/:planId/purchase', async (req, res) => {
       countdownEndDate: null,
       milestones: plan.milestones || [], // Copy milestones
       autoCompletionCap: plan.autoCompletionCap || 100,
+      // Copy the Plan default once. This Task keeps its own value so later
+      // Plan edits never overwrite the per-task admin override.
+      allowAssignedMilestoneEdit: plan.allowAssignedMilestoneEdit === true,
       // CONTENT REQUIREMENT CONTROL (Phase 2 Step 4)
       requireClientContent: plan.requireClientContent || false,
       // Auto-populate from client's assigned team
@@ -2380,6 +2383,9 @@ router.post('/subscriptions/:id/purchase', async (req, res) => {
         progress: task.progress,
         status: TASK_STATUS.PENDING_APPROVAL,
         deadline: task.deadline,
+        // Copy the source Plan/task default only at clone time; this remains
+        // an independent Task-level override afterwards.
+        allowAssignedMilestoneEdit: task.allowAssignedMilestoneEdit === true,
         // WORKING-DAY DEADLINE SYSTEM: snapshot plan delivery duration
         deliveryDuration: task.deliveryDuration || null,
         planId: task._id,
@@ -2697,6 +2703,24 @@ router.get('/tasks', async (req, res) => {
           const isAssignedViaAssignedTo = t.assignedTo && t.assignedTo.toString() === clientId;
           return isAssignedViaUsers || isAssignedViaAssignedTo;
         })(),
+        // Server-authoritative list eligibility for the existing milestone
+        // PATCH endpoint. No extra request is needed per card.
+        canEditMilestone: (() => {
+          const isOwner = t.clientId && t.clientId.toString() === clientId;
+          if (
+            isOwner
+            || !['PENDING', 'ACTIVE'].includes(currentStatus)
+            || !Array.isArray(currentMilestones)
+            || currentMilestones.length === 0
+          ) return false;
+          const isAssignedViaUsers = (t.assignedUsers || []).some(u => {
+            if (!u.userId) return false;
+            const uid = typeof u.userId === 'object' && u.userId._id ? u.userId._id.toString() : u.userId.toString();
+            return uid === clientId;
+          });
+          const isAssignedViaAssignedTo = t.assignedTo && t.assignedTo.toString() === clientId;
+          return (isAssignedViaUsers || isAssignedViaAssignedTo) && t.allowAssignedMilestoneEdit === true;
+        })(),
         // COMMISSION DISPLAY (Phase 3): the logged-in user's OWN net commission
         // for this task — the settled EarningsLedger net after completion, or
         // the display-only pre-completion projection. Never contains another
@@ -2725,8 +2749,10 @@ router.get('/tasks', async (req, res) => {
         orderCode: t.orderId
           ? (orderCodeByTask.get(t.orderId.toString()) || null)
           : null,
-        // FIX #1: Include milestones in response
+        // FIX #1: Include milestones in response; id is required by the
+        // existing PATCH /client/tasks/:taskId/milestone endpoint.
         milestones: currentMilestones.map(m => ({
+          id: m._id ? m._id.toString() : undefined,
           name: m.name,
           percentage: m.percentage,
           color: m.color,
@@ -4243,6 +4269,9 @@ router.post('/purchase-cart', async (req, res) => {
           progressTarget: plan.progressTarget || 100,
           milestones: plan.milestones || [],
           autoCompletionCap: plan.autoCompletionCap || 100,
+          // Checkout snapshot prevents later Plan edits from changing a
+          // pending order's eventual Task-level value.
+          allowAssignedMilestoneEdit: plan.allowAssignedMilestoneEdit === true,
           internalNotes: plan.internalNotes || '',
           priority: plan.priority || 'Medium',
           showQuantityToClient: plan.showQuantityToClient !== false,
