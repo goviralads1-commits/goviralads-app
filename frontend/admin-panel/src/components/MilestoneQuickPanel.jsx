@@ -31,7 +31,7 @@ const cleanMilestones = (milestones) =>
     // `reached` / `reachedAt` are intentionally never sent — server derives them.
   }));
 
-const MilestoneQuickPanel = ({ task, onSaved }) => {
+const MilestoneQuickPanel = ({ task, onSaved, inlinePanel = false }) => {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -196,7 +196,14 @@ const MilestoneQuickPanel = ({ task, onSaved }) => {
 
       {open && (
         <div style={{
-          position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)', zIndex: 40,
+          position: inlinePanel ? 'relative' : 'absolute',
+          left: inlinePanel ? 'auto' : 0,
+          right: inlinePanel ? 'auto' : 0,
+          top: inlinePanel ? 'auto' : 'calc(100% + 6px)',
+          marginTop: inlinePanel ? '6px' : 0,
+          zIndex: inlinePanel ? 'auto' : 40,
+          maxHeight: inlinePanel ? 'min(360px, 55vh)' : 'none',
+          overflowY: inlinePanel ? 'auto' : 'visible',
           background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px',
           boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '10px',
         }}>

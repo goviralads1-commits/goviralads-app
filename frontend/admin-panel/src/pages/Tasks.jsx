@@ -1310,6 +1310,7 @@ const Tasks = () => {
                     <MilestoneQuickPanel
                       task={task}
                       onSaved={(updated) => handleMilestoneSaved(task.id, updated)}
+                      inlinePanel
                     />
                   </div>
                 )}
