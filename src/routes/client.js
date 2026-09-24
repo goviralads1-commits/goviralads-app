@@ -2980,6 +2980,8 @@ router.get('/insights/tasks', async (req, res) => {
 // from the earliest persisted TASK_COMPLETED notification per task (one batched
 // query — no N+1); tasks without that record report completedAt = null (no
 // legacy backfill, never derived from endDate or updatedAt).
+const { buildTimelineJourneyMap, findTimelineEventTaskIds, findTimelineTasks } = require('../utils/workflowTimeline');
+
 router.get('/insights/timeline', async (req, res) => {
   try {
     const clientId = req.user.id;
@@ -3018,38 +3020,23 @@ router.get('/insights/timeline', async (req, res) => {
     // outside. One batched server-side query; the clientId (= req.user.id, never
     // client-supplied) base filter still ANDs over the whole $or, so completion
     // ids belonging to other clients can never surface here.
-    let completedInRangeIds = [];
+    let eventTaskIds = { completedIds: [], approvedIds: [] };
     if (hasRange) {
       try {
-        completedInRangeIds = await Notification.find({
-          type: 'TASK_COMPLETED',
-          'relatedEntity.entityType': 'TASK',
-          createdAt: rangeFilter,
-        }).distinct('relatedEntity.entityId');
+        eventTaskIds = await findTimelineEventTaskIds(rangeFilter);
       } catch (err) {
         console.error('Timeline completedInRangeIds query failed:', err.message);
-        completedInRangeIds = [];
       }
     }
-    const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { deadline: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
-      : null;
-    const taskFilter = taskDateScope
-      ? { $and: [taskBase, taskVisibility, taskDateScope] }
-      : { $and: [taskBase, taskVisibility] };
-
-    const [orders, tasks] = await Promise.all([
-      Order.find({ clientId, ...createdAtFilter })
-        .sort({ createdAt: 1 })
-        .select('orderId totalAmount orderStatus createdAt items.planTitle')
-        .limit(500)
-        .lean(),
-      Task.find(taskFilter)
-        .sort({ startDate: 1 })
-        .select('title status startDate endDate deadline creditCost clientId')
-        .limit(500)
-        .lean()
-    ]);
+    const orders = await Order.find({ clientId, ...(hasRange ? {
+      $or: [{ createdAt: rangeFilter }, { approvedAt: rangeFilter }, { completedAt: rangeFilter }],
+    } : {}) }).sort({ createdAt: 1 })
+      .select('orderId clientId totalAmount orderStatus createdAt approvedAt completedAt items.planTitle')
+      .limit(500).lean();
+    const tasks = await findTimelineTasks({
+      taskScope: { $and: [taskBase, taskVisibility] },
+      rangeFilter, ...eventTaskIds, orderIds: orders.map(o => o._id), limit: 500,
+    });
 
     // Client names are required only for non-owner assigned-task cards. Resolve
     // existing Task.clientId -> User.profile.name once for the whole response.
@@ -3066,31 +3053,17 @@ router.get('/insights/timeline', async (req, res) => {
       }
     }
 
-    // ACTUAL COMPLETION TIMESTAMP — earliest TASK_COMPLETED notification per task
-    // in ONE batched query (no N+1). The task ids come from the client-scoped
-    // query above (req.user.id), so no other client's notifications are exposed.
-    // No record => completedAt stays null (never endDate/updatedAt, no backfill).
-    const completedAtByTask = new Map();
-    if (tasks.length > 0) {
-      try {
-        const doneNotifs = await Notification.find({
-          type: 'TASK_COMPLETED',
-          'relatedEntity.entityType': 'TASK',
-          'relatedEntity.entityId': { $in: tasks.map(t => t._id) },
-        }).select('relatedEntity.entityId createdAt').sort({ createdAt: 1 }).lean();
-        for (const n of doneNotifs) {
-          const key = n.relatedEntity?.entityId?.toString();
-          if (key && !completedAtByTask.has(key)) completedAtByTask.set(key, n.createdAt);
-        }
-      } catch (err) {
-        console.error('Timeline completedAtByTask query failed:', err.message);
-      }
-    }
+    // Reuse recorded task events. Order context remains ownership-only, even
+    // when the caller is assigned to another client's task.
+    const journeyByTask = await buildTimelineJourneyMap(tasks, clientId, orders);
 
     res.json({
       range: { startDate: startDate || null, endDate: endDate || null },
       orders: orders.map(o => ({
+        id: o._id.toString(),
         orderId: o.orderId || '',
+        approvedAt: o.approvedAt || null,
+        completedAt: o.completedAt || null,
         totalAmount: o.totalAmount || 0,
         orderStatus: o.orderStatus,
         createdAt: o.createdAt,
@@ -3103,12 +3076,12 @@ router.get('/insights/timeline', async (req, res) => {
         startDate: t.startDate || null,
         endDate: t.endDate || null,
         deadline: t.deadline || null,
+        clientId: t.clientId?.toString() || null,
         // Only an assigned working user receives another client's display name.
         clientName: t.clientId && t.clientId.toString() !== clientId
           ? (clientNameById.get(t.clientId.toString()) || null)
           : null,
-        // Actual completion event time (TASK_COMPLETED notification) or null.
-        completedAt: completedAtByTask.get(t._id.toString()) || null,
+        ...journeyByTask.get(t._id.toString()),
         creditCost: t.creditCost || 0
       }))
     });

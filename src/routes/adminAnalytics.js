@@ -33,6 +33,7 @@ const UserSubscription = require('../models/UserSubscription');
 const { RechargeRequest } = require('../models/RechargeRequest');
 const CommissionLog = require('../models/CommissionLog');
 const Notification = require('../models/Notification');
+const { buildTimelineJourneyMap, findTimelineEventTaskIds, findTimelineTasks } = require('../utils/workflowTimeline');
 
 router.use(authenticateJWT);
 router.use(requireAdmin);
@@ -50,30 +51,9 @@ function buildDateFilters(startDate, endDate) {
   };
 }
 
-// ACTUAL COMPLETION TIMESTAMP for the timeline endpoints: the EARLIEST persisted
-// TASK_COMPLETED notification per task is the authoritative completion event time
-// (written at the completion transition by the admin completion paths and the
-// client AUTO-completion paths). ONE batched query per request — no N+1. Tasks
-// without such a record get completedAt = null: no legacy backfill, and never
-// derived from endDate or updatedAt.
-async function buildCompletedAtMap(tasks) {
-  const completedAtByTask = new Map();
-  if (!tasks || tasks.length === 0) return completedAtByTask;
-  const doneNotifs = await Notification.find({
-    type: 'TASK_COMPLETED',
-    'relatedEntity.entityType': 'TASK',
-    'relatedEntity.entityId': { $in: tasks.map(t => t._id) },
-  }).select('relatedEntity.entityId createdAt').sort({ createdAt: 1 }).lean();
-  for (const n of doneNotifs) {
-    const key = n.relatedEntity?.entityId?.toString();
-    if (key && !completedAtByTask.has(key)) completedAtByTask.set(key, n.createdAt);
-  }
-  return completedAtByTask;
-}
-
 // Shared additive task mapper for existing admin timeline responses. One client
 // lookup per response prevents calendar rendering from causing N+1 queries.
-async function buildTimelineTaskPayload(tasks, completedAtByTask) {
+async function buildTimelineTaskPayload(tasks, journeyByTask) {
   const clientIds = [...new Set((tasks || []).filter(t => t.clientId).map(t => t.clientId.toString()))];
   const clientNameById = new Map();
   if (clientIds.length > 0) {
@@ -91,8 +71,9 @@ async function buildTimelineTaskPayload(tasks, completedAtByTask) {
     startDate: t.startDate || null,
     endDate: t.endDate || null,
     deadline: t.deadline || null,
+    clientId: t.clientId?.toString() || null,
     clientName: t.clientId ? (clientNameById.get(t.clientId.toString()) || null) : null,
-    completedAt: completedAtByTask.get(t._id.toString()) || null,
+    ...journeyByTask.get(t._id.toString()),
     creditCost: t.creditCost || 0,
   }));
 }
@@ -100,26 +81,27 @@ async function buildTimelineTaskPayload(tasks, completedAtByTask) {
 // Resolve and authorize the target client. Returns { clientId } when allowed,
 // or a { status, error } object the handler must return to the caller.
 async function resolveAuthorizedClient(req) {
-  const { clientId } = req.query;
-  if (!clientId || !mongoose.isValidObjectId(clientId)) {
-    return { status: 400, error: 'Valid clientId is required' };
+  const raw = req.query.clientIds ?? req.query.clientId;
+  if (typeof raw !== 'string') return { status: 400, error: 'Valid clientId or comma-separated clientIds is required' };
+  const ids = [...new Set(raw.split(',').map(id => id.trim()))];
+  if (!ids.length || ids.length > 100 || ids.some(id => !mongoose.isValidObjectId(id))) {
+    return { status: 400, error: 'Select between 1 and 100 valid clients' };
   }
-
-  const target = await User.findById(clientId).select('role status isDeleted').lean();
-  if (!target || target.role !== 'CLIENT' || target.isDeleted) {
-    return { status: 404, error: 'Client not found' };
-  }
+  const targets = await User.find({ _id: { $in: ids }, role: 'CLIENT', isDeleted: { $ne: true } }).select('_id').lean();
+  if (targets.length !== ids.length) return { status: 404, error: 'Client not found' };
 
   // Reuse the caller's EXISTING authorization surface (same rule as GET /admin/clients)
   const caller = await User.findById(req.user.id).populate('customRole');
   const isMainAdmin = caller && caller.role === 'ADMIN' && !caller.customRole;
   if (!isMainAdmin) {
+    if (!caller) return { status: 404, error: 'Client not found' };
     const visibleClientIds = await Task.distinct('clientId', { assignedTo: caller._id });
-    const allowed = visibleClientIds.some(id => id && String(id) === String(clientId));
-    if (!allowed) return { status: 404, error: 'Client not found' };
+    const allowed = new Set(visibleClientIds.filter(Boolean).map(String));
+    if (ids.some(id => !allowed.has(id))) return { status: 404, error: 'Client not found' };
   }
 
-  return { clientId: new mongoose.Types.ObjectId(String(clientId)) };
+  const clientIds = ids.map(id => new mongoose.Types.ObjectId(id));
+  return { clientId: clientIds.length === 1 ? clientIds[0] : { $in: clientIds }, clientIds };
 }
 
 // ---------- GET /admin/analytics/client ----------
@@ -179,7 +161,9 @@ router.get('/client', async (req, res) => {
       // Commission Generate: CommissionLog.amount sum for THIS client's tasks (by createdAt)
       CommissionLog.aggregate([
         { $match: { ...commissionFilter, ...createdAtFilter } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
+        { $lookup: { from: Task.collection.name, localField: 'taskId', foreignField: '_id', as: 'task' } },
+        { $unwind: '$task' },
+        { $group: { _id: '$task.clientId', total: { $sum: '$amount' } } }
       ]),
       // Expenses/Tax/Other: ONLY from COMPLETED tasks, by completion date (updatedAt)
       Task.aggregate([
@@ -220,33 +204,34 @@ router.get('/client', async (req, res) => {
     const [rechargeAgg, spendAgg] = await Promise.all([
       WalletTransaction.aggregate([
         { $match: { type: 'RECHARGE_APPROVED', walletId: { $in: walletIds }, ...createdAtFilter } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
+        { $lookup: { from: Wallet.collection.name, localField: 'walletId', foreignField: '_id', as: 'wallet' } },
+        { $unwind: '$wallet' },
+        { $group: { _id: '$wallet.clientId', total: { $sum: '$amount' } } }
       ]),
       Order.aggregate([
         { $match: { clientId, orderStatus: { $ne: 'REJECTED' }, ...createdAtFilter } },
-        { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+        { $group: { _id: '$clientId', total: { $sum: '$totalAmount' } } }
       ])
     ]);
-    const clientUser = await User.findById(clientId).select('identifier profile.name billing.companyName billing.name').lean();
-    const identifier = clientUser?.profile?.name || clientUser?.billing?.companyName || clientUser?.billing?.name || clientUser?.identifier || 'Unknown';
-    const top10 = [{
-      clientId,
-      identifier,
-      totalRecharge: rechargeAgg[0]?.total || 0,
-      totalSpend: spendAgg[0]?.total || 0,
-      totalCommission: commissionTotal[0]?.total || 0
-    }];
+    const clientUsers = await User.find({ _id: clientId }).select('identifier profile.name billing.companyName billing.name').lean();
+    const names = new Map(clientUsers.map(user => [String(user._id), user.profile?.name || user.billing?.companyName || user.billing?.name || user.identifier || 'Unknown']));
+    const identifier = clientUsers.length === 1 ? names.get(String(clientUsers[0]._id)) : `${clientUsers.length} selected clients`;
+    const totals = rows => new Map(rows.map(row => [String(row._id), row.total || 0]));
+    const recharges = totals(rechargeAgg), spends = totals(spendAgg), commissions = totals(commissionTotal);
+    const top10 = clientUsers.map(user => ({ clientId: user._id, identifier: names.get(String(user._id)),
+      totalRecharge: recharges.get(String(user._id)) || 0, totalSpend: spends.get(String(user._id)) || 0,
+      totalCommission: commissions.get(String(user._id)) || 0 })).sort((a, b) => b.totalRecharge - a.totalRecharge).slice(0, 10);
 
     // Recent activity — only this client's records (same merge/sort as global)
     const [recentOrders, recentTasks, recentRecharges] = await Promise.all([
-      Order.find({ clientId, ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('orderId totalAmount orderStatus createdAt').lean(),
-      Task.find({ ...taskBase, status: 'COMPLETED', ...updatedAtFilter }).sort({ updatedAt: -1 }).limit(5).select('title creditCost updatedAt').lean(),
-      RechargeRequest.find({ clientId, status: 'APPROVED', ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('amount createdAt').lean()
+      Order.find({ clientId, ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('orderId clientId totalAmount orderStatus createdAt').lean(),
+      Task.find({ ...taskBase, status: 'COMPLETED', ...updatedAtFilter }).sort({ updatedAt: -1 }).limit(5).select('title clientId creditCost updatedAt').lean(),
+      RechargeRequest.find({ clientId, status: 'APPROVED', ...createdAtFilter }).sort({ createdAt: -1 }).limit(5).select('amount clientId createdAt').lean()
     ]);
     const recentActivity = [
-      ...recentOrders.map(o => ({ type: 'order', label: `Order ${o.orderId || ''}`, value: o.totalAmount, status: o.orderStatus, date: o.createdAt, clientName: identifier })),
-      ...recentTasks.map(t => ({ type: 'task', label: t.title || 'Task', value: t.creditCost, status: 'COMPLETED', date: t.updatedAt, clientName: identifier })),
-      ...recentRecharges.map(r => ({ type: 'recharge', label: 'Recharge Approved', value: r.amount, status: 'APPROVED', date: r.createdAt, clientName: identifier }))
+      ...recentOrders.map(o => ({ type: 'order', label: `Order ${o.orderId || ''}`, value: o.totalAmount, status: o.orderStatus, date: o.createdAt, clientName: names.get(String(o.clientId)) || 'Unknown' })),
+      ...recentTasks.map(t => ({ type: 'task', label: t.title || 'Task', value: t.creditCost, status: 'COMPLETED', date: t.updatedAt, clientName: names.get(String(t.clientId)) || 'Unknown' })),
+      ...recentRecharges.map(r => ({ type: 'recharge', label: 'Recharge Approved', value: r.amount, status: 'APPROVED', date: r.createdAt, clientName: names.get(String(r.clientId)) || 'Unknown' }))
     ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
 
     // Earners for this client's tasks (staff attribution preserved — same as global)
@@ -272,7 +257,7 @@ router.get('/client', async (req, res) => {
     const costData = taskCostAgg[0] || { totalExpenses: 0, totalTax: 0, totalOther: 0 };
 
     res.json({
-      scope: { clientId: clientId.toString(), identifier },
+      scope: { clientId: auth.clientIds?.length === 1 ? String(auth.clientIds[0]) : null, clientIds: auth.clientIds?.map(String), identifier },
       metrics: {
         totalTasks,
         pendingTasks,
@@ -280,7 +265,7 @@ router.get('/client', async (req, res) => {
         completedTasks,
         amountReceived: amountReceivedAgg[0]?.total || 0,
         creditSend: creditSendAgg[0]?.total || 0,
-        commissionGenerate: commissionTotal[0]?.total || 0,
+        commissionGenerate: commissionTotal.reduce((total, row) => total + (row.total || 0), 0),
         expenses: costData.totalExpenses,
         tax: costData.totalTax,
         other: costData.totalOther,
@@ -387,39 +372,31 @@ router.get('/client/timeline', async (req, res) => {
     // createdAt inside the range) falls inside it — even if startDate/endDate are
     // outside. One batched server-side query; the clientId base filter below still
     // ANDs over the whole $or, so no other client's task can ever be included.
-    const completedInRangeIds = hasRange
-      ? await Notification.find({
-          type: 'TASK_COMPLETED',
-          'relatedEntity.entityType': 'TASK',
-          createdAt: rangeFilter,
-        }).distinct('relatedEntity.entityId')
-      : [];
-    const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { deadline: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
-      : {};
-
-    const [orders, tasks] = await Promise.all([
-      Order.find({ clientId, ...createdAtFilter })
-        .sort({ createdAt: 1 })
-        .select('orderId totalAmount orderStatus createdAt items.planTitle')
-        .lean(),
-      Task.find({ ...taskBase, ...taskDateScope })
-        .sort({ startDate: 1 })
-        .select('title status startDate endDate deadline creditCost clientId')
-        .limit(500)
-        .lean()
-    ]);
+    const eventTaskIds = hasRange
+      ? await findTimelineEventTaskIds(rangeFilter)
+      : { completedIds: [], approvedIds: [] };
+    const orders = await Order.find({ clientId, ...(hasRange ? {
+      $or: [{ createdAt: rangeFilter }, { approvedAt: rangeFilter }, { completedAt: rangeFilter }],
+    } : {}) }).sort({ createdAt: 1 })
+      .select('orderId clientId totalAmount orderStatus createdAt approvedAt completedAt items.planTitle').lean();
+    const tasks = await findTimelineTasks({
+      taskScope: taskBase, rangeFilter, ...eventTaskIds,
+      orderIds: orders.map(o => o._id), limit: 500,
+    });
 
     // One batched lookup for the whole page — the task ids come from the
     // client-scoped query above, so no other client's notifications are exposed.
-    const completedAtByTask = await buildCompletedAtMap(tasks);
-    const timelineTasks = await buildTimelineTaskPayload(tasks, completedAtByTask);
+    const journeyByTask = await buildTimelineJourneyMap(tasks, null, orders);
+    const timelineTasks = await buildTimelineTaskPayload(tasks, journeyByTask);
 
     res.json({
-      scope: { clientId: clientId.toString() },
+      scope: { clientId: auth.clientIds?.length === 1 ? String(auth.clientIds[0]) : null, clientIds: auth.clientIds?.map(String) },
       range: { startDate: startDate || null, endDate: endDate || null },
       orders: orders.map(o => ({
+        id: o._id.toString(),
         orderId: o.orderId || '',
+        approvedAt: o.approvedAt || null,
+        completedAt: o.completedAt || null,
         totalAmount: o.totalAmount || 0,
         orderStatus: o.orderStatus,
         createdAt: o.createdAt,
@@ -466,40 +443,32 @@ router.get('/timeline', async (req, res) => {
     // ACTUAL completion event (TASK_COMPLETED notification createdAt) in range.
     // One batched server-side query; the client-visibility clientScope base filter
     // still ANDs over the whole $or, so the caller's existing scope is preserved.
-    const completedInRangeIds = hasRange
-      ? await Notification.find({
-          type: 'TASK_COMPLETED',
-          'relatedEntity.entityType': 'TASK',
-          createdAt: rangeFilter,
-        }).distinct('relatedEntity.entityId')
-      : [];
-    const taskDateScope = hasRange
-      ? { $or: [{ startDate: rangeFilter }, { endDate: rangeFilter }, { deadline: rangeFilter }, { _id: { $in: completedInRangeIds } }] }
-      : {};
-
-    const [orders, tasks] = await Promise.all([
-      Order.find({ ...clientScope, ...createdAtFilter })
-        .sort({ createdAt: 1 })
-        .select('orderId totalAmount orderStatus createdAt items.planTitle')
-        .limit(1000)
-        .lean(),
-      Task.find({ ...taskBase, ...taskDateScope })
-        .sort({ startDate: 1 })
-        .select('title status startDate endDate deadline creditCost clientId')
-        .limit(1000)
-        .lean()
-    ]);
+    const eventTaskIds = hasRange
+      ? await findTimelineEventTaskIds(rangeFilter)
+      : { completedIds: [], approvedIds: [] };
+    const orders = await Order.find({ ...clientScope, ...(hasRange ? {
+      $or: [{ createdAt: rangeFilter }, { approvedAt: rangeFilter }, { completedAt: rangeFilter }],
+    } : {}) }).sort({ createdAt: 1 })
+      .select('orderId clientId totalAmount orderStatus createdAt approvedAt completedAt items.planTitle')
+      .limit(1000).lean();
+    const tasks = await findTimelineTasks({
+      taskScope: taskBase, rangeFilter, ...eventTaskIds,
+      orderIds: orders.map(o => o._id), limit: 1000,
+    });
 
     // One batched lookup for the whole page — the task ids already obey the
     // caller's client-visibility scope computed above.
-    const completedAtByTask = await buildCompletedAtMap(tasks);
-    const timelineTasks = await buildTimelineTaskPayload(tasks, completedAtByTask);
+    const journeyByTask = await buildTimelineJourneyMap(tasks, null, orders);
+    const timelineTasks = await buildTimelineTaskPayload(tasks, journeyByTask);
 
     res.json({
       scope: { allClients: true },
       range: { startDate: startDate || null, endDate: endDate || null },
       orders: orders.map(o => ({
+        id: o._id.toString(),
         orderId: o.orderId || '',
+        approvedAt: o.approvedAt || null,
+        completedAt: o.completedAt || null,
         totalAmount: o.totalAmount || 0,
         orderStatus: o.orderStatus,
         createdAt: o.createdAt,

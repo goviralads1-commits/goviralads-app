@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
 import { useAuth } from '../App';
 import WorkflowCalendar from '../components/WorkflowCalendar';
+import WorkflowJourney from '../components/WorkflowJourney';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ const Dashboard = () => {
   const [customEnd, setCustomEnd] = useState('');
   // Client filter (WHO) — '' means All Clients; otherwise the selected client's User ObjectId
   const [clientFilter, setClientFilter] = useState('');
+  const [clientDraft, setClientDraft] = useState([]);
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const clientDropdownRef = useRef(null);
@@ -189,7 +191,8 @@ const Dashboard = () => {
     applyDateFilter(value);
   };
 
-  const selectedClient = clientFilter ? clients.find(c => c.id === clientFilter) : null;
+  const selectedClientIds = clientFilter ? clientFilter.split(',') : [];
+  const selectedClient = selectedClientIds.length > 1 ? { identifier: `${selectedClientIds.length} selected clients` } : clients.find(c => c.id === clientFilter);
   const filteredClients = clients.filter(c => (c.identifier || '').toLowerCase().includes(clientSearch.toLowerCase()));
 
   // Close the client dropdown on outside click
@@ -545,95 +548,6 @@ const Dashboard = () => {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // ===== CLIENT WORKFLOW TIMELINE (date-wise ORDER -> START -> END view) =====
-  // Status legend colors. endDate is displayed strictly as END DATE with the task's
-  // current status — never as a completion date. The ACTUAL completion event is
-  // plotted only when the server provides completedAt (the persisted TASK_COMPLETED
-  // notification time); no completedAt => no completion bar (never from endDate or
-  // updatedAt).
-  const TIMELINE_STATUS_META = {
-    COMPLETED: { color: '#22c55e', label: 'Completed' },
-    ACTIVE: { color: '#3b82f6', label: 'Active / In Progress' },
-    IN_PROGRESS: { color: '#3b82f6', label: 'Active / In Progress' },
-    PENDING: { color: '#eab308', label: 'Scheduled' },
-    PENDING_APPROVAL: { color: '#f97316', label: 'Pending Approval' },
-    CANCELLED: { color: '#94a3b8', label: 'Cancelled' },
-  };
-  const TIMELINE_ORDER_COLOR = '#8b5cf6';
-  // Workflow graph lanes (bottom -> top): a task's bar rises to the lane of its CURRENT
-  // status, anchored at its startDate. endDate renders as a separate HOLLOW rising bar
-  // (END DATE) — never as a completion date. An ACTUAL completion (completedAt) renders
-  // as a separate SOLID green bar rising to the COMPLETED lane.
-  const STAGE_ORDER = ['PENDING', 'SCHEDULED', 'ACTIVE', 'COMPLETED'];
-  const STAGE_META = {
-    PENDING: { color: '#f97316', label: 'Pending', h: 26 },
-    SCHEDULED: { color: '#eab308', label: 'Scheduled', h: 56 },
-    ACTIVE: { color: '#3b82f6', label: 'Active / In Progress', h: 86 },
-    COMPLETED: { color: '#22c55e', label: 'Completed', h: 116 },
-  };
-  const TIMELINE_STATUS_LANE = { PENDING_APPROVAL: 'PENDING', PENDING: 'SCHEDULED', ACTIVE: 'ACTIVE', IN_PROGRESS: 'ACTIVE', COMPLETED: 'COMPLETED' };
-  // Day keys are UTC day strings — the same convention as the backend date filters,
-  // so an event is bucketed into exactly the day the server-side range includes.
-  const utcDayKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
-  const fmtTimelineDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—');
-
-  let timelineDays = [];
-  const timelineEvents = {};
-  // day -> ordered list of INDIVIDUAL rising bars (every order / task start / task end
-  // keeps its own bar — same-date events are never collapsed into a single mark).
-  const timelineGraph = {};
-  const timelineSummary = { orders: 0, starts: 0, ends: 0, completed: 0 };
-  let timelineRangeTooLong = false;
-  if (timeline && dateFilter.startDate && dateFilter.endDate) {
-    // Each event is independent by ITS OWN DATE: a start/end/completed event is
-    // plotted/counted only when that specific date falls inside the selected
-    // range. A task included via its completion date can never contribute an
-    // out-of-range START or END DATE bar/count (dates stay available as detail
-    // context only).
-    const inTimelineRange = (day) => day >= dateFilter.startDate && day <= dateFilter.endDate;
-    (timeline.orders || []).forEach((o) => {
-      const day = utcDayKey(o.createdAt);
-      if (!day) return;
-      (timelineEvents[day] = timelineEvents[day] || []).push({ kind: 'order', order: o });
-      (timelineGraph[day] = timelineGraph[day] || []).push({ kind: 'order' });
-      timelineSummary.orders += 1;
-    });
-    (timeline.tasks || []).forEach((t) => {
-      const startDay = utcDayKey(t.startDate);
-      const endDay = utcDayKey(t.endDate || t.deadline);
-      const lane = TIMELINE_STATUS_LANE[t.status]; // CANCELLED/LISTED plot no bar
-      if (startDay && inTimelineRange(startDay)) {
-        (timelineEvents[startDay] = timelineEvents[startDay] || []).push({ kind: 'start', task: t });
-        if (lane) (timelineGraph[startDay] = timelineGraph[startDay] || []).push({ kind: 'start', lane });
-        timelineSummary.starts += 1;
-      }
-      if (endDay && inTimelineRange(endDay)) {
-        (timelineEvents[endDay] = timelineEvents[endDay] || []).push({ kind: 'end', task: t });
-        if (lane) (timelineGraph[endDay] = timelineGraph[endDay] || []).push({ kind: 'end', lane });
-        timelineSummary.ends += 1;
-      }
-      // ACTUAL COMPLETION — plotted only when the server returned a real completedAt
-      // (TASK_COMPLETED notification time). Never falls back to endDate/updatedAt:
-      // no completedAt => no completion event.
-      const completedDay = utcDayKey(t.completedAt);
-      if (completedDay && inTimelineRange(completedDay)) {
-        (timelineEvents[completedDay] = timelineEvents[completedDay] || []).push({ kind: 'completed', task: t });
-        (timelineGraph[completedDay] = timelineGraph[completedDay] || []).push({ kind: 'completed' });
-        timelineSummary.completed += 1;
-      }
-    });
-    // Date axis generated from the SELECTED range (inclusive on both ends)
-    const rangeStart = new Date(dateFilter.startDate + 'T00:00:00.000Z');
-    const rangeEnd = new Date(dateFilter.endDate + 'T00:00:00.000Z');
-    const MAX_TIMELINE_DAYS = 366;
-    for (let d = new Date(rangeStart); d <= rangeEnd; d.setUTCDate(d.getUTCDate() + 1)) {
-      if (timelineDays.length >= MAX_TIMELINE_DAYS) { timelineRangeTooLong = true; break; }
-      timelineDays.push(d.toISOString().slice(0, 10));
-    }
-  }
-  const firstTimelineEventDay = Object.keys(timelineEvents).sort()[0] || null;
-  const activeTimelineDay = timelineDate || firstTimelineEventDay;
-
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
@@ -692,7 +606,7 @@ const Dashboard = () => {
                 {/* Client filter — WHO */}
                 <div ref={clientDropdownRef} style={{ position: 'relative' }}>
                   <button
-                    onClick={() => { setClientDropdownOpen(o => !o); setClientSearch(''); }}
+                    onClick={() => { setClientDraft(selectedClientIds); setClientDropdownOpen(o => !o); setClientSearch(''); }}
                     style={{
                       padding: '7px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
                       border: clientFilter ? '1px solid #6366f1' : '1px solid #e2e8f0',
@@ -726,15 +640,18 @@ const Dashboard = () => {
                         {filteredClients.map(c => (
                           <button
                             key={c.id}
-                            onClick={() => { setClientFilter(c.id); setClientDropdownOpen(false); }}
-                            style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12.5px', fontWeight: clientFilter === c.id ? '700' : '500', cursor: 'pointer', border: 'none', background: clientFilter === c.id ? '#eef2ff' : '#fff', color: clientFilter === c.id ? '#6366f1' : '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            type="button"
+                            aria-pressed={clientDraft.includes(c.id)}
+                            onClick={() => setClientDraft(previous => previous.includes(c.id) ? previous.filter(id => id !== c.id) : previous.length < 100 ? [...previous, c.id] : previous)}
+                            style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12.5px', fontWeight: clientDraft.includes(c.id) ? '700' : '500', cursor: 'pointer', border: 'none', background: clientDraft.includes(c.id) ? '#eef2ff' : '#fff', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                           >
-                            {c.identifier}
+                            {clientDraft.includes(c.id) ? '☑ ' : '☐ '}{c.identifier}
                           </button>
                         ))}
                         {filteredClients.length === 0 && (
                           <p style={{ padding: '10px 12px', fontSize: '12px', color: '#94a3b8', margin: 0 }}>No clients match</p>
                         )}
+                        <button type="button" onClick={() => { setClientFilter(clientDraft.join(',')); setClientDropdownOpen(false); }} style={{ margin: '8px', padding: '8px 12px', border: 0, borderRadius: '6px', background: '#4f46e5', color: '#fff', cursor: 'pointer' }}>Apply {clientDraft.length ? `(${clientDraft.length})` : 'All'}</button>
                       </div>
                     </div>
                   )}
@@ -780,17 +697,6 @@ const Dashboard = () => {
                     <div style={{ display: 'inline-flex', gap: '3px', padding: '3px', borderRadius: '8px', background: '#f1f5f9' }}>
                       {['timeline', 'calendar'].map(view => <button key={view} type="button" onClick={() => setTimelineView(view)} style={{ padding: '5px 9px', border: 'none', borderRadius: '6px', background: timelineView === view ? '#fff' : 'transparent', color: timelineView === view ? '#4f46e5' : '#64748b', boxShadow: timelineView === view ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '10.5px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{view}</button>)}
                     </div>
-                    {[{ color: '#f97316', label: 'Pending' }, { color: '#eab308', label: 'Scheduled' }, { color: '#3b82f6', label: 'Active' }, { color: '#22c55e', label: 'Completed' }].map(l => (
-                      <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
-                        <span style={{ width: '7px', height: '10px', borderRadius: '3px', background: l.color }} />{l.label}
-                      </span>
-                    ))}
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
-                      <span style={{ width: '7px', height: '10px', borderRadius: '3px', border: '1.5px solid #64748b', boxSizing: 'border-box' }} />End date
-                    </span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', fontWeight: '600', color: '#94a3b8' }}>
-                      <span style={{ width: '7px', height: '10px', borderRadius: '3px 3px 0 0', background: TIMELINE_ORDER_COLOR }} />Order
-                    </span>
                   </div>
                 </div>
                 {timelineLoading ? (
@@ -803,138 +709,9 @@ const Dashboard = () => {
                 ) : !dateFilter.startDate || !dateFilter.endDate ? (
                   <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Select a date range (Today, 7 Days, Month or Custom) to see {selectedClient ? selectedClient.identifier : 'this client'}’s date-wise workflow.</p>
                 ) : timelineView === 'calendar' ? (
-                  <WorkflowCalendar tasks={timeline?.tasks || []} rangeStart={dateFilter.startDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
+                  <WorkflowCalendar tasks={timeline?.tasks || []} orders={timeline?.orders || []} rangeStart={dateFilter.startDate} rangeEnd={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
                 ) : (
-                  <>
-                    {/* In-range event counts — timeline-specific; the status/financial metric
-                        cards below already own the standard Business Analytics numbers. */}
-                    <p style={{ fontSize: '11px', fontWeight: '500', color: '#94a3b8', margin: '0 0 12px 0' }}>
-                      {timelineSummary.orders} order{timelineSummary.orders === 1 ? '' : 's'} placed · {timelineSummary.starts} task start{timelineSummary.starts === 1 ? '' : 's'} · {timelineSummary.completed} completed · {timelineSummary.ends} task end{timelineSummary.ends === 1 ? '' : 's'}
-                      {timelineRangeTooLong && ' · showing first 366 days'}
-                    </p>
-                    {timelineDays.length === 0 ? (
-                      <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Invalid date range.</p>
-                    ) : (
-                      <>
-                        {/* WORKFLOW GRAPH — X: dates of the selected range; Y: workflow
-                            stages (bottom->top Pending/Scheduled/Active/Completed).
-                            Solid rising bars = tasks anchored at startDate, rising to the
-                            lane of their CURRENT status. Hollow bars = END DATE markers.
-                            Short purple bars = orders placed. Every event keeps its own
-                            bar — busy dates widen their column instead of collapsing.
-                            Horizontally scrollable on mobile; no numeric Y labels. */}
-                        <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                          {/* Fixed stage-label gutter — compact so the plot gets more
-                              usable width; labels stay right-aligned to the plot edge
-                              and ACTIVE / IN PROGRESS wraps to two clean lines without
-                              colliding with bars. */}
-                          <div style={{ width: '80px', flexShrink: 0 }}>
-                            {['COMPLETED', 'ACTIVE / IN PROGRESS', 'SCHEDULED', 'PENDING'].map(l => (
-                              <div key={l} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '6px', fontSize: '8.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', lineHeight: 1.45, textAlign: 'right' }}>{l}</div>
-                            ))}
-                            <div style={{ height: '26px' }} />
-                          </div>
-                          {/* Scrollable plot */}
-                          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
-                            <div style={{ position: 'relative', minWidth: timelineDays.reduce((w, d) => w + Math.max(26, (timelineGraph[d] || []).length * 6 + 8), 0), height: '146px' }}>
-                              {[0, 30, 60, 90].map(y => (
-                                <div key={y} style={{ position: 'absolute', left: 0, right: 0, top: y, borderTop: '1px dashed #e2e8f0' }} />
-                              ))}
-                              <div style={{ position: 'absolute', left: 0, right: 0, top: 120, borderTop: '1px solid #cbd5e1' }} />
-                              <div style={{ display: 'flex', position: 'absolute', left: 0, top: 0, bottom: 0 }}>
-                                {timelineDays.map(day => {
-                                  const bars = timelineGraph[day] || [];
-                                  const shown = bars.slice(0, 40);
-                                  // Bars narrow slightly as a date gets busier, and the
-                                  // date column itself WIDENS to fit every event — events
-                                  // are never collapsed into one bar or hidden behind a
-                                  // "+N" unless an extreme single-day count overflows.
-                                  const bw = shown.length <= 4 ? 5 : 3;
-                                  const bgap = shown.length <= 4 ? 2 : 1;
-                                  const colW = Math.max(26, bars.length * (bw + bgap) + 8);
-                                  const isSelected = day === activeTimelineDay;
-                                  const dObj = new Date(day + 'T00:00:00.000Z');
-                                  const nOrders = bars.filter(b => b.kind === 'order').length;
-                                  const nStarts = bars.filter(b => b.kind === 'start').length;
-                                  const nEnds = bars.filter(b => b.kind === 'end').length;
-                                  const nCompleted = bars.filter(b => b.kind === 'completed').length;
-                                  return (
-                                    <button
-                                      key={day}
-                                      onClick={() => setTimelineDate(day)}
-                                      title={`${dObj.getUTCDate()}: ${nOrders} orders · ${nStarts} starts · ${nCompleted} completed · ${nEnds} ends`}
-                                      style={{ width: `${colW}px`, flexShrink: 0, position: 'relative', border: 'none', background: isSelected ? '#eef2ff' : 'transparent', cursor: 'pointer', padding: 0 }}
-                                    >
-                                      {/* Rising bars from the date axis — one bar per event:
-                                          solid = order placed / task started / task ACTUALLY
-                                          COMPLETED (completedAt, always the green COMPLETED
-                                          lane); hollow = task END DATE (planned deadline).
-                                          Multiple events on a date render as separate adjacent
-                                          bars, never collapsed. */}
-                                      {bars.length > 0 && (
-                                        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '120px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: `${bgap}px` }}>
-                                          {shown.map((b, i) => b.kind === 'order' ? (
-                                            <div key={i} style={{ width: `${Math.max(bw - 1, 2)}px`, height: '18px', background: TIMELINE_ORDER_COLOR, borderRadius: '2px 2px 0 0' }} />
-                                          ) : b.kind === 'start' ? (
-                                            <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META[b.lane].h}px`, background: STAGE_META[b.lane].color, borderRadius: '3px 3px 0 0' }} />
-                                          ) : b.kind === 'completed' ? (
-                                            <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META.COMPLETED.h}px`, background: STAGE_META.COMPLETED.color, borderRadius: '3px 3px 0 0' }} />
-                                          ) : (
-                                            <div key={i} style={{ width: `${bw}px`, height: `${STAGE_META[b.lane].h}px`, border: `1.5px solid ${STAGE_META[b.lane].color}`, borderRadius: '3px 3px 0 0', boxSizing: 'border-box', background: 'transparent' }} />
-                                          ))}
-                                          {bars.length > 40 && (
-                                            <div style={{ width: `${bw}px`, height: '8px', background: '#cbd5e1', borderRadius: '3px 3px 0 0' }} title={`${bars.length - 40} more events`} />
-                                          )}
-                                        </div>
-                                      )}
-                                      {/* Day number */}
-                                      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: isSelected ? '700' : '500', color: isSelected ? '#6366f1' : '#94a3b8' }}>{dObj.getUTCDate()}</div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Day detail panel */}
-                        <div style={{ marginTop: '14px', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
-                          {!activeTimelineDay ? (
-                            <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No workflow events for {selectedClient ? selectedClient.identifier : 'this client'} in {dateFilter.label}. Events appear here as orders are placed and tasks start/end.</p>
-                          ) : (timelineEvents[activeTimelineDay] || []).length === 0 ? (
-                            <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No events on {fmtTimelineDate(activeTimelineDay)}.</p>
-                          ) : (
-                            <div>
-                              <p style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{fmtTimelineDate(activeTimelineDay)}</p>
-                              {(timelineEvents[activeTimelineDay] || []).map((ev, i) => ev.kind === 'order' ? (
-                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '6px 0', borderBottom: '1px solid #f8fafc' }}>
-                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: TIMELINE_ORDER_COLOR, marginTop: '5px', flexShrink: 0 }} />
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <p style={{ fontSize: '12.5px', fontWeight: '600', color: '#0f172a', margin: 0 }}>Order {ev.order.orderId || ''} placed</p>
-                                    <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>{(ev.order.services || []).join(', ') || '—'} · ₹{(ev.order.totalAmount || 0).toLocaleString('en-IN')}</p>
-                                    <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Status: {ev.order.orderStatus}</p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '6px 0', borderBottom: '1px solid #f8fafc' }}>
-                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: TIMELINE_STATUS_META[ev.task.status]?.color || '#94a3b8', marginTop: '5px', flexShrink: 0 }} />
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <p style={{ fontSize: '12.5px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{ev.task.title}</p>
-                                    {/* "End date" is reported honestly — it is the planned endDate with the
-                                        current status, never a claimed completion date. "Completed" is the
-                                        actual completion time recorded by the server (completedAt). */}
-                                    <p style={{ fontSize: '11.5px', color: '#64748b', margin: 0 }}>
-                                      {ev.kind === 'start' ? 'Started' : ev.kind === 'completed' ? `Completed ${fmtTimelineDate(ev.task.completedAt)}` : 'End date'} · Status: {TIMELINE_STATUS_META[ev.task.status]?.label || ev.task.status} · {(ev.task.creditCost || 0).toLocaleString('en-IN')} credits
-                                    </p>
-                                    <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>Start: {fmtTimelineDate(ev.task.startDate)} → End: {fmtTimelineDate(ev.task.endDate || ev.task.deadline)}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </>
+                  <WorkflowJourney timeline={timeline} startDate={dateFilter.startDate} endDate={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
                 )}
               </div>
             )}
