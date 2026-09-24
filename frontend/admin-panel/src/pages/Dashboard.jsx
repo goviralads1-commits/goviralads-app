@@ -711,7 +711,13 @@ const Dashboard = () => {
                 ) : timelineView === 'calendar' ? (
                   <WorkflowCalendar tasks={timeline?.tasks || []} orders={timeline?.orders || []} rangeStart={dateFilter.startDate} rangeEnd={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
                 ) : (
-                  <WorkflowJourney timeline={timeline} startDate={dateFilter.startDate} endDate={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
+                  <WorkflowJourney key={clientFilter} timeline={timeline} startDate={dateFilter.startDate} endDate={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate}
+                    loadInputs={async (task, signal) => {
+                      const id = task.orderOnly ? task.order?.id : task.id;
+                      if (!id) throw new Error('Detail ID unavailable');
+                      const response = await api.get(`/admin/${task.orderOnly ? 'orders' : 'tasks'}/${encodeURIComponent(id)}`, { signal });
+                      return response.data[task.orderOnly ? 'order' : 'task'];
+                    }} />
                 )}
               </div>
             )}

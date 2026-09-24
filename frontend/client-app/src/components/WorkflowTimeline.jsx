@@ -166,7 +166,13 @@ const WorkflowTimeline = () => {
         ) : view === 'calendar' ? (
           <WorkflowCalendar tasks={journeyTimeline?.tasks || []} orders={journeyTimeline?.orders || []} rangeStart={range.startDate} rangeEnd={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
         ) : (
-          <WorkflowJourney timeline={journeyTimeline} startDate={range.startDate} endDate={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+          <WorkflowJourney timeline={journeyTimeline} startDate={range.startDate} endDate={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate}
+            loadInputs={async (task, signal) => {
+              const id = task.orderOnly ? task.order?.id : task.id;
+              if (!id) throw new Error('Detail ID unavailable');
+              const response = await api.get(`/client/${task.orderOnly ? 'orders' : 'tasks'}/${encodeURIComponent(id)}`, { signal });
+              return response.data[task.orderOnly ? 'order' : 'task'];
+            }} />
         )}
       </div>
     </div>

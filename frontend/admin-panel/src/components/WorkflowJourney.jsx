@@ -107,30 +107,48 @@ export function buildWorkflowGraph(timeline, startDate, endDate) {
     ] : taskJourneyEvents(task);
     const points = events.filter(event => journeyDay(event.date)).map(event => ({ ...event, day: journeyDay(event.date) }))
       .sort((a, b) => new Date(a.date) - new Date(b.date) || a.row - b.row);
-    const perDay = new Map();
-    for (const point of points.filter(point => point.row === 4)) {
-      const sameDay = perDay.get(point.day) || [];
-      sameDay.push(point);
-      perDay.set(point.day, sameDay);
-    }
-    // Multiple milestones on one date stay at that date, in separate lanes inside the milestone band.
-    for (const sameDay of perDay.values()) sameDay.forEach((point, i) => { point.offset = (i - (sameDay.length - 1) / 2) * 16; });
-    return { task, points, missing: events.filter(event => !journeyDay(event.date)),
-      color: journeyColor(task, index), lane: (index % 5 - 2) * 4,
-      milestoneCount: Math.max(1, ...[...perDay.values()].map(points => points.length)) };
+    points.forEach((point, i) => { point.endpoint = i === 0 || i === points.length - 1; });
+    return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, index) };
   });
-  const milestoneHeight = Math.max(64, Math.max(1, ...series.map(line => line.milestoneCount)) * 16 + 32);
-  const rows = [0, 1, 2, 3, 4, 5].map(row => row === 5 ? 78 : row === 4 ? 110 + milestoneHeight / 2 : 110 + milestoneHeight + (3 - row) * 64 + 32);
-  const height = rows[0] + 38;
   const { count, dayWidth, width, x, ticks } = journeyDateAxis(startDate, endDate);
-  const dated = series.flatMap(line => line.points).filter(point => point.day >= startDate && point.day <= endDate);
+  const labelWidth = Math.min(182, width / 2 - 24);
+  const characters = Math.floor(labelWidth / 7);
+  for (const line of series) for (const point of line.points) {
+    point.x = x(point.day);
+    point.labelX = point.x <= width / 2 ? point.x + 20 : point.x - 20 - labelWidth;
+    const name = `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim();
+    point.labelLines = point.endpoint && point.day >= startDate && point.day <= endDate
+      ? name.match(new RegExp(`.{1,${characters}}(?:\\s|$)|.{1,${characters}}`, 'gu')).map(part => part.trim()) : [];
+    point.left = Math.min(point.x - 14, point.labelLines.length ? point.labelX - 4 : point.x - 14);
+    point.right = Math.max(point.x + 14, point.labelLines.length ? point.labelX + labelWidth + 4 : point.x + 14);
+  }
+  // Pack every task's hit targets and endpoint names together, without shifting dates.
+  const allPoints = series.flatMap(line => line.points);
+  const bands = [];
+  const rows = [];
+  let height = 48;
+  for (const row of [5, 4, 3, 2, 1, 0]) {
+    const points = allPoints.filter(point => point.row === row).sort((a, b) => a.left - b.left);
+    const laneEnds = [];
+    const laneHeight = Math.max(32, ...points.map(point => point.labelLines.length * 14 + 12));
+    for (const point of points) {
+      let lane = laneEnds.findIndex(end => end + 8 <= point.left);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = point.right;
+      point.y = height + 18 + lane * laneHeight;
+    }
+    const bandHeight = Math.max(64, laneEnds.length * laneHeight + 8);
+    bands[row] = { top: height, height: bandHeight };
+    rows[row] = height + bandHeight / 2;
+    height += bandHeight;
+  }
+  const dated = allPoints.filter(point => point.day >= startDate && point.day <= endDate);
   const firstOrder = dated.filter(point => point.row === 0).map(point => point.day).sort()[0];
   const firstActual = firstOrder || dated.map(point => point.day).sort()[0] || startDate;
   for (const line of series) {
-    for (const point of line.points) { point.x = x(point.day); point.y = rows[point.row] + line.lane + (point.offset || 0); }
     line.path = line.points.map((point, index) => index ? `H${point.x} V${point.y}` : `M${point.x},${point.y}`).join(' ');
   }
-  return { series, numbered, rows, milestoneHeight, width, height, ticks, x, firstActual, count, dayWidth };
+  return { series, numbered, rows, bands, labelWidth, width, height, ticks, x, firstActual, count, dayWidth };
 }
 
 export const TaskJourney = ({ task }) => {
@@ -154,27 +172,81 @@ export const TaskJourney = ({ task }) => {
   </article>;
 };
 
-const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectDate }) => {
+export const JourneyInputs = ({ data, orderOnly }) => {
+  const groups = orderOnly ? (data?.items || []).map(item => ({
+    title: item.planTitle, clientInputs: item.inputs, customInputLabel: item.planSnapshot?.customInputLabel,
+  })) : [data || {}];
+  const entries = groups.flatMap(group => {
+    const fields = [];
+    const add = (label, value) => {
+      if (typeof value === 'string' && value.trim()) fields.push({ label: group.title ? `${group.title} · ${label}` : label, value });
+    };
+    (group.clientInputs || []).forEach((input, index) => {
+      const suffix = group.clientInputs.length > 1 ? ` ${index + 1}` : '';
+      add(`Video/content link${suffix}`, input.link);
+      add(`${group.customInputLabel || 'Client input / reference'}${suffix}`, input.customInput);
+    });
+    add('Instructions / content', group.clientContentText);
+    (group.clientContentLinks || []).forEach((link, index) => add(`Content link ${index + 1}`, link));
+    add('Drive / reference link', group.clientDriveLink);
+    add('Upload folder', group.clientUploadFolderLink);
+    return fields;
+  });
+  if (!entries.length) return <p>No saved client inputs or content links are available.</p>;
+  return <dl style={{ margin: '8px 0', lineHeight: 1.6 }}>{entries.map(({ label, value }, index) => {
+    let href;
+    try { const url = new URL(value); if (['https:', 'http:'].includes(url.protocol)) href = url.href; } catch { /* Non-URL references stay readable as text. */ }
+    return <div key={index} style={{ marginTop: '8px' }}><dt style={{ fontWeight: 600 }}>{label}</dt><dd style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{href ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#4338ca', textDecoration: 'underline' }}>{value}</a> : value}</dd></div>;
+  })}</dl>;
+};
+
+const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectDate, loadInputs }) => {
   const model = useMemo(() => buildWorkflowGraph(timeline, startDate, endDate), [timeline, startDate, endDate]);
   const scroller = useRef(null);
   const [highlight, setHighlight] = useState('');
   const [activePoint, setActivePoint] = useState(null);
+  const request = useRef(null);
+  const closeDetail = () => { request.current?.abort(); setActivePoint(null); };
   // Selection/scroll changes do not rebuild the model or reset the user's viewport.
   useEffect(() => {
     if (scroller.current) scroller.current.scrollLeft = Math.max(0, model.x(model.firstActual) - model.dayWidth / 2);
     setHighlight('');
     setActivePoint(null);
+    return () => request.current?.abort();
   }, [model]);
-  const choosePoint = (line, point) => {
+  const choosePoint = async (line, point) => {
+    request.current?.abort();
+    const selection = { model, task: line.task, point, loading: point.endpoint };
     setHighlight(line.task.id);
-    setActivePoint(`${line.task.sequence ? `Order ${line.task.sequence} · ` : ''}${line.task.title} · ${point.label} · ${formatDate(point.date)} · ${point.detail || ''}`);
+    setActivePoint(selection);
     onSelectDate?.(point.day);
+    if (!point.endpoint) return;
+    const controller = new AbortController();
+    request.current = controller;
+    try {
+      if (!loadInputs) throw new Error('Task inputs are unavailable.');
+      const data = await loadInputs(line.task, controller.signal);
+      if (!data) throw new Error('Task inputs are unavailable.');
+      if (!controller.signal.aborted) setActivePoint(current => current === selection ? { ...selection, loading: false, data } : current);
+    } catch (error) {
+      if (!controller.signal.aborted) setActivePoint(current => current === selection ? { ...selection, loading: false,
+        error: error.response?.status === 403 ? 'You do not have access to these inputs.' : 'Unable to load saved inputs. Close and tap the endpoint to try again.' } : current);
+    }
   };
+  const detail = activePoint?.model === model ? activePoint : null;
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
-  const badges = new Set();
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 12px' }}>Each line connects actual dated evidence. Swipe or scroll horizontally; tap a point or journey key to inspect it.</p>
+    <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 12px' }}>Each line connects actual dated evidence. Tap a named endpoint for client inputs or a dot for milestone details. The last point is the latest recorded evidence, not necessarily completion.</p>
+    {detail && <section aria-label="Journey point details" aria-live="polite" onKeyDown={event => { if (event.key === 'Escape') closeDetail(); }} style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: '440px', boxSizing: 'border-box', zIndex: 100, boxShadow: '0 8px 32px #0f172a33', fontSize: '12px', padding: '12px', background: '#eef2ff', borderRadius: '8px', overflowWrap: 'anywhere', maxHeight: '280px', overflowY: 'auto' }}>
+      <button type="button" onClick={closeDetail} style={{ float: 'right', marginLeft: '8px', cursor: 'pointer' }}>Close</button>
+      <strong>{detail.task.sequence ? `${detail.task.sequence} · ` : ''}{detail.task.title}</strong>
+      <p>{detail.point.label} · {formatDate(detail.point.date)}</p><p>{detail.point.detail}</p>
+      {detail.point.endpoint && <>
+        {detail.loading ? <p role="status">Loading saved client inputs…</p> : detail.error ? <p role="alert">{detail.error}</p> : <JourneyInputs data={detail.data} orderOnly={detail.task.orderOnly} />}
+        {!detail.task.orderOnly && <a href={`/tasks/${encodeURIComponent(detail.task.id)}`} style={{ color: '#4338ca', textDecoration: 'underline' }}>Open task details</a>}
+      </>}
+    </section>}
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width="110" height={model.height} style={{ flex: '0 0 110px', background: '#fff', borderRight: '1px solid #e2e8f0' }}>
         <text x="10" y="27" fontSize="10" fill="#64748b">STAGE / DATE</text>
@@ -186,9 +258,9 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <svg aria-label="Task journeys by actual date and workflow stage" width={model.width} height={model.height} style={{ display: 'block', overflow: 'hidden' }}>
           <title>One step-line per task or order. Points use saved evidence, not invented dates. Connectors do not imply daily progress history.</title>
-          {model.rows.map((y, row) => <g key={row}>
-            <rect x="0" y={row === 4 ? 110 : y - 32} width={model.width} height={row === 4 ? model.milestoneHeight : 64} fill={row % 2 ? '#fff' : '#f8fafc'} />
-            <line x1="0" x2={model.width} y1={y + (row === 4 ? model.milestoneHeight / 2 : 32)} y2={y + (row === 4 ? model.milestoneHeight / 2 : 32)} stroke="#e2e8f0" />
+          {model.bands.map((band, row) => <g key={row}>
+            <rect x="0" y={band.top} width={model.width} height={band.height} fill={row % 2 ? '#fff' : '#f8fafc'} />
+            <line x1="0" x2={model.width} y1={band.top + band.height} y2={band.top + band.height} stroke="#e2e8f0" />
           </g>)}
           {model.ticks.map(day => <g key={day}>
             <line x1={model.x(day) - model.dayWidth / 2} x2={model.x(day) - model.dayWidth / 2} y1="0" y2={model.height} stroke="#e2e8f0" />
@@ -196,33 +268,27 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
             <text x={model.x(day)} y="36" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</text>
           </g>)}
           {selectedDate && selectedDate >= startDate && selectedDate <= endDate && <line x1={model.x(selectedDate)} x2={model.x(selectedDate)} y1="44" y2={model.height} stroke="#a5b4fc" strokeDasharray="4 4" />}
+          {lines.map(line => <path key={line.task.id} data-workflow-path="true" d={line.path} fill="none" stroke={line.color} strokeWidth={highlight === line.task.id ? 3 : 2} strokeLinejoin="round" opacity={!highlight || highlight === line.task.id ? 1 : 0.15} pointerEvents="none" />)}
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
-            const orderKey = line.task.order?.id || line.task.order?.orderId;
-            const badge = line.task.sequence && !badges.has(orderKey) && visible;
-            if (badge) badges.add(orderKey);
-            const last = line.points[line.points.length - 1];
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
-              <path data-workflow-path="true" d={line.path} fill="none" stroke={line.color} strokeWidth={highlight === line.task.id ? 3 : 2} strokeLinejoin="round" />
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.key} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.title}: ${point.label}, ${formatDate(point.date)}`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.key} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${point.label}, ${formatDate(point.date)}${point.endpoint ? ', show client inputs' : ''}`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${point.label} · ${formatDate(point.date)} · ${point.detail || ''}`}</title>
                 <circle cx={point.x} cy={point.y} r="14" fill="transparent" />
                 <circle cx={point.x} cy={point.y} r="6" fill={point.key === 'approval' ? '#fff' : stageColors[point.row]} stroke={point.key === 'approval' ? '#60a5fa' : '#fff'} strokeWidth="1.5" />
-                {point.row === 0 && badge && <g data-order-number={line.task.sequence}>
-                  <circle cx={point.x} cy={point.y - 20} r="13" fill={line.color} />
-                  <text x={point.x} y={point.y - 16} textAnchor="middle" fill="#fff" fontWeight="700" fontSize="12">{line.task.sequence}</text>
+                {point.labelLines.length > 0 && <g data-endpoint-label="true" data-order-number={line.task.sequence || undefined}>
+                  <rect x={point.labelX - 4} y={point.y - 12} width={model.labelWidth + 8} height={point.labelLines.length * 14 + 6} rx="4" fill="#fff" />
+                  <text fill={line.color} fontFamily="monospace" fontSize="11" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={point.y + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>
                 </g>}
-                {visible && (highlight === line.task.id || model.series.length <= 4 || point === last) && <text x={point.x > model.width - 160 ? point.x - 11 : point.x + 11} y={point.y + 4} textAnchor={point.x > model.width - 160 ? 'end' : 'start'} fill={stageColors[point.row]} fontSize="10" fontWeight="600">{point.label.length > 18 ? `${point.label.slice(0, 18)}…` : point.label} · {new Date(point.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</text>}
               </g>)}
             </g>;
           })}
         </svg>
       </div>
     </div>
-    {activePoint && <p role="status" style={{ fontSize: '12px', padding: '10px', background: '#eef2ff', borderRadius: '8px', overflowWrap: 'anywhere' }}>{activePoint}</p>}
     {!model.series.length && <p style={{ fontSize: '12px', color: '#64748b' }}>No tasks or orders in this range.</p>}
     <div aria-label="Journey key" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px', maxHeight: '160px', overflowY: 'auto' }}>
-      {model.series.map(line => <button key={line.task.id} type="button" aria-pressed={highlight === line.task.id} onClick={() => { setHighlight(previous => previous === line.task.id ? '' : line.task.id); setActivePoint(null); }} style={{ display: 'flex', gap: '8px', alignItems: 'center', textAlign: 'left', minWidth: 0, maxWidth: '100%', border: `1px solid ${highlight === line.task.id ? line.color : '#e2e8f0'}`, borderRadius: '8px', padding: '8px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>
+      {model.series.map(line => <button key={line.task.id} type="button" aria-pressed={highlight === line.task.id} onClick={() => { setHighlight(previous => previous === line.task.id ? '' : line.task.id); closeDetail(); }} style={{ display: 'flex', gap: '8px', alignItems: 'center', textAlign: 'left', minWidth: 0, maxWidth: '100%', border: `1px solid ${highlight === line.task.id ? line.color : '#e2e8f0'}`, borderRadius: '8px', padding: '8px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>
         <span style={{ flexShrink: 0, minWidth: '24px', padding: '5px', borderRadius: '20px', background: line.color, color: '#fff', textAlign: 'center', fontWeight: 700 }}>{line.task.sequence || '—'}</span>
         <span style={{ overflowWrap: 'anywhere', minWidth: 0 }}><strong>{line.task.title}</strong><span style={{ display: 'block', color: '#64748b', marginTop: '3px' }}>Order: {formatDate(line.task.order?.createdAt)} · {line.task.orderOnly ? line.task.status : `${currentStage(line.task.progress)}${typeof line.task.progress === 'number' ? ` (${line.task.progress}%)` : ''}`}</span></span>
       </button>)}
