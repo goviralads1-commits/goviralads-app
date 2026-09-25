@@ -7,6 +7,13 @@ import { useAuth } from '../App';
 import WorkflowCalendar from '../components/WorkflowCalendar';
 import WorkflowJourney from '../components/WorkflowJourney';
 
+export const loadAdminJourneyInputs = async (task, signal) => {
+  const id = task.orderOnly ? task.order?.id : task.id;
+  if (!id) throw new Error('Detail ID unavailable');
+  const response = await api.get(`/admin/${task.orderOnly ? 'orders' : 'tasks'}/${encodeURIComponent(id)}`, { signal });
+  return response.data[task.orderOnly ? 'order' : 'task'];
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
@@ -241,6 +248,8 @@ const Dashboard = () => {
     if (!dateFilter.startDate || !dateFilter.endDate) {
       setTimeline(null);
       setTimelineDate(null);
+      setTimelineLoading(false);
+      setTimelineError(false);
       return;
     }
     setTimelineLoading(true);
@@ -598,7 +607,7 @@ const Dashboard = () => {
         </div>
 
         {/* BUSINESS ANALYTICS SECTION */}
-        {(analytics || analyticsLoading) && (
+        {(
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: 0 }}>📊 Business Analytics{selectedClient && <span style={{ fontSize: '11px', fontWeight: '600', color: '#6366f1', backgroundColor: '#eef2ff', padding: '3px 8px', borderRadius: '6px', marginLeft: '8px' }}>{selectedClient.identifier}</span>}</h3>
@@ -693,10 +702,8 @@ const Dashboard = () => {
                 <style>{`@keyframes gvaTlPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
                   <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Timeline</h4>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ display: 'inline-flex', gap: '3px', padding: '3px', borderRadius: '8px', background: '#f1f5f9' }}>
-                      {['timeline', 'calendar'].map(view => <button key={view} type="button" onClick={() => setTimelineView(view)} style={{ padding: '5px 9px', border: 'none', borderRadius: '6px', background: timelineView === view ? '#fff' : 'transparent', color: timelineView === view ? '#4f46e5' : '#64748b', boxShadow: timelineView === view ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '10.5px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{view}</button>)}
-                    </div>
+                  <div role="group" aria-label="Workflow view" style={{ display: 'flex', width: '100%', gap: '4px', padding: '3px', borderRadius: '10px', background: '#f1f5f9' }}>
+                    {['timeline', 'calendar'].map(view => <button key={view} type="button" aria-pressed={timelineView === view} onClick={() => setTimelineView(view)} style={{ flex: 1, minHeight: '40px', padding: '8px 12px', border: 'none', borderRadius: '8px', background: timelineView === view ? '#fff' : 'transparent', color: timelineView === view ? '#4f46e5' : '#64748b', boxShadow: timelineView === view ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '13px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{view}</button>)}
                   </div>
                 </div>
                 {timelineLoading ? (
@@ -709,15 +716,10 @@ const Dashboard = () => {
                 ) : !dateFilter.startDate || !dateFilter.endDate ? (
                   <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Select a date range (Today, 7 Days, Month or Custom) to see {selectedClient ? selectedClient.identifier : 'this client'}’s date-wise workflow.</p>
                 ) : timelineView === 'calendar' ? (
-                  <WorkflowCalendar tasks={timeline?.tasks || []} orders={timeline?.orders || []} rangeStart={dateFilter.startDate} rangeEnd={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} />
+                  <WorkflowCalendar key={clientFilter} tasks={timeline?.tasks || []} orders={timeline?.orders || []} rangeStart={dateFilter.startDate} rangeEnd={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate} loadInputs={loadAdminJourneyInputs} />
                 ) : (
                   <WorkflowJourney key={clientFilter} timeline={timeline} startDate={dateFilter.startDate} endDate={dateFilter.endDate} selectedDate={timelineDate} onSelectDate={setTimelineDate}
-                    loadInputs={async (task, signal) => {
-                      const id = task.orderOnly ? task.order?.id : task.id;
-                      if (!id) throw new Error('Detail ID unavailable');
-                      const response = await api.get(`/admin/${task.orderOnly ? 'orders' : 'tasks'}/${encodeURIComponent(id)}`, { signal });
-                      return response.data[task.orderOnly ? 'order' : 'task'];
-                    }} />
+                    loadInputs={loadAdminJourneyInputs} />
                 )}
               </div>
             )}

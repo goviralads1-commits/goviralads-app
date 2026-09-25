@@ -40,34 +40,52 @@ for (const app of ['client-app', 'admin-panel']) {
   const { renderToStaticMarkup } = appRequire('react-dom/server');
   const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
-  test(`${app}: 0% Scheduled, 1% Started, dynamic 50% evidence, no inferred startDate`, () => {
+  test(`${app}: current 0% Scheduled, 1–99% In Process, 100% Completed; no inferred transition dates`, () => {
     const zero = { ...task, progress: 0, milestones: [], completedAt: null };
     const events = view.taskJourneyEvents(zero);
     assert.equal(events.find(e => e.key === 'scheduled').date, undefined);
     assert.equal(events.find(e => e.key === 'approval').date, zero.approvedAt);
     assert.equal(view.taskJourneyEvents({ ...zero, progress: 1 }).find(e => e.key === 'approval').date, zero.approvedAt);
     assert.deepEqual(plain(view.taskJourneyRange(zero)), plain(view.taskJourneyRange({ ...zero, progress: 1 })));
-    assert.equal(view.taskJourneyEvents({ ...zero, milestones: [{ name: 'Approved at zero', percentage: 0, reached: true, reachedAt: zero.approvedAt }] }).find(e => e.key === 'scheduled').date, zero.approvedAt);
+    assert.equal(view.taskJourneyEvents({ ...zero, milestones: [{ name: 'Approved at zero', percentage: 0, reached: true, reachedAt: zero.approvedAt }] }).find(e => e.key === 'scheduled').date, undefined);
     assert.equal(events.find(e => e.key === 'started').date, undefined);
     assert.match(render(view.TaskJourney, { task: zero }), /0%.*Scheduled/);
-    assert.match(render(view.TaskJourney, { task: { ...zero, progress: 1 } }), /1%.*Started/);
+    for (const progress of [1, 10, 30, 49, 50, 60, 99]) {
+      assert.equal(view.currentStage(progress), 'In Process');
+      assert.match(render(view.TaskJourney, { task: { ...zero, progress } }), new RegExp(`${progress}%.*In Process`));
+      assert.deepEqual(plain(view.taskJourneyEvents({ ...zero, progress })), plain(events));
+    }
+    assert.equal(view.currentStage(100), 'Completed');
+    assert.equal(view.currentStage(null), 'Stage unavailable');
+    assert.match(render(view.TaskJourney, { task }), /100%.*Completed/);
     const reached = view.taskJourneyEvents(task);
-    assert.equal(reached.find(e => e.key === 'started').date, '2026-09-17');
-    assert.equal(reached.find(e => e.key === 'process').date, '2026-09-17T23:59:59.999Z');
-    assert.match(reached.find(e => e.key === 'process').detail, /First available evidence/);
+    assert.equal(reached.find(e => e.key === 'started').date, undefined);
+    assert.equal(reached.find(e => e.key === 'process').date, undefined);
+    assert.doesNotMatch(reached.map(e => e.detail).join(' '), /50%/);
     assert.equal(reached.filter(e => e.key.startsWith('milestone:')).length, 3);
     assert.ok(!reached.some(e => e.label === 'Reset milestone'));
     assert.equal(reached.find(e => e.key === 'scheduled').date, undefined);
     assert.deepEqual([...new Set(reached.filter(e => view.journeyDay(e.date)).map(e => view.journeyDay(e.date)))].sort(), ['2026-09-15', '2026-09-16', '2026-09-17', '2026-09-24']);
   });
 
-  test(`${app}: recorded completion and saved 100% evidence; unavailable history stays undated`, () => {
+  test(`${app}: only recorded completion becomes a transition; mutable 100% evidence preserves Calendar bounds`, () => {
     const unknown = { ...task, order: null, createdAt: '2026-09-15', approvedAt: null, completedAt: null, milestones: [] };
     assert.equal(view.taskJourneyEvents(unknown).filter(e => view.journeyDay(e.date)).length, 0);
     assert.equal(view.taskJourneyRange(unknown).start, null);
     assert.equal(view.taskJourneyRange(unknown).end, null);
     const milestoneOnly = { ...task, completedAt: null };
-    assert.equal(view.taskJourneyEvents(milestoneOnly).find(e => e.key === 'completed').date, '2026-09-24');
+    assert.equal(view.taskJourneyEvents(milestoneOnly).find(e => e.key === 'completed').date, null);
+    assert.equal(view.taskJourneyRange(milestoneOnly).end, '2026-09-24');
+    assert.equal(view.taskJourneyRange(milestoneOnly).completed, false);
+    assert.equal(view.taskJourneyRange(milestoneOnly).endLabel, 'Saved 100% evidence');
+    assert.equal(view.taskJourneyEvents({ ...task, completedAt: '2026-09-25' }).find(e => e.key === 'completed').date, '2026-09-25');
+    assert.equal(view.taskJourneyRange({ ...task, completedAt: '2026-09-25' }).end, '2026-09-24');
+    for (const milestones of [task.milestones, task.milestones.map(m => ({ ...m, reached: false })), task.milestones.map(m => ({ ...m, percentage: 0 }))]) {
+      const events = view.taskJourneyEvents({ ...task, milestones });
+      assert.equal(events.find(e => e.key === 'completed').date, task.completedAt);
+      assert.ok(events.filter(e => ['scheduled', 'started', 'process'].includes(e.key)).every(e => !e.date));
+      assert.ok(events.filter(e => e.key.startsWith('milestone:')).every(e => e.row === null));
+    }
     assert.equal(view.taskJourneyRange(task).end, '2026-09-24');
     assert.equal(view.taskJourneyRange({ ...task, completedAt: null, milestones: task.milestones.slice(0, 2) }).end, '2026-09-17');
   });
@@ -118,7 +136,7 @@ for (const app of ['client-app', 'admin-panel']) {
     for (const width of [220, 235, 290]) {
       const mobile = view.buildWorkflowGraph({ tasks, orders }, '2026-09-01', '2026-09-30', width);
       assert.ok(mobile.height < 600);
-      assert.equal(mobile.bands[4].height, app === 'client-app' ? 48 : 68);
+      assert.equal(mobile.bands.length, 5);
     }
     assert.deepEqual(tasks, before);
   });
@@ -133,7 +151,7 @@ for (const app of ['client-app', 'admin-panel']) {
       const group = html.split(`data-journey-task="${line.task.id}"`)[1].split('data-journey-task=')[0].split('</svg>')[0];
       const circles = [...group.matchAll(/<circle\b[^>]*r="[56]"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"/g)];
       assert.equal(circles.length, line.points.length);
-      assert.ok(circles.every(match => match[2] === line.color && (match[1] === line.color || match[1] === '#fff')));
+      assert.ok(circles.every(match => match[2] === line.color && match[1] === line.color));
       const texts = [...group.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)];
       assert.equal(texts.length, 2);
       for (const text of texts) {
@@ -176,85 +194,8 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.match(source, /\[model\]/);
   });
 
-  if (app === 'admin-panel') test(`${app}: shared collision lanes keep names and hit targets apart, even on nearby dates`, () => {
-    const busy = Array.from({ length: 12 }, (_, i) => ({ ...task, id: `busy-${i}`, title: `Package ${i} with a long client-provided name`,
-      milestones: task.milestones.map(m => ({ ...m, reachedAt: i % 2 ? '2026-09-18' : m.reachedAt })) }));
-    for (const [start, end] of [['2026-09-01', '2026-09-30'], ['2026-09-17', '2026-09-17'], ['2020-01-01', '2030-01-01']]) {
-      const model = view.buildWorkflowGraph({ tasks: busy }, start, end);
-      const points = model.series.flatMap(line => line.points);
-      for (let i = 0; i < points.length; i++) {
-        const a = points[i];
-        const bottom = a.y + Math.max(14, a.labelLines.length * 14 - 6);
-        for (const b of points.slice(i + 1)) {
-          const otherBottom = b.y + Math.max(14, b.labelLines.length * 14 - 6);
-          assert.ok(a.right <= b.left || b.right <= a.left || bottom <= b.y - 14 || otherBottom <= a.y - 14, 'point/label rectangles do not overlap');
-        }
-        if (a.labelLines.length) {
-          assert.ok(a.endpoint);
-          assert.ok(a.labelX >= 0 && a.labelX + model.labelWidth <= model.width);
-        }
-      }
-    }
-    const props = { timeline: { tasks: [task] }, startDate: '2026-09-01', endDate: '2026-09-30' };
-    const html = render(view.default, props);
-    const texts = [...html.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)].map(match => match[1].replace(/<[^>]*>/g, ''));
-    assert.equal(texts.filter(text => text.includes('Campaign launch')).length, 2);
-    assert.ok(!texts.some(text => /Draft|Review|Delivery|Completed ·|Started ·|In Process ·/.test(text)));
-    const single = { ...task, approvedAt: null, completedAt: null, milestones: [] };
-    assert.equal((render(view.default, { ...props, timeline: { tasks: [single] } }).match(/data-endpoint-label=/g) || []).length, 1);
-    const clipped = view.buildWorkflowGraph(props.timeline, '2026-09-18', '2026-09-20');
-    assert.ok(clipped.series[0].points.every(point => !point.labelLines.length));
-  });
-
-  if (app === 'admin-panel') test(`${app}: 375px mobile geometry bounds milestone height and preserves readable endpoints`, () => {
-    const graphWidth = 235; // 375px viewport, existing card spacing and the 76px stage column.
-    for (const total of [6, 24, 60]) {
-      const dense = { ...task, milestones: Array.from({ length: total }, (_, i) => ({ name: `Milestone ${i}`, percentage: 1 + i, reached: true, reachedAt: i % 2 ? '2026-09-17' : '2026-09-18' })) };
-      const tasks = Array.from({ length: total === 24 ? 8 : 1 }, (_, i) => ({ ...dense, id: `dense-${i}` }));
-      const model = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24', graphWidth);
-      const points = model.series.flatMap(line => line.points);
-      assert.equal(model.bands[4].height, 68);
-      for (let row = 1; row < 6; row++) assert.ok(model.rows[row - 1] > model.rows[row], 'stages progress bottom to top');
-      assert.ok(model.height <= (tasks.length > 1 ? 560 : 400));
-      assert.equal(points.filter(point => point.row === 4).length, total * tasks.length);
-      for (const point of points) {
-        const column = model.columns.find(column => column.day === point.day);
-        assert.ok(point.x - 14 >= column.left && point.x + 14 <= column.left + column.width);
-        if (point.labelLines.length) {
-          assert.ok(point.endpoint);
-          assert.ok(point.labelX - 4 >= column.left && point.labelX + model.labelWidth + 4 <= column.left + column.width);
-        }
-      }
-      const rectangles = points.map(point => ({
-        left: point.labelLines.length ? point.labelX - 4 : point.x - 14,
-        right: point.labelLines.length ? point.labelX + model.labelWidth + 4 : point.x + 14,
-        top: point.y - 14, bottom: point.labelLines.length ? point.labelY + point.labelLines.length * 14 - 6 : point.y + 14,
-      }));
-      rectangles.forEach((a, i) => rectangles.slice(i + 1).forEach(b => {
-        assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
-      }));
-      assert.deepEqual(plain(model.numbered.map(t => t.sequence)), plain(view.numberJourneyTasks(tasks, [], '2026-09-15', '2026-09-24').map(t => t.sequence)));
-      for (const line of model.series) assert.equal((line.path.match(/H/g) || []).length, line.points.length - 1);
-    }
-    const short = { ...task, approvedAt: null, milestones: [], completedAt: '2026-09-16' };
-    for (const end of ['2026-09-15', '2026-09-16']) {
-      assert.equal(view.buildWorkflowGraph({ tasks: [short] }, '2026-09-15', end, graphWidth).width, graphWidth);
-    }
-    const desktop = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-01', '2026-09-30');
-    assert.equal(desktop.width, 2400);
-    assert.equal(desktop.height, 440);
-    for (let row = 1; row < 6; row++) assert.ok(desktop.rows[row - 1] > desktop.rows[row]);
-    const mobileView = load('WorkflowJourney', { react: { ...React, useState: initial => React.useState(initial === 0 ? graphWidth : initial) } });
-    const html = render(mobileView.default, { timeline: { tasks: [task] }, startDate: '2026-09-15', endDate: '2026-09-24' });
-    assert.match(html, /aria-label="Workflow stage axis" width="76"/);
-    assert.match(html, /bottom: calc\(84px \+ env\(safe-area-inset-bottom/);
-    assert.equal((html.match(/data-endpoint-label=/g) || []).length, 2);
-    assert.match(html, /Scheduled<tspan[^>]*>\(0%\)<\/tspan>/);
-    assert.match(html, /Started<tspan[^>]*>\(≥1%\)<\/tspan>/);
-  });
-
-  if (app === 'client-app') {
-    test('client: one date dot retains every saved record and anchors same-day activity at Order', () => {
+  {
+    test(`${app}: one date dot retains every saved record and anchors same-day activity at Order`, () => {
       const busy = { ...task, milestones: Array.from({ length: 20 }, (_, i) => ({ name: `Activity ${i}`, percentage: i * 5, reached: true, reachedAt: `2026-09-17T10:${String(i).padStart(2, '0')}:00Z` })) };
       const before = plain(busy);
       const graph = view.buildWorkflowGraph({ tasks: [busy] }, '2026-09-01', '2026-09-30', 235);
@@ -282,7 +223,7 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.deepEqual(busy, before);
     });
 
-    test('client: unknown order dates remain missing and dated stages never zig-zag', () => {
+    test(`${app}: unknown order dates remain missing and dated stages never zig-zag`, () => {
       const unknown = { ...task, order: null };
       const line = view.buildWorkflowGraph({ tasks: [unknown] }, '2026-09-01', '2026-09-30', 235).series[0];
       assert.ok(line.missing.some(event => event.key === 'order'));
@@ -301,20 +242,22 @@ for (const app of ['client-app', 'admin-panel']) {
         for (let i = 1; i < points.length; i++) {
           assert.ok(points[i].day > points[i - 1].day);
           assert.ok(points[i].x > points[i - 1].x);
-          assert.ok(points[i].y >= points[i - 1].y);
+          assert.ok(points[i].y <= points[i - 1].y);
         }
-        assert.equal(points.find(point => point.day === '2026-09-19').events.find(event => event.key === 'process').row, 3);
+        assert.equal(points.find(point => point.day === '2026-09-19').events[0].row, null);
+        assert.ok(points.find(point => point.day === '2026-09-19').supporting);
         assert.ok(points.every(point => point.day !== dated.deadline));
       }
     });
 
-    test('client: 360–430px layouts bound height, date collisions and long endpoint labels', () => {
+    test(`${app}: 360–430px layouts bound height, date collisions and long endpoint labels`, () => {
       for (const width of [220, 235, 290]) for (const total of [1, 8, 25]) {
         const tasks = Array.from({ length: total }, (_, i) => ({ ...task, id: `dense-${i}`, title: `Package ${i} with a very long client-provided title that must not expand the graph`,
           milestones: Array.from({ length: 60 }, (_, j) => ({ name: `Milestone ${j}`, percentage: j + 1, reached: true, reachedAt: j % 2 ? '2026-09-17' : '2026-09-18' })) }));
         const model = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24', width);
         assert.ok(model.height < 500);
-        for (let row = 1; row < 6; row++) assert.ok(model.rows[row] > model.rows[row - 1]);
+        assert.equal(model.rows.length, 5);
+        for (let row = 1; row < 5; row++) assert.ok(model.rows[row] < model.rows[row - 1]);
         const rectangles = [];
         for (const line of model.series) {
           assert.equal(line.points.length, 5);
@@ -345,7 +288,7 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.match(panel, /84px \+ env\(safe-area-inset-bottom/);
     });
 
-    test('client: compact Calendar dates aggregate packages without inventing daily activity', () => {
+    test(`${app}: compact Calendar dates aggregate packages without inventing daily activity`, () => {
       const tasks = [task, { ...task, id: 'sibling' }, { ...task, id: 'unknown', order: null }];
       const model = calendar.buildCalendarRanges(tasks, '2026-09-15', '2026-09-24');
       const graph = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24');
@@ -403,13 +346,13 @@ for (const app of ['client-app', 'admin-panel']) {
       for (const child of React.Children.toArray(tree.props?.children)) { const found = find(child, predicate); if (found) return found; }
       return null;
     };
-    const event = key => find(draw(), node => app === 'client-app' && key.startsWith('milestone:') ? node.props?.['data-date'] === '2026-09-17' : node.props?.['data-event'] === key);
+    const event = key => find(draw(), node => key.startsWith('milestone:') ? node.props?.['data-date'] === '2026-09-17' : node.props?.['data-event'] === key);
     const detail = () => find(draw(), node => node.props?.['aria-label'] === 'Journey point details');
     draw();
     assert.equal(calls.length, 0);
     await event('milestone:0').props.onClick();
     assert.match(renderToStaticMarkup(detail()), /Draft/);
-    if (app === 'client-app') {
+    {
       assert.match(renderToStaticMarkup(detail()), /Review/);
       assert.match(renderToStaticMarkup(detail()), /60%/);
       assert.doesNotMatch(renderToStaticMarkup(detail()), /Delivery/);
@@ -469,51 +412,37 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(calendar.buildCalendarRanges([{ ...notStarted, order: null }], '2026-09-15', '2026-09-24').undated.length, 1);
   });
 
-  if (app === 'admin-panel') test(`${app}: fixed stage coordinates, proportional dates, one path per task, same-day milestones`, () => {
+  test(`${app}: five core stages, shared first-progress evidence and no milestone stage`, () => {
+    assert.deepEqual(plain(view.workflowRows), ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (≥1%)', 'IN PROCESS (1%–99%)', 'COMPLETED (100%)']);
     const model = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-01', '2026-09-30');
-    const line = model.series[0];
-    assert.equal(model.firstActual, '2026-09-15');
-    assert.equal(model.x('2026-09-17') - model.x('2026-09-15'), 160);
-    assert.equal(model.rows.length, 6);
-    assert.ok(model.rows[0] > model.rows[5]);
-    for (const point of line.points) {
-      const band = model.bands[point.row];
-      assert.ok(point.y >= band.top + 14 && point.y + 14 <= band.top + band.height);
-      assert.equal(point.x, model.x(point.day));
-    }
-    assert.equal(line.points.find(p => p.key === 'order').row, 0);
-    assert.equal(line.points.find(p => p.key === 'started').row, 2);
-    assert.equal(line.points.find(p => p.key === 'process').row, 3);
-    assert.equal(line.points.find(p => p.key === 'completed').row, 5);
-    const milestones = line.points.filter(p => p.day === '2026-09-17' && p.row === 4);
-    assert.equal(milestones.length, 2);
-    assert.equal(milestones[0].x, milestones[1].x);
-    assert.notEqual(milestones[0].y, milestones[1].y);
-    assert.equal((line.path.match(/M/g) || []).length, 1);
-    assert.equal((line.path.match(/H/g) || []).length, line.points.length - 1);
-    assert.equal(calendar.buildCalendarRanges([task], '2026-09-01', '2026-09-30').tasks[0].start, line.points.find(p => p.key === 'order').day);
-    const later = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-18', '2026-09-20');
-    assert.equal(later.firstActual, '2026-09-18');
-    assert.ok(later.series[0].path.length > 0); // clipped journey still spans this middle window
-    const today = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-24', '2026-09-24');
-    assert.equal(today.count, 1);
-    assert.equal(today.series[0].task.sequence, null);
-    for (const end of ['2026-09-18', '2026-09-19', '2026-09-20']) {
-      const axis = view.journeyDateAxis('2026-09-18', end);
-      assert.equal(axis.dayWidth * axis.count, axis.width);
-      assert.ok(axis.x('2026-09-17') < 0);
-      assert.ok(axis.x('2026-09-21') > axis.width);
-    }
-    assert.equal(view.taskJourneyRange({ ...task, order: null }).start, null);
+    assert.equal(model.firstActual, task.order.createdAt);
+    assert.equal(model.series[0].points.at(-1).row, 4);
+    const firstProgress = '2026-09-17T12:00:00Z';
+    const points = view.journeyDatePoints([
+      { key: 'started', row: 2, date: firstProgress },
+      { key: 'process', row: 3, date: firstProgress },
+    ]);
+    assert.equal(points.length, 1);
+    assert.equal(points[0].events.length, 2);
+    assert.equal(points[0].row, 3);
+    const clipped = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-18', '2026-09-20');
+    assert.ok(clipped.series[0].path.length);
+    assert.ok(clipped.series[0].points.every(point => !point.labelLines.length));
+    assert.equal(view.buildWorkflowGraph(null, 'bad', '2026-09-30').count, 0);
+    const taskWithoutDate = { ...task, order: { id: task.order.id } };
+    const resolved = view.buildWorkflowGraph({ tasks: [taskWithoutDate], orders: [task.order] }, '2026-09-01', '2026-09-30');
+    assert.equal(resolved.series[0].points[0].date, task.order.createdAt);
+    assert.equal(taskWithoutDate.order.createdAt, undefined);
   });
 }
 
-test('client-only presentation retains existing evidence, numbering, color and Calendar range rules', () => {
+test('all views keep identical workflow presentation, evidence, numbering, colors and Calendar bounds', () => {
   const load = (app, name, overrides = {}) => {
     const module = { exports: {} };
     vm.runInNewContext(transformSync(read(`frontend/${app}/src/components/${name}.jsx`), { loader: 'jsx', format: 'cjs' }).code, { module, exports: module.exports, require: name => overrides[name] || clientRequire(name) });
     return module.exports;
   };
+  for (const file of ['WorkflowJourney.jsx', 'WorkflowCalendar.jsx']) assert.equal(read(`frontend/client-app/src/components/${file}`), read(`frontend/admin-panel/src/components/${file}`));
   const client = load('client-app', 'WorkflowJourney'), admin = load('admin-panel', 'WorkflowJourney');
   for (const name of ['taskJourneyEvents', 'taskJourneyRange', 'numberJourneyOrders', 'numberJourneyTasks', 'buildJourneyColors', 'journeyColor']) assert.equal(client[name].toString(), admin[name].toString(), name);
   assert.equal(load('client-app', 'WorkflowCalendar', { './WorkflowJourney': client }).buildCalendarRanges.toString(), load('admin-panel', 'WorkflowCalendar', { './WorkflowJourney': admin }).buildCalendarRanges.toString());
@@ -523,7 +452,7 @@ test('endpoint loaders reuse existing authorized task/order routes and never exp
   for (const [file, prefix] of [['frontend/client-app/src/components/WorkflowTimeline.jsx', 'client'], ['frontend/admin-panel/src/pages/Dashboard.jsx', 'admin']]) {
     const source = read(file);
     const calls = [];
-    const code = prefix === 'client' ? source.match(/export const loadClientJourneyInputs = ([\s\S]*?);\r?\n\r?\n/)[1] : `${source.match(/loadInputs=\{(async [\s\S]*?)\}\} \/>/)[1]}}`;
+    const code = source.match(/export const load(?:Client|Admin)JourneyInputs = ([\s\S]*?);\r?\n\r?\n/)[1];
     const loader = vm.runInNewContext(`(${code})`, {
       api: { get: async (url, options) => { calls.push({ url, options }); return { data: { task: { id: 'task' }, order: { id: 'order' } } }; } },
     });
@@ -538,7 +467,7 @@ test('endpoint loaders reuse existing authorized task/order routes and never exp
   }
 });
 
-function clientHarness(user = { id: 'owner', role: 'CLIENT' }) {
+function clientHarness(user = { id: 'owner', role: 'CLIENT' }, app = 'client-app') {
   const React = clientRequire('react');
   const slots = [], calls = [];
   let cursor = 0, effects = [];
@@ -551,18 +480,21 @@ function clientHarness(user = { id: 'owner', role: 'CLIENT' }) {
     useEffect(fn, deps) { const i = cursor++; if (changed(slots[i]?.deps, deps)) { slots[i]?.cleanup?.(); slots[i] = { deps }; effects.push(() => { slots[i].cleanup = fn(); }); } },
   };
   const api = { get: (url, options) => new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })) };
-  const modules = { react: hooks, '../services/api': api, '../services/authService': { getCurrentUser: () => user } };
-  const load = (name, extension = 'jsx') => {
+  const modules = { react: hooks, '../services/api': api, '../services/authService': { getCurrentUser: () => user },
+    'react-router-dom': { useNavigate: () => () => {} }, '../components/Header': () => null,
+    '../services/pushService': { initPushNotifications() {}, setupForegroundHandler: () => () => {} }, '../App': { useAuth: () => ({ user }) } };
+  const load = (name, extension = 'jsx', folder = 'components') => {
     const module = { exports: {} };
-    vm.runInNewContext(transformSync(read(`frontend/client-app/src/components/${name}.${extension}`), { loader: extension, format: 'cjs' }).code, {
+    vm.runInNewContext(transformSync(read(`frontend/${app}/src/${folder}/${name}.${extension}`), { loader: extension, format: 'cjs' }).code, {
       module, exports: module.exports, require: name => modules[name] || clientRequire(name), URL, AbortController,
+      document: { body: { classList: { add() {}, remove() {} } }, addEventListener() {}, removeEventListener() {} },
     });
-    modules[`./${name}`] = module.exports;
+    modules[`./${name}`] = modules[`../components/${name}`] = module.exports;
     return module.exports;
   };
   const journey = load('WorkflowJourney'), calendar = load('WorkflowCalendar');
-  load('workflowTimelineTask', 'js');
-  const timeline = load('WorkflowTimeline');
+  if (app === 'client-app') load('workflowTimelineTask', 'js');
+  const timeline = app === 'client-app' ? load('WorkflowTimeline') : load('Dashboard', 'jsx', 'pages');
   const find = (tree, predicate) => {
     if (!tree || typeof tree !== 'object') return null;
     if (predicate(tree)) return tree;
@@ -664,8 +596,8 @@ test('client: both views share filtered tasks, persisted order dates, inputs loa
   assert.equal(h.journey.taskJourneyRange(missing.tasks[0]).start, null);
 });
 
-test('client: Calendar date activity opens the shared detail and exact-task video inputs on demand', async () => {
-  const h = clientHarness();
+for (const app of ['client-app', 'admin-panel']) test(`${app}: Calendar date activity opens shared detail and exact-task video inputs on demand`, async () => {
+  const h = clientHarness(undefined, app);
   const calls = [];
   const props = { tasks: [task], orders: [], rangeStart: '2026-09-15', rangeEnd: '2026-09-24',
     loadInputs: (selected, signal) => new Promise(resolve => calls.push({ selected, signal, resolve })) };
@@ -700,6 +632,114 @@ test('client: Calendar date activity opens the shared detail and exact-task vide
   assert.match(html, /Client contact reference/);
   assert.match(html, /Saved instructions/);
   assert.doesNotMatch(html, /example.com\/stale/);
+});
+
+test('assigned user: authorized tasks share both views, no buyer order is reconstructed, inputs remain task-scoped', async () => {
+  const h = clientHarness({ id: 'assigned-user', role: 'CLIENT' });
+  const assigned = { ...task, id: 'assigned-task', clientId: 'buyer', order: null, orderContext: 'unavailable' };
+  const data = { tasks: [assigned], orders: [] };
+  h.draw();
+  assert.equal(h.calls[0].url, '/client/insights/timeline');
+  h.calls[0].resolve({ data });
+  await settle();
+  const findView = type => h.find(h.draw(), node => node.type === type);
+  const timeline = findView(h.journey.default);
+  assert.deepEqual(plain(timeline.props.timeline.tasks.map(t => t.id)), ['assigned-task']);
+  assert.equal(timeline.props.timeline.tasks[0].order, null);
+  const point = h.journey.buildWorkflowGraph(timeline.props.timeline, '2026-09-01', '2026-09-30').series[0];
+  assert.ok(point.points.every(p => !p.isOrder));
+  assert.equal(point.points[0].stageKnown, false);
+  h.find(h.draw(), node => node.type === 'button' && node.props.children === 'calendar').props.onClick();
+  const calendar = findView(h.calendar.default);
+  assert.equal(calendar.props.tasks, timeline.props.timeline.tasks);
+  assert.equal(calendar.props.orders.length, 0);
+  const pending = calendar.props.loadInputs(assigned, new AbortController().signal);
+  assert.equal(h.calls[1].url, '/client/tasks/assigned-task');
+  h.calls[1].reject({ response: { status: 403 } });
+  await assert.rejects(pending);
+  assert.equal(h.calls.length, 2);
+  assert.ok(!h.calls.some(call => call.url.includes('/orders/')));
+});
+
+test('admin: Workflow tabs survive independent analytics failures, loading, empty, missing history and timeline errors', async () => {
+  for (const state of ['empty', 'unknown', 'error']) {
+    const h = clientHarness({ id: 'admin', role: 'ADMIN' }, 'admin-panel');
+    h.draw();
+    const request = h.calls.find(call => call.url === '/admin/analytics/timeline');
+    for (const call of h.calls) {
+      if (call === request) continue;
+      if (call.url === '/admin/analytics') call.reject(new Error('Analytics unavailable'));
+      else call.resolve({ data: {} });
+    }
+    await settle();
+    const button = view => h.find(h.draw(), node => node.type === 'button' && node.props.children === view);
+    assert.ok(button('timeline'));
+    assert.ok(button('calendar'));
+    button('calendar').props.onClick();
+    assert.equal(button('calendar').props['aria-pressed'], true);
+    if (state === 'error') request.reject({ response: { status: 403 } });
+    else request.resolve({ data: { tasks: state === 'empty' ? [] : [{ id: 'undated', title: 'Unknown history', progress: 100 }], orders: [] } });
+    await settle();
+    assert.ok(button('timeline'));
+    assert.ok(button('calendar'));
+    const calendar = h.find(h.draw(), node => node.type === h.calendar.default);
+    if (state === 'error') {
+      assert.equal(calendar, null);
+      assert.ok(h.find(h.draw(), node => node.type === 'p' && node.props.children === 'Timeline failed to load.'));
+    } else {
+      assert.ok(calendar);
+      const html = h.markup(h.journey.default ? clientRequire('react').createElement(h.calendar.default, calendar.props) : null);
+      assert.match(html, /No recorded ranges/);
+      if (state === 'unknown') assert.match(html, /Date unavailable/);
+    }
+  }
+});
+
+test('admin: client/date filters feed both Workflow views and reject stale responses', async () => {
+  const h = clientHarness({ id: 'admin', role: 'ADMIN' }, 'admin-panel');
+  const original = { tasks: [task], orders: [task.order] };
+  const respond = calls => calls.forEach(call => call.resolve({ data: call.url.endsWith('/timeline') ? original : call.url === '/admin/clients' ? { clients: [{ id: 'buyer', identifier: 'Buyer' }, { id: 'other', identifier: 'Other' }] } : {} }));
+  h.draw();
+  respond(h.calls);
+  await settle();
+  const find = predicate => h.find(h.draw(), predicate);
+  const button = value => find(node => node.type === 'button' && node.props.children === value);
+  const timeline = find(node => node.type === h.journey.default);
+  button('calendar').props.onClick();
+  let calendar = find(node => node.type === h.calendar.default);
+  assert.equal(calendar.props.tasks, timeline.props.timeline.tasks);
+  assert.equal(calendar.props.orders, timeline.props.timeline.orders);
+  assert.equal(calendar.props.loadInputs, timeline.props.loadInputs);
+  find(node => node.type === 'button' && node.props.style?.maxWidth === '180px').props.onClick();
+  find(node => node.type === 'button' && node.props['aria-pressed'] === false && JSON.stringify(node.props.children).includes('Buyer')).props.onClick();
+  find(node => node.type === 'button' && node.props['aria-pressed'] === false && JSON.stringify(node.props.children).includes('Other')).props.onClick();
+  find(node => node.type === 'button' && Array.isArray(node.props.children) && node.props.children[0] === 'Apply ').props.onClick();
+  h.draw();
+  const filtered = h.calls.filter(call => call.url === '/admin/analytics/client/timeline').at(-1);
+  assert.equal(filtered.options.params.clientId, 'buyer,other');
+  const priorCount = h.calls.length;
+  find(node => node.type === 'select').props.onChange({ target: { value: '7days' } });
+  h.draw();
+  const latest = h.calls.filter(call => call.url === '/admin/analytics/client/timeline').at(-1);
+  assert.notEqual(latest, filtered);
+  assert.equal(latest.options.params.clientId, 'buyer,other');
+  assert.equal((new Date(latest.options.params.endDate) - new Date(latest.options.params.startDate)) / 86400000, 6);
+  const finalData = { tasks: [{ ...task, id: 'filtered-task' }], orders: [task.order] };
+  for (const call of h.calls.slice(priorCount)) call.resolve({ data: call === latest ? finalData : {} });
+  await settle();
+  filtered.resolve({ data: { tasks: [{ ...task, id: 'STALE' }] } });
+  await settle();
+  calendar = find(node => node.type === h.calendar.default);
+  assert.equal(calendar.props.tasks, finalData.tasks);
+  assert.equal(calendar.props.rangeStart, latest.options.params.startDate);
+  button('timeline').props.onClick();
+  const current = find(node => node.type === h.journey.default);
+  assert.equal(current.props.timeline.tasks, calendar.props.tasks);
+  assert.equal(current.props.startDate, calendar.props.rangeStart);
+  find(node => node.type === 'select').props.onChange({ target: { value: 'alltime' } });
+  h.draw();
+  assert.ok(button('calendar'));
+  assert.ok(find(node => node.type === 'p' && JSON.stringify(node.props.children).includes('Select a date range')));
 });
 
 test('existing normalization keeps planned end separate from completion', () => {

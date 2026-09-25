@@ -11,37 +11,28 @@ const formatDate = value => journeyDay(value)
 const formatPointDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? formatDate(value)
   : `${new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'UTC' })} UTC`;
 const dayMillis = 86400000;
-export const workflowRows = ['ORDER', 'SCHEDULED (0%)', 'STARTED (≥1%)', 'IN PROCESS', 'MILESTONE(S)', 'COMPLETED'];
-const stageColors = ['#334155', '#60a5fa', '#2563eb', '#f59e0b', '#7c3aed', '#16a34a'];
+export const workflowRows = ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (≥1%)', 'IN PROCESS (1%–99%)', 'COMPLETED (100%)'];
 const lineColors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#4d7c0f', '#1e40af', '#a16207', '#9333ea', '#0f766e', '#c2410c', '#0369a1', '#a21caf', '#15803d', '#e11d48', '#4338ca', '#78716c', '#b45309', '#047857', '#6d28d9', '#9f1239', '#0e7490', '#713f12'];
-const currentStage = progress => progress === 0 ? 'Scheduled' : progress >= 100 ? 'Completed' : progress >= 50 ? 'In Process' : progress >= 1 ? 'Started' : 'Stage unavailable';
+export const currentStage = progress => !Number.isFinite(progress) ? 'Stage unavailable' : progress === 0 ? 'Scheduled' : progress >= 100 ? 'Completed' : progress >= 1 ? 'In Process' : 'Stage unavailable';
 
 export function taskJourneyEvents(task) {
   const milestones = (task.milestones || []).flatMap((milestone, index) => milestone.reached === true ? [{
-    key: `milestone:${index}`, row: 4, label: milestone.name || `Milestone ${index + 1}`, date: milestone.reachedAt,
-    detail: `${milestone.percentage ?? '—'}% · saved milestone`, progress: milestone.percentage,
+    key: `milestone:${index}`, row: null, label: milestone.name || `Milestone ${index + 1}`, date: milestone.reachedAt,
+    detail: 'Saved milestone evidence. Configuration can change; this is not a permanent workflow transition.', progress: milestone.percentage,
   }] : []);
-  const evidence = milestones.filter(event => journeyDay(event.date) && Number.isFinite(event.progress))
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-  const scheduled = evidence.find(event => event.progress === 0);
-  const started = evidence.find(event => event.progress >= 1);
-  const halfway = evidence.find(event => event.progress >= 50);
-  const completionEvidence = evidence.find(event => event.progress >= 100);
-  const completed = [task.completedAt, completionEvidence?.date].filter(journeyDay)
-    .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+  // The authorized payload has no durable zero/first-progress transition timestamps.
+  // Mutable milestones and today's progress must never supply those dates.
+  const completed = journeyDay(task.completedAt) ? task.completedAt : null;
   return [
-    { key: 'order', row: 0, label: 'Order', date: task.order?.createdAt, detail: task.order?.orderId || 'Order date unavailable' },
-    { key: 'approval', row: 1, label: 'Approval', date: task.approvedAt,
+    { key: 'order', row: 0, label: 'Order placed', date: task.order?.createdAt, detail: task.order?.orderId || 'Order date unavailable' },
+    { key: 'approval', row: null, label: 'Approval', date: task.approvedAt,
       detail: 'Recorded approval date. Progress at approval was not persisted; this is not a dated 0% transition.' },
-    { key: 'scheduled', row: 1, label: 'Scheduled', date: scheduled?.date,
-      detail: scheduled ? `Saved 0% evidence: ${scheduled.label}.` : 'Historical 0% timestamp unavailable. Current 0% still means Scheduled.' },
-    { key: 'started', row: 2, label: 'Started', date: started?.date,
-      detail: started ? `First available evidence ≥1%: ${started.label} (${started.progress}%). Not a reconstructed transition.` : 'First ≥1% date unavailable' },
-    { key: 'process', row: 3, label: 'In Process', date: halfway?.date,
-      detail: halfway ? `First available evidence ≥50%: ${halfway.label} (${halfway.progress}%). Not a reconstructed transition.` : 'First ≥50% date unavailable' },
+    { key: 'scheduled', row: 1, label: 'Scheduled (0%)', date: undefined, detail: 'Date unavailable' },
+    { key: 'started', row: 2, label: 'Started (≥1%)', date: undefined, detail: 'First-progress date unavailable' },
+    { key: 'process', row: 3, label: 'In Process (1%–99%)', date: undefined, detail: 'First-progress date unavailable' },
     ...milestones,
-    { key: 'completed', row: 5, label: 'Completed', date: completed,
-      detail: completed ? (completed === completionEvidence?.date ? `Saved ≥100% evidence: ${completionEvidence.label}. First-ever transition unavailable.` : 'Recorded completion event; first-ever 100% transition unavailable.') : 'Actual completion date unavailable' },
+    { key: 'completed', row: 4, label: 'Completed', date: completed,
+      detail: completed ? 'Recorded task completion.' : 'Actual completion date unavailable' },
   ];
 }
 
@@ -50,10 +41,17 @@ export function taskJourneyRange(task) {
   const events = taskJourneyEvents(task);
   const dates = events.map(event => journeyDay(event.date)).filter(Boolean).sort();
   const orderDate = journeyDay(task.order?.createdAt);
+  // Preserve Calendar's existing date bounds, but distinguish mutable range evidence
+  // from a recorded workflow completion. It must not become a graph transition.
+  const milestoneEnd = events.filter(event => event.key.startsWith('milestone:') && Number.isFinite(event.progress) && event.progress >= 100 && journeyDay(event.date))
+    .sort((a, b) => new Date(a.date) - new Date(b.date))[0]?.date;
+  const endEvidence = [task.completedAt, milestoneEnd].filter(journeyDay).sort((a, b) => new Date(a) - new Date(b))[0];
+  const completed = Boolean(journeyDay(task.completedAt) && endEvidence === task.completedAt);
   return {
     start: orderDate,
-    end: journeyDay(events.find(event => event.key === 'completed').date) || dates[dates.length - 1] || null,
-    completed: Boolean(journeyDay(events.find(event => event.key === 'completed').date)),
+    end: journeyDay(endEvidence) || dates[dates.length - 1] || null,
+    completed,
+    endLabel: completed ? 'Completed' : journeyDay(milestoneEnd) ? 'Saved 100% evidence' : 'Latest evidence',
     missingOrder: !orderDate,
   };
 }
@@ -70,7 +68,11 @@ export function numberJourneyOrders(tasks, orders = [], startDate, endDate) {
 }
 
 export function numberJourneyTasks(tasks, orders = [], startDate, endDate) {
-  const unique = [...new Map(tasks.map(task => [task.id, task])).values()];
+  const unique = [...new Map(tasks.map(task => [task.id, task])).values()].map(task => {
+    const order = orders.find(order => (task.order?.id && task.order.id === order.id) || (task.order?.orderId && task.order.orderId === order.orderId));
+    return !journeyDay(task.order?.createdAt) && journeyDay(order?.createdAt)
+      ? { ...task, order: { ...task.order, createdAt: order.createdAt } } : task;
+  });
   const numbers = numberJourneyOrders(unique, orders, startDate, endDate);
   return unique.map(task => ({ ...task, sequence: numbers.get(task.order?.id || task.order?.orderId) || null,
     sequenceNote: journeyDay(task.order?.createdAt) ? 'Order outside selected range · unnumbered' : 'Order date unavailable · unnumbered' }))
@@ -120,13 +122,14 @@ export function journeyDatePoints(events) {
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push(event);
   }
-  let furthestStage = 0;
+  let furthestStage = null;
   return [...byDay].map(([day, records], index, days) => {
     const order = records.find(event => event.key === 'order');
-    const transitions = records.filter(event => !event.key.startsWith('milestone:'));
+    const transitions = records.filter(event => Number.isInteger(event.row));
     const representative = order || [...(transitions.length ? transitions : records)].sort((a, b) => b.row - a.row)[0];
-    furthestStage = Math.max(furthestStage, representative.row);
-    return { ...representative, day, events: records, row: order ? 0 : furthestStage,
+    for (const event of transitions) furthestStage = Math.max(furthestStage ?? 0, event.row);
+    return { ...representative, day, events: records, row: order ? 0 : furthestStage ?? 0,
+      stageKnown: furthestStage !== null, supporting: !transitions.length,
       endpoint: Boolean(order) || index === days.length - 1, isOrder: Boolean(order) };
   });
 }
@@ -177,7 +180,7 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const allPoints = series.flatMap(line => line.points);
   const rows = [], bands = [];
   let height = 40;
-  for (const row of [0, 1, 2, 3, 4, 5]) {
+  for (const row of [4, 3, 2, 1, 0]) {
     const points = allPoints.filter(point => point.row === row);
     const visible = points.filter(point => byDay.has(point.day));
     const bandHeight = Math.max(48, ...visible.map(point => 44 + point.laneOffset + point.labelLines.length * 14));
@@ -206,9 +209,9 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
     }));
   const series = [...numbered, ...orderOnly].map(task => {
     const events = task.orderOnly ? [
-      { key: 'order', row: 0, label: 'Order', date: task.order.createdAt, detail: task.order.orderId },
-      { key: 'approval', row: 1, label: 'Approval', date: task.order.approvedAt, detail: 'Recorded approval; progress at approval unavailable' },
-      { key: 'completed', row: 5, label: 'Completed', date: task.order.completedAt, detail: 'Recorded order completion' },
+      { key: 'order', row: 0, label: 'Order placed', date: task.order.createdAt, detail: task.order.orderId },
+      { key: 'approval', row: null, label: 'Approval', date: task.order.approvedAt, detail: 'Recorded approval; progress at approval unavailable' },
+      { key: 'completed', row: 4, label: 'Completed', date: task.order.completedAt, detail: 'Recorded order completion' },
     ] : taskJourneyEvents(task);
     const points = journeyDatePoints(events);
     return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, colors) };
@@ -229,7 +232,7 @@ export const TaskJourney = ({ task }) => {
       <p>Status: {task.status || 'Unavailable'} · {(task.creditCost || 0).toLocaleString('en-IN')} credits</p>
       <p><strong>Scheduled start:</strong> {formatDate(task.startDate)} · <strong>Planned end:</strong> {formatDate(task.endDate || task.deadline)}. Planned dates are not plotted.</p>
       <details><summary>Recorded dates</summary>{journeyDatePoints(events).map(point => <details key={point.day} style={{ padding: '6px 0' }}><summary>{formatDate(point.day)} · {point.events.length} records</summary><JourneyDateEvents point={point} /></details>)}</details>
-      {unavailable.length > 0 && <details><summary>Dates unavailable ({unavailable.length})</summary><p>Missing history is not inferred from current progress or plans.</p>{unavailable.map(event => <p key={event.key}>{event.label}: {event.detail}</p>)}</details>}
+      {unavailable.length > 0 && <details><summary>Dates unavailable ({unavailable.length})</summary><p>Missing history is not inferred from current progress or plans.</p>{unavailable.map(event => <div key={event.key} style={{ padding: '4px 0' }}>{event.label} · Date unavailable</div>)}</details>}
       <details><summary>Milestone configuration · {(task.milestones || []).filter(m => m.reached).length} / {(task.milestones || []).length} reached</summary>
         <p>Separate milestone start dates and complete progress history are unavailable.</p>
         {(task.milestones || []).map((milestone, index) => <p key={index}>{milestone.name} · {milestone.percentage}% · {milestone.reached ? 'Reached' : 'Not reached'} · {formatDate(milestone.reached ? milestone.reachedAt : null)}</p>)}
@@ -309,7 +312,9 @@ export const JourneyDetail = ({ detail, closeDetail, showInputs }) => !detail ? 
   <button type="button" onClick={closeDetail} style={{ float: 'right', minHeight: '40px', padding: '0 8px', cursor: 'pointer' }}>Close</button>
   <strong style={{ display: 'block', fontSize: '15px' }}>{formatDate(detail.point.day)}</strong>
   <p style={{ margin: '6px 0' }}>{detail.task.sequence ? `Order ${detail.task.sequence} · ` : ''}{detail.task.title}</p>
+  {!detail.task.orderOnly && <p style={{ margin: '6px 0' }}>{currentStage(detail.task.progress)}{Number.isFinite(detail.task.progress) ? ` · ${detail.task.progress}%` : ''} · current</p>}
   <span style={{ color: '#64748b' }}>{detail.point.events.length} records on this date</span>
+  {detail.point.supporting && <p style={{ margin: '6px 0', color: '#64748b' }}>Supporting activity · no workflow transition recorded on this date.</p>}
   <JourneyDateEvents point={detail.point} />
   <details style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0' }} onToggle={event => { if (event.currentTarget.open && !detail.loading && !detail.data && !detail.error) showInputs(); }}>
     <summary style={{ cursor: 'pointer', padding: '12px 0', fontWeight: 600 }}>View task inputs &amp; content</summary>
@@ -347,14 +352,14 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>One dot per journey, per date. Tap for that day’s activity and inputs. Swipe to explore dates.</p>
+    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. Supporting activity stays at the last recorded stage; missing stage dates stay unavailable.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
         <text x={mobileWidth ? 6 : 10} y="27" fontSize="10" fill="#64748b">{mobileWidth ? 'STAGE' : 'STAGE / DATE'}</text>
         {workflowRows.map((label, row) => <g key={label}>
-          <rect x="4" y={model.rows[row] - (mobileWidth ? 20 : 24)} width={stageWidth - 8} height={mobileWidth ? 40 : 48} rx="8" fill={`${stageColors[row]}0d`} />
-          <text x={mobileWidth ? 6 : 10} y={model.rows[row] + ([1, 2, 3, 5].includes(row) ? -3 : 4)} fill="#475569" fontSize="11" fontWeight="600">{['Order', 'Scheduled', 'Started', 'In Process', 'Milestones', 'Completed'][row]}{[1, 2, 3, 5].includes(row) && <tspan x={mobileWidth ? 6 : 10} dy="14" fontSize="11">{({ 1: '(0%)', 2: '(≥1%)', 3: '(≥50%)', 5: '(100%)' })[row]}</tspan>}</text>
+          <rect x="4" y={model.rows[row] - 20} width={stageWidth - 8} height="40" rx="8" fill="#f1f5f9" />
+          <text x={mobileWidth ? 6 : 10} y={model.rows[row] - 3} fill="#475569" fontSize="11" fontWeight="600">{['Order', 'Scheduled', 'Started', 'In Process', 'Completed'][row]}<tspan x={mobileWidth ? 6 : 10} dy="14" fontSize="11">{['Placed', '(0%)', '(≥1%)', '(1%–99%)', '(100%)'][row]}</tspan></text>
         </g>)}
       </svg>
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -374,7 +379,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={point.supporting ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}`}</title>
                 <circle cx={point.x} cy={point.y} r="20" fill="transparent" />
                 <circle cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
@@ -398,7 +403,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
     </div>
       {model.numbered.filter(task => !highlight || task.id === highlight).map(task => <TaskJourney key={task.id} task={task} />)}
     </details>
-    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. Missing order dates remain unavailable, not replaced by Started. Bands summarize the furthest dated stage; tap a date for its exact evidence. The last point may be latest activity, not completion. Current progress and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. Milestones use the current saved configuration. Approval does not assert historical 0% progress.</p></details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. Missing order dates remain unavailable, not replaced by Started. Only recorded workflow transitions move a journey upward. Supporting records stay at the last known stage, or at the base when stage history is unavailable; their position does not assert an Order or Scheduled event. The last point may be latest activity, not completion. Current progress and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. Milestones use the current saved configuration. Approval does not assert historical 0% progress.</p></details>
   </div>;
 };
 

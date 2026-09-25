@@ -56,8 +56,8 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
   const choose = range => { chooseDay(range.visibleStart); setFocusedTask(range.task.id); };
   if (!model.count) return <p>Choose a valid date range.</p>;
   const height = 56 + Math.max(1, model.tasks.length) * 64;
-  return <div className="client-workflow-calendar" style={{ minWidth: 0 }}>
-    <style>{`.client-workflow-calendar .calendar-days { display: none; } @media (max-width: 640px) { .client-workflow-calendar .calendar-ranges { display: none; } .client-workflow-calendar .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; max-height: 340px; overflow-y: auto; } }`}</style>
+  return <div className="workflow-calendar" style={{ minWidth: 0 }}>
+    <style>{`.workflow-calendar .calendar-days { display: none; } @media (max-width: 640px) { .workflow-calendar .calendar-ranges { display: none; } .workflow-calendar .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; max-height: 340px; overflow-y: auto; } }`}</style>
     <p style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>{shortDate(rangeStart)} – {shortDate(rangeEnd)} · Tap a date to explore its packages.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div className="calendar-days" aria-label="Calendar dates">
@@ -73,7 +73,7 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
           <div style={{ height: '56px', padding: '16px 8px', fontSize: '11px', fontWeight: 700, borderBottom: '1px solid #e2e8f0' }}>TASK / ORDER</div>
           {model.tasks.map(range => <button key={range.task.id} type="button" onClick={() => choose(range)} title={range.task.title} style={{ display: 'flex', alignItems: 'center', gap: '5px', width: '100%', height: '64px', border: 0, borderBottom: '1px solid #e2e8f0', padding: '6px', background: focusedTask === range.task.id ? '#eef2ff' : '#fff', textAlign: 'left', cursor: 'pointer' }}>
             <span style={{ flexShrink: 0, padding: '5px', minWidth: '24px', borderRadius: '20px', color: '#fff', background: range.color, fontSize: '11px', textAlign: 'center', fontWeight: 700 }}>{range.task.sequence || '—'}</span>
-            <span style={{ minWidth: 0, fontSize: '12px', color: '#0f172a' }}><strong style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{range.task.title}</strong><span style={{ display: 'block', color: '#64748b', marginTop: '3px', fontSize: '10px' }}>{range.completed ? 'Completed' : 'Latest evidence'}</span></span>
+            <span style={{ minWidth: 0, fontSize: '12px', color: '#0f172a' }}><strong style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{range.task.title}</strong><span style={{ display: 'block', color: '#64748b', marginTop: '3px', fontSize: '10px' }}>{range.endLabel}</span></span>
           </button>)}
         </div>
         <div ref={scroller} tabIndex={0} role="region" aria-label="Calendar ranges, scroll dates horizontally" style={{ flex: 1, minWidth: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -86,11 +86,11 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
               <text x={model.x(day)} y="39" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</text>
             </g>)}
             {model.tasks.map(range => <g key={range.task.id} data-range-task={range.task.id} data-range-start={range.start} data-range-end={range.end} data-calendar-row={range.row} role="button" tabIndex={0} aria-label={`${range.task.title}: ${range.start} to ${range.end}${range.completed ? '' : ', completion unavailable'}`} onClick={() => choose(range)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(range); } }} style={{ cursor: 'pointer' }}>
-              <title>{`${range.task.title} · ${range.start} → ${range.end}${range.completed ? ' · Recorded completion' : ' · Latest dated evidence; completion unavailable'}`}</title>
+              <title>{`${range.task.title} · ${range.start} → ${range.end}${` · ${range.endLabel}${range.completed ? '' : '; completion date unavailable'}`}`}</title>
               <line x1="0" x2={model.width} y1={56 + range.row * 64} y2={56 + range.row * 64} stroke="#e2e8f0" />
               <rect x={range.left + 1} y={72 + range.row * 64} width={Math.max(2, range.width - 2)} height="30" rx="15" fill={range.color} opacity={focusedTask && focusedTask !== range.task.id ? 0.45 : 0.88} />
               <text x={range.left + 10} y={92 + range.row * 64} fontSize="10" fontWeight="700" fill="#fff">{range.start < rangeStart ? '← ' : ''}{shortDate(range.visibleStart)}</text>
-              <text x={range.left + range.width - 7} y={115 + range.row * 64} textAnchor="end" fontSize="10" fill={range.color}>{range.end > rangeEnd ? 'Continues →' : `${range.completed ? 'Completed' : 'Latest evidence'} ${shortDate(range.end)}`}</text>
+              <text x={range.left + range.width - 7} y={115 + range.row * 64} textAnchor="end" fontSize="10" fill={range.color}>{range.end > rangeEnd ? 'Continues →' : `${range.endLabel} ${shortDate(range.end)}`}</text>
             </g>)}
           </svg>
         </div>
@@ -102,11 +102,11 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
       {!activeJourneys.length && <p>No recorded journeys on this date.</p>}
       {activeJourneys.filter(({ line }) => !focusedTask || line.task.id === focusedTask).map(({ line, point, range }) => <article key={line.task.id} style={{ padding: '12px', marginTop: '8px', border: '1px solid #e2e8f0', borderLeft: `3px solid ${line.color}`, borderRadius: '10px', overflowWrap: 'anywhere' }}>
         <strong>{line.task.sequence ? `${line.task.sequence} · ` : ''}{line.task.title}</strong>
-        <p style={{ margin: '6px 0', color: '#64748b' }}>{range ? `${shortDate(range.start)} → ${shortDate(range.end)} · ${range.completed ? 'Completed' : 'Latest evidence'}` : 'Order range unavailable'}</p>
+        <p style={{ margin: '6px 0', color: '#64748b' }}>{range ? `${shortDate(range.start)} → ${shortDate(range.end)} · ${range.endLabel}` : 'Order range unavailable'}</p>
         <button type="button" data-calendar-detail={line.task.id} onClick={() => selection.choosePoint(line, point || { day: activeDate, events: [], endpoint: false })} style={{ minHeight: '40px', border: 0, padding: '6px 0', background: 'transparent', color: line.color, cursor: 'pointer', fontWeight: 600 }}>{point ? `${point.events.length} records · View activity & inputs` : 'No activity recorded today · View inputs'}</button>
       </article>)}
     </details>
-    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About journey ranges</summary><p>Ranges begin at the recorded order date and end at completion or the latest dated evidence. A package on a date indicates its range, not a recorded activity every day. Planned dates are not plotted; missing history stays unavailable.</p></details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About journey ranges</summary><p>Existing range dates are unchanged. Saved 100% milestone evidence may bound a range, but does not prove a permanent completion transition. A package on a date indicates its range, not activity every day. Planned dates are not plotted; missing history stays unavailable.</p></details>
     {model.undated.length > 0 && <details style={{ fontSize: '12px', color: '#64748b', marginTop: '12px' }}><summary>Other returned tasks · actual range unavailable or outside this window ({model.undated.length})</summary>{model.undated.map(task => <TaskJourney key={task.id} task={task} />)}</details>}
   </div>;
 };
