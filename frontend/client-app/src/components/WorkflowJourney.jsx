@@ -113,26 +113,45 @@ export function journeyDateAxis(startDate, endDate) {
   return { count, dayWidth, width, x, ticks };
 }
 
+export function journeyDatePoints(events) {
+  const byDay = new Map();
+  for (const event of events.filter(event => journeyDay(event.date)).sort((a, b) => new Date(a.date) - new Date(b.date) || a.row - b.row)) {
+    const day = journeyDay(event.date);
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(event);
+  }
+  let furthestStage = 0;
+  return [...byDay].map(([day, records], index, days) => {
+    const order = records.find(event => event.key === 'order');
+    const transitions = records.filter(event => !event.key.startsWith('milestone:'));
+    const representative = order || [...(transitions.length ? transitions : records)].sort((a, b) => b.row - a.row)[0];
+    furthestStage = Math.max(furthestStage, representative.row);
+    return { ...representative, day, events: records, row: order ? 0 : furthestStage,
+      endpoint: Boolean(order) || index === days.length - 1, isOrder: Boolean(order) };
+  });
+}
+
 function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const { count } = journeyDateAxis(startDate, endDate);
-  const baseWidth = count > 366 ? Math.max(1, 26000 / count) : 48;
-  const labelWidth = Math.min(140, Math.max(count > 2 ? 96 : 70, Math.floor(availableWidth / Math.min(count || 1, 2)) - 24));
+  const baseWidth = availableWidth ? 52 : 80;
+  const labelWidth = availableWidth ? Math.min(132, Math.max(count > 2 ? 96 : 70, Math.floor(availableWidth / Math.min(count || 1, 2)) - 24)) : 156;
   const groups = new Map();
-  for (const line of series) for (const point of line.points) {
+  for (const [lineIndex, line] of series.entries()) for (const point of line.points) {
+    point.laneOffset = series.length > 1 ? lineIndex * Math.min(3, 16 / (series.length - 1)) : 0;
     const name = `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim();
     const visible = point.day >= startDate && point.day <= endDate;
     point.labelLines = point.endpoint && visible ? name.match(new RegExp(`.{1,${Math.floor(labelWidth / 7)}}(?:\\s|$)|.{1,${Math.floor(labelWidth / 7)}}`, 'gu')).map(part => part.trim()) : [];
+    if (point.labelLines.length > 2) point.labelLines = [point.labelLines[0], `${point.labelLines[1].slice(0, -1)}…`];
     const key = `${point.row}:${point.day}`;
     if (!groups.has(key)) groups.set(key, { day: point.day, points: [], width: 0 });
     groups.get(key).points.push(point);
   }
   const dayWidths = new Map();
-  // Two rows only: crowded dates gain small horizontal slots, never more vertical lanes.
+  // Crowded dates gain horizontal slots; stable journey offsets keep stage height bounded.
   for (const group of groups.values()) {
-    for (let i = 0; i < group.points.length; i += 2) {
-      const pair = group.points.slice(i, i + 2);
-      const slotWidth = pair.some(point => point.labelLines.length) ? labelWidth + 8 : 32;
-      pair.forEach((point, lane) => { point.mobileLane = lane; point.offsetX = group.width + slotWidth / 2; });
+    for (const point of group.points) {
+      const slotWidth = point.labelLines.length ? labelWidth + 8 : 44;
+      point.offsetX = group.width + slotWidth / 2;
       group.width += slotWidth;
     }
     dayWidths.set(group.day, Math.max(dayWidths.get(group.day) || baseWidth, group.width + 16));
@@ -158,13 +177,11 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const allPoints = series.flatMap(line => line.points);
   const rows = [], bands = [];
   let height = 40;
-  for (const row of [5, 4, 3, 2, 1, 0]) {
+  for (const row of [0, 1, 2, 3, 4, 5]) {
     const points = allPoints.filter(point => point.row === row);
     const visible = points.filter(point => byDay.has(point.day));
-    const laneHeight = Math.max(32, ...visible.map(point => point.labelLines.length ? point.labelLines.length * 14 + 32 : 32));
-    const lanes = Math.max(1, ...visible.map(point => point.mobileLane + 1));
-    const bandHeight = Math.max(44, lanes * laneHeight + 4);
-    for (const point of points) { point.y = height + 16 + (byDay.has(point.day) ? point.mobileLane : 0) * laneHeight; point.labelY = point.y + 20; }
+    const bandHeight = Math.max(48, ...visible.map(point => 44 + point.laneOffset + point.labelLines.length * 14));
+    for (const point of points) { point.y = height + 22 + point.laneOffset; point.labelY = point.y + 20; }
     bands[row] = { top: height, height: bandHeight };
     rows[row] = height + bandHeight / 2;
     height += bandHeight;
@@ -193,70 +210,30 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
       { key: 'approval', row: 1, label: 'Approval', date: task.order.approvedAt, detail: 'Recorded approval; progress at approval unavailable' },
       { key: 'completed', row: 5, label: 'Completed', date: task.order.completedAt, detail: 'Recorded order completion' },
     ] : taskJourneyEvents(task);
-    const points = events.filter(event => journeyDay(event.date)).map(event => ({ ...event, day: journeyDay(event.date) }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date) || a.row - b.row);
-    points.forEach((point, i) => { point.endpoint = i === 0 || i === points.length - 1; });
+    const points = journeyDatePoints(events);
     return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, colors) };
   });
-  if (mobileWidth) return { ...compactJourneyLayout(series, startDate, endDate, mobileWidth), numbered };
-  const { count, dayWidth, width, x, ticks } = journeyDateAxis(startDate, endDate);
-  const labelWidth = Math.min(182, width / 2 - 24);
-  const characters = Math.floor(labelWidth / 7);
-  for (const line of series) for (const point of line.points) {
-    point.x = x(point.day);
-    point.labelX = point.x <= width / 2 ? point.x + 20 : point.x - 20 - labelWidth;
-    const name = `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim();
-    point.labelLines = point.endpoint && point.day >= startDate && point.day <= endDate
-      ? name.match(new RegExp(`.{1,${characters}}(?:\\s|$)|.{1,${characters}}`, 'gu')).map(part => part.trim()) : [];
-    point.left = Math.min(point.x - 14, point.labelLines.length ? point.labelX - 4 : point.x - 14);
-    point.right = Math.max(point.x + 14, point.labelLines.length ? point.labelX + labelWidth + 4 : point.x + 14);
-  }
-  // Pack every task's hit targets and endpoint names together, without shifting dates.
-  const allPoints = series.flatMap(line => line.points);
-  const bands = [];
-  const rows = [];
-  let height = 48;
-  for (const row of [5, 4, 3, 2, 1, 0]) {
-    const points = allPoints.filter(point => point.row === row).sort((a, b) => a.left - b.left);
-    const laneEnds = [];
-    const laneHeight = Math.max(32, ...points.map(point => point.labelLines.length * 14 + 12));
-    for (const point of points) {
-      let lane = laneEnds.findIndex(end => end + 8 <= point.left);
-      if (lane < 0) lane = laneEnds.length;
-      laneEnds[lane] = point.right;
-      point.y = height + 18 + lane * laneHeight;
-    }
-    const bandHeight = Math.max(64, laneEnds.length * laneHeight + 8);
-    bands[row] = { top: height, height: bandHeight };
-    rows[row] = height + bandHeight / 2;
-    height += bandHeight;
-  }
-  const dated = allPoints.filter(point => point.day >= startDate && point.day <= endDate);
-  const firstOrder = dated.filter(point => point.row === 0).map(point => point.day).sort()[0];
-  const firstActual = firstOrder || dated.map(point => point.day).sort()[0] || startDate;
-  for (const line of series) {
-    line.path = line.points.map((point, index) => index ? `H${point.x} V${point.y}` : `M${point.x},${point.y}`).join(' ');
-  }
-  return { series, numbered, rows, bands, labelWidth, width, height, ticks, x, firstActual, count, dayWidth };
+  return { ...compactJourneyLayout(series, startDate, endDate, mobileWidth), numbered };
 }
 
 export const TaskJourney = ({ task }) => {
   const events = taskJourneyEvents(task);
-  return <article aria-label={`Workflow journey for ${task.title}`} style={{ minWidth: 0, padding: '12px 0', borderTop: '1px solid #e2e8f0', fontSize: '12px', overflowWrap: 'anywhere' }}>
+  const unavailable = events.filter(event => !journeyDay(event.date));
+  return <article aria-label={`Workflow journey for ${task.title}`} style={{ minWidth: 0, marginTop: '8px', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '13px', overflowWrap: 'anywhere' }}>
     <strong>{task.sequence ? `Order ${task.sequence} · ` : ''}{task.title}</strong>
-    {!task.sequence && <p style={{ color: '#64748b' }}>{task.sequenceNote || 'Order date unavailable · unnumbered'}</p>}
-    {task.clientName && <p>Client: {task.clientName}</p>}
-    <p>Current progress: {typeof task.progress === 'number' ? `${task.progress}%` : 'Unavailable'} · {currentStage(task.progress)} · snapshot, not a dated event.</p>
-    <p style={{ color: '#64748b' }}>Task status: {task.status || 'Unavailable'} · {(task.creditCost || 0).toLocaleString('en-IN')} credits</p>
-    <dl style={{ lineHeight: 1.6 }}>
-      {events.map(event => <div key={event.key} style={{ marginTop: '6px' }}>
-        <dt style={{ fontWeight: 600 }}>{event.label} · {formatDate(event.date)}</dt><dd style={{ margin: 0, color: '#64748b' }}>{event.detail}</dd>
-      </div>)}
-    </dl>
-    <p style={{ color: '#64748b' }}><strong>Scheduled start:</strong> {formatDate(task.startDate)} · <strong>Planned end:</strong> {formatDate(task.endDate || task.deadline)}. Planned dates are not plotted.</p>
-    <details><summary>Milestone configuration · {(task.milestones || []).filter(m => m.reached).length} / {(task.milestones || []).length} reached</summary>
-      <p>Separate milestone start dates and complete progress history are unavailable.</p>
-      {(task.milestones || []).map((milestone, index) => <p key={index}>{milestone.name} · {milestone.percentage}% · {milestone.reached ? 'Reached' : 'Not reached'} · {formatDate(milestone.reached ? milestone.reachedAt : null)}</p>)}
+    <p style={{ margin: '6px 0', color: '#475569' }}>Order: {formatDate(task.order?.createdAt)}</p>
+    <p style={{ margin: '6px 0' }}>{typeof task.progress === 'number' ? `${task.progress}% · ` : ''}{currentStage(task.progress)} <span style={{ color: '#64748b' }}>· current</span></p>
+    <details><summary style={{ cursor: 'pointer', padding: '8px 0' }}>Package information</summary>
+      {!task.sequence && <p>{task.sequenceNote || 'Order date unavailable · unnumbered'}</p>}
+      {task.clientName && <p>Client: {task.clientName}</p>}
+      <p>Status: {task.status || 'Unavailable'} · {(task.creditCost || 0).toLocaleString('en-IN')} credits</p>
+      <p><strong>Scheduled start:</strong> {formatDate(task.startDate)} · <strong>Planned end:</strong> {formatDate(task.endDate || task.deadline)}. Planned dates are not plotted.</p>
+      <details><summary>Recorded dates</summary>{journeyDatePoints(events).map(point => <details key={point.day} style={{ padding: '6px 0' }}><summary>{formatDate(point.day)} · {point.events.length} records</summary><JourneyDateEvents point={point} /></details>)}</details>
+      {unavailable.length > 0 && <details><summary>Dates unavailable ({unavailable.length})</summary><p>Missing history is not inferred from current progress or plans.</p>{unavailable.map(event => <p key={event.key}>{event.label}: {event.detail}</p>)}</details>}
+      <details><summary>Milestone configuration · {(task.milestones || []).filter(m => m.reached).length} / {(task.milestones || []).length} reached</summary>
+        <p>Separate milestone start dates and complete progress history are unavailable.</p>
+        {(task.milestones || []).map((milestone, index) => <p key={index}>{milestone.name} · {milestone.percentage}% · {milestone.reached ? 'Reached' : 'Not reached'} · {formatDate(milestone.reached ? milestone.reachedAt : null)}</p>)}
+      </details>
     </details>
   </article>;
 };
@@ -289,6 +266,58 @@ export const JourneyInputs = ({ data, orderOnly }) => {
   })}</dl>;
 };
 
+export const JourneyDateEvents = ({ point }) => <div style={{ marginTop: '8px' }}>
+  {point.events.map(event => <details key={event.key} style={{ borderTop: '1px solid #eef2f7', padding: '8px 0' }}>
+    <summary style={{ cursor: 'pointer', lineHeight: 1.5 }}><strong>{event.label}</strong>{Number.isFinite(event.progress) ? ` · ${event.progress}%` : ''}<time dateTime={event.date} style={{ display: 'block', color: '#64748b', fontSize: '12px' }}>{formatPointDate(event.date)}</time></summary>
+    <p style={{ margin: '4px 0', color: '#64748b' }}>{event.detail}</p>
+  </details>)}
+</div>;
+
+export function useJourneyDetail(model, onSelectDate, loadInputs) {
+  const [activePoint, setActivePoint] = useState(null);
+  const request = useRef(null);
+  const closeDetail = () => { request.current?.abort(); setActivePoint(null); };
+  useEffect(() => { setActivePoint(null); return () => request.current?.abort(); }, [model]);
+  const loadSelection = async selection => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    setActivePoint(selection);
+    try {
+      if (!loadInputs) throw new Error('Task inputs are unavailable.');
+      const data = await loadInputs(selection.task, controller.signal);
+      if (!data) throw new Error('Task inputs are unavailable.');
+      if (!controller.signal.aborted) setActivePoint(current => current === selection ? { ...selection, loading: false, data } : current);
+    } catch (error) {
+      if (!controller.signal.aborted) setActivePoint(current => current === selection ? { ...selection, loading: false,
+        error: error.response?.status === 403 ? 'You do not have access to these inputs.' : 'Unable to load saved inputs. Please try again.' } : current);
+    }
+  };
+  const choosePoint = (line, point) => {
+    request.current?.abort();
+    const selection = { model, task: line.task, point, loading: point.endpoint };
+    setActivePoint(selection);
+    onSelectDate?.(point.day);
+    if (point.endpoint) return loadSelection(selection);
+  };
+  const detail = activePoint?.model === model ? activePoint : null;
+  const showInputs = () => detail && loadSelection({ ...detail, loading: true, error: null });
+  return { detail, choosePoint, closeDetail, showInputs };
+}
+
+export const JourneyDetail = ({ detail, closeDetail, showInputs }) => !detail ? null : <section className="journey-detail" aria-label="Journey point details" aria-live="polite" onKeyDown={event => { if (event.key === 'Escape') closeDetail(); }} style={{ position: 'fixed', bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 24px)', maxWidth: '440px', boxSizing: 'border-box', zIndex: 100, boxShadow: '0 8px 32px #0f172a33', fontSize: '13px', padding: '16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflowWrap: 'anywhere', maxHeight: 'min(360px, calc(100dvh - 180px))', overflowY: 'auto' }}>
+  <button type="button" onClick={closeDetail} style={{ float: 'right', minHeight: '40px', padding: '0 8px', cursor: 'pointer' }}>Close</button>
+  <strong style={{ display: 'block', fontSize: '15px' }}>{formatDate(detail.point.day)}</strong>
+  <p style={{ margin: '6px 0' }}>{detail.task.sequence ? `Order ${detail.task.sequence} · ` : ''}{detail.task.title}</p>
+  <span style={{ color: '#64748b' }}>{detail.point.events.length} records on this date</span>
+  <JourneyDateEvents point={detail.point} />
+  <details style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0' }} onToggle={event => { if (event.currentTarget.open && !detail.loading && !detail.data && !detail.error) showInputs(); }}>
+    <summary style={{ cursor: 'pointer', padding: '12px 0', fontWeight: 600 }}>View task inputs &amp; content</summary>
+    {detail.loading ? <p role="status">Loading saved client inputs…</p> : detail.error ? <div role="alert"><p>{detail.error}</p><button type="button" onClick={showInputs}>Retry inputs</button></div> : detail.data ? <JourneyInputs data={detail.data} orderOnly={detail.task.orderOnly} /> : <button type="button" onClick={showInputs}>Load saved inputs</button>}
+  </details>
+  {!detail.task.orderOnly && <a href={`/tasks/${encodeURIComponent(detail.task.id)}`} style={{ display: 'inline-block', padding: '10px 0', color: '#4338ca', textDecoration: 'underline' }}>Open task details</a>}
+</section>;
+
 const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectDate, loadInputs }) => {
   const container = useRef(null);
   const [mobileWidth, setMobileWidth] = useState(0);
@@ -307,56 +336,25 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   const stageWidth = mobileWidth ? 76 : 110;
   const scroller = useRef(null);
   const [highlight, setHighlight] = useState('');
-  const [activePoint, setActivePoint] = useState(null);
-  const request = useRef(null);
-  const closeDetail = () => { request.current?.abort(); setActivePoint(null); };
+  const selection = useJourneyDetail(model, onSelectDate, loadInputs);
+  const { closeDetail } = selection;
   // Selection/scroll changes do not rebuild the model or reset the user's viewport.
   useEffect(() => {
     if (scroller.current) scroller.current.scrollLeft = model.dayStart ? model.dayStart(model.firstActual) : Math.max(0, model.x(model.firstActual) - model.dayWidth / 2);
     setHighlight('');
-    setActivePoint(null);
-    return () => request.current?.abort();
   }, [model]);
-  const choosePoint = async (line, point) => {
-    request.current?.abort();
-    const selection = { model, task: line.task, point, loading: point.endpoint };
-    setHighlight(line.task.id);
-    setActivePoint(selection);
-    onSelectDate?.(point.day);
-    if (!point.endpoint) return;
-    const controller = new AbortController();
-    request.current = controller;
-    try {
-      if (!loadInputs) throw new Error('Task inputs are unavailable.');
-      const data = await loadInputs(line.task, controller.signal);
-      if (!data) throw new Error('Task inputs are unavailable.');
-      if (!controller.signal.aborted) setActivePoint(current => current === selection ? { ...selection, loading: false, data } : current);
-    } catch (error) {
-      if (!controller.signal.aborted) setActivePoint(current => current === selection ? { ...selection, loading: false,
-        error: error.response?.status === 403 ? 'You do not have access to these inputs.' : 'Unable to load saved inputs. Close and tap the endpoint to try again.' } : current);
-    }
-  };
-  const detail = activePoint?.model === model ? activePoint : null;
+  const choosePoint = (line, point) => { setHighlight(line.task.id); return selection.choosePoint(line, point); };
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <style>{`@media (max-width: 640px) { .workflow-journey { margin-inline: -6px; } .workflow-journey .journey-detail { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; max-height: min(280px, calc(100dvh - 180px)) !important; } }`}</style>
-    <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 12px' }}>Each line connects actual dated evidence. Tap a named endpoint for client inputs or a dot for milestone details. The last point is the latest recorded evidence, not necessarily completion.</p>
-    {detail && <section className="journey-detail" aria-label="Journey point details" aria-live="polite" onKeyDown={event => { if (event.key === 'Escape') closeDetail(); }} style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: '440px', boxSizing: 'border-box', zIndex: 100, boxShadow: '0 8px 32px #0f172a33', fontSize: '12px', padding: '12px', background: '#eef2ff', borderRadius: '8px', overflowWrap: 'anywhere', maxHeight: '280px', overflowY: 'auto' }}>
-      <button type="button" onClick={closeDetail} style={{ float: 'right', marginLeft: '8px', cursor: 'pointer' }}>Close</button>
-      <strong>{detail.task.sequence ? `${detail.task.sequence} · ` : ''}{detail.task.title}</strong>
-      <p>{detail.point.label} · {formatPointDate(detail.point.date)}</p><p>{detail.point.detail}</p>
-      {detail.point.endpoint && <>
-        {detail.loading ? <p role="status">Loading saved client inputs…</p> : detail.error ? <p role="alert">{detail.error}</p> : <JourneyInputs data={detail.data} orderOnly={detail.task.orderOnly} />}
-        {!detail.task.orderOnly && <a href={`/tasks/${encodeURIComponent(detail.task.id)}`} style={{ color: '#4338ca', textDecoration: 'underline' }}>Open task details</a>}
-      </>}
-    </section>}
+    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>One dot per journey, per date. Tap for that day’s activity and inputs. Swipe to explore dates.</p>
+    <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
         <text x={mobileWidth ? 6 : 10} y="27" fontSize="10" fill="#64748b">{mobileWidth ? 'STAGE' : 'STAGE / DATE'}</text>
         {workflowRows.map((label, row) => <g key={label}>
           <rect x="4" y={model.rows[row] - (mobileWidth ? 20 : 24)} width={stageWidth - 8} height={mobileWidth ? 40 : 48} rx="8" fill={`${stageColors[row]}0d`} />
-          <text x={mobileWidth ? 6 : 10} y={model.rows[row] + (mobileWidth && (row === 1 || row === 2) ? -3 : 4)} fill={stageColors[row]} fontSize="10" fontWeight="700">{mobileWidth ? ['Order', 'Scheduled', 'Started', 'In Process', 'Milestones', 'Completed'][row] : label}{mobileWidth && (row === 1 || row === 2) && <tspan x="6" dy="13" fontSize="9">{row === 1 ? '(0%)' : '(≥1%)'}</tspan>}</text>
+          <text x={mobileWidth ? 6 : 10} y={model.rows[row] + ([1, 2, 3, 5].includes(row) ? -3 : 4)} fill="#475569" fontSize="11" fontWeight="600">{['Order', 'Scheduled', 'Started', 'In Process', 'Milestones', 'Completed'][row]}{[1, 2, 3, 5].includes(row) && <tspan x={mobileWidth ? 6 : 10} dy="14" fontSize="11">{({ 1: '(0%)', 2: '(≥1%)', 3: '(≥50%)', 5: '(100%)' })[row]}</tspan>}</text>
         </g>)}
       </svg>
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -376,13 +374,13 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.key} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${point.label}, ${formatDate(point.date)}${point.endpoint ? ', show client inputs' : ''}`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
-                <title>{`${line.task.title} · ${point.label} · ${formatDate(point.date)} · ${point.detail || ''}`}</title>
-                <circle cx={point.x} cy={point.y} r="14" fill="transparent" />
-                <circle cx={point.x} cy={point.y} r="6" fill={point.key === 'approval' ? '#fff' : line.color} stroke={line.color} strokeWidth="1.5" />
+              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+                <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}`}</title>
+                <circle cx={point.x} cy={point.y} r="20" fill="transparent" />
+                <circle cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
                 {point.labelLines.length > 0 && <g data-endpoint-label="true" data-order-number={line.task.sequence || undefined}>
                   <rect x={point.labelX - 4} y={(point.labelY ?? point.y) - 12} width={model.labelWidth + 8} height={point.labelLines.length * 14 + 6} rx="4" fill="#fff" />
-                  <text fill={line.color} fontFamily="monospace" fontSize="11" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={(point.labelY ?? point.y) + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>
+                  <text fill={line.color} fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={(point.labelY ?? point.y) + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>
                 </g>}
               </g>)}
             </g>;
@@ -391,16 +389,16 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
       </div>
     </div>
     {!model.series.length && <p style={{ fontSize: '12px', color: '#64748b' }}>No tasks or orders in this range.</p>}
-    <div aria-label="Journey key" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px', maxHeight: '160px', overflowY: 'auto' }}>
+    <details style={{ marginTop: '12px', fontSize: '13px' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>Packages · {model.series.length}</summary>
+    <div aria-label="Journey key" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
       {model.series.map(line => <button key={line.task.id} type="button" aria-pressed={highlight === line.task.id} onClick={() => { setHighlight(previous => previous === line.task.id ? '' : line.task.id); closeDetail(); }} style={{ display: 'flex', gap: '8px', alignItems: 'center', textAlign: 'left', minWidth: 0, maxWidth: '100%', border: `1px solid ${highlight === line.task.id ? line.color : '#e2e8f0'}`, borderRadius: '8px', padding: '8px', background: '#fff', cursor: 'pointer', fontSize: '11px' }}>
         <span style={{ flexShrink: 0, minWidth: '24px', padding: '5px', borderRadius: '20px', background: line.color, color: '#fff', textAlign: 'center', fontWeight: 700 }}>{line.task.sequence || '—'}</span>
         <span style={{ overflowWrap: 'anywhere', minWidth: 0 }}><strong>{line.task.title}</strong><span style={{ display: 'block', color: '#64748b', marginTop: '3px' }}>Order: {formatDate(line.task.order?.createdAt)} · {line.task.orderOnly ? line.task.status : `${currentStage(line.task.progress)}${typeof line.task.progress === 'number' ? ` (${line.task.progress}%)` : ''}`}</span></span>
       </button>)}
     </div>
-    <p style={{ fontSize: '11px', color: '#64748b', lineHeight: 1.6 }}>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier overlapping orders and unavailable order dates stay unnumbered. Colors identify journeys; hollow approval points do not assert historical 0% progress. Milestone points use the current saved configuration. Dates unavailable are not plotted; current progress is not a historical timestamp.</p>
-    <details style={{ fontSize: '12px', color: '#475569' }}><summary style={{ cursor: 'pointer' }}>Task details and unavailable dates ({model.numbered.length})</summary>
       {model.numbered.filter(task => !highlight || task.id === highlight).map(task => <TaskJourney key={task.id} task={task} />)}
     </details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. Missing order dates remain unavailable, not replaced by Started. Bands summarize the furthest dated stage; tap a date for its exact evidence. The last point may be latest activity, not completion. Current progress and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. Milestones use the current saved configuration. Approval does not assert historical 0% progress.</p></details>
   </div>;
 };
 

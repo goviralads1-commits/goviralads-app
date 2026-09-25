@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import api from '../services/api';
 import { getCurrentUser } from '../services/authService';
 import WorkflowCalendar from './WorkflowCalendar';
-import WorkflowJourney from './WorkflowJourney';
+import WorkflowJourney, { journeyDay } from './WorkflowJourney';
 import { normalizeWorkflowTask } from './workflowTimelineTask';
 const toISODate = (d) => d.toISOString().slice(0, 10);
 
@@ -29,6 +29,25 @@ const RANGE_OPTIONS = [
   { value: 'custom', label: 'Custom' },
 ];
 
+export const loadClientJourneyInputs = async (task, signal) => {
+  const id = task.orderOnly ? task.order?.id : task.id;
+  if (!id) throw new Error('Detail ID unavailable');
+  const response = await api.get(`/client/${task.orderOnly ? 'orders' : 'tasks'}/${encodeURIComponent(id)}`, { signal });
+  return response.data[task.orderOnly ? 'order' : 'task'];
+};
+
+export function clientJourneyData(timeline, selectedClients, ownerId) {
+  if (!timeline) return null;
+  const orders = selectedClients.length && !selectedClients.includes(ownerId) ? [] : timeline.orders || [];
+  const tasks = (timeline.tasks || []).filter(task => !selectedClients.length || selectedClients.includes(task.clientId)).map(task => {
+    const recordedOrder = orders.find(order => (task.order?.id && task.order.id === order.id) || (task.order?.orderId && task.order.orderId === order.orderId));
+    const order = !journeyDay(task.order?.createdAt) && journeyDay(recordedOrder?.createdAt)
+      ? { ...task.order, createdAt: recordedOrder.createdAt } : task.order;
+    return normalizeWorkflowTask({ ...task, order });
+  });
+  return { ...timeline, tasks, orders };
+}
+
 const WorkflowTimeline = () => {
   // Session gate mirrors the router's requireClient exactly: only CLIENT-role
   // sessions may render/fetch this component. Non-client sessions (e.g. an admin
@@ -47,11 +66,7 @@ const WorkflowTimeline = () => {
   const ownerId = getCurrentUser()?.id || getCurrentUser()?._id;
   const clientOptions = useMemo(() => [...new Map((timeline?.tasks || []).filter(task => task.clientId)
     .map(task => [task.clientId, { id: task.clientId, name: task.clientId === ownerId ? 'My tasks' : task.clientName || `Client ${task.clientId.slice(-6)}` }])).values()], [timeline, ownerId]);
-  const journeyTimeline = useMemo(() => timeline ? {
-    ...timeline,
-    orders: selectedClients.length && !selectedClients.includes(ownerId) ? [] : timeline.orders,
-    tasks: (timeline.tasks || []).filter(task => !selectedClients.length || selectedClients.includes(task.clientId)).map(normalizeWorkflowTask),
-  } : null, [timeline, selectedClients, ownerId]);
+  const journeyTimeline = useMemo(() => clientJourneyData(timeline, selectedClients, ownerId), [timeline, selectedClients, ownerId]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
@@ -148,9 +163,9 @@ const WorkflowTimeline = () => {
           <button type="button" onClick={() => { setSelectedClients([]); setSelectedDate(null); }} style={{ marginBottom: '6px' }}>All clients</button>
           {clientOptions.map(client => <label key={client.id} style={{ display: 'block', padding: '4px 0', overflowWrap: 'anywhere' }}><input type="checkbox" checked={selectedClients.includes(client.id)} onChange={() => { setSelectedClients(previous => previous.includes(client.id) ? previous.filter(id => id !== client.id) : [...previous, client.id]); setSelectedDate(null); }} /> {client.name}</label>)}
         </details>}
-        <div style={{ display: 'inline-flex', gap: '4px', padding: '3px', marginBottom: '12px', borderRadius: '9px', background: '#f1f5f9' }}>
+        <div role="group" aria-label="Workflow view" style={{ display: 'flex', gap: '4px', padding: '3px', marginBottom: '12px', borderRadius: '10px', background: '#f1f5f9' }}>
           {['timeline', 'calendar'].map(option => (
-            <button key={option} type="button" onClick={() => setView(option)} style={{ padding: '5px 10px', border: 'none', borderRadius: '7px', background: view === option ? '#fff' : 'transparent', color: view === option ? '#4f46e5' : '#64748b', boxShadow: view === option ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '11px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{option}</button>
+            <button key={option} type="button" aria-pressed={view === option} onClick={() => setView(option)} style={{ flex: 1, minHeight: '40px', padding: '8px 12px', border: 'none', borderRadius: '8px', background: view === option ? '#fff' : 'transparent', color: view === option ? '#4f46e5' : '#64748b', boxShadow: view === option ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '13px', fontWeight: '700', cursor: 'pointer', textTransform: 'capitalize' }}>{option}</button>
           ))}
         </div>
 
@@ -164,15 +179,9 @@ const WorkflowTimeline = () => {
         ) : !hasRange ? (
           <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Pick a start and end date to see your date-wise workflow.</p>
         ) : view === 'calendar' ? (
-          <WorkflowCalendar tasks={journeyTimeline?.tasks || []} orders={journeyTimeline?.orders || []} rangeStart={range.startDate} rangeEnd={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+          <WorkflowCalendar tasks={journeyTimeline?.tasks || []} orders={journeyTimeline?.orders || []} rangeStart={range.startDate} rangeEnd={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate} loadInputs={loadClientJourneyInputs} />
         ) : (
-          <WorkflowJourney timeline={journeyTimeline} startDate={range.startDate} endDate={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate}
-            loadInputs={async (task, signal) => {
-              const id = task.orderOnly ? task.order?.id : task.id;
-              if (!id) throw new Error('Detail ID unavailable');
-              const response = await api.get(`/client/${task.orderOnly ? 'orders' : 'tasks'}/${encodeURIComponent(id)}`, { signal });
-              return response.data[task.orderOnly ? 'order' : 'task'];
-            }} />
+          <WorkflowJourney timeline={journeyTimeline} startDate={range.startDate} endDate={range.endDate} selectedDate={selectedDate} onSelectDate={setSelectedDate} loadInputs={loadClientJourneyInputs} />
         )}
       </div>
     </div>
