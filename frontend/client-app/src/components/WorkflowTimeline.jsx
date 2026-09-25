@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import api from '../services/api';
 import { getCurrentUser } from '../services/authService';
 import WorkflowCalendar from './WorkflowCalendar';
-import WorkflowJourney, { journeyDay } from './WorkflowJourney';
+import WorkflowJourney, { resolveJourneyOrder } from './WorkflowJourney';
 import { normalizeWorkflowTask } from './workflowTimelineTask';
 const toISODate = (d) => d.toISOString().slice(0, 10);
 
@@ -39,12 +39,8 @@ export const loadClientJourneyInputs = async (task, signal) => {
 export function clientJourneyData(timeline, selectedClients, ownerId) {
   if (!timeline) return null;
   const orders = selectedClients.length && !selectedClients.includes(ownerId) ? [] : timeline.orders || [];
-  const tasks = (timeline.tasks || []).filter(task => !selectedClients.length || selectedClients.includes(task.clientId)).map(task => {
-    const recordedOrder = orders.find(order => (task.order?.id && task.order.id === order.id) || (task.order?.orderId && task.order.orderId === order.orderId));
-    const order = !journeyDay(task.order?.createdAt) && journeyDay(recordedOrder?.createdAt)
-      ? { ...task.order, createdAt: recordedOrder.createdAt } : task.order;
-    return normalizeWorkflowTask({ ...task, order });
-  });
+  const tasks = (timeline.tasks || []).filter(task => !selectedClients.length || selectedClients.includes(task.clientId))
+    .map(task => normalizeWorkflowTask({ ...task, order: resolveJourneyOrder(task, orders) }));
   return { ...timeline, tasks, orders };
 }
 

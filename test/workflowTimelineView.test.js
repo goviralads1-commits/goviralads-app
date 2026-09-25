@@ -92,6 +92,144 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(view.taskJourneyRange({ ...task, completedAt: null, milestones: task.milestones.slice(0, 2) }).end, '2026-09-17');
   });
 
+  test(`${app}: exact order IDs win over colliding display codes; missing and ambiguous history stays unavailable`, () => {
+    const wrong = { id: 'wrong', orderId: 'REUSED', createdAt: '2026-09-01' };
+    const correct = { id: 'correct', orderId: 'REUSED', createdAt: '2026-09-15' };
+    const current = { ...task, order: { id: 'correct', orderId: 'REUSED' } };
+    const before = plain(current);
+    assert.equal(view.resolveJourneyOrder(current, [wrong, correct]).createdAt, correct.createdAt);
+    assert.equal(view.resolveJourneyOrder(current, [wrong]).createdAt, undefined);
+    assert.equal(view.resolveJourneyOrder({ ...task, order: null }, [correct]), null);
+    const alias = { ...task, order: { orderId: 'REUSED' } };
+    assert.equal(view.resolveJourneyOrder(alias, [wrong, correct]).createdAt, undefined);
+    const graph = view.buildWorkflowGraph({ tasks: [alias], orders: [correct] }, '2026-09-01', '2026-09-30', 235);
+    assert.equal(graph.series.length, 1, 'display-code fallback must not add a duplicate order journey');
+    assert.equal(graph.series[0].task.order.id, correct.id);
+    assert.equal(graph.series[0].points[0].date, correct.createdAt);
+    const range = calendar.buildCalendarRanges([alias], '2026-09-01', '2026-09-30', [correct]).tasks[0];
+    assert.equal(range.task.sequence, graph.series[0].task.sequence);
+    assert.equal(range.color, graph.series[0].color);
+    assert.deepEqual(current, before);
+  });
+
+  test(`${app}: each path contains only its own task/order dates, including siblings and order-only journeys`, () => {
+    const orders = [
+      { id: 'late', orderId: 'LATE', createdAt: '2026-09-16T15:00:00Z' },
+      { id: 'early', orderId: 'EARLY', createdAt: '2026-09-15T09:00:00Z' },
+      { id: 'pending', orderId: 'PENDING', createdAt: '2026-09-16T08:00:00Z', approvedAt: '2026-09-18' },
+    ];
+    const tasks = [
+      { ...task, id: 'late-task', title: 'Late package', order: { id: 'late' }, approvedAt: '2026-09-17', completedAt: '2026-09-20', milestones: [] },
+      { ...task, id: 'early-task', order: orders[1], approvedAt: '2026-09-16', completedAt: '2026-09-24', milestones: [
+        { name: 'Only early', reached: true, percentage: 20, reachedAt: '2026-09-19T12:00:00Z' },
+        { name: 'Earlier record', reached: true, percentage: 1, reachedAt: '2026-09-19T08:00:00Z' },
+      ] },
+      { ...task, id: 'sibling', title: 'Sibling package', order: orders[1], approvedAt: null, completedAt: '2026-09-21', milestones: [] },
+      { ...task, id: 'assigned', order: null, approvedAt: '2026-09-22', completedAt: null, milestones: [] },
+    ];
+    const before = plain({ tasks, orders });
+    for (const width of [0, 206, 235, 290]) {
+      const graph = view.buildWorkflowGraph({ tasks: [...tasks].reverse(), orders }, '2026-09-15', '2026-09-24', width);
+      assert.equal(graph.series.length, 5);
+      const ranges = calendar.buildCalendarRanges(tasks, '2026-09-15', '2026-09-24', orders);
+      const numbers = new Map([['early-task', 1], ['sibling', 1], ['order:pending', 2], ['late-task', 3], ['assigned', null]]);
+      for (const line of graph.series) {
+        assert.equal(line.task.sequence ?? null, numbers.get(line.task.id));
+        const original = tasks.find(item => item.id === line.task.id);
+        const expected = original ? view.taskJourneyEvents({ ...original, order: view.resolveJourneyOrder(original, orders) }).filter(event => view.journeyDay(event.date)) : [
+          { key: 'order', date: orders[2].createdAt }, { key: 'approval', date: orders[2].approvedAt },
+        ];
+        const records = line.points.flatMap(point => point.events).map(event => [event.key, event.date]);
+        assert.deepEqual(plain(records.sort()), plain(expected.map(event => [event.key, event.date]).sort()));
+        assert.equal(line.points.length, new Set(line.points.map(point => point.day)).size);
+        for (let i = 1; i < line.points.length; i++) {
+          assert.ok(line.points[i].day > line.points[i - 1].day);
+          assert.ok(line.points[i].x > line.points[i - 1].x);
+        }
+        if (line.task.sequence) {
+          const start = line.points.find(point => point.isOrder);
+          assert.deepEqual(plain(start.labels.find(label => label.kind === 'start').lines), [String(line.task.sequence)]);
+        }
+        const range = ranges.tasks.find(range => range.task.id === line.task.id);
+        if (range) { assert.equal(range.task.sequence, line.task.sequence); assert.equal(range.color, line.color); }
+      }
+      const days = calendar.buildCalendarDays(ranges, graph.series, '2026-09-15');
+      for (const day of days) for (const item of day.journeys) {
+        if (item.point) assert.equal(item.point, item.line.points.find(point => point.day === day.day));
+        assert.equal(item.line.task.sequence ?? null, numbers.get(item.line.task.id));
+      }
+      const again = view.buildWorkflowGraph({ tasks, orders: [...orders].reverse() }, '2026-09-15', '2026-09-24', width);
+      for (const line of again.series) {
+        const prior = graph.series.find(item => item.task.id === line.task.id);
+        assert.equal(line.task.sequence, prior.task.sequence);
+        assert.equal(line.path, prior.path);
+      }
+    }
+    assert.deepEqual({ tasks, orders }, before);
+  });
+
+  test(`${app}: no connector touches another journey's dot, even with identical dates and sibling colors`, () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => ({ ...task, id: `overlap-${i}`, completedAt: `2026-09-${20 + i % 5}` }));
+    for (const width of [0, 206, 235, 290]) {
+      const graph = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24', width);
+      for (const line of graph.series) {
+        const commands = [...line.path.matchAll(/([MLHV])(-?[\d.]+)(?:,(-?[\d.]+))?/g)];
+        assert.equal(commands.filter(command => command[1] === 'M').length, 1);
+        let from;
+        const vertices = [];
+        for (const [, command, a, b] of commands) {
+          const to = command === 'M' || command === 'L' ? { x: +a, y: +b } : command === 'H' ? { x: +a, y: from.y } : { x: from.x, y: +a };
+          if (from) for (const other of graph.series.filter(other => other !== line)) for (const point of other.points) {
+            const dx = to.x - from.x, dy = to.y - from.y;
+            const fraction = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / (dx * dx + dy * dy || 1)));
+            assert.ok(Math.hypot(point.x - from.x - fraction * dx, point.y - from.y - fraction * dy) > 7, `${line.task.id} touches ${other.task.id}`);
+          }
+          if (from) assert.ok(to.x >= from.x, 'routing cannot reverse chronological position');
+          vertices.push(to);
+          from = to;
+        }
+        for (const point of line.points) assert.ok(vertices.some(vertex => vertex.x === point.x && vertex.y === point.y));
+      }
+      const html = render(view.default, { timeline: { tasks }, startDate: '2026-09-15', endDate: '2026-09-24' });
+      assert.equal((html.match(/data-workflow-path="true"/g) || []).length, tasks.length);
+      for (const task of tasks) assert.equal((html.match(new RegExp(`data-path-task="${task.id}"`, 'g')) || []).length, 1);
+    }
+  });
+
+  test(`${app}: mobile shows 7–10 readable dates, number-only starts and compact title-only ends`, () => {
+    for (const width of [206, 220, 235, 270, 290]) for (const days of [7, 8, 10, 30]) {
+      const graph = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-01', `2026-09-${String(days).padStart(2, '0')}`, width);
+      const visibleDays = Math.min(days, width / graph.dayWidth);
+      assert.ok(visibleDays >= 7 && visibleDays <= 10);
+      assert.equal(graph.ticks.length, days);
+      assert.ok(graph.dayWidth >= 24);
+      if (days <= 8) assert.equal(graph.width, width);
+    }
+    for (const width of [0, 235]) {
+      const graph = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-15', '2026-09-24', width);
+      const points = graph.series[0].points;
+      assert.deepEqual(plain(points[0].labels.map(label => [label.kind, label.lines.join(' ')])), [['start', '1']]);
+      assert.deepEqual(plain(points.at(-1).labels.map(label => [label.kind, label.lines.join(' ')])), [['end', '1 · Campaign launch']]);
+      assert.ok(points.slice(1, -1).every(point => point.labels.length === 0));
+      const sameDay = { ...task, approvedAt: null, milestones: [], completedAt: task.order.createdAt };
+      const one = view.buildWorkflowGraph({ tasks: [sameDay] }, '2026-09-15', '2026-09-15', width).series[0].points;
+      assert.equal(one.length, 1);
+      assert.deepEqual(plain(one[0].labels.map(label => label.kind)), ['start', 'end']);
+      const placed = view.buildWorkflowGraph({ tasks: [{ ...sameDay, completedAt: null }] }, '2026-09-15', '2026-09-15', width).series[0].points[0];
+      assert.deepEqual(plain(placed.labels.map(label => [label.kind, label.lines.join(' ')])), [['start', '1']]);
+    }
+    const mobile = load('WorkflowJourney', { react: { ...React, useState: initial => React.useState(initial === 0 ? 235 : initial) } });
+    const html = render(mobile.default, { timeline: { tasks: [task] }, startDate: '2026-09-15', endDate: '2026-09-24' });
+    const start = html.split('data-endpoint-label="start"')[1].split('</g>')[0];
+    const end = html.split('data-endpoint-label="end"')[1].split('</g>')[0];
+    assert.doesNotMatch(start, /Campaign|Started|In Process|Completed/);
+    assert.match(start, />1<\//);
+    assert.match(end, /1 · Campaign launch/);
+    assert.doesNotMatch(html, /textLength=|spacingAndGlyphs/);
+    assert.match(end, /text-overflow:ellipsis/);
+    assert.match(end, /font-size:12px/);
+  });
+
   test(`${app}: range-local order numbers survive completion order and duplicates`, () => {
     const second = { ...task, id: 'second', order: { id: 'order-2', createdAt: '2026-09-16' }, completedAt: '2026-09-18' };
     const shared = { ...task, id: 'shared' };
@@ -137,7 +275,7 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.ok([...colors.values()].every(color => [...colors.values()].filter(value => value === color).length === 2));
     for (const width of [220, 235, 290]) {
       const mobile = view.buildWorkflowGraph({ tasks, orders }, '2026-09-01', '2026-09-30', width);
-      assert.ok(mobile.height < 600);
+      assert.ok(mobile.height <= 320 + tasks.length * 120);
       assert.equal(mobile.bands.length, 5);
     }
     assert.deepEqual(tasks, before);
@@ -154,10 +292,10 @@ for (const app of ['client-app', 'admin-panel']) {
       const circles = [...group.matchAll(/<circle\b[^>]*r="[56]"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"/g)];
       assert.equal(circles.length, line.points.length);
       assert.ok(circles.every(match => match[2] === line.color && match[1] === line.color));
-      const texts = [...group.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)];
+      const texts = [...group.matchAll(/<foreignObject\b[^>]*>([\s\S]*?)<\/foreignObject>/g)];
       assert.equal(texts.length, 2);
       for (const text of texts) {
-        assert.ok(text[0].includes(`fill="${line.color}"`));
+        assert.ok(text[0].includes(`color:${line.color}`));
         assert.doesNotMatch(text[1], /Draft|Review|Delivery/);
       }
     }
@@ -174,7 +312,7 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.equal(points.at(-1).date, dated.completedAt);
       for (let i = 1; i < points.length; i++) assert.ok(new Date(points[i].date) >= new Date(points[i - 1].date));
       assert.ok(!points.some(point => point.date === dated.deadline));
-      assert.equal(points.filter(point => point.labelLines.length).length, 2);
+      assert.equal(points.filter(point => point.labels.length).length, 2);
       assert.deepEqual(plain(model.numbered.map(item => item.sequence)), [1]);
     }
   });
@@ -221,7 +359,7 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.equal(one.points[0].row, 0);
       assert.equal(one.points[0].date, sameDay.order.createdAt);
       assert.ok(one.points[0].events.some(event => event.key === 'completed'));
-      assert.equal(one.points.filter(point => point.labelLines.length).length, 1);
+      assert.equal(one.points.filter(point => point.labels.length).length, 1);
       assert.deepEqual(busy, before);
     });
 
@@ -252,27 +390,33 @@ for (const app of ['client-app', 'admin-panel']) {
       }
     });
 
-    test(`${app}: 360–430px layouts bound height, date collisions and long endpoint labels`, () => {
+    test(`${app}: 360–430px layouts keep compact dates and collision-free targets/labels`, () => {
       for (const width of [220, 235, 290]) for (const total of [1, 8, 25]) {
         const tasks = Array.from({ length: total }, (_, i) => ({ ...task, id: `dense-${i}`, title: `Package ${i} with a very long client-provided title that must not expand the graph`,
           milestones: Array.from({ length: 60 }, (_, j) => ({ name: `Milestone ${j}`, percentage: j + 1, reached: true, reachedAt: j % 2 ? '2026-09-17' : '2026-09-18' })) }));
         const model = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24', width);
-        assert.ok(model.height < 500);
+        assert.ok(model.height <= 320 + total * 120);
+        assert.ok(model.width <= width * 1.4, 'dense dates must not widen the mobile axis');
+        if (total === 1) assert.ok(model.height < 360);
         assert.equal(model.rows.length, 5);
         for (let row = 1; row < 5; row++) assert.ok(model.rows[row] < model.rows[row - 1]);
         const rectangles = [];
         for (const line of model.series) {
           assert.equal(line.points.length, 5);
-          assert.equal(line.points.filter(point => point.labelLines.length).length, 2);
-          assert.equal((line.path.match(/H/g) || []).length, line.points.length - 1);
+          assert.equal(line.points.filter(point => point.labels.length).length, 2);
+          assert.equal((line.path.match(/M/g) || []).length, 1);
           for (const point of line.points) {
             const column = model.columns.find(column => column.day === point.day);
-            assert.ok(point.x - 20 >= column.left && point.x + 20 <= column.left + column.width);
-            assert.ok(point.labelLines.length <= 2);
-            const left = point.labelLines.length ? point.labelX - 4 : point.x - 20;
-            const right = point.labelLines.length ? point.labelX + model.labelWidth + 4 : point.x + 20;
-            assert.ok(left >= column.left && right <= column.left + column.width);
-            rectangles.push({ left, right, top: point.y - 20, bottom: point.labelLines.length ? point.labelY + point.labelLines.length * 14 : point.y + 20 });
+            assert.equal(point.x, column.left + column.width / 2);
+            assert.ok(point.x - 12 >= column.left && point.x + 12 <= column.left + column.width);
+            rectangles.push({ left: point.x - 12, right: point.x + 12, top: point.y - 12, bottom: point.y + 12 });
+            for (const label of point.labels) {
+              assert.equal(label.lines.length, 1);
+              const box = { left: label.x - 4, right: label.x + label.width + 4, top: label.y - 12, bottom: label.y + 4 };
+              assert.ok(box.left >= 0 && box.right <= model.width);
+              assert.ok(box.top >= model.bands[point.row].top && box.bottom <= model.bands[point.row].top + model.bands[point.row].height);
+              rectangles.push(box);
+            }
           }
         }
         rectangles.forEach((a, i) => rectangles.slice(i + 1).forEach(b => assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)));
@@ -281,8 +425,10 @@ for (const app of ['client-app', 'admin-panel']) {
       for (const end of ['2026-09-15', '2026-09-16']) assert.equal(view.buildWorkflowGraph({ tasks: [short] }, '2026-09-15', end, 235).width, 235);
       const mobile = load('WorkflowJourney', { react: { ...React, useState: initial => React.useState(initial === 0 ? 235 : initial) } });
       const html = render(mobile.default, { timeline: { tasks: [task] }, startDate: '2026-09-15', endDate: '2026-09-24' });
-      assert.match(html, /aria-label="Workflow stage axis" width="76"/);
-      assert.match(html, /r="20" fill="transparent"/);
+      assert.match(html, /aria-label="Workflow stage axis" width="72"/);
+      assert.match(html, /data-point-target="true"[^>]*width="24" height="24"/);
+      assert.match(html, /max-height:480px/);
+      assert.match(html, /overflow-y:auto/);
       assert.match(html, /Scheduled<tspan[^>]*>\(0%\)/);
       assert.match(html, /Started<tspan[^>]*>\(1%–4%\)/);
       assert.match(html, /In Process<tspan[^>]*>\(5%–99%\)/);
@@ -431,7 +577,7 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(points[0].row, 3);
     const clipped = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-18', '2026-09-20');
     assert.ok(clipped.series[0].path.length);
-    assert.ok(clipped.series[0].points.every(point => !point.labelLines.length));
+    assert.ok(clipped.series[0].points.every(point => !point.labels.length));
     assert.equal(view.buildWorkflowGraph(null, 'bad', '2026-09-30').count, 0);
     const taskWithoutDate = { ...task, order: { id: task.order.id } };
     const resolved = view.buildWorkflowGraph({ tasks: [taskWithoutDate], orders: [task.order] }, '2026-09-01', '2026-09-30');
@@ -448,7 +594,7 @@ test('all views keep identical workflow presentation, evidence, numbering, color
   };
   for (const file of ['WorkflowJourney.jsx', 'WorkflowCalendar.jsx']) assert.equal(read(`frontend/client-app/src/components/${file}`), read(`frontend/admin-panel/src/components/${file}`));
   const client = load('client-app', 'WorkflowJourney'), admin = load('admin-panel', 'WorkflowJourney');
-  for (const name of ['taskJourneyEvents', 'taskJourneyRange', 'numberJourneyOrders', 'numberJourneyTasks', 'buildJourneyColors', 'journeyColor']) assert.equal(client[name].toString(), admin[name].toString(), name);
+  for (const name of ['taskJourneyEvents', 'taskJourneyRange', 'resolveJourneyOrder', 'numberJourneyOrders', 'numberJourneyTasks', 'buildJourneyColors', 'journeyColor']) assert.equal(client[name].toString(), admin[name].toString(), name);
   assert.equal(load('client-app', 'WorkflowCalendar', { './WorkflowJourney': client }).buildCalendarRanges.toString(), load('admin-panel', 'WorkflowCalendar', { './WorkflowJourney': admin }).buildCalendarRanges.toString());
 });
 
@@ -598,6 +744,8 @@ test('client: both views share filtered tasks, persisted order dates, inputs loa
   const missing = h.timeline.clientJourneyData({ tasks: [{ ...task, order: null }], orders: [task.order] }, [], 'owner');
   assert.equal(missing.tasks[0].order, null);
   assert.equal(h.journey.taskJourneyRange(missing.tasks[0]).start, null);
+  const mismatched = h.timeline.clientJourneyData({ tasks: [{ ...task, order: { id: 'exact', orderId: 'REUSED' } }], orders: [{ id: 'wrong', orderId: 'REUSED', createdAt: '2026-09-01' }] }, [], 'owner');
+  assert.equal(mismatched.tasks[0].order.createdAt, undefined);
 });
 
 for (const app of ['client-app', 'admin-panel']) test(`${app}: Calendar date activity opens shared detail and exact-task video inputs on demand`, async () => {
@@ -653,6 +801,12 @@ test('assigned user: authorized tasks share both views, no buyer order is recons
   const point = h.journey.buildWorkflowGraph(timeline.props.timeline, '2026-09-01', '2026-09-30').series[0];
   assert.ok(point.points.every(p => !p.isOrder));
   assert.equal(point.points[0].stageKnown, false);
+  const mobile = h.journey.buildWorkflowGraph(timeline.props.timeline, '2026-09-15', '2026-09-24', 235);
+  assert.equal(mobile.series[0].task.sequence, null);
+  assert.ok(mobile.series[0].points.every(point => !point.labels.some(label => label.kind === 'start')));
+  assert.ok(mobile.series[0].points.at(-1).labels.some(label => label.kind === 'end'));
+  assert.equal(mobile.series[0].color, point.color);
+  assert.ok(mobile.width <= 235 * 1.4);
   h.find(h.draw(), node => node.type === 'button' && node.props.children === 'calendar').props.onClick();
   const calendar = findView(h.calendar.default);
   assert.equal(calendar.props.tasks, timeline.props.timeline.tasks);

@@ -56,8 +56,20 @@ export function taskJourneyRange(task) {
   };
 }
 
+export function resolveJourneyOrder(task, orders = []) {
+  const linked = task.order;
+  if (!linked) return linked;
+  // An internal ID is authoritative; a display code must never override it.
+  const matches = orders.filter(order => linked.id ? order.id === linked.id : linked.orderId && order.orderId === linked.orderId);
+  const unique = new Map(matches.map(order => [order.id || order.orderId, order]));
+  if (unique.size !== 1) return linked;
+  const recorded = [...unique.values()][0];
+  return { ...linked, id: linked.id || recorded.id,
+    createdAt: journeyDay(linked.createdAt) ? linked.createdAt : recorded.createdAt };
+}
+
 export function numberJourneyOrders(tasks, orders = [], startDate, endDate) {
-  const available = [...orders, ...tasks.map(task => task.order).filter(Boolean)]
+  const available = [...orders, ...tasks.map(task => resolveJourneyOrder(task, orders)).filter(Boolean)]
     .filter(order => {
       const day = journeyDay(order.createdAt);
       return day && (order.id || order.orderId) && (!startDate || day >= startDate) && (!endDate || day <= endDate);
@@ -68,11 +80,8 @@ export function numberJourneyOrders(tasks, orders = [], startDate, endDate) {
 }
 
 export function numberJourneyTasks(tasks, orders = [], startDate, endDate) {
-  const unique = [...new Map(tasks.map(task => [task.id, task])).values()].map(task => {
-    const order = orders.find(order => (task.order?.id && task.order.id === order.id) || (task.order?.orderId && task.order.orderId === order.orderId));
-    return !journeyDay(task.order?.createdAt) && journeyDay(order?.createdAt)
-      ? { ...task, order: { ...task.order, createdAt: order.createdAt } } : task;
-  });
+  const unique = [...new Map(tasks.map(task => [task.id, task])).values()]
+    .map(task => ({ ...task, order: resolveJourneyOrder(task, orders) }));
   const numbers = numberJourneyOrders(unique, orders, startDate, endDate);
   return unique.map(task => ({ ...task, sequence: numbers.get(task.order?.id || task.order?.orderId) || null,
     sequenceNote: journeyDay(task.order?.createdAt) ? 'Order outside selected range · unnumbered' : 'Order date unavailable · unnumbered' }))
@@ -85,7 +94,7 @@ const colorSeed = key => [...key].reduce((hash, character) => (Math.imul(hash, 3
 
 export function buildJourneyColors(tasks, orders = []) {
   const keys = [...new Set([
-    ...tasks.map(journeyIdentity),
+    ...tasks.map(task => journeyIdentity({ ...task, order: resolveJourneyOrder(task, orders) })),
     ...orders.filter(order => order.id || order.orderId).map(order => `order:${order.id || order.orderId}`),
   ])].sort();
   const colors = new Map(), used = new Set();
@@ -136,65 +145,99 @@ export function journeyDatePoints(events) {
 
 function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const { count } = journeyDateAxis(startDate, endDate);
-  const baseWidth = availableWidth ? 52 : 80;
-  const labelWidth = availableWidth ? Math.min(132, Math.max(count > 2 ? 96 : 70, Math.floor(availableWidth / Math.min(count || 1, 2)) - 24)) : 156;
-  const groups = new Map();
-  for (const [lineIndex, line] of series.entries()) for (const point of line.points) {
-    point.laneOffset = series.length > 1 ? lineIndex * Math.min(3, 16 / (series.length - 1)) : 0;
-    const name = `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim();
-    const visible = point.day >= startDate && point.day <= endDate;
-    point.labelLines = point.endpoint && visible ? name.match(new RegExp(`.{1,${Math.floor(labelWidth / 7)}}(?:\\s|$)|.{1,${Math.floor(labelWidth / 7)}}`, 'gu')).map(part => part.trim()) : [];
-    if (point.labelLines.length > 2) point.labelLines = [point.labelLines[0], `${point.labelLines[1].slice(0, -1)}…`];
-    const key = `${point.row}:${point.day}`;
-    if (!groups.has(key)) groups.set(key, { day: point.day, points: [], width: 0 });
-    groups.get(key).points.push(point);
-  }
-  const dayWidths = new Map();
-  // Crowded dates gain horizontal slots; stable journey offsets keep stage height bounded.
-  for (const group of groups.values()) {
-    for (const point of group.points) {
-      const slotWidth = point.labelLines.length ? labelWidth + 8 : 44;
-      point.offsetX = group.width + slotWidth / 2;
-      group.width += slotWidth;
-    }
-    dayWidths.set(group.day, Math.max(dayWidths.get(group.day) || baseWidth, group.width + 16));
-  }
-  const columns = Array.from({ length: count }, (_, i) => {
-    const day = new Date(new Date(startDate).getTime() + i * dayMillis).toISOString().slice(0, 10);
-    return { day, width: dayWidths.get(day) || baseWidth };
-  });
-  const extra = Math.max(0, availableWidth - columns.reduce((sum, column) => sum + column.width, 0)) / (count || 1);
-  let width = 0;
-  for (const column of columns) { column.left = width; column.width += extra; width += column.width; }
+  const baseWidth = availableWidth ? Math.max(24, Math.min(36, availableWidth / 8)) : 80;
+  const dayWidth = Math.max(baseWidth, (availableWidth || 320) / (count || 1));
+  const width = Math.max(availableWidth, count * dayWidth);
+  const labelWidth = availableWidth ? Math.min(126, availableWidth - 8) : 156;
+  const columns = Array.from({ length: count }, (_, i) => ({
+    day: new Date(new Date(startDate).getTime() + i * dayMillis).toISOString().slice(0, 10),
+    left: i * dayWidth, width: dayWidth,
+  }));
   const byDay = new Map(columns.map(column => [column.day, column]));
-  const x = day => {
-    const column = byDay.get(day);
-    return column ? column.left + column.width / 2 : day < startDate
-      ? (new Date(day) - new Date(startDate)) / dayMillis * baseWidth + baseWidth / 2
-      : width + (new Date(day) - new Date(endDate)) / dayMillis * baseWidth - baseWidth / 2;
-  };
-  for (const group of groups.values()) for (const point of group.points) {
-    point.x = byDay.has(point.day) ? x(point.day) - group.width / 2 + point.offsetX : x(point.day);
-    point.labelX = point.x - labelWidth / 2;
+  const x = day => dayWidth / 2 + (new Date(day) - new Date(startDate)) / dayMillis * dayWidth;
+  const labelStep = availableWidth ? 18 : 32;
+  for (const line of series) {
+    const occupied = new Map();
+    line.labelLevels = 0;
+    for (const point of line.points) {
+      point.x = x(point.day);
+      point.labels = [];
+      if (!byDay.has(point.day)) continue;
+      const addLabel = (kind, text) => {
+        const limit = Math.floor(labelWidth / 7);
+        let lines = text.match(new RegExp(`.{1,${limit}}(?:\\s|$)|.{1,${limit}}`, 'gu'))?.map(part => part.trim()) || [];
+        if (availableWidth) lines = [text];
+        else if (lines.length > 2) lines = [lines[0], `${lines[1].slice(0, -1)}…`];
+        const size = kind === 'start' ? Math.max(10, text.length * 7) : labelWidth;
+        const left = Math.max(4, Math.min(width - size - 4, point.x - size / 2));
+        const levels = occupied.get(point.row) || [];
+        let level = levels.findIndex(items => items.every(item => left >= item.right + 8 || left + size + 8 <= item.left));
+        if (level < 0) { level = levels.length; levels.push([]); }
+        levels[level].push({ left, right: left + size });
+        occupied.set(point.row, levels);
+        line.labelLevels = Math.max(line.labelLevels, level + 1);
+        point.labels.push({ kind, lines, x: left, width: size, offsetY: 24 + level * labelStep });
+      };
+      if (point.isOrder && line.task.sequence) addLabel('start', String(line.task.sequence));
+      // A single Order record has no separate end yet. Same-day later records
+      // can expose an end title at that same dot without inventing a second point.
+      if (point === line.points.at(-1) && (!point.isOrder || point.events.some(event => event.key !== 'order'))) {
+        addLabel('end', `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim());
+      }
+    }
+    const bounds = line.points.flatMap(point => [point.x - 12, point.x + 12, ...point.labels.flatMap(label => [label.x - 4, label.x + label.width + 4])]);
+    line.left = Math.min(...bounds);
+    line.right = Math.max(...bounds);
+    line.inRange = line.left <= width && line.right >= 0;
+    line.trackHeight = Math.max(28, 22 + line.labelLevels * labelStep);
   }
+  // Labels never widen dates. Reuse vertical tracks only for disjoint journeys;
+  // concurrent journeys keep distinct dot/connector lanes, including siblings.
+  const tracks = [];
+  for (const line of [...series].filter(line => line.inRange).sort((a, b) => a.left - b.left || String(a.task.id).localeCompare(String(b.task.id)))) {
+    let track = tracks.find(track => track.right + 8 < line.left && track.height >= line.trackHeight);
+    if (!track) { track = { right: line.right, height: line.trackHeight }; tracks.push(track); }
+    track.right = line.right;
+    line.track = track;
+  }
+  let offset = 0;
+  for (const track of tracks) { track.offset = offset; offset += track.height; }
   const allPoints = series.flatMap(line => line.points);
   const rows = [], bands = [];
-  let height = 40;
+  let height = 48;
   for (const row of [4, 3, 2, 1, 0]) {
-    const points = allPoints.filter(point => point.row === row);
-    const visible = points.filter(point => byDay.has(point.day));
-    const bandHeight = Math.max(48, ...visible.map(point => 44 + point.laneOffset + point.labelLines.length * 14));
-    for (const point of points) { point.y = height + 22 + point.laneOffset; point.labelY = point.y + 20; }
+    let bandHeight = 48;
+    for (const line of series) for (const point of line.points.filter(point => point.row === row)) {
+      point.y = height + 14 + (line.track?.offset || 0);
+      for (const label of point.labels) label.y = point.y + label.offsetY;
+      if (line.inRange) bandHeight = Math.max(bandHeight, point.y - height + 16,
+        ...point.labels.map(label => label.y - height + label.lines.length * 14 - 6));
+    }
     bands[row] = { top: height, height: bandHeight };
     rows[row] = height + bandHeight / 2;
     height += bandHeight;
   }
-  const ticks = columns.filter((column, i) => i % Math.max(1, Math.ceil(44 / baseWidth)) === 0).map(column => column.day);
+  const ticks = columns.map(column => column.day);
   const dated = allPoints.filter(point => byDay.has(point.day));
-  const firstActual = dated.filter(point => point.row === 0).map(point => point.day).sort()[0] || dated.map(point => point.day).sort()[0] || startDate;
-  for (const line of series) line.path = line.points.map((point, i) => i ? `H${point.x} V${point.y}` : `M${point.x},${point.y}`).join(' ');
-  return { series, rows, bands, labelWidth, width: Math.max(availableWidth, width), height, ticks, x, firstActual, count,
-    dayWidth: baseWidth, columns, dayStart: day => byDay.get(day)?.left || 0 };
+  const firstActual = dated.filter(point => point.isOrder).map(point => point.day).sort()[0] || dated.map(point => point.day).sort()[0] || startDate;
+  for (const [lineIndex, line] of series.entries()) line.path = line.points.map((point, i) => {
+    if (!i) return `M${point.x},${point.y}`;
+    const previous = line.points[i - 1];
+    if (previous.y === point.y) return `H${point.x}`;
+    const dx = point.x - previous.x, dy = point.y - previous.y;
+    const obstructed = series.some(other => other !== line && other.points.some(dot => {
+      const t = Math.max(0, Math.min(1, ((dot.x - previous.x) * dx + (dot.y - previous.y) * dy) / (dx * dx + dy * dy)));
+      return Math.hypot(dot.x - previous.x - t * dx, dot.y - previous.y - t * dy) < 10;
+    }));
+    if (!obstructed) return `L${point.x},${point.y}`;
+    // Detour between date centers if a diagonal would touch another task's dot.
+    // Separate turn positions also avoid merging same-date vertical connectors.
+    const gap = dayWidth - 20;
+    const turnX = point.x - dayWidth / 2 - gap / 2 + (lineIndex + 0.5) * gap / series.length;
+    return `H${turnX} V${point.y} H${point.x}`;
+  }).join(' ');
+  return { series, rows, bands, labelWidth, width, height, ticks, x, firstActual, count,
+    dayWidth, columns, dayStart: day => byDay.get(day)?.left || 0 };
 }
 
 export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0) {
@@ -329,7 +372,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const media = window.matchMedia('(max-width: 640px)');
-    const measure = () => setMobileWidth(media.matches ? Math.max(160, (container.current?.clientWidth || window.innerWidth) - 78) : 0);
+    const measure = () => setMobileWidth(media.matches ? Math.max(160, (container.current?.clientWidth || window.innerWidth) - 74) : 0);
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     if (container.current) observer?.observe(container.current);
     measure();
@@ -338,7 +381,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
     return () => { observer?.disconnect(); media.removeEventListener('change', measure); window.removeEventListener('resize', measure); };
   }, []);
   const model = useMemo(() => buildWorkflowGraph(timeline, startDate, endDate, mobileWidth), [timeline, startDate, endDate, mobileWidth]);
-  const stageWidth = mobileWidth ? 76 : 110;
+  const stageWidth = mobileWidth ? 72 : 110;
   const scroller = useRef(null);
   const [highlight, setHighlight] = useState('');
   const selection = useJourneyDetail(model, onSelectDate, loadInputs);
@@ -354,7 +397,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
     <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. Supporting activity stays at the last recorded stage; missing stage dates stay unavailable.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
-    <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
+    <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '480px' : undefined, background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
         <text x={mobileWidth ? 6 : 10} y="27" fontSize="10" fill="#64748b">{mobileWidth ? 'STAGE' : 'STAGE / DATE'}</text>
         {workflowRows.map((label, row) => <g key={label}>
@@ -362,7 +405,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           <text x={mobileWidth ? 6 : 10} y={model.rows[row] - 3} fill="#475569" fontSize="11" fontWeight="600">{['Order', 'Scheduled', 'Started', 'In Process', 'Completed'][row]}<tspan x={mobileWidth ? 6 : 10} dy="14" fontSize="11">{['Placed', '(0%)', '(1%–4%)', '(5%–99%)', '(100%)'][row]}</tspan></text>
         </g>)}
       </svg>
-      <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, height: model.height, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
         <svg aria-label="Task journeys by actual date and workflow stage" width={model.width} height={model.height} style={{ display: 'block', overflow: 'hidden' }}>
           <title>One step-line per task or order. Points use saved evidence, not invented dates. Connectors do not imply daily progress history.</title>
           {model.bands.map((band, row) => <g key={row}>
@@ -371,22 +414,30 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           </g>)}
           {model.ticks.map(day => <g key={day}>
             <line x1={model.dayStart ? model.dayStart(day) : model.x(day) - model.dayWidth / 2} x2={model.dayStart ? model.dayStart(day) : model.x(day) - model.dayWidth / 2} y1="0" y2={model.height} stroke="#e2e8f0" />
-            <text x={model.x(day)} y="20" textAnchor="middle" fontSize="11" fontWeight="600" fill="#0f172a">{new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</text>
-            {!mobileWidth && <text x={model.x(day)} y="36" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</text>}
+            {mobileWidth && <text x={model.x(day)} y="12" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</text>}
+            <text x={model.x(day)} y={mobileWidth ? 27 : 20} textAnchor="middle" fontSize="12" fontWeight="600" fill="#0f172a">{mobileWidth ? Number(day.slice(-2)) : new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</text>
+            <text x={model.x(day)} y="41" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }).slice(0, mobileWidth ? 2 : 3)}</text>
           </g>)}
           {selectedDate && selectedDate >= startDate && selectedDate <= endDate && <line x1={model.x(selectedDate)} x2={model.x(selectedDate)} y1="44" y2={model.height} stroke="#a5b4fc" strokeDasharray="4 4" />}
-          {lines.map(line => <path key={line.task.id} data-workflow-path="true" d={line.path} fill="none" stroke={line.color} strokeWidth={highlight === line.task.id ? 3 : 2} strokeLinejoin="round" opacity={!highlight || highlight === line.task.id ? 1 : 0.15} pointerEvents="none" />)}
+          {lines.map(line => <g key={line.task.id} opacity={!highlight || highlight === line.task.id ? 1 : 0.15} pointerEvents="none">
+            <path d={line.path} fill="none" stroke="#fff" strokeWidth="6" strokeLinejoin="round" />
+            <path data-workflow-path="true" data-path-task={line.task.id} d={line.path} fill="none" stroke={line.color} strokeWidth={highlight === line.task.id ? 3 : 2} strokeLinejoin="round" />
+          </g>)}
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
               {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={point.supporting ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}`}</title>
-                <circle cx={point.x} cy={point.y} r="20" fill="transparent" />
+                <rect data-point-target="true" x={point.x - 12} y={point.y - 12} width="24" height="24" fill="transparent" />
                 <circle cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
-                {point.labelLines.length > 0 && <g data-endpoint-label="true" data-order-number={line.task.sequence || undefined}>
-                  <rect x={point.labelX - 4} y={(point.labelY ?? point.y) - 12} width={model.labelWidth + 8} height={point.labelLines.length * 14 + 6} rx="4" fill="#fff" />
-                  <text fill={line.color} fontFamily="system-ui, sans-serif" fontSize="12" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={(point.labelY ?? point.y) + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>
-                </g>}
+                {point.labels.map(label => <g key={label.kind} data-endpoint-label={label.kind} data-order-number={line.task.sequence || undefined}>
+                  <rect x={label.x - 4} y={label.y - 12} width={label.width + 8} height={label.lines.length * 14 + 2} rx="4" fill="#fff" />
+                  <foreignObject x={label.x} y={label.y - 12} width={label.width} height={label.lines.length * 14}>
+                    <div xmlns="http://www.w3.org/1999/xhtml" style={{ color: line.color, fontFamily: 'system-ui, sans-serif', fontSize: '12px', fontWeight: 600, lineHeight: '14px', pointerEvents: 'none' }}>
+                      {label.lines.map((text, index) => <div key={index} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{text}</div>)}
+                    </div>
+                  </foreignObject>
+                </g>)}
               </g>)}
             </g>;
           })}
