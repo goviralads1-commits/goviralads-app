@@ -137,6 +137,53 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.ok(clipped.series[0].points.every(point => !point.labelLines.length));
   });
 
+  test(`${app}: 375px mobile geometry bounds milestone height and preserves readable endpoints`, () => {
+    const graphWidth = 235; // 375px viewport, existing card spacing and the 76px stage column.
+    for (const total of [6, 24, 60]) {
+      const dense = { ...task, milestones: Array.from({ length: total }, (_, i) => ({ name: `Milestone ${i}`, percentage: 1 + i, reached: true, reachedAt: i % 2 ? '2026-09-17' : '2026-09-18' })) };
+      const tasks = Array.from({ length: total === 24 ? 8 : 1 }, (_, i) => ({ ...dense, id: `dense-${i}` }));
+      const model = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24', graphWidth);
+      const points = model.series.flatMap(line => line.points);
+      assert.equal(model.bands[4].height, 68);
+      for (let row = 1; row < 6; row++) assert.ok(model.rows[row - 1] > model.rows[row], 'stages progress bottom to top');
+      assert.ok(model.height <= (tasks.length > 1 ? 560 : 400));
+      assert.equal(points.filter(point => point.row === 4).length, total * tasks.length);
+      for (const point of points) {
+        const column = model.columns.find(column => column.day === point.day);
+        assert.ok(point.x - 14 >= column.left && point.x + 14 <= column.left + column.width);
+        if (point.labelLines.length) {
+          assert.ok(point.endpoint);
+          assert.ok(point.labelX - 4 >= column.left && point.labelX + model.labelWidth + 4 <= column.left + column.width);
+        }
+      }
+      const rectangles = points.map(point => ({
+        left: point.labelLines.length ? point.labelX - 4 : point.x - 14,
+        right: point.labelLines.length ? point.labelX + model.labelWidth + 4 : point.x + 14,
+        top: point.y - 14, bottom: point.labelLines.length ? point.labelY + point.labelLines.length * 14 - 6 : point.y + 14,
+      }));
+      rectangles.forEach((a, i) => rectangles.slice(i + 1).forEach(b => {
+        assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
+      }));
+      assert.deepEqual(plain(model.numbered.map(t => t.sequence)), plain(view.numberJourneyTasks(tasks, [], '2026-09-15', '2026-09-24').map(t => t.sequence)));
+      for (const line of model.series) assert.equal((line.path.match(/H/g) || []).length, line.points.length - 1);
+    }
+    const short = { ...task, approvedAt: null, milestones: [], completedAt: '2026-09-16' };
+    for (const end of ['2026-09-15', '2026-09-16']) {
+      assert.equal(view.buildWorkflowGraph({ tasks: [short] }, '2026-09-15', end, graphWidth).width, graphWidth);
+    }
+    const desktop = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-01', '2026-09-30');
+    assert.equal(desktop.width, 2400);
+    assert.equal(desktop.height, 440);
+    for (let row = 1; row < 6; row++) assert.ok(desktop.rows[row - 1] > desktop.rows[row]);
+    const mobileView = load('WorkflowJourney', { react: { ...React, useState: initial => React.useState(initial === 0 ? graphWidth : initial) } });
+    const html = render(mobileView.default, { timeline: { tasks: [task] }, startDate: '2026-09-15', endDate: '2026-09-24' });
+    assert.match(html, /aria-label="Workflow stage axis" width="76"/);
+    assert.match(html, /bottom: calc\(84px \+ env\(safe-area-inset-bottom/);
+    assert.equal((html.match(/data-endpoint-label=/g) || []).length, 2);
+    assert.match(html, /Scheduled<tspan[^>]*>\(0%\)<\/tspan>/);
+    assert.match(html, /Started<tspan[^>]*>\(≥1%\)<\/tspan>/);
+  });
+
   test(`${app}: saved inputs include usable links, custom references and content, without unrelated data`, () => {
     const data = { clientInputs: [{ link: 'https://example.com/video', customInput: '+1 555 123 / reference' }],
       customInputLabel: 'Contact / prompt', clientContentText: '<script>instructions</script>',

@@ -90,7 +90,71 @@ export function journeyDateAxis(startDate, endDate) {
   return { count, dayWidth, width, x, ticks };
 }
 
-export function buildWorkflowGraph(timeline, startDate, endDate) {
+function compactJourneyLayout(series, startDate, endDate, availableWidth) {
+  const { count } = journeyDateAxis(startDate, endDate);
+  const baseWidth = count > 366 ? Math.max(1, 26000 / count) : 48;
+  const labelWidth = Math.min(140, Math.max(70, Math.floor(availableWidth / Math.min(count || 1, 2)) - 24));
+  const groups = new Map();
+  for (const line of series) for (const point of line.points) {
+    const name = `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim();
+    const visible = point.day >= startDate && point.day <= endDate;
+    point.labelLines = point.endpoint && visible ? name.match(new RegExp(`.{1,${Math.floor(labelWidth / 7)}}(?:\\s|$)|.{1,${Math.floor(labelWidth / 7)}}`, 'gu')).map(part => part.trim()) : [];
+    const key = `${point.row}:${point.day}`;
+    if (!groups.has(key)) groups.set(key, { day: point.day, points: [], width: 0 });
+    groups.get(key).points.push(point);
+  }
+  const dayWidths = new Map();
+  // Two rows only: crowded dates gain small horizontal slots, never more vertical lanes.
+  for (const group of groups.values()) {
+    for (let i = 0; i < group.points.length; i += 2) {
+      const pair = group.points.slice(i, i + 2);
+      const slotWidth = pair.some(point => point.labelLines.length) ? labelWidth + 8 : 32;
+      pair.forEach((point, lane) => { point.mobileLane = lane; point.offsetX = group.width + slotWidth / 2; });
+      group.width += slotWidth;
+    }
+    dayWidths.set(group.day, Math.max(dayWidths.get(group.day) || baseWidth, group.width + 16));
+  }
+  const columns = Array.from({ length: count }, (_, i) => {
+    const day = new Date(new Date(startDate).getTime() + i * dayMillis).toISOString().slice(0, 10);
+    return { day, width: dayWidths.get(day) || baseWidth };
+  });
+  const extra = Math.max(0, availableWidth - columns.reduce((sum, column) => sum + column.width, 0)) / (count || 1);
+  let width = 0;
+  for (const column of columns) { column.left = width; column.width += extra; width += column.width; }
+  const byDay = new Map(columns.map(column => [column.day, column]));
+  const x = day => {
+    const column = byDay.get(day);
+    return column ? column.left + column.width / 2 : day < startDate
+      ? (new Date(day) - new Date(startDate)) / dayMillis * baseWidth + baseWidth / 2
+      : width + (new Date(day) - new Date(endDate)) / dayMillis * baseWidth - baseWidth / 2;
+  };
+  for (const group of groups.values()) for (const point of group.points) {
+    point.x = byDay.has(point.day) ? x(point.day) - group.width / 2 + point.offsetX : x(point.day);
+    point.labelX = point.x - labelWidth / 2;
+  }
+  const allPoints = series.flatMap(line => line.points);
+  const rows = [], bands = [];
+  let height = 40;
+  for (const row of [5, 4, 3, 2, 1, 0]) {
+    const points = allPoints.filter(point => point.row === row);
+    const visible = points.filter(point => byDay.has(point.day));
+    const laneHeight = Math.max(32, ...visible.map(point => point.labelLines.length ? point.labelLines.length * 14 + 32 : 32));
+    const lanes = Math.max(1, ...visible.map(point => point.mobileLane + 1));
+    const bandHeight = Math.max(44, lanes * laneHeight + 4);
+    for (const point of points) { point.y = height + 16 + (byDay.has(point.day) ? point.mobileLane : 0) * laneHeight; point.labelY = point.y + 20; }
+    bands[row] = { top: height, height: bandHeight };
+    rows[row] = height + bandHeight / 2;
+    height += bandHeight;
+  }
+  const ticks = columns.filter((column, i) => i % Math.max(1, Math.ceil(44 / baseWidth)) === 0).map(column => column.day);
+  const dated = allPoints.filter(point => byDay.has(point.day));
+  const firstActual = dated.filter(point => point.row === 0).map(point => point.day).sort()[0] || dated.map(point => point.day).sort()[0] || startDate;
+  for (const line of series) line.path = line.points.map((point, i) => i ? `H${point.x} V${point.y}` : `M${point.x},${point.y}`).join(' ');
+  return { series, rows, bands, labelWidth, width: Math.max(availableWidth, width), height, ticks, x, firstActual, count,
+    dayWidth: baseWidth, columns, dayStart: day => byDay.get(day)?.left || 0 };
+}
+
+export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0) {
   const numbered = numberJourneyTasks(timeline?.tasks || [], timeline?.orders || [], startDate, endDate);
   const numbers = numberJourneyOrders(numbered, timeline?.orders || [], startDate, endDate);
   const linked = new Set(numbered.map(task => task.order?.id || task.order?.orderId).filter(Boolean));
@@ -110,6 +174,7 @@ export function buildWorkflowGraph(timeline, startDate, endDate) {
     points.forEach((point, i) => { point.endpoint = i === 0 || i === points.length - 1; });
     return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, index) };
   });
+  if (mobileWidth) return { ...compactJourneyLayout(series, startDate, endDate, mobileWidth), numbered };
   const { count, dayWidth, width, x, ticks } = journeyDateAxis(startDate, endDate);
   const labelWidth = Math.min(182, width / 2 - 24);
   const characters = Math.floor(labelWidth / 7);
@@ -201,7 +266,21 @@ export const JourneyInputs = ({ data, orderOnly }) => {
 };
 
 const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectDate, loadInputs }) => {
-  const model = useMemo(() => buildWorkflowGraph(timeline, startDate, endDate), [timeline, startDate, endDate]);
+  const container = useRef(null);
+  const [mobileWidth, setMobileWidth] = useState(0);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 640px)');
+    const measure = () => setMobileWidth(media.matches ? Math.max(160, (container.current?.clientWidth || window.innerWidth) - 78) : 0);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    if (container.current) observer?.observe(container.current);
+    measure();
+    media.addEventListener('change', measure);
+    window.addEventListener('resize', measure);
+    return () => { observer?.disconnect(); media.removeEventListener('change', measure); window.removeEventListener('resize', measure); };
+  }, []);
+  const model = useMemo(() => buildWorkflowGraph(timeline, startDate, endDate, mobileWidth), [timeline, startDate, endDate, mobileWidth]);
+  const stageWidth = mobileWidth ? 76 : 110;
   const scroller = useRef(null);
   const [highlight, setHighlight] = useState('');
   const [activePoint, setActivePoint] = useState(null);
@@ -209,7 +288,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   const closeDetail = () => { request.current?.abort(); setActivePoint(null); };
   // Selection/scroll changes do not rebuild the model or reset the user's viewport.
   useEffect(() => {
-    if (scroller.current) scroller.current.scrollLeft = Math.max(0, model.x(model.firstActual) - model.dayWidth / 2);
+    if (scroller.current) scroller.current.scrollLeft = model.dayStart ? model.dayStart(model.firstActual) : Math.max(0, model.x(model.firstActual) - model.dayWidth / 2);
     setHighlight('');
     setActivePoint(null);
     return () => request.current?.abort();
@@ -236,9 +315,10 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   const detail = activePoint?.model === model ? activePoint : null;
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
-  return <div style={{ minWidth: 0 }}>
+  return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
+    <style>{`@media (max-width: 640px) { .workflow-journey { margin-inline: -6px; } .workflow-journey .journey-detail { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; max-height: min(280px, calc(100dvh - 180px)) !important; } }`}</style>
     <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 12px' }}>Each line connects actual dated evidence. Tap a named endpoint for client inputs or a dot for milestone details. The last point is the latest recorded evidence, not necessarily completion.</p>
-    {detail && <section aria-label="Journey point details" aria-live="polite" onKeyDown={event => { if (event.key === 'Escape') closeDetail(); }} style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: '440px', boxSizing: 'border-box', zIndex: 100, boxShadow: '0 8px 32px #0f172a33', fontSize: '12px', padding: '12px', background: '#eef2ff', borderRadius: '8px', overflowWrap: 'anywhere', maxHeight: '280px', overflowY: 'auto' }}>
+    {detail && <section className="journey-detail" aria-label="Journey point details" aria-live="polite" onKeyDown={event => { if (event.key === 'Escape') closeDetail(); }} style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: '440px', boxSizing: 'border-box', zIndex: 100, boxShadow: '0 8px 32px #0f172a33', fontSize: '12px', padding: '12px', background: '#eef2ff', borderRadius: '8px', overflowWrap: 'anywhere', maxHeight: '280px', overflowY: 'auto' }}>
       <button type="button" onClick={closeDetail} style={{ float: 'right', marginLeft: '8px', cursor: 'pointer' }}>Close</button>
       <strong>{detail.task.sequence ? `${detail.task.sequence} · ` : ''}{detail.task.title}</strong>
       <p>{detail.point.label} · {formatDate(detail.point.date)}</p><p>{detail.point.detail}</p>
@@ -248,11 +328,11 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
       </>}
     </section>}
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
-      <svg aria-label="Workflow stage axis" width="110" height={model.height} style={{ flex: '0 0 110px', background: '#fff', borderRight: '1px solid #e2e8f0' }}>
-        <text x="10" y="27" fontSize="10" fill="#64748b">STAGE / DATE</text>
+      <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
+        <text x={mobileWidth ? 6 : 10} y="27" fontSize="10" fill="#64748b">{mobileWidth ? 'STAGE' : 'STAGE / DATE'}</text>
         {workflowRows.map((label, row) => <g key={label}>
-          <rect x="4" y={model.rows[row] - 24} width="102" height="48" rx="8" fill={`${stageColors[row]}0d`} />
-          <text x="10" y={model.rows[row] + 4} fill={stageColors[row]} fontSize="10" fontWeight="700">{label}</text>
+          <rect x="4" y={model.rows[row] - (mobileWidth ? 20 : 24)} width={stageWidth - 8} height={mobileWidth ? 40 : 48} rx="8" fill={`${stageColors[row]}0d`} />
+          <text x={mobileWidth ? 6 : 10} y={model.rows[row] + (mobileWidth && (row === 1 || row === 2) ? -3 : 4)} fill={stageColors[row]} fontSize="10" fontWeight="700">{mobileWidth ? ['Order', 'Scheduled', 'Started', 'In Process', 'Milestones', 'Completed'][row] : label}{mobileWidth && (row === 1 || row === 2) && <tspan x="6" dy="13" fontSize="9">{row === 1 ? '(0%)' : '(≥1%)'}</tspan>}</text>
         </g>)}
       </svg>
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -263,9 +343,9 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
             <line x1="0" x2={model.width} y1={band.top + band.height} y2={band.top + band.height} stroke="#e2e8f0" />
           </g>)}
           {model.ticks.map(day => <g key={day}>
-            <line x1={model.x(day) - model.dayWidth / 2} x2={model.x(day) - model.dayWidth / 2} y1="0" y2={model.height} stroke="#e2e8f0" />
+            <line x1={model.dayStart ? model.dayStart(day) : model.x(day) - model.dayWidth / 2} x2={model.dayStart ? model.dayStart(day) : model.x(day) - model.dayWidth / 2} y1="0" y2={model.height} stroke="#e2e8f0" />
             <text x={model.x(day)} y="20" textAnchor="middle" fontSize="11" fontWeight="600" fill="#0f172a">{new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</text>
-            <text x={model.x(day)} y="36" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</text>
+            {!mobileWidth && <text x={model.x(day)} y="36" textAnchor="middle" fontSize="10" fill="#64748b">{new Date(day).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</text>}
           </g>)}
           {selectedDate && selectedDate >= startDate && selectedDate <= endDate && <line x1={model.x(selectedDate)} x2={model.x(selectedDate)} y1="44" y2={model.height} stroke="#a5b4fc" strokeDasharray="4 4" />}
           {lines.map(line => <path key={line.task.id} data-workflow-path="true" d={line.path} fill="none" stroke={line.color} strokeWidth={highlight === line.task.id ? 3 : 2} strokeLinejoin="round" opacity={!highlight || highlight === line.task.id ? 1 : 0.15} pointerEvents="none" />)}
@@ -277,8 +357,8 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
                 <circle cx={point.x} cy={point.y} r="14" fill="transparent" />
                 <circle cx={point.x} cy={point.y} r="6" fill={point.key === 'approval' ? '#fff' : stageColors[point.row]} stroke={point.key === 'approval' ? '#60a5fa' : '#fff'} strokeWidth="1.5" />
                 {point.labelLines.length > 0 && <g data-endpoint-label="true" data-order-number={line.task.sequence || undefined}>
-                  <rect x={point.labelX - 4} y={point.y - 12} width={model.labelWidth + 8} height={point.labelLines.length * 14 + 6} rx="4" fill="#fff" />
-                  <text fill={line.color} fontFamily="monospace" fontSize="11" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={point.y + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>
+                  <rect x={point.labelX - 4} y={(point.labelY ?? point.y) - 12} width={model.labelWidth + 8} height={point.labelLines.length * 14 + 6} rx="4" fill="#fff" />
+                  <text fill={line.color} fontFamily="monospace" fontSize="11" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={(point.labelY ?? point.y) + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>
                 </g>}
               </g>)}
             </g>;
