@@ -11,9 +11,9 @@ const formatDate = value => journeyDay(value)
 const formatPointDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? formatDate(value)
   : `${new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'UTC' })} UTC`;
 const dayMillis = 86400000;
-export const workflowRows = ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (≥1%)', 'IN PROCESS (1%–99%)', 'COMPLETED (100%)'];
+export const workflowRows = ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (1%–4%)', 'IN PROCESS (5%–99%)', 'COMPLETED (100%)'];
 const lineColors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#4d7c0f', '#1e40af', '#a16207', '#9333ea', '#0f766e', '#c2410c', '#0369a1', '#a21caf', '#15803d', '#e11d48', '#4338ca', '#78716c', '#b45309', '#047857', '#6d28d9', '#9f1239', '#0e7490', '#713f12'];
-export const currentStage = progress => !Number.isFinite(progress) ? 'Stage unavailable' : progress === 0 ? 'Scheduled' : progress >= 100 ? 'Completed' : progress >= 1 ? 'In Process' : 'Stage unavailable';
+export const currentStage = progress => !Number.isFinite(progress) ? 'Stage unavailable' : progress === 0 ? 'Scheduled' : progress >= 100 ? 'Completed' : progress >= 5 ? 'In Process' : progress >= 1 ? 'Started' : 'Stage unavailable';
 
 export function taskJourneyEvents(task) {
   const milestones = (task.milestones || []).flatMap((milestone, index) => milestone.reached === true ? [{
@@ -28,8 +28,8 @@ export function taskJourneyEvents(task) {
     { key: 'approval', row: null, label: 'Approval', date: task.approvedAt,
       detail: 'Recorded approval date. Progress at approval was not persisted; this is not a dated 0% transition.' },
     { key: 'scheduled', row: 1, label: 'Scheduled (0%)', date: undefined, detail: 'Date unavailable' },
-    { key: 'started', row: 2, label: 'Started (≥1%)', date: undefined, detail: 'First-progress date unavailable' },
-    { key: 'process', row: 3, label: 'In Process (1%–99%)', date: undefined, detail: 'First-progress date unavailable' },
+    { key: 'started', row: 2, label: 'Started (1%–4%)', date: undefined, detail: 'First-progress date unavailable' },
+    { key: 'process', row: 3, label: 'In Process (5%–99%)', date: undefined, detail: 'First ≥5% date unavailable' },
     ...milestones,
     { key: 'completed', row: 4, label: 'Completed', date: completed,
       detail: completed ? 'Recorded task completion.' : 'Actual completion date unavailable' },
@@ -359,7 +359,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
         <text x={mobileWidth ? 6 : 10} y="27" fontSize="10" fill="#64748b">{mobileWidth ? 'STAGE' : 'STAGE / DATE'}</text>
         {workflowRows.map((label, row) => <g key={label}>
           <rect x="4" y={model.rows[row] - 20} width={stageWidth - 8} height="40" rx="8" fill="#f1f5f9" />
-          <text x={mobileWidth ? 6 : 10} y={model.rows[row] - 3} fill="#475569" fontSize="11" fontWeight="600">{['Order', 'Scheduled', 'Started', 'In Process', 'Completed'][row]}<tspan x={mobileWidth ? 6 : 10} dy="14" fontSize="11">{['Placed', '(0%)', '(≥1%)', '(1%–99%)', '(100%)'][row]}</tspan></text>
+          <text x={mobileWidth ? 6 : 10} y={model.rows[row] - 3} fill="#475569" fontSize="11" fontWeight="600">{['Order', 'Scheduled', 'Started', 'In Process', 'Completed'][row]}<tspan x={mobileWidth ? 6 : 10} dy="14" fontSize="11">{['Placed', '(0%)', '(1%–4%)', '(5%–99%)', '(100%)'][row]}</tspan></text>
         </g>)}
       </svg>
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

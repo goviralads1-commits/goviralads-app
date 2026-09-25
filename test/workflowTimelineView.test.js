@@ -40,7 +40,7 @@ for (const app of ['client-app', 'admin-panel']) {
   const { renderToStaticMarkup } = appRequire('react-dom/server');
   const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
-  test(`${app}: current 0% Scheduled, 1–99% In Process, 100% Completed; no inferred transition dates`, () => {
+  test(`${app}: current 0% Scheduled, 1–4% Started, 5–99% In Process, 100% Completed; no inferred transition dates`, () => {
     const zero = { ...task, progress: 0, milestones: [], completedAt: null };
     const events = view.taskJourneyEvents(zero);
     assert.equal(events.find(e => e.key === 'scheduled').date, undefined);
@@ -50,10 +50,12 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(view.taskJourneyEvents({ ...zero, milestones: [{ name: 'Approved at zero', percentage: 0, reached: true, reachedAt: zero.approvedAt }] }).find(e => e.key === 'scheduled').date, undefined);
     assert.equal(events.find(e => e.key === 'started').date, undefined);
     assert.match(render(view.TaskJourney, { task: zero }), /0%.*Scheduled/);
-    for (const progress of [1, 10, 30, 49, 50, 60, 99]) {
-      assert.equal(view.currentStage(progress), 'In Process');
-      assert.match(render(view.TaskJourney, { task: { ...zero, progress } }), new RegExp(`${progress}%.*In Process`));
+    for (let progress = 0; progress <= 100; progress++) {
+      const expected = progress === 0 ? 'Scheduled' : progress <= 4 ? 'Started' : progress <= 99 ? 'In Process' : 'Completed';
+      assert.equal(view.currentStage(progress), expected);
+      assert.match(render(view.TaskJourney, { task: { ...zero, progress } }), new RegExp(`${progress}%.*${expected}`));
       assert.deepEqual(plain(view.taskJourneyEvents({ ...zero, progress })), plain(events));
+      assert.deepEqual(plain(view.taskJourneyRange({ ...zero, progress })), plain(view.taskJourneyRange(zero)));
     }
     assert.equal(view.currentStage(100), 'Completed');
     assert.equal(view.currentStage(null), 'Stage unavailable');
@@ -282,6 +284,8 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.match(html, /aria-label="Workflow stage axis" width="76"/);
       assert.match(html, /r="20" fill="transparent"/);
       assert.match(html, /Scheduled<tspan[^>]*>\(0%\)/);
+      assert.match(html, /Started<tspan[^>]*>\(1%–4%\)/);
+      assert.match(html, /In Process<tspan[^>]*>\(5%–99%\)/);
       assert.doesNotMatch(html, /Task details and unavailable dates/);
       assert.match(html, /<details[^>]*><summary[^>]*>Packages/);
       const panel = render(view.JourneyDetail, { detail: { task, point: { day: '2026-09-15', events: [] } } });
@@ -412,8 +416,8 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(calendar.buildCalendarRanges([{ ...notStarted, order: null }], '2026-09-15', '2026-09-24').undated.length, 1);
   });
 
-  test(`${app}: five core stages, shared first-progress evidence and no milestone stage`, () => {
-    assert.deepEqual(plain(view.workflowRows), ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (≥1%)', 'IN PROCESS (1%–99%)', 'COMPLETED (100%)']);
+  test(`${app}: five core stages, same-date recorded transitions and no milestone stage`, () => {
+    assert.deepEqual(plain(view.workflowRows), ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (1%–4%)', 'IN PROCESS (5%–99%)', 'COMPLETED (100%)']);
     const model = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-01', '2026-09-30');
     assert.equal(model.firstActual, task.order.createdAt);
     assert.equal(model.series[0].points.at(-1).row, 4);
@@ -636,7 +640,7 @@ for (const app of ['client-app', 'admin-panel']) test(`${app}: Calendar date act
 
 test('assigned user: authorized tasks share both views, no buyer order is reconstructed, inputs remain task-scoped', async () => {
   const h = clientHarness({ id: 'assigned-user', role: 'CLIENT' });
-  const assigned = { ...task, id: 'assigned-task', clientId: 'buyer', order: null, orderContext: 'unavailable' };
+  const assigned = { ...task, id: 'assigned-task', clientId: 'buyer', order: null, orderContext: 'unavailable', progress: 3, completedAt: null };
   const data = { tasks: [assigned], orders: [] };
   h.draw();
   assert.equal(h.calls[0].url, '/client/insights/timeline');
@@ -653,6 +657,12 @@ test('assigned user: authorized tasks share both views, no buyer order is recons
   const calendar = findView(h.calendar.default);
   assert.equal(calendar.props.tasks, timeline.props.timeline.tasks);
   assert.equal(calendar.props.orders.length, 0);
+  for (const progress of [0, 1, 2, 3, 4, 5, 50, 99, 100]) {
+    const current = { ...calendar.props.tasks[0], progress };
+    const expected = progress === 0 ? 'Scheduled' : progress <= 4 ? 'Started' : progress <= 99 ? 'In Process' : 'Completed';
+    assert.match(h.markup(h.journey.TaskJourney({ task: current })), new RegExp(`${progress}%.*${expected}`));
+    assert.ok(h.journey.taskJourneyEvents(current).filter(event => ['scheduled', 'started', 'process', 'completed'].includes(event.key)).every(event => !event.date));
+  }
   const pending = calendar.props.loadInputs(assigned, new AbortController().signal);
   assert.equal(h.calls[1].url, '/client/tasks/assigned-task');
   h.calls[1].reject({ response: { status: 403 } });
