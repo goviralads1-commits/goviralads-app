@@ -8,10 +8,12 @@ export const journeyDay = value => {
 const formatDate = value => journeyDay(value)
   ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
   : 'Date unavailable';
+const formatPointDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? formatDate(value)
+  : `${new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'UTC' })} UTC`;
 const dayMillis = 86400000;
 export const workflowRows = ['ORDER', 'SCHEDULED (0%)', 'STARTED (≥1%)', 'IN PROCESS', 'MILESTONE(S)', 'COMPLETED'];
 const stageColors = ['#334155', '#60a5fa', '#2563eb', '#f59e0b', '#7c3aed', '#16a34a'];
-const lineColors = ['#2563eb', '#059669', '#f43f5e', '#d97706', '#7c3aed', '#0891b2', '#be185d'];
+const lineColors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#4d7c0f', '#1e40af', '#a16207', '#9333ea', '#0f766e', '#c2410c', '#0369a1', '#a21caf', '#15803d', '#e11d48', '#4338ca', '#78716c', '#b45309', '#047857', '#6d28d9', '#9f1239', '#0e7490', '#713f12'];
 const currentStage = progress => progress === 0 ? 'Scheduled' : progress >= 100 ? 'Completed' : progress >= 50 ? 'In Process' : progress >= 1 ? 'Started' : 'Stage unavailable';
 
 export function taskJourneyEvents(task) {
@@ -75,7 +77,28 @@ export function numberJourneyTasks(tasks, orders = [], startDate, endDate) {
     .sort((a, b) => (a.sequence || Infinity) - (b.sequence || Infinity) || String(a.id).localeCompare(String(b.id)));
 }
 
-export const journeyColor = (task, index) => lineColors[((task.sequence || index + 1) - 1) % lineColors.length];
+const journeyIdentity = task => task.order?.id || task.order?.orderId
+  ? `order:${task.order.id || task.order.orderId}` : `task:${task.id}`;
+const colorSeed = key => [...key].reduce((hash, character) => (Math.imul(hash, 31) + character.codePointAt(0)) >>> 0, 0);
+
+export function buildJourneyColors(tasks, orders = []) {
+  const keys = [...new Set([
+    ...tasks.map(journeyIdentity),
+    ...orders.filter(order => order.id || order.orderId).map(order => `order:${order.id || order.orderId}`),
+  ])].sort();
+  const colors = new Map(), used = new Set();
+  for (const key of keys) {
+    if (used.size === lineColors.length) used.clear();
+    let slot = colorSeed(key) % lineColors.length;
+    while (used.has(slot)) slot = (slot + 1) % lineColors.length;
+    used.add(slot);
+    colors.set(key, lineColors[slot]);
+  }
+  return colors;
+}
+
+export const journeyColor = (task, colors) => colors?.get(journeyIdentity(task))
+  || lineColors[colorSeed(journeyIdentity(task)) % lineColors.length];
 
 export function journeyDateAxis(startDate, endDate) {
   const count = journeyDay(startDate) && journeyDay(endDate) ? Math.max(0, Math.floor((new Date(endDate) - new Date(startDate)) / dayMillis) + 1) : 0;
@@ -93,7 +116,7 @@ export function journeyDateAxis(startDate, endDate) {
 function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const { count } = journeyDateAxis(startDate, endDate);
   const baseWidth = count > 366 ? Math.max(1, 26000 / count) : 48;
-  const labelWidth = Math.min(140, Math.max(70, Math.floor(availableWidth / Math.min(count || 1, 2)) - 24));
+  const labelWidth = Math.min(140, Math.max(count > 2 ? 96 : 70, Math.floor(availableWidth / Math.min(count || 1, 2)) - 24));
   const groups = new Map();
   for (const line of series) for (const point of line.points) {
     const name = `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim();
@@ -155,6 +178,7 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
 }
 
 export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0) {
+  const colors = buildJourneyColors(timeline?.tasks || [], timeline?.orders || []);
   const numbered = numberJourneyTasks(timeline?.tasks || [], timeline?.orders || [], startDate, endDate);
   const numbers = numberJourneyOrders(numbered, timeline?.orders || [], startDate, endDate);
   const linked = new Set(numbered.map(task => task.order?.id || task.order?.orderId).filter(Boolean));
@@ -163,7 +187,7 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
       id: `order:${order.id || order.orderId}`, title: `Order ${order.orderId || ''}`, orderOnly: true,
       order, sequence: numbers.get(order.id || order.orderId), status: order.orderStatus,
     }));
-  const series = [...numbered, ...orderOnly].map((task, index) => {
+  const series = [...numbered, ...orderOnly].map(task => {
     const events = task.orderOnly ? [
       { key: 'order', row: 0, label: 'Order', date: task.order.createdAt, detail: task.order.orderId },
       { key: 'approval', row: 1, label: 'Approval', date: task.order.approvedAt, detail: 'Recorded approval; progress at approval unavailable' },
@@ -172,7 +196,7 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
     const points = events.filter(event => journeyDay(event.date)).map(event => ({ ...event, day: journeyDay(event.date) }))
       .sort((a, b) => new Date(a.date) - new Date(b.date) || a.row - b.row);
     points.forEach((point, i) => { point.endpoint = i === 0 || i === points.length - 1; });
-    return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, index) };
+    return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, colors) };
   });
   if (mobileWidth) return { ...compactJourneyLayout(series, startDate, endDate, mobileWidth), numbered };
   const { count, dayWidth, width, x, ticks } = journeyDateAxis(startDate, endDate);
@@ -321,7 +345,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
     {detail && <section className="journey-detail" aria-label="Journey point details" aria-live="polite" onKeyDown={event => { if (event.key === 'Escape') closeDetail(); }} style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: '440px', boxSizing: 'border-box', zIndex: 100, boxShadow: '0 8px 32px #0f172a33', fontSize: '12px', padding: '12px', background: '#eef2ff', borderRadius: '8px', overflowWrap: 'anywhere', maxHeight: '280px', overflowY: 'auto' }}>
       <button type="button" onClick={closeDetail} style={{ float: 'right', marginLeft: '8px', cursor: 'pointer' }}>Close</button>
       <strong>{detail.task.sequence ? `${detail.task.sequence} · ` : ''}{detail.task.title}</strong>
-      <p>{detail.point.label} · {formatDate(detail.point.date)}</p><p>{detail.point.detail}</p>
+      <p>{detail.point.label} · {formatPointDate(detail.point.date)}</p><p>{detail.point.detail}</p>
       {detail.point.endpoint && <>
         {detail.loading ? <p role="status">Loading saved client inputs…</p> : detail.error ? <p role="alert">{detail.error}</p> : <JourneyInputs data={detail.data} orderOnly={detail.task.orderOnly} />}
         {!detail.task.orderOnly && <a href={`/tasks/${encodeURIComponent(detail.task.id)}`} style={{ color: '#4338ca', textDecoration: 'underline' }}>Open task details</a>}
@@ -352,10 +376,10 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.key} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${point.label}, ${formatDate(point.date)}${point.endpoint ? ', show client inputs' : ''}`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.key} data-event={point.key} data-stage={workflowRows[point.row]} data-date={point.day} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${point.label}, ${formatDate(point.date)}${point.endpoint ? ', show client inputs' : ''}`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${point.label} · ${formatDate(point.date)} · ${point.detail || ''}`}</title>
                 <circle cx={point.x} cy={point.y} r="14" fill="transparent" />
-                <circle cx={point.x} cy={point.y} r="6" fill={point.key === 'approval' ? '#fff' : stageColors[point.row]} stroke={point.key === 'approval' ? '#60a5fa' : '#fff'} strokeWidth="1.5" />
+                <circle cx={point.x} cy={point.y} r="6" fill={point.key === 'approval' ? '#fff' : line.color} stroke={line.color} strokeWidth="1.5" />
                 {point.labelLines.length > 0 && <g data-endpoint-label="true" data-order-number={line.task.sequence || undefined}>
                   <rect x={point.labelX - 4} y={(point.labelY ?? point.y) - 12} width={model.labelWidth + 8} height={point.labelLines.length * 14 + 6} rx="4" fill="#fff" />
                   <text fill={line.color} fontFamily="monospace" fontSize="11" fontWeight="600">{point.labelLines.map((text, index) => <tspan key={index} x={point.labelX} y={(point.labelY ?? point.y) + 4 + index * 14} textLength={Math.min(model.labelWidth, text.length * 7)} lengthAdjust="spacingAndGlyphs">{text}</tspan>)}</text>

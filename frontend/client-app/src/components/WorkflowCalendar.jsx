@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { journeyDateAxis, journeyColor, numberJourneyTasks, taskJourneyRange, TaskJourney } from './WorkflowJourney';
+import { journeyDateAxis, journeyColor, buildJourneyColors, numberJourneyTasks, taskJourneyRange, TaskJourney } from './WorkflowJourney';
 
 export function buildCalendarRanges(tasks, rangeStart, rangeEnd, orders = []) {
   const axis = journeyDateAxis(rangeStart, rangeEnd);
   const dated = [], undated = [];
   if (!axis.count) return { ...axis, tasks: dated, undated };
   const numbered = numberJourneyTasks(tasks, orders, rangeStart, rangeEnd);
-  for (const [index, task] of numbered.entries()) {
+  const colors = buildJourneyColors(tasks, orders);
+  for (const task of numbered) {
     const range = taskJourneyRange(task);
     if (!range.start || !range.end || range.end < range.start || range.start > rangeEnd || range.end < rangeStart) {
       undated.push(task);
@@ -16,7 +17,7 @@ export function buildCalendarRanges(tasks, rangeStart, rangeEnd, orders = []) {
     const visibleEnd = range.end > rangeEnd ? rangeEnd : range.end;
     const left = axis.x(visibleStart) - axis.dayWidth / 2;
     const right = axis.x(visibleEnd) + axis.dayWidth / 2;
-    dated.push({ task, ...range, visibleStart, visibleEnd, left, width: right - left, row: dated.length, color: journeyColor(task, index) });
+    dated.push({ task, ...range, visibleStart, visibleEnd, left, width: right - left, row: dated.length, color: journeyColor(task, colors) });
   }
   return { ...axis, tasks: dated, undated };
 }
