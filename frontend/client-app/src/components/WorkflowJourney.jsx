@@ -14,6 +14,13 @@ const dayMillis = 86400000;
 export const workflowRows = ['ORDER PLACED', 'SCHEDULED (0%)', 'STARTED (1%–4%)', 'IN PROCESS (5%–99%)', 'COMPLETED (100%)'];
 const lineColors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#4d7c0f', '#1e40af', '#a16207', '#9333ea', '#0f766e', '#c2410c', '#0369a1', '#a21caf', '#15803d', '#e11d48', '#4338ca', '#78716c', '#b45309', '#047857', '#6d28d9', '#9f1239', '#0e7490', '#713f12'];
 export const currentStage = progress => !Number.isFinite(progress) ? 'Stage unavailable' : progress === 0 ? 'Scheduled' : progress >= 100 ? 'Completed' : progress >= 5 ? 'In Process' : progress >= 1 ? 'Started' : 'Stage unavailable';
+// Vertical placement of the latest saved progress, derived from the currentStage
+// thresholds so a graph band and its journey card can never disagree. 0% keeps the
+// Order Placed row, because the persisted order date is the recorded 0% evidence.
+export const stageRow = progress => {
+  const stage = currentStage(progress);
+  return stage === 'Completed' ? 4 : stage === 'In Process' ? 3 : stage === 'Started' ? 2 : 0;
+};
 
 export function taskJourneyEvents(task) {
   const milestones = (task.milestones || []).flatMap((milestone, index) => milestone.reached === true ? [{
@@ -149,7 +156,7 @@ export function journeyDateAxis(startDate, endDate) {
   return { count, dayWidth, width, x, ticks };
 }
 
-export function journeyDatePoints(events) {
+export function journeyDatePoints(events, currentRow = null) {
   const byDay = new Map();
   for (const event of events.filter(event => journeyDay(event.date)).sort((a, b) => new Date(a.date) - new Date(b.date) || a.row - b.row)) {
     const day = journeyDay(event.date);
@@ -157,7 +164,7 @@ export function journeyDatePoints(events) {
     byDay.get(day).push(event);
   }
   let furthestStage = null;
-  return [...byDay].map(([day, records], index, days) => {
+  const points = [...byDay].map(([day, records], index, days) => {
     const order = records.find(event => event.key === 'order');
     const transitions = records.filter(event => Number.isInteger(event.row));
     const representative = order || [...(transitions.length ? transitions : records)].sort((a, b) => b.row - a.row)[0];
@@ -166,6 +173,16 @@ export function journeyDatePoints(events) {
       stageKnown: furthestStage !== null, supporting: !transitions.length,
       endpoint: Boolean(order) || index === days.length - 1, isOrder: Boolean(order) };
   });
+  // The latest saved progress is the journey's present stage, so the last dated
+  // point sits on that stage's row. It never invents, moves or adds a date: the
+  // point keeps its own day, order flag and chronological position, and recorded
+  // evidence is never lowered by a later progress value.
+  const last = points[points.length - 1];
+  if (last && Number.isInteger(currentRow) && currentRow > last.row) {
+    last.fromProgress = true;
+    last.row = currentRow;
+  }
+  return points;
 }
 
 function compactJourneyLayout(series, startDate, endDate, availableWidth) {
@@ -283,7 +300,9 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
       { key: 'approval', row: null, label: 'Approval', date: task.order.approvedAt, detail: 'Recorded approval; progress at approval unavailable' },
       { key: 'completed', row: 4, label: 'Completed', date: task.order.completedAt, detail: 'Recorded order completion' },
     ] : taskJourneyEvents(task);
-    const points = journeyDatePoints(events);
+    // An order-only line has no task progress of its own, so it keeps the rows its
+    // recorded order evidence produced.
+    const points = journeyDatePoints(events, task.orderOnly ? null : stageRow(task.progress));
     return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, colors) };
   });
   return { ...compactJourneyLayout(series, startDate, endDate, mobileWidth), numbered };
@@ -422,7 +441,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. Supporting activity stays at the last recorded stage; missing stage dates stay unavailable.</p>
+    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. The last dot sits at the latest saved progress stage; missing stage dates stay unavailable.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '480px' : undefined, background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
@@ -453,7 +472,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={point.supporting ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={point.supporting && !point.fromProgress ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}`}</title>
                 <rect data-point-target="true" x={point.x - 12} y={point.y - 12} width="24" height="24" fill="transparent" />
                 <circle cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
@@ -481,7 +500,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
     </div>
       {model.numbered.filter(task => !highlight || task.id === highlight).map(task => <TaskJourney key={task.id} task={task} />)}
     </details>
-    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. Missing order dates remain unavailable, not replaced by Started. Only recorded workflow transitions move a journey upward. Supporting records stay at the last known stage, or at the base when stage history is unavailable; their position does not assert an Order or Scheduled event. The last point may be latest activity, not completion. Current progress and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. Milestones use the current saved configuration. Approval does not assert historical 0% progress.</p></details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. Missing order dates remain unavailable, not replaced by Started. Recorded workflow transitions and the latest saved progress move a journey upward; saved progress never lowers a recorded stage. Supporting records stay at the last known stage, or at the base when stage history is unavailable; their position does not assert an Order or Scheduled event. The last point may be latest activity, not completion. Current progress sets the present stage without adding a date, and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. Milestones use the current saved configuration. Approval does not assert historical 0% progress.</p></details>
   </div>;
 };
 
