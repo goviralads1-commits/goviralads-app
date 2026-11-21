@@ -16,7 +16,7 @@ const day = '2026-09-10';
 function loadView(file) {
   const source = read(file).split('export const TaskJourney =')[0]
     .replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
-  return vm.runInNewContext(`${source}\n({ journeyDay, journeyDateAxis, journeyColor, taskJourneyEvents, taskJourneyRange, numberJourneyTasks, buildWorkflowGraph });`);
+  return vm.runInNewContext(`${source}\n({ journeyDay, journeyDateAxis, journeyColor, taskJourneyEvents, taskJourneyRange, isRejectedJourney, filterRejectedJourneys, buildJourneyColors, numberJourneyTasks, buildWorkflowGraph });`);
 }
 
 for (const file of [clientView, adminView]) {
@@ -30,7 +30,7 @@ for (const file of [clientView, adminView]) {
     assert.equal(ui.journeyDay('bad-date'), null);
     assert.equal(ui.journeyDay(null), null);
   });
-  test(`${file}: real milestone dates and status meanings are preserved`, () => {
+  test(`${file}: real milestone dates are preserved and planned dates never become stage transitions`, () => {
     const task = { status: 'PENDING', startDate: day, progress: 120, milestones: [
       { name: 'Draft', percentage: 40, reached: true, reachedAt: day },
       { name: 'Reset', percentage: 90, reached: false, reachedAt: '2026-09-12' },
@@ -38,9 +38,13 @@ for (const file of [clientView, adminView]) {
     ] };
     const before = plain(task);
     const stages = ui.taskJourneyEvents(task);
-    assert.equal(stages.find(stage => stage.key === 'started').date, day);
+    // A planned startDate is not recorded evidence of a Started (1%–4%) transition.
+    assert.equal(stages.find(stage => stage.key === 'started').date, undefined);
     assert.equal(stages.find(stage => stage.key === 'process').date, undefined);
+    assert.equal(stages.find(stage => stage.key === 'scheduled').date, undefined);
     assert.equal(stages.find(stage => stage.key === 'milestone:0').date, day);
+    assert.equal(stages.find(stage => stage.key === 'milestone:1'), undefined);
+    assert.equal(stages.find(stage => stage.key === 'milestone:2').date, null);
     assert.deepEqual(task, before);
     assert.equal(ui.taskJourneyEvents({ orderContext: 'unavailable', createdAt: day })[0].date, undefined);
   });
@@ -52,7 +56,10 @@ for (const file of [clientView, adminView]) {
       completedAt: '2026-09-11T00:00:00.000Z' }));
     const model = ui.buildWorkflowGraph({ orders: [order], tasks }, day, day);
     assert.equal(model.series.length, 65); // linked orders do not create duplicate lines
-    assert.equal(model.series.flatMap(line => line.points).filter(point => point.day === day).length, 130);
+    assert.equal(model.series.flatMap(line => line.points).length, 130);
+    // One dot per journey per date: order + same-day milestone share a single point.
+    assert.equal(model.series.flatMap(line => line.points).filter(point => point.day === day).length, 65);
+    assert.ok(model.series.every(line => line.points.length === new Set(line.points.map(point => point.day)).size));
     assert.equal(model.count, 1);
     assert.equal(model.numbered.find(task => task.id === 't0').startDate, '2026-08-02');
   });
@@ -291,7 +298,10 @@ for (const mode of timelineModes) {
     for (const file of [clientView, adminView]) {
       const graph = loadView(file).buildWorkflowGraph(response.data, day, day);
       assert.equal(graph.series.filter(line => line.points.some(point => point.day === day)).length, 3);
-      assert.equal(graph.series.flatMap(line => line.points).length, 4); // two task lines share the same order, plus two milestones
+      // Planned start/end dates are never points, and a same-day order plus
+      // milestone share one dot: milestone, order-linked and multi-match only.
+      assert.equal(graph.series.flatMap(line => line.points).length, 3);
+      assert.equal(graph.series.find(line => line.task.id === 'created').points.length, 0);
     }
     assert.equal(f.queries.filter(q => q.name === 'Task').length, 2);
     assert.equal(f.queries.filter(q => q.name === 'Order').length, 1);

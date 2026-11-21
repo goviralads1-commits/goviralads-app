@@ -196,7 +196,7 @@ for (const app of ['client-app', 'admin-panel']) {
     }
   });
 
-  test(`${app}: mobile shows 7–10 readable dates, number-only starts and compact title-only ends`, () => {
+  test(`${app}: mobile shows 7–10 readable dates and number-only start and end labels`, () => {
     for (const width of [206, 220, 235, 270, 290]) for (const days of [7, 8, 10, 30]) {
       const graph = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-01', `2026-09-${String(days).padStart(2, '0')}`, width);
       const visibleDays = Math.min(days, width / graph.dayWidth);
@@ -209,12 +209,12 @@ for (const app of ['client-app', 'admin-panel']) {
       const graph = view.buildWorkflowGraph({ tasks: [task] }, '2026-09-15', '2026-09-24', width);
       const points = graph.series[0].points;
       assert.deepEqual(plain(points[0].labels.map(label => [label.kind, label.lines.join(' ')])), [['start', '1']]);
-      assert.deepEqual(plain(points.at(-1).labels.map(label => [label.kind, label.lines.join(' ')])), [['end', '1 · Campaign launch']]);
+      assert.deepEqual(plain(points.at(-1).labels.map(label => [label.kind, label.lines.join(' ')])), [['end', '1']]);
       assert.ok(points.slice(1, -1).every(point => point.labels.length === 0));
       const sameDay = { ...task, approvedAt: null, milestones: [], completedAt: task.order.createdAt };
       const one = view.buildWorkflowGraph({ tasks: [sameDay] }, '2026-09-15', '2026-09-15', width).series[0].points;
       assert.equal(one.length, 1);
-      assert.deepEqual(plain(one[0].labels.map(label => label.kind)), ['start', 'end']);
+      assert.deepEqual(plain(one[0].labels.map(label => label.kind)), ['start']);
       const placed = view.buildWorkflowGraph({ tasks: [{ ...sameDay, completedAt: null }] }, '2026-09-15', '2026-09-15', width).series[0].points[0];
       assert.deepEqual(plain(placed.labels.map(label => [label.kind, label.lines.join(' ')])), [['start', '1']]);
     }
@@ -224,7 +224,8 @@ for (const app of ['client-app', 'admin-panel']) {
     const end = html.split('data-endpoint-label="end"')[1].split('</g>')[0];
     assert.doesNotMatch(start, /Campaign|Started|In Process|Completed/);
     assert.match(start, />1<\//);
-    assert.match(end, /1 · Campaign launch/);
+    assert.doesNotMatch(end, /Campaign|pkg|Started|In Process|Completed/);
+    assert.match(end, />1<\//);
     assert.doesNotMatch(html, /textLength=|spacingAndGlyphs/);
     assert.match(end, /text-overflow:ellipsis/);
     assert.match(end, /font-size:12px/);
@@ -246,6 +247,81 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(narrowed.find(t => t.id === 'task-1').sequence, null);
     assert.equal(view.numberJourneyTasks(tasks, [], '2026-09-15', '2026-09-24').find(t => t.id === 'second').sequence, 2);
     assert.deepEqual(tasks, before);
+  });
+
+  test(`${app}: rejected orders and cancelled tasks are excluded, approved and completed work is not`, () => {
+    const orders = [
+      { id: 'order-1', orderId: 'ORD-1', createdAt: '2026-09-15', orderStatus: 'APPROVED' },
+      { id: 'rejected', orderId: 'ORD-2', createdAt: '2026-09-16', orderStatus: 'REJECTED', approvedAt: '2026-09-17' },
+      { id: 'done', orderId: 'ORD-3', createdAt: '2026-09-17', orderStatus: 'COMPLETED', completedAt: '2026-09-20' },
+    ];
+    const tasks = [
+      { ...task, id: 'ok', order: { id: 'order-1' } },
+      { ...task, id: 'on-rejected', title: 'Rejected order package', order: { id: 'rejected' }, status: 'ACTIVE', completedAt: '2026-09-19' },
+      { ...task, id: 'cancelled', title: 'Cancelled package', order: { id: 'done' }, status: 'CANCELLED' },
+      { ...task, id: 'undated', order: null, status: 'ACTIVE', completedAt: null, milestones: [] },
+      { ...task, id: 'finished', order: { id: 'done' }, status: 'COMPLETED', completedAt: '2026-09-20' },
+    ];
+    const before = plain({ tasks, orders });
+    assert.equal(view.isRejectedJourney(tasks[1], orders), true);
+    assert.equal(view.isRejectedJourney(tasks[2], orders), true);
+    assert.equal(view.isRejectedJourney({ ...tasks[1], order: { orderId: 'ORD-2' } }, orders), true);
+    // Ambiguous display codes and unavailable order context never exclude work.
+    assert.equal(view.isRejectedJourney({ ...tasks[1], order: { orderId: 'ORD-2' } }, [...orders, { id: 'twin', orderId: 'ORD-2', orderStatus: 'APPROVED' }]), false);
+    assert.equal(view.isRejectedJourney({ ...tasks[1], order: { id: 'rejected' } }, []), false);
+    assert.equal(view.isRejectedJourney(tasks[3], orders), false);
+    assert.equal(view.isRejectedJourney(tasks[4], orders), false);
+    assert.equal(view.isRejectedJourney(tasks[0], orders), false);
+    for (const width of [0, 235]) {
+      const graph = view.buildWorkflowGraph({ tasks, orders }, '2026-09-15', '2026-09-24', width);
+      assert.deepEqual(plain(graph.series.map(line => line.task.id)), ['ok', 'finished', 'undated']);
+      assert.deepEqual(plain(graph.numbered.map(item => [item.id, item.sequence])), [['ok', 1], ['finished', 2], ['undated', null]]);
+      const html = render(view.default, { timeline: { tasks, orders }, startDate: '2026-09-15', endDate: '2026-09-24' });
+      assert.doesNotMatch(html, /Rejected order package|Cancelled package|ORD-2/);
+      const ranges = calendar.buildCalendarRanges(tasks, '2026-09-15', '2026-09-24', orders);
+      assert.deepEqual(plain(ranges.tasks.map(range => [range.task.id, range.task.sequence])), [['ok', 1], ['finished', 2]]);
+      assert.deepEqual(plain(ranges.undated.map(item => item.id)), ['undated']);
+      for (const range of ranges.tasks) assert.equal(range.color, graph.series.find(line => line.task.id === range.task.id).color);
+      const days = calendar.buildCalendarDays(ranges, graph.series, '2026-09-15');
+      assert.ok(!days.some(day => day.journeys.some(item => ['on-rejected', 'cancelled'].includes(item.line.task.id))));
+      assert.deepEqual(plain(days.find(day => day.day === '2026-09-19').journeys.map(item => item.line.task.id).sort()), ['finished', 'ok']);
+    }
+    assert.deepEqual({ tasks, orders }, before);
+  });
+
+  test(`${app}: Calendar dates carry the same chronological numbers and colors as the Timeline`, () => {
+    const orders = [
+      { id: 'order-1', orderId: 'ORD-1', createdAt: '2026-09-15' },
+      { id: 'order-2', orderId: 'ORD-2', createdAt: '2026-09-16' },
+    ];
+    const tasks = [
+      { ...task, id: 'first', order: { id: 'order-1' }, approvedAt: '2026-09-15', completedAt: '2026-09-20', milestones: [] },
+      { ...task, id: 'sibling', title: 'Second package', order: { id: 'order-1' }, approvedAt: null, completedAt: '2026-09-20', milestones: [] },
+      { ...task, id: 'second', order: { id: 'order-2' }, approvedAt: '2026-09-17', completedAt: '2026-09-22', milestones: [] },
+    ];
+    const graph = view.buildWorkflowGraph({ tasks, orders }, '2026-09-15', '2026-09-24');
+    const color = sequence => graph.series.find(line => line.task.sequence === sequence).color;
+    assert.notEqual(color(1), color(2));
+    const html = render(calendar.default, { tasks, orders, rangeStart: '2026-09-15', rangeEnd: '2026-09-24' });
+    const cells = html.split('aria-label="Calendar dates"')[1].split('class="calendar-ranges"')[0];
+    assert.doesNotMatch(cells, /pkg|Campaign launch|Second package/);
+    const chips = day => [...cells.split(`data-calendar-numbers="${day}"`)[1].split('</button>')[0]
+      .matchAll(/data-calendar-order="(\d+)"[^>]*background:(#[0-9a-f]{6})/g)].map(match => [match[1], match[2]]);
+    assert.deepEqual(chips('2026-09-15'), [['1', color(1)]]);
+    assert.deepEqual(chips('2026-09-16'), [['1', color(1)], ['2', color(2)]]);
+    assert.deepEqual(chips('2026-09-20'), [['1', color(1)], ['2', color(2)]]);
+    assert.deepEqual(chips('2026-09-22'), [['2', color(2)]]);
+    assert.deepEqual(chips('2026-09-24'), []);
+    assert.match(cells.split('data-calendar-numbers="2026-09-24"')[1].split('</button>')[0], /—/);
+    // The same order keeps one number and one color across both views and filters.
+    for (const [start, end] of [['2026-09-15', '2026-09-24'], ['2026-09-16', '2026-09-22']]) {
+      const narrowed = view.buildWorkflowGraph({ tasks, orders }, start, end);
+      for (const range of calendar.buildCalendarRanges(tasks, start, end, orders).tasks) {
+        const line = narrowed.series.find(item => item.task.id === range.task.id);
+        assert.equal(range.task.sequence, line.task.sequence);
+        assert.equal(range.color, line.color);
+      }
+    }
   });
 
   test(`${app}: 25 order colors are deterministic, shared by sibling tasks and synchronized with Calendar`, () => {
@@ -594,7 +670,7 @@ test('all views keep identical workflow presentation, evidence, numbering, color
   };
   for (const file of ['WorkflowJourney.jsx', 'WorkflowCalendar.jsx']) assert.equal(read(`frontend/client-app/src/components/${file}`), read(`frontend/admin-panel/src/components/${file}`));
   const client = load('client-app', 'WorkflowJourney'), admin = load('admin-panel', 'WorkflowJourney');
-  for (const name of ['taskJourneyEvents', 'taskJourneyRange', 'resolveJourneyOrder', 'numberJourneyOrders', 'numberJourneyTasks', 'buildJourneyColors', 'journeyColor']) assert.equal(client[name].toString(), admin[name].toString(), name);
+  for (const name of ['taskJourneyEvents', 'taskJourneyRange', 'resolveJourneyOrder', 'isRejectedJourney', 'filterRejectedJourneys', 'numberJourneyOrders', 'numberJourneyTasks', 'buildJourneyColors', 'journeyColor']) assert.equal(client[name].toString(), admin[name].toString(), name);
   assert.equal(load('client-app', 'WorkflowCalendar', { './WorkflowJourney': client }).buildCalendarRanges.toString(), load('admin-panel', 'WorkflowCalendar', { './WorkflowJourney': admin }).buildCalendarRanges.toString());
 });
 
@@ -804,7 +880,9 @@ test('assigned user: authorized tasks share both views, no buyer order is recons
   const mobile = h.journey.buildWorkflowGraph(timeline.props.timeline, '2026-09-15', '2026-09-24', 235);
   assert.equal(mobile.series[0].task.sequence, null);
   assert.ok(mobile.series[0].points.every(point => !point.labels.some(label => label.kind === 'start')));
-  assert.ok(mobile.series[0].points.at(-1).labels.some(label => label.kind === 'end'));
+  // No chronological number is available, so no endpoint label is invented and
+  // the package title never appears on the graph.
+  assert.ok(mobile.series[0].points.every(point => point.labels.length === 0));
   assert.equal(mobile.series[0].color, point.color);
   assert.ok(mobile.width <= 235 * 1.4);
   h.find(h.draw(), node => node.type === 'button' && node.props.children === 'calendar').props.onClick();

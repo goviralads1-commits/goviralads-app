@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { journeyDateAxis, journeyColor, buildJourneyColors, numberJourneyTasks, taskJourneyRange, TaskJourney, buildWorkflowGraph, useJourneyDetail, JourneyDetail } from './WorkflowJourney';
+import { journeyDateAxis, journeyColor, buildJourneyColors, numberJourneyTasks, taskJourneyRange, TaskJourney, buildWorkflowGraph, filterRejectedJourneys, useJourneyDetail, JourneyDetail } from './WorkflowJourney';
 
 export function buildCalendarRanges(tasks, rangeStart, rangeEnd, orders = []) {
   const axis = journeyDateAxis(rangeStart, rangeEnd);
   const dated = [], undated = [];
   if (!axis.count) return { ...axis, tasks: dated, undated };
-  const numbered = numberJourneyTasks(tasks, orders, rangeStart, rangeEnd);
-  const colors = buildJourneyColors(tasks, orders);
+  // Same rejection rule as the Timeline graph, so both views number identically.
+  const visible = filterRejectedJourneys(tasks, orders);
+  const numbered = numberJourneyTasks(visible.tasks, visible.orders, rangeStart, rangeEnd);
+  const colors = buildJourneyColors(visible.tasks, visible.orders);
   for (const task of numbered) {
     const range = taskJourneyRange(task);
     if (!range.start || !range.end || range.end < range.start || range.start > rangeEnd || range.end < rangeStart) {
@@ -61,11 +63,19 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
     <p style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>{shortDate(rangeStart)} – {shortDate(rangeEnd)} · Tap a date to explore its packages.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div className="calendar-days" aria-label="Calendar dates">
-      {days.map(({ day, journeys }) => <button key={day} type="button" data-calendar-day={day} aria-label={`${shortDate(day)}, ${journeys.length} journeys`} aria-pressed={day === activeDate} onClick={() => chooseDay(day)} style={{ minWidth: 0, minHeight: '62px', padding: '4px 0', border: `1px solid ${day === activeDate ? '#a5b4fc' : '#e2e8f0'}`, borderRadius: '8px', background: day === activeDate ? '#eef2ff' : '#fff', color: '#334155', cursor: 'pointer' }}>
-        <span style={{ display: 'block', fontSize: '11px' }}>{new Date(day).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</span>
-        <strong style={{ display: 'block', fontSize: '14px' }}>{Number(day.slice(-2))}</strong>
-        <span style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>{journeys.length ? `${journeys.length} pkg` : '—'}</span>
-      </button>)}
+      {days.map(({ day, journeys }) => {
+        // Chronological order numbers only, in each order's Timeline color. The
+        // same number and color mark the order date and the completion date.
+        const numbers = [...new Map(journeys.filter(({ line }) => line.task.sequence)
+          .map(({ line }) => [line.task.sequence, line.color])).entries()].sort((a, b) => a[0] - b[0]);
+        return <button key={day} type="button" data-calendar-day={day} aria-label={`${shortDate(day)}, ${journeys.length} journeys`} aria-pressed={day === activeDate} onClick={() => chooseDay(day)} style={{ minWidth: 0, minHeight: '62px', padding: '4px 0', border: `1px solid ${day === activeDate ? '#a5b4fc' : '#e2e8f0'}`, borderRadius: '8px', background: day === activeDate ? '#eef2ff' : '#fff', color: '#334155', cursor: 'pointer' }}>
+          <span style={{ display: 'block', fontSize: '11px' }}>{new Date(day).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</span>
+          <strong style={{ display: 'block', fontSize: '14px' }}>{Number(day.slice(-2))}</strong>
+          <span data-calendar-numbers={day} style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', justifyContent: 'center', padding: '0 2px', fontSize: '11px', color: '#64748b' }}>
+            {numbers.length ? numbers.map(([sequence, color]) => <span key={sequence} data-calendar-order={sequence} style={{ minWidth: '16px', padding: '1px 3px', borderRadius: '9px', background: color, color: '#fff', fontWeight: 700 }}>{sequence}</span>) : '—'}
+          </span>
+        </button>;
+      })}
     </div>
     <div className="calendar-ranges" style={{ maxHeight: '360px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
       <div style={{ display: 'flex', minWidth: 0 }}>

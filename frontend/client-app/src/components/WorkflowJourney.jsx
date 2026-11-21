@@ -68,6 +68,31 @@ export function resolveJourneyOrder(task, orders = []) {
     createdAt: journeyDay(linked.createdAt) ? linked.createdAt : recorded.createdAt };
 }
 
+// A rejected order or a cancelled task is not a normal journey. Exclusion needs
+// explicit recorded status: unavailable dates or unavailable order context must
+// never hide approved, active or completed work.
+export function isRejectedJourney(task, orders = []) {
+  if (String(task?.status || '').toUpperCase() === 'CANCELLED') return true;
+  const linked = task?.order;
+  if (!linked) return false;
+  // Same exact-ID rule as resolveJourneyOrder; an ambiguous display code cannot
+  // decide rejection.
+  const matches = orders.filter(order => linked.id ? order.id === linked.id : linked.orderId && order.orderId === linked.orderId);
+  const unique = new Map(matches.map(order => [order.id || order.orderId, order]));
+  if (unique.size !== 1) return false;
+  return String([...unique.values()][0].orderStatus || '').toUpperCase() === 'REJECTED';
+}
+
+export function filterRejectedJourneys(tasks = [], orders = []) {
+  const rejected = new Set(orders
+    .filter(order => String(order.orderStatus || '').toUpperCase() === 'REJECTED')
+    .map(order => order.id || order.orderId));
+  return {
+    tasks: tasks.filter(task => !isRejectedJourney(task, orders)),
+    orders: orders.filter(order => !rejected.has(order.id || order.orderId)),
+  };
+}
+
 export function numberJourneyOrders(tasks, orders = [], startDate, endDate) {
   const available = [...orders, ...tasks.map(task => resolveJourneyOrder(task, orders)).filter(Boolean)]
     .filter(order => {
@@ -168,7 +193,8 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
         let lines = text.match(new RegExp(`.{1,${limit}}(?:\\s|$)|.{1,${limit}}`, 'gu'))?.map(part => part.trim()) || [];
         if (availableWidth) lines = [text];
         else if (lines.length > 2) lines = [lines[0], `${lines[1].slice(0, -1)}…`];
-        const size = kind === 'start' ? Math.max(10, text.length * 7) : labelWidth;
+        // Both endpoints are chronological order numbers only, never titles.
+        const size = Math.max(10, text.length * 7);
         const left = Math.max(4, Math.min(width - size - 4, point.x - size / 2));
         const levels = occupied.get(point.row) || [];
         let level = levels.findIndex(items => items.every(item => left >= item.right + 8 || left + size + 8 <= item.left));
@@ -179,10 +205,10 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
         point.labels.push({ kind, lines, x: left, width: size, offsetY: 24 + level * labelStep });
       };
       if (point.isOrder && line.task.sequence) addLabel('start', String(line.task.sequence));
-      // A single Order record has no separate end yet. Same-day later records
-      // can expose an end title at that same dot without inventing a second point.
-      if (point === line.points.at(-1) && (!point.isOrder || point.events.some(event => event.key !== 'order'))) {
-        addLabel('end', `${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title || 'Untitled task'}`.replace(/\s+/g, ' ').trim());
+      // Endpoint labels are the order number only. A journey whose last point is
+      // also its first keeps one number instead of repeating it on the same dot.
+      if (point === line.points.at(-1) && point !== line.points[0] && line.task.sequence) {
+        addLabel('end', String(line.task.sequence));
       }
     }
     const bounds = line.points.flatMap(point => [point.x - 12, point.x + 12, ...point.labels.flatMap(label => [label.x - 4, label.x + label.width + 4])]);
@@ -241,11 +267,12 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
 }
 
 export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0) {
-  const colors = buildJourneyColors(timeline?.tasks || [], timeline?.orders || []);
-  const numbered = numberJourneyTasks(timeline?.tasks || [], timeline?.orders || [], startDate, endDate);
-  const numbers = numberJourneyOrders(numbered, timeline?.orders || [], startDate, endDate);
+  const visible = filterRejectedJourneys(timeline?.tasks || [], timeline?.orders || []);
+  const colors = buildJourneyColors(visible.tasks, visible.orders);
+  const numbered = numberJourneyTasks(visible.tasks, visible.orders, startDate, endDate);
+  const numbers = numberJourneyOrders(numbered, visible.orders, startDate, endDate);
   const linked = new Set(numbered.map(task => task.order?.id || task.order?.orderId).filter(Boolean));
-  const orderOnly = [...new Map((timeline?.orders || []).map(order => [order.id || order.orderId, order])).values()]
+  const orderOnly = [...new Map(visible.orders.map(order => [order.id || order.orderId, order])).values()]
     .filter(order => !linked.has(order.id || order.orderId)).map(order => ({
       id: `order:${order.id || order.orderId}`, title: `Order ${order.orderId || ''}`, orderOnly: true,
       order, sequence: numbers.get(order.id || order.orderId), status: order.orderStatus,
