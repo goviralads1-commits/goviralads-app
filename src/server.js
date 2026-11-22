@@ -495,6 +495,25 @@ app.get('/public/branding', async (_req, res) => {
 app.get('/public/agency-info', async (_req, res) => {
   try {
     const settings = await Settings.getSettings();
+
+    // Download App footer link. Published ONLY when an admin enabled it AND saved a
+    // usable absolute http/https URL, so the public footer can never render a dead or
+    // unsafe link. Everything else about Settings (GST number, reminder templates,
+    // subscription config) stays out of this response.
+    let downloadApp = { enabled: false, url: '' };
+    const storedDownloadApp = settings.downloadApp || {};
+    const downloadAppUrl = String(storedDownloadApp.url || '').trim();
+    if (storedDownloadApp.enabled && downloadAppUrl) {
+      try {
+        const parsed = new URL(downloadAppUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          downloadApp = { enabled: true, url: downloadAppUrl };
+        }
+      } catch {
+        // Malformed URL in the database — keep the link hidden rather than ship it.
+      }
+    }
+
     res.json({
       agencyName: settings.agencyName || '',
       agencyAddress: settings.agencyAddress || '',
@@ -504,6 +523,7 @@ app.get('/public/agency-info', async (_req, res) => {
       websiteUrl: settings.websiteUrl || '',
       logoUrl: settings.logoUrl || '',
       socialLinks: settings.socialLinks || {},
+      downloadApp,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch agency info' });

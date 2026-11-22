@@ -7631,6 +7631,36 @@ router.delete('/coupons/:id', async (req, res) => {
 // ADMIN SETTINGS (Phase 5 - Invoice Branding)
 // ============================================================
 
+// "Download App" destination URL validation. Accepts an empty value (meaning "not
+// configured yet") and any absolute http/https URL; rejects everything else, so a
+// javascript:, data: or relative URL can never be published into the public footer.
+const DOWNLOAD_APP_URL_MAX_LENGTH = 2048;
+function normalizeDownloadAppUrl(value) {
+  const url = String(value === undefined || value === null ? '' : value).trim();
+  if (url === '') return { ok: true, url: '' };
+  if (url.length > DOWNLOAD_APP_URL_MAX_LENGTH) {
+    return { ok: false, error: `Download App URL must be ${DOWNLOAD_APP_URL_MAX_LENGTH} characters or fewer` };
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { ok: false, error: 'Download App URL must be a valid absolute URL starting with http:// or https://' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, error: 'Download App URL must use the http:// or https:// protocol' };
+  }
+  return { ok: true, url };
+}
+
+/** Shapes the Download App config for an admin response (full fidelity). */
+function serializeDownloadApp(settings) {
+  return {
+    enabled: Boolean(settings && settings.downloadApp && settings.downloadApp.enabled),
+    url: String((settings && settings.downloadApp && settings.downloadApp.url) || ''),
+  };
+}
+
 // GET /admin/settings - Get agency/branding settings
 router.get('/settings', async (req, res) => {
   try {
@@ -7647,6 +7677,7 @@ router.get('/settings', async (req, res) => {
         websiteUrl: settings.websiteUrl || '',
         whatsappNumber: settings.whatsappNumber || '',
         socialLinks: settings.socialLinks || { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
+        downloadApp: serializeDownloadApp(settings),
         subscriptionReminders: settings.subscriptionReminders || {
           enabled: true,
           beforeExpiry: { enabled: true, days: [7, 3, 1] },
@@ -7670,7 +7701,7 @@ router.patch('/settings', async (req, res) => {
     const _caller = await User.findById(req.user.id).populate('customRole');
     if (!_caller || _caller.customRole) return res.status(403).json({ error: 'Forbidden' });
 
-    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl, whatsappNumber, socialLinks, subscriptionReminders } = req.body || {};
+    const { agencyName, agencyAddress, supportEmail, gstNumber, logoUrl, phoneNumber, websiteUrl, whatsappNumber, socialLinks, downloadApp, subscriptionReminders } = req.body || {};
     
     const updates = {};
     if (agencyName !== undefined) updates.agencyName = agencyName.trim();
@@ -7688,6 +7719,21 @@ router.patch('/settings', async (req, res) => {
       if (socialLinks.twitter !== undefined) updates.socialLinks.twitter = String(socialLinks.twitter || '').trim();
       if (socialLinks.linkedin !== undefined) updates.socialLinks.linkedin = String(socialLinks.linkedin || '').trim();
       if (socialLinks.youtube !== undefined) updates.socialLinks.youtube = String(socialLinks.youtube || '').trim();
+    }
+
+    // Download App footer link. Written with dotted paths so a partial payload
+    // (e.g. only the toggle) can never wipe the sibling field.
+    if (downloadApp !== undefined && downloadApp !== null && typeof downloadApp === 'object') {
+      if (downloadApp.enabled !== undefined) {
+        updates['downloadApp.enabled'] = Boolean(downloadApp.enabled);
+      }
+      if (downloadApp.url !== undefined) {
+        const normalized = normalizeDownloadAppUrl(downloadApp.url);
+        if (!normalized.ok) {
+          return res.status(400).json({ error: normalized.error });
+        }
+        updates['downloadApp.url'] = normalized.url;
+      }
     }
 
     // Subscription Reminders configuration
@@ -7755,6 +7801,7 @@ router.patch('/settings', async (req, res) => {
         websiteUrl: settings.websiteUrl,
         whatsappNumber: settings.whatsappNumber || '',
         socialLinks: settings.socialLinks || {},
+        downloadApp: serializeDownloadApp(settings),
         subscriptionReminders: settings.subscriptionReminders || {
           enabled: true,
           beforeExpiry: { enabled: true, days: [7, 3, 1] },

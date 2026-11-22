@@ -60,6 +60,16 @@ const settingsSchema = new mongoose.Schema(
       youtube: { type: String, trim: true, default: '' },
     },
 
+    // "Download App" link shown in the public website footer beside the social icons.
+    // Disabled by default so nothing renders until an admin turns it on and saves a
+    // URL. The URL is intentionally free-form (http/https only) — it is never
+    // hardcoded to a store listing, so the same field serves a future Play Store URL,
+    // an APK mirror, or any other destination the business chooses.
+    downloadApp: {
+      enabled: { type: Boolean, default: false },
+      url: { type: String, trim: true, default: '' },
+    },
+
     // Subscription Renewal Reminder configuration
     subscriptionReminders: {
       enabled: { type: Boolean, default: true },

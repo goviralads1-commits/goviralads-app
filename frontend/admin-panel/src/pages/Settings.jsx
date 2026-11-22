@@ -16,6 +16,7 @@ const Settings = () => {
     websiteUrl: '',
     whatsappNumber: '',
     socialLinks: { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
+    downloadApp: { enabled: false, url: '' },
     subscriptionReminders: {
       enabled: true,
       beforeExpiry: { enabled: true, days: [7, 3, 1] },
@@ -29,6 +30,9 @@ const Settings = () => {
     },
   });
   const [previewModal, setPreviewModal] = useState(null); // { direction, type } e.g. { direction: 'before', type: 'inapp' }
+  // Last persisted Download App config, so the form can show what the public website
+  // footer is actually serving right now (not just what is typed in the input).
+  const [savedDownloadApp, setSavedDownloadApp] = useState({ enabled: false, url: '' });
 
   useEffect(() => {
     fetchSettings();
@@ -62,6 +66,10 @@ const Settings = () => {
           linkedin: res.data.settings.socialLinks?.linkedin || '',
           youtube: res.data.settings.socialLinks?.youtube || '',
         },
+        downloadApp: {
+          enabled: Boolean(res.data.settings.downloadApp?.enabled),
+          url: res.data.settings.downloadApp?.url || '',
+        },
         subscriptionReminders: {
           ...(res.data.settings.subscriptionReminders || {
             enabled: true,
@@ -76,6 +84,10 @@ const Settings = () => {
           },
         },
       });
+      setSavedDownloadApp({
+        enabled: Boolean(res.data.settings.downloadApp?.enabled),
+        url: res.data.settings.downloadApp?.url || '',
+      });
     } catch (err) {
       setToast({ type: 'error', message: 'Failed to load settings' });
     } finally {
@@ -83,13 +95,34 @@ const Settings = () => {
     }
   };
 
+  // Mirrors the backend rule in src/routes/admin.js: empty is allowed ("not configured
+  // yet"), anything else must be an absolute http/https URL.
+  const isValidDownloadAppUrl = (value) => {
+    const url = String(value || '').trim();
+    if (url === '') return true;
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
   const handleSave = async () => {
+    if (!isValidDownloadAppUrl(formData.downloadApp.url)) {
+      setToast({ type: 'error', message: 'Download App URL must start with http:// or https://' });
+      return;
+    }
     try {
       setSaving(true);
-      await api.patch('/admin/settings', formData);
+      const res = await api.patch('/admin/settings', formData);
+      setSavedDownloadApp({
+        enabled: Boolean(res.data.settings?.downloadApp?.enabled),
+        url: res.data.settings?.downloadApp?.url || '',
+      });
       setToast({ type: 'success', message: 'Settings saved successfully!' });
     } catch (err) {
-      setToast({ type: 'error', message: 'Failed to save settings' });
+      setToast({ type: 'error', message: err.response?.data?.error || 'Failed to save settings' });
     } finally {
       setSaving(false);
     }
@@ -101,6 +134,10 @@ const Settings = () => {
 
   const handleSocialChange = (platform, value) => {
     setFormData(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, [platform]: value } }));
+  };
+
+  const handleDownloadAppChange = (field, value) => {
+    setFormData(prev => ({ ...prev, downloadApp: { ...prev.downloadApp, [field]: value } }));
   };
 
   // Helper: update a message template field
@@ -390,6 +427,90 @@ const Settings = () => {
                   />
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Download App — public website footer link, managed beside the social icons */}
+          <div style={{ marginBottom: '24px', padding: '20px', backgroundColor: '#eef2ff', borderRadius: '16px', border: '2px solid #c7d2fe' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '12px', flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#3730a3', margin: 0 }}>
+                📱 Download App Link
+              </h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: formData.downloadApp.enabled ? '#15803d' : '#94a3b8' }}>
+                  {formData.downloadApp.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formData.downloadApp.enabled}
+                  onChange={(e) => handleDownloadAppChange('enabled', e.target.checked)}
+                  style={{ width: '18px', height: '18px', accentColor: '#6366f1', cursor: 'pointer' }}
+                />
+              </label>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#475569', margin: '0 0 14px 0', lineHeight: 1.6 }}>
+              Shows a Download App icon in the <strong>goviralads.com</strong> footer, beside the social
+              media links above. It appears on the website only when it is enabled <em>and</em> a valid
+              http/https URL is saved. The destination is never hardcoded — paste the Google Play
+              Store listing here once the app is published.
+            </p>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>
+                Destination URL
+              </label>
+              <input
+                type="url"
+                value={formData.downloadApp.url}
+                onChange={(e) => handleDownloadAppChange('url', e.target.value)}
+                placeholder="https://play.google.com/store/apps/details?id=com.yourcompany.app"
+                style={{
+                  width: '100%', padding: '12px 14px', fontSize: '13px',
+                  border: formData.downloadApp.url && !isValidDownloadAppUrl(formData.downloadApp.url) ? '2px solid #ef4444' : '2px solid #e2e8f0',
+                  borderRadius: '10px', outline: 'none', boxSizing: 'border-box',
+                  backgroundColor: '#fff'
+                }}
+              />
+              {formData.downloadApp.url && !isValidDownloadAppUrl(formData.downloadApp.url) && (
+                <p style={{ fontSize: '12px', color: '#dc2626', fontWeight: '600', margin: '6px 0 0 0' }}>
+                  ✗ Must be a valid URL starting with http:// or https://
+                </p>
+              )}
+              {formData.downloadApp.enabled && !formData.downloadApp.url.trim() && (
+                <p style={{ fontSize: '12px', color: '#b45309', fontWeight: '600', margin: '6px 0 0 0' }}>
+                  ⚠ Enabled with no URL — the footer link stays hidden until a URL is saved.
+                </p>
+              )}
+            </div>
+
+            {/* Currently persisted state, so the admin can see what the footer is serving */}
+            <div style={{ marginTop: '14px', padding: '12px 14px', backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <p style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px 0' }}>
+                Currently saved
+              </p>
+              {savedDownloadApp.enabled && savedDownloadApp.url ? (
+                <>
+                  <p style={{ fontSize: '13px', color: '#15803d', fontWeight: '600', margin: '0 0 2px 0' }}>
+                    ● Live — visible in the website footer
+                  </p>
+                  <a
+                    href={savedDownloadApp.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '12px', color: '#6366f1', wordBreak: 'break-all' }}
+                  >
+                    {savedDownloadApp.url}
+                  </a>
+                </>
+              ) : (
+                <p style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600', margin: 0 }}>
+                  ○ Hidden — not visible in the website footer
+                </p>
+              )}
+              <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 0 0' }}>
+                Applies to the public website after you press Save Settings.
+              </p>
             </div>
           </div>
 
