@@ -371,6 +371,39 @@ app.get('/health/media', (_req, res) => {
   }
 });
 
+// DEPLOYMENT PROVENANCE (read-only diagnostic). Reports which commit THIS running
+// process was built from and whether the admin workflow-report route and its PDF
+// engine are actually registered in it. Render injects RENDER_GIT_COMMIT_ID /
+// RENDER_GIT_BRANCH / RENDER_SERVICE_NAME at deploy time. No secret, no business
+// record and no database access is involved, and no existing route is altered.
+app.get('/health/version', (_req, res) => {
+  let analyticsRoutes = [];
+  let workflowReportEngine = false;
+  try {
+    analyticsRoutes = (adminAnalyticsRoutes.stack || [])
+      .filter(layer => layer.route && layer.route.methods && layer.route.methods.get)
+      .map(layer => layer.route.path);
+  } catch (routeErr) {
+    analyticsRoutes = [];
+  }
+  try {
+    workflowReportEngine = typeof require('./services/workflowReportPdf').generateWorkflowReportPDF === 'function'
+      && typeof require('./services/workflowReportService').buildReportModel === 'function';
+  } catch (engineErr) {
+    workflowReportEngine = false;
+  }
+  res.status(200).json({
+    commit: process.env.RENDER_GIT_COMMIT_ID || process.env.RENDER_GIT_COMMIT || null,
+    branch: process.env.RENDER_GIT_BRANCH || null,
+    service: process.env.RENDER_SERVICE_NAME || null,
+    // `analyticsRoutes` is published alongside the flag so an empty list is visibly
+    // an introspection failure rather than a missing route. Route paths only.
+    analyticsRoutes,
+    workflowReportRoute: analyticsRoutes.includes('/report/pdf'),
+    workflowReportEngine,
+  });
+});
+
 app.use('/auth', authRoutes);
 app.use('/client', clientRoutes);
 // Client-scoped Business Analytics (read-only) — mounted before the generic /admin router
