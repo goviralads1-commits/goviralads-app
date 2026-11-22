@@ -49,13 +49,21 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.deepEqual(plain(view.taskJourneyRange(zero)), plain(view.taskJourneyRange({ ...zero, progress: 1 })));
     assert.equal(view.taskJourneyEvents({ ...zero, milestones: [{ name: 'Approved at zero', percentage: 0, reached: true, reachedAt: zero.approvedAt }] }).find(e => e.key === 'scheduled').date, undefined);
     assert.equal(events.find(e => e.key === 'started').date, undefined);
+    // An unfinished journey stays active up to the reporting day; saved 100% ends it.
+    assert.equal(view.taskJourneyRange(zero).active, true);
+    assert.equal(view.taskJourneyRange(zero).terminal, false);
+    assert.equal(view.taskJourneyRange(zero).end, view.journeyDay(new Date()));
+    assert.equal(view.taskJourneyRange(zero).endLabel, 'Active today');
+    assert.equal(view.taskJourneyRange({ ...zero, progress: 100 }).terminal, true);
+    assert.equal(view.taskJourneyRange({ ...zero, progress: 100 }).active, false);
+    assert.equal(view.taskJourneyRange({ ...zero, progress: 100 }).end, '2026-09-16');
     assert.match(render(view.TaskJourney, { task: zero }), /0%.*Scheduled/);
     for (let progress = 0; progress <= 100; progress++) {
       const expected = progress === 0 ? 'Scheduled' : progress <= 4 ? 'Started' : progress <= 99 ? 'In Process' : 'Completed';
       assert.equal(view.currentStage(progress), expected);
       assert.match(render(view.TaskJourney, { task: { ...zero, progress } }), new RegExp(`${progress}%.*${expected}`));
       assert.deepEqual(plain(view.taskJourneyEvents({ ...zero, progress })), plain(events));
-      assert.deepEqual(plain(view.taskJourneyRange({ ...zero, progress })), plain(view.taskJourneyRange(zero)));
+      if (progress < 100) assert.deepEqual(plain(view.taskJourneyRange({ ...zero, progress })), plain(view.taskJourneyRange(zero)));
     }
     assert.equal(view.currentStage(100), 'Completed');
     assert.equal(view.currentStage(null), 'Stage unavailable');
@@ -86,7 +94,10 @@ for (const app of ['client-app', 'admin-panel']) {
       const events = view.taskJourneyEvents({ ...task, milestones });
       assert.equal(events.find(e => e.key === 'completed').date, task.completedAt);
       assert.ok(events.filter(e => ['scheduled', 'started', 'process'].includes(e.key)).every(e => !e.date));
-      assert.ok(events.filter(e => e.key.startsWith('milestone:')).every(e => e.row === null));
+      // A reached milestone is dated progress evidence, mapped through the same
+      // thresholds as the latest saved progress. 0% is never a stage transition.
+      assert.deepEqual(plain(events.filter(e => e.key.startsWith('milestone:')).map(e => [e.progress, e.row])),
+        plain(milestones.filter(m => m.reached === true).map(m => [m.percentage, m.percentage > 0 ? view.stageRow(m.percentage) : null])));
     }
     assert.equal(view.taskJourneyRange(task).end, '2026-09-24');
     assert.equal(view.taskJourneyRange({ ...task, completedAt: null, milestones: task.milestones.slice(0, 2) }).end, '2026-09-17');
@@ -307,12 +318,27 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.doesNotMatch(cells, /pkg|Campaign launch|Second package/);
     const chips = day => [...cells.split(`data-calendar-numbers="${day}"`)[1].split('</button>')[0]
       .matchAll(/data-calendar-order="(\d+)"[^>]*background:(#[0-9a-f]{6})/g)].map(match => [match[1], match[2]]);
+    // A numbered badge only appears on the date the order was actually created, so an
+    // ongoing journey is never counted as a newly placed package on a later date.
     assert.deepEqual(chips('2026-09-15'), [['1', color(1)]]);
-    assert.deepEqual(chips('2026-09-16'), [['1', color(1)], ['2', color(2)]]);
-    assert.deepEqual(chips('2026-09-20'), [['1', color(1)], ['2', color(2)]]);
-    assert.deepEqual(chips('2026-09-22'), [['2', color(2)]]);
+    assert.deepEqual(chips('2026-09-16'), [['2', color(2)]]);
+    assert.deepEqual(chips('2026-09-20'), []);
+    assert.deepEqual(chips('2026-09-22'), []);
     assert.deepEqual(chips('2026-09-24'), []);
     assert.match(cells.split('data-calendar-numbers="2026-09-24"')[1].split('</button>')[0], /—/);
+    // Continuation days carry one colour dot per active journey instead, and the
+    // dots stop after each journey's recorded completion date.
+    const dots = day => [...cells.split(`data-calendar-active="${day}"`)[1].split('</button>')[0]
+      .matchAll(/data-calendar-active-dot="(#[0-9a-f]{6})"/g)].map(match => match[1]);
+    assert.deepEqual(dots('2026-09-15'), []);
+    assert.deepEqual(dots('2026-09-16'), [color(1)]);
+    assert.deepEqual(dots('2026-09-19'), [color(1), color(2)]);
+    assert.deepEqual(dots('2026-09-20'), [color(1), color(2)]);
+    assert.deepEqual(dots('2026-09-21'), [color(2)]);
+    assert.deepEqual(dots('2026-09-22'), [color(2)]);
+    assert.deepEqual(dots('2026-09-23'), []);
+    assert.deepEqual(dots('2026-09-24'), []);
+    assert.match(cells.split('data-calendar-day="2026-09-19"')[1].split('</button>')[0], /0 packages placed, 2 journeys active/);
     // The same order keeps one number and one color across both views and filters.
     for (const [start, end] of [['2026-09-15', '2026-09-24'], ['2026-09-16', '2026-09-22']]) {
       const narrowed = view.buildWorkflowGraph({ tasks, orders }, start, end);
@@ -351,7 +377,11 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.ok([...colors.values()].every(color => [...colors.values()].filter(value => value === color).length === 2));
     for (const width of [220, 235, 290]) {
       const mobile = view.buildWorkflowGraph({ tasks, orders }, '2026-09-01', '2026-09-30', width);
-      assert.ok(mobile.height <= 320 + tasks.length * 120);
+      // All five stages are populated now, so the honest bound is the header plus one
+      // full lane stack per band; anything beyond that would be a layout blow-up.
+      const lanes = mobile.series.filter(line => line.inRange);
+      const stack = Math.max(0, ...lanes.map(line => line.track.offset + line.trackHeight));
+      assert.ok(mobile.height <= 48 + mobile.bands.length * (stack + 64), `height ${mobile.height} exceeds one lane stack per band`);
       assert.equal(mobile.bands.length, 5);
     }
     assert.deepEqual(tasks, before);
@@ -366,7 +396,7 @@ for (const app of ['client-app', 'admin-panel']) {
     for (const line of model.series) {
       const group = html.split(`data-journey-task="${line.task.id}"`)[1].split('data-journey-task=')[0].split('</svg>')[0];
       const circles = [...group.matchAll(/<circle\b[^>]*r="[56]"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"/g)];
-      assert.equal(circles.length, line.points.length + (line.origin ? 1 : 0));
+      assert.equal(circles.length, line.points.length + (line.origin ? 1 : 0) + line.markers.length);
       assert.ok(circles.every(match => match[2] === line.color && match[1] === line.color));
       const texts = [...group.matchAll(/<foreignObject\b[^>]*>([\s\S]*?)<\/foreignObject>/g)];
       assert.equal(texts.length, 2);
@@ -386,7 +416,15 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.equal(points[0].date, dated.order.createdAt);
       assert.equal(points.at(-1).key, 'completed');
       assert.equal(points.at(-1).date, dated.completedAt);
-      for (let i = 1; i < points.length; i++) assert.ok(new Date(points[i].date) >= new Date(points[i - 1].date));
+      assert.equal(points.at(-1).day, '2026-09-24', 'no daily point is drawn after the terminal endpoint');
+      for (let i = 1; i < points.length; i++) assert.ok(points[i].day > points[i - 1].day);
+      const recorded = points.filter(point => point.date);
+      for (let i = 1; i < recorded.length; i++) assert.ok(new Date(recorded[i].date) >= new Date(recorded[i - 1].date));
+      assert.ok(points.slice(1, -1).every(point => point.daily === true || point.events.length), 'every drawn day is either a record or a continuation');
+      assert.deepEqual(plain(points.filter(point => point.daily).map(point => point.day)),
+        ['2026-09-18', '2026-09-19', '2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23']);
+      assert.ok(points.filter(point => point.daily).every(point => point.events.length === 0 && point.date === null), 'continuation days carry no fabricated record');
+      assert.equal(points.length, 10);
       assert.ok(!points.some(point => point.date === dated.deadline));
       assert.equal(points.filter(point => point.labels.length).length, 2);
       assert.deepEqual(plain(model.numbered.map(item => item.sequence)), [1]);
@@ -438,12 +476,19 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.equal(one.points[0].date, sameDay.order.createdAt);
       assert.ok(one.points[0].events.some(event => event.key === 'completed'));
       assert.equal(one.points.filter(point => point.labels.length).length, 1);
-      // Same-date supporting activity at 0% still anchors the dot at Order Placed.
+      // Same-date evidence: the order, its approval and dated 95% milestone records
+      // all fall on one date. The dot sits on the furthest recorded stage while the
+      // earlier stages keep same-date markers, so no second date is invented and an
+      // undated latest progress value never lowers the recorded evidence.
       const anchored = view.buildWorkflowGraph({ tasks: [{ ...sameDay, progress: 0, completedAt: null }] }, '2026-09-17', '2026-09-17', 235).series[0];
       assert.equal(anchored.points.length, 1);
-      assert.equal(anchored.points[0].row, 0);
+      assert.equal(anchored.points[0].row, 3);
       assert.equal(anchored.points[0].isOrder, true);
       assert.equal(anchored.points[0].fromProgress, undefined);
+      assert.deepEqual(plain(anchored.points[0].rises), [0, 1]);
+      assert.deepEqual(plain(anchored.markers.map(marker => marker.row)), [0, 1]);
+      assert.deepEqual(plain(anchored.markers.map(marker => marker.day)), ['2026-09-17', '2026-09-17']);
+      assert.equal(anchored.anchor.row, 0);
       assert.deepEqual(busy, before);
     });
 
@@ -468,8 +513,13 @@ for (const app of ['client-app', 'admin-panel']) {
           assert.ok(points[i].x > points[i - 1].x);
           assert.ok(points[i].y <= points[i - 1].y);
         }
-        assert.equal(points.find(point => point.day === '2026-09-19').events[0].row, null);
-        assert.ok(points.find(point => point.day === '2026-09-19').supporting);
+        // A saved 50% milestone is dated In Process evidence, so the stage rises on
+        // the recorded date and every later day continues at that same stage.
+        assert.equal(points.find(point => point.day === '2026-09-19').events[0].row, 3);
+        assert.equal(points.find(point => point.day === '2026-09-19').supporting, false);
+        assert.deepEqual(plain(points.map(point => [point.day, point.row])), [
+          ['2026-09-15', 0], ['2026-09-16', 1], ['2026-09-17', 2], ['2026-09-18', 3], ['2026-09-19', 3],
+          ['2026-09-20', 3], ['2026-09-21', 3], ['2026-09-22', 3], ['2026-09-23', 3], ['2026-09-24', 4]]);
         assert.ok(points.every(point => point.day !== dated.deadline));
       }
     });
@@ -479,14 +529,17 @@ for (const app of ['client-app', 'admin-panel']) {
         const tasks = Array.from({ length: total }, (_, i) => ({ ...task, id: `dense-${i}`, title: `Package ${i} with a very long client-provided title that must not expand the graph`,
           milestones: Array.from({ length: 60 }, (_, j) => ({ name: `Milestone ${j}`, percentage: j + 1, reached: true, reachedAt: j % 2 ? '2026-09-17' : '2026-09-18' })) }));
         const model = view.buildWorkflowGraph({ tasks }, '2026-09-15', '2026-09-24', width);
-        assert.ok(model.height <= 320 + total * 120);
+        const denseLanes = model.series.filter(line => line.inRange);
+        const denseStack = Math.max(0, ...denseLanes.map(line => line.track.offset + line.trackHeight));
+        assert.ok(model.height <= 48 + model.bands.length * (denseStack + 64), `height ${model.height} exceeds one lane stack per band`);
         assert.ok(model.width <= width * 1.4, 'dense dates must not widen the mobile axis');
         if (total === 1) assert.ok(model.height < 360);
         assert.equal(model.rows.length, 5);
         for (let row = 1; row < 5; row++) assert.ok(model.rows[row] < model.rows[row - 1]);
         const rectangles = [];
         for (const line of model.series) {
-          assert.equal(line.points.length, 5);
+          // One point per calendar day from the order date to the recorded completion.
+          assert.equal(line.points.length, 10);
           assert.equal(line.points.filter(point => point.labels.length).length, 2);
           assert.equal((line.path.match(/M/g) || []).length, 1);
           for (const point of line.points) {
@@ -529,8 +582,16 @@ for (const app of ['client-app', 'admin-panel']) {
       const days = calendar.buildCalendarDays(model, graph.series, '2026-09-15');
       assert.equal(days.length, 10);
       assert.equal(days.find(day => day.day === '2026-09-17').journeys.length, 3);
-      assert.equal(days.find(day => day.day === '2026-09-19').journeys.length, 2);
-      assert.ok(days.find(day => day.day === '2026-09-19').journeys.every(item => !item.point));
+      // Every day of an unfinished journey is a continuation day: the journey is
+      // present and active, but never re-counted as a newly placed package.
+      const ongoing = days.find(day => day.day === '2026-09-19');
+      assert.equal(ongoing.journeys.length, 3);
+      assert.equal(ongoing.placed.length, 0);
+      assert.equal(ongoing.active.length, 3);
+      assert.ok(ongoing.journeys.every(item => item.point && item.point.daily === true));
+      assert.deepEqual(plain(days.find(day => day.day === '2026-09-15').placed.map(item => item.line.task.id).sort()), ['sibling', 'task-1']);
+      assert.deepEqual(plain(days.find(day => day.day === '2026-09-24').journeys.filter(item => item.completedHere).map(item => item.line.task.id).sort()), ['sibling', 'task-1', 'unknown'],
+        'the recorded completion is reported on its own date');
       const html = render(calendar.default, { tasks, rangeStart: '2026-09-15', rangeEnd: '2026-09-24' });
       assert.equal((html.match(/data-calendar-day=/g) || []).length, 10);
       const cells = html.split('aria-label="Calendar dates"')[1].split('class="calendar-ranges"')[0];
@@ -642,7 +703,15 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.match(html, /2026-09-19 · 8 tasks/);
     assert.equal(calendar.buildCalendarRanges([task], 'bad', '2026-09-24').count, 0);
     const notStarted = { ...task, progress: 0, completedAt: null, milestones: [] };
-    assert.equal(calendar.buildCalendarRanges([notStarted], '2026-09-15', '2026-09-24').tasks[0].end, '2026-09-16');
+    // An unfinished journey stays active up to the reporting day; the selected window
+    // still clips what is drawn, and saved 100% makes it terminal instead.
+    const openRange = calendar.buildCalendarRanges([notStarted], '2026-09-15', '2026-09-24').tasks[0];
+    assert.equal(openRange.latestEvidence, '2026-09-16');
+    assert.equal(openRange.end, view.journeyDay(new Date()));
+    assert.equal(openRange.endLabel, 'Active today');
+    assert.equal(openRange.visibleEnd, '2026-09-24');
+    assert.equal(view.taskJourneyRange({ ...notStarted, progress: 100 }).terminal, true);
+    assert.equal(calendar.buildCalendarRanges([{ ...notStarted, progress: 100 }], '2026-09-15', '2026-09-24').tasks[0].end, '2026-09-16');
     assert.equal(calendar.buildCalendarRanges([{ ...notStarted, order: null }], '2026-09-15', '2026-09-24').undated.length, 1);
   });
 
@@ -669,70 +738,196 @@ for (const app of ['client-app', 'admin-panel']) {
     assert.equal(taskWithoutDate.order.createdAt, undefined);
   });
 
-  test(`${app}: same-date progress moves the journey to its saved stage without moving its date`, () => {
+  test(`${app}: an unfinished journey advances one calendar day at a time and stops at 100%`, () => {
     const placed = '2026-09-15T09:00:00Z';
     const order = { id: 'order-same', orderId: 'ORD-SAME', createdAt: placed };
     const base = { ...task, id: 'same-day', progress: 0, completedAt: null, approvedAt: null, milestones: [], order };
     const orders = [order];
-    const untouched = view.buildWorkflowGraph({ tasks: [base], orders }, '2026-09-15', '2026-09-24').series[0];
+    const window = ['2026-09-15', '2026-09-24'];
+    const days10 = Array.from({ length: 10 }, (_, i) => `2026-09-${15 + i}`);
+    const untouched = view.buildWorkflowGraph({ tasks: [base], orders }, ...window).series[0];
     assert.deepEqual(plain([0, 1, 4, 5, 99, 100, null, undefined].map(view.stageRow)), [0, 2, 2, 3, 3, 4, 0, 0]);
-    // The reported defect: an order placed at 0% and updated to 10% on the same
-    // calendar date must leave Order Placed and reach In Process on that date.
+    // HORIZONTAL MOVEMENT: one point per active journey per calendar day. The extra
+    // days carry no events and no timestamp, so nothing is fabricated.
+    assert.deepEqual(plain(untouched.points.map(point => point.day)), days10);
+    assert.equal(untouched.points[0].date, placed);
+    assert.equal(untouched.points[0].isOrder, true);
+    assert.ok(untouched.points.slice(1).every(point => point.daily === true && point.date === null && point.events.length === 0));
+    // VERTICAL MOVEMENT: the recorded order date keeps its own stage, and the latest
+    // saved progress is the present stage on the reporting date only.
     for (const [progress, row] of [[0, 0], [1, 2], [4, 2], [5, 3], [10, 3], [99, 3], [100, 4]]) {
-      const line = view.buildWorkflowGraph({ tasks: [{ ...base, progress }], orders }, '2026-09-15', '2026-09-24').series[0];
-      assert.equal(line.points.length, 1, 'a saved progress update adds no dot and no date');
-      const point = line.points[0];
-      assert.equal(point.day, '2026-09-15');
-      assert.equal(point.date, placed, 'the original Order Placed timestamp is unchanged');
-      assert.equal(point.isOrder, true);
-      assert.equal(point.row, row);
-      assert.equal(point.x, untouched.points[0].x, 'the journey never shifts horizontally');
-      assert.equal(point.fromProgress, row > 0 ? true : undefined);
+      const terminal = progress === 100;
+      const line = view.buildWorkflowGraph({ tasks: [{ ...base, progress }], orders }, ...window).series[0];
+      assert.equal(line.points.length, terminal ? 1 : 10, 'saved 100% is terminal, so no later daily point is drawn');
+      const first = line.points[0];
+      assert.equal(first.day, '2026-09-15');
+      assert.equal(first.date, placed, 'the original Order Placed timestamp is unchanged');
+      assert.equal(first.isOrder, true);
+      assert.equal(first.x, untouched.points[0].x, 'the journey never shifts horizontally');
       assert.equal(line.task.sequence, 1, 'the chronological journey number is unchanged');
       assert.equal(line.color, untouched.color, 'the journey colour is unchanged');
-      assert.deepEqual(plain(point.labels.map(label => [label.kind, label.lines.join(' ')])), [['start', '1']]);
+      assert.deepEqual(plain(first.labels.map(label => [label.kind, label.lines.join(' ')])), [['start', '1']]);
+      const last = line.points.at(-1);
+      assert.equal(last.row, row, 'the present stage sits on the reporting date');
+      assert.equal(last.fromProgress, row > 0 ? true : undefined);
+      if (!terminal) {
+        assert.equal(first.row, 0, 'undated progress never moves the order date off Order Placed');
+        assert.equal(last.day, '2026-09-24');
+        assert.deepEqual(plain(last.labels.map(label => [label.kind, label.lines.join(' ')])), [['end', '1']]);
+      }
     }
     const html = render(view.default, { timeline: { tasks: [{ ...base, progress: 10 }], orders }, startDate: '2026-09-15', endDate: '2026-09-24' });
-    assert.match(html, /data-stage="IN PROCESS \(5%–99%\)" data-date="2026-09-15"/);
+    assert.match(html, /data-stage="ORDER PLACED" data-date="2026-09-15"/);
+    assert.match(html, /data-daily="true" data-stage="IN PROCESS \(5%–99%\)" data-date="2026-09-24"/);
     assert.match(html, /10%.*In Process/);
     assert.doesNotMatch(html, /data-stage="SUPPORTING ACTIVITY"/);
     // A journey spanning several dates keeps every earlier dot where its recorded
-    // evidence put it; only the last dot carries the present stage.
+    // evidence put it; only the reporting date carries the present stage.
     const spanning = { ...base, progress: 10, approvedAt: '2026-09-16',
       milestones: [{ name: 'Draft', percentage: 10, reached: true, reachedAt: '2026-09-18' }] };
-    const span = view.buildWorkflowGraph({ tasks: [spanning], orders }, '2026-09-15', '2026-09-24').series[0];
-    assert.deepEqual(plain(span.points.map(point => [point.day, point.row])), [['2026-09-15', 0], ['2026-09-16', 0], ['2026-09-18', 3]]);
+    const span = view.buildWorkflowGraph({ tasks: [spanning], orders }, ...window).series[0];
+    assert.deepEqual(plain(span.points.map(point => [point.day, point.row])), [
+      ['2026-09-15', 0], ['2026-09-16', 1], ['2026-09-17', 1], ['2026-09-18', 3], ['2026-09-19', 3],
+      ['2026-09-20', 3], ['2026-09-21', 3], ['2026-09-22', 3], ['2026-09-23', 3], ['2026-09-24', 3]]);
     for (let i = 1; i < span.points.length; i++) {
       assert.ok(span.points[i].y <= span.points[i - 1].y, 'dated stages never zig-zag downward');
       assert.ok(span.points[i].x > span.points[i - 1].x);
     }
-    assert.equal(span.points.filter(point => point.fromProgress).length, 1);
-    // A recorded completion is never lowered by a smaller saved progress value.
-    const done = view.buildWorkflowGraph({ tasks: [{ ...base, progress: 60, completedAt: '2026-09-20' }], orders }, '2026-09-15', '2026-09-24').series[0];
-    assert.deepEqual(plain(done.points.map(point => [point.day, point.row])), [['2026-09-15', 0], ['2026-09-20', 4]]);
+    assert.equal(span.points.filter(point => point.fromProgress).length, 0, 'a dated 10% record already proves In Process');
+    // A recorded completion is never lowered by a smaller saved progress value, and
+    // no daily point follows it.
+    const done = view.buildWorkflowGraph({ tasks: [{ ...base, progress: 60, completedAt: '2026-09-20' }], orders }, ...window).series[0];
+    assert.deepEqual(plain(done.points.map(point => [point.day, point.row])), [
+      ['2026-09-15', 0], ['2026-09-16', 0], ['2026-09-17', 0], ['2026-09-18', 0], ['2026-09-19', 0], ['2026-09-20', 4]]);
     assert.equal(done.points.at(-1).fromProgress, undefined);
-    // Order-only journeys carry no task progress, so their rows stay as recorded.
-    const orderOnly = view.buildWorkflowGraph({ tasks: [], orders: [{ ...order, orderStatus: 'APPROVED', approvedAt: '2026-09-16' }] }, '2026-09-15', '2026-09-24');
-    assert.deepEqual(plain(orderOnly.series[0].points.map(point => point.row)), [0, 0]);
-    // Calendar bounds come from recorded dates only, so a progress change can
-    // never move a range end, and the mobile layout keeps its five bands.
+    // Order-only journeys carry no task progress, so their rows stay as recorded and
+    // they continue daily at the last recorded stage.
+    const orderOnly = view.buildWorkflowGraph({ tasks: [], orders: [{ ...order, orderStatus: 'APPROVED', approvedAt: '2026-09-16' }] }, ...window);
+    assert.deepEqual(plain(orderOnly.series[0].points.map(point => point.row)), [0, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    // Calendar bounds come from recorded dates plus the reporting day, so a progress
+    // change can never move a range end, and the mobile layout keeps its five bands.
     assert.deepEqual(plain(view.taskJourneyRange({ ...base, progress: 0 })), plain(view.taskJourneyRange({ ...base, progress: 10 })));
-    assert.equal(calendar.buildCalendarRanges([{ ...base, progress: 10 }], '2026-09-15', '2026-09-24', orders).tasks[0].end, '2026-09-15');
+    assert.equal(calendar.buildCalendarRanges([{ ...base, progress: 10 }], ...window, orders).tasks[0].visibleEnd, '2026-09-24');
     for (const width of [0, 206, 235, 290]) {
-      const mobile = view.buildWorkflowGraph({ tasks: [{ ...base, progress: 10 }], orders }, '2026-09-15', '2026-09-24', width);
-      const point = mobile.series[0].points[0];
+      const mobile = view.buildWorkflowGraph({ tasks: [{ ...base, progress: 10 }], orders }, ...window, width);
+      const point = mobile.series[0].points.at(-1);
       assert.equal(mobile.bands.length, 5);
       assert.equal(mobile.rows.length, 5);
       assert.equal(point.row, 3);
       assert.ok(point.y >= mobile.bands[3].top && point.y <= mobile.bands[3].top + mobile.bands[3].height);
-      // The connector starts on the recorded Order Placed row of the same date and
-      // terminates exactly on the lifted dot.
-      assert.equal(mobile.series[0].origin.row, 0);
-      assert.equal(mobile.series[0].origin.x, point.x);
-      assert.ok(mobile.series[0].origin.y >= mobile.bands[0].top && mobile.series[0].origin.y <= mobile.bands[0].top + mobile.bands[0].height);
-      assert.ok(mobile.series[0].path.endsWith(`${point.x},${point.y}`), 'the connector terminates on its dot');
+      // A multi-day journey draws its own recorded dots, so it needs no origin anchor;
+      // the connector still rises onto the present stage and terminates on the dot.
+      assert.equal(mobile.series[0].origin, null);
+      const lastToken = mobile.series[0].path.match(/[MLHV]-?[\d.]+(?:,-?[\d.]+)?/g).at(-1);
+      assert.ok([`V${point.y}`, `H${point.x}`, `L${point.x},${point.y}`].includes(lastToken), 'the connector terminates on its dot');
     }
     assert.deepEqual(plain(base), plain({ ...task, id: 'same-day', progress: 0, completedAt: null, approvedAt: null, milestones: [], order }));
+  });
+
+  test(`${app}: the required daily journey model holds on the live reporting day`, () => {
+    // Every date is derived from the actual reporting day, so these assertions stay
+    // true whenever the suite runs and never hard-code a "today".
+    const reporting = view.journeyDay(new Date());
+    const shift = offset => new Date(new Date(`${reporting}T00:00:00Z`).getTime() + offset * 86400000).toISOString().slice(0, 10);
+    const [d2, d1, d0] = [shift(-2), shift(-1), reporting];
+    const window = [d2, d0];
+    const rows = line => plain(line.points.map(point => [point.day, point.row]));
+    const journey = (id, extra = {}, orderExtra = {}) => ({ ...task, progress: 0, approvedAt: null, milestones: [], completedAt: null,
+      ...extra, id, title: `Package ${id}`,
+      order: { id: `order-${id}`, orderId: `ORD-${id}`, createdAt: `${d2}T09:00:00Z`, ...orderExtra } });
+
+    // 1. An order placed yesterday that is still unapproved today keeps advancing at
+    //    Order Placed, because no approval or progress evidence exists yet.
+    const pending = { id: 'order-pending', orderId: 'ORD-PENDING', createdAt: `${d1}T09:00:00Z` };
+    const unapproved = view.buildWorkflowGraph({ tasks: [], orders: [pending] }, d1, d0).series[0];
+    assert.deepEqual(rows(unapproved), [[d1, 0], [d0, 0]]);
+    assert.equal(unapproved.points.at(-1).daily, true, 'the journey continues to the reporting day without a new record');
+    assert.deepEqual(plain(view.taskJourneyRange(journey('pending-range', {}, { createdAt: pending.createdAt, id: pending.id, orderId: pending.orderId }))),
+      plain({ start: d1, end: d0, completed: false, terminal: false, active: true, latestEvidence: d1,
+        endLabel: 'Active today', missingOrder: false }));
+
+    // 2. Approved at 0% yesterday, 10% recorded yesterday, unchanged today: the stage
+    //    rises on the recorded date and today continues at that same saved stage.
+    const approved = journey('approved', { progress: 10, approvedAt: `${d1}T10:00:00Z`,
+      milestones: [{ name: 'Work Started', percentage: 10, reached: true, reachedAt: `${d1}T11:00:00Z` }] },
+    { approvedAt: `${d1}T10:00:00Z` });
+    const second = view.buildWorkflowGraph({ tasks: [approved] }, ...window).series[0];
+    assert.deepEqual(rows(second), [[d2, 0], [d1, 3], [d0, 3]]);
+    assert.deepEqual(plain(second.points[1].rises), [1], 'the recorded approval keeps its own marker on its own date');
+    assert.deepEqual(plain(second.markers.map(marker => [marker.day, marker.row])), [[d1, 1]]);
+    assert.equal(second.points.at(-1).daily, true);
+    assert.equal(second.points.at(-1).events.length, 0, 'a continuation day carries no fabricated record');
+    assert.deepEqual(plain(view.taskJourneyRange(approved)),
+      plain({ start: d2, end: d0, completed: false, terminal: false, active: true, latestEvidence: d1,
+        endLabel: 'Active today', missingOrder: false }));
+
+    // 3. Same-day placement and approval, then 4% rising to 5%: both recorded stages
+    //    share the placement date and the Started→In Process rise happens on its date.
+    const threshold = journey('threshold', { progress: 5, approvedAt: `${d2}T10:00:00Z`,
+      milestones: [{ name: 'Almost started', percentage: 4, reached: true, reachedAt: `${d2}T11:00:00Z` },
+        { name: 'Work Started', percentage: 5, reached: true, reachedAt: `${d1}T11:00:00Z` }] },
+    { approvedAt: `${d2}T10:00:00Z` });
+    const third = view.buildWorkflowGraph({ tasks: [threshold] }, ...window).series[0];
+    assert.deepEqual(rows(third), [[d2, 2], [d1, 3], [d0, 3]]);
+    assert.equal(third.points.length, new Set(third.points.map(point => point.day)).size, 'no second date is invented');
+    assert.deepEqual(plain(third.markers.map(marker => [marker.day, marker.row])), [[d2, 0], [d2, 1]]);
+    assert.equal(third.anchor.row, 0, 'the connector still starts on the recorded Order Placed row');
+
+    // 4. 99% to 100%: the terminal endpoint sits on the actual completion date.
+    const closing = journey('closing', { progress: 100, approvedAt: `${d2}T10:00:00Z`,
+      milestones: [{ name: 'Almost ready', percentage: 99, reached: true, reachedAt: `${d1}T11:00:00Z` },
+        { name: 'Delivered', percentage: 100, reached: true, reachedAt: `${d0}T09:00:00Z` }] },
+    { approvedAt: `${d2}T10:00:00Z` });
+    assert.deepEqual(rows(view.buildWorkflowGraph({ tasks: [closing] }, ...window).series[0]), [[d2, 1], [d1, 3], [d0, 4]]);
+
+    // 5. Completed yesterday: nothing at all is drawn today or later.
+    const finished = journey('finished', { progress: 100, approvedAt: `${d2}T10:00:00Z`, completedAt: `${d1}T18:00:00Z`,
+      milestones: [{ name: 'Delivered', percentage: 100, reached: true, reachedAt: `${d1}T18:00:00Z` }] },
+    { createdAt: `${d2}T08:30:00Z`, approvedAt: `${d2}T10:00:00Z` });
+    const fifth = view.buildWorkflowGraph({ tasks: [finished] }, ...window).series[0];
+    assert.deepEqual(rows(fifth), [[d2, 1], [d1, 4]]);
+    assert.ok(!fifth.points.some(point => point.day >= d0), 'no daily point follows the terminal endpoint');
+    const finishedRange = view.taskJourneyRange(finished);
+    assert.deepEqual(plain([finishedRange.end, finishedRange.completed, finishedRange.terminal, finishedRange.active, finishedRange.endLabel]),
+      [d1, true, true, false, 'Completed']);
+
+    // 6. Four concurrent journeys keep separate colours, numbers and daily points.
+    const concurrent = [0, 1, 2, 3].map(i => journey(`concurrent-${i}`,
+      { progress: 10 + i, approvedAt: `${d1}T10:0${i}:00Z`,
+        milestones: [{ name: 'Work Started', percentage: 10 + i, reached: true, reachedAt: `${d1}T11:0${i}:00Z` }] },
+      { createdAt: `${d2}T09:0${i}:00Z`, approvedAt: `${d1}T10:0${i}:00Z` }));
+    const four = view.buildWorkflowGraph({ tasks: concurrent }, ...window);
+    assert.equal(new Set(four.series.map(line => line.color)).size, 4);
+    assert.deepEqual(plain(four.numbered.map(line => [line.id, line.sequence])), plain(concurrent.map((item, i) => [item.id, i + 1])));
+    for (const line of four.series) {
+      assert.deepEqual(rows(line), [[d2, 0], [d1, 3], [d0, 3]]);
+      assert.equal(line.points.at(-1).daily, true);
+      const last = line.points.at(-1);
+      const lastToken = line.path.match(/[MLHV]-?[\d.]+(?:,-?[\d.]+)?/g).at(-1);
+      assert.ok([`V${last.y}`, `H${last.x}`, `L${last.x},${last.y}`].includes(lastToken), 'each connector terminates on its own dot');
+    }
+
+    // 7. The Calendar reports continuation without inflating the package count, and
+    //    agrees with the Timeline on every journey range.
+    const calendarTasks = [...concurrent, finished];
+    const model = calendar.buildCalendarRanges(calendarTasks, ...window);
+    const graph = view.buildWorkflowGraph({ tasks: calendarTasks }, ...window);
+    const days = calendar.buildCalendarDays(model, graph.series, d2);
+    for (const line of graph.series) {
+      const range = model.tasks.find(item => item.task.id === line.task.id);
+      assert.deepEqual(plain([range.start, range.end]), plain([line.points[0].day, line.points.at(-1).day]),
+        'Timeline and Calendar use the same journey date range');
+    }
+    assert.deepEqual(plain(days.map(day => [day.day, day.placed.length, day.active.length])), [[d2, 5, 0], [d1, 0, 5], [d0, 0, 4]]);
+    assert.deepEqual(plain(days[2].journeys.map(item => item.line.task.id)), plain(concurrent.map(item => item.id)),
+      'a completed journey stops appearing after its final date');
+    assert.deepEqual(plain(days[1].journeys.filter(item => item.completedHere).map(item => item.line.task.id)), ['finished']);
+    assert.ok(days[1].journeys.every(item => item.point), 'every active journey has a recorded point on each active day');
+    const html = render(calendar.default, { tasks: calendarTasks, rangeStart: d2, rangeEnd: d0 });
+    assert.equal((html.match(/data-calendar-order="/g) || []).length, 5, 'order numbers appear only on the true placement date');
+    assert.match(html, new RegExp(`data-calendar-day="${d2}" aria-label="[^"]*5 packages placed, 0 journeys active"`));
+    assert.match(html, new RegExp(`data-calendar-day="${d1}" aria-label="[^"]*0 packages placed, 5 journeys active"`));
+    assert.match(html, new RegExp(`data-calendar-day="${d0}" aria-label="[^"]*0 packages placed, 4 journeys active"`));
   });
 
   test(`${app}: same-day connectors rise from the recorded row and end exactly on their dot`, () => {
@@ -1048,7 +1243,9 @@ test('assigned user: authorized tasks share both views, no buyer order is recons
   assert.equal(timeline.props.timeline.tasks[0].order, null);
   const point = h.journey.buildWorkflowGraph(timeline.props.timeline, '2026-09-01', '2026-09-30').series[0];
   assert.ok(point.points.every(p => !p.isOrder));
-  assert.equal(point.points[0].stageKnown, false);
+  // The recorded approval date is dated SCHEDULED evidence even without a buyer order.
+  assert.equal(point.points[0].stageKnown, true);
+  assert.equal(point.points[0].row, 1);
   const mobile = h.journey.buildWorkflowGraph(timeline.props.timeline, '2026-09-15', '2026-09-24', 235);
   assert.equal(mobile.series[0].task.sequence, null);
   assert.ok(mobile.series[0].points.every(point => !point.labels.some(label => label.kind === 'start')));

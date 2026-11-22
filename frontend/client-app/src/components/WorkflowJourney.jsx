@@ -22,21 +22,33 @@ export const stageRow = progress => {
   return stage === 'Completed' ? 4 : stage === 'In Process' ? 3 : stage === 'Started' ? 2 : 0;
 };
 
+// Saved milestone records are the only persisted progress-transition timestamps:
+// progressService writes reachedAt the first time saved progress crosses that
+// milestone percentage, and clears it again if progress drops back. They are the
+// dated Started / In Process evidence, mapped through the same thresholds as the
+// latest saved progress. A milestone at 0%, or without a usable percentage, is not
+// a stage transition: 0% is only dated by the recorded order/approval evidence.
+const milestoneRow = percentage => (Number.isFinite(percentage) && percentage > 0 ? stageRow(percentage) : null);
+
 export function taskJourneyEvents(task) {
   const milestones = (task.milestones || []).flatMap((milestone, index) => milestone.reached === true ? [{
-    key: `milestone:${index}`, row: null, label: milestone.name || `Milestone ${index + 1}`, date: milestone.reachedAt,
-    detail: 'Saved milestone evidence. Configuration can change; this is not a permanent workflow transition.', progress: milestone.percentage,
+    key: `milestone:${index}`, row: milestoneRow(milestone.percentage), label: milestone.name || `Milestone ${index + 1}`, date: milestone.reachedAt,
+    detail: 'Saved progress evidence: this percentage was first recorded reached on this date. Configuration can change.', progress: milestone.percentage,
   }] : []);
-  // The authorized payload has no durable zero/first-progress transition timestamps.
-  // Mutable milestones and today's progress must never supply those dates.
+  // The authorized payload persists no separate first-progress timestamp, so the
+  // recorded approval date is the dated SCHEDULED (0%) stage and saved milestones
+  // are the only dated progress evidence. Mutable plans never supply those dates.
+  // The backend already resolves approvedAt as order.approvedAt or the recorded
+  // TASK_APPROVED notification, so no second approval source is substituted here.
   const completed = journeyDay(task.completedAt) ? task.completedAt : null;
   return [
     { key: 'order', row: 0, label: 'Order placed', date: task.order?.createdAt, detail: task.order?.orderId || 'Order date unavailable' },
-    { key: 'approval', row: null, label: 'Approval', date: task.approvedAt,
-      detail: 'Recorded approval date. Progress at approval was not persisted; this is not a dated 0% transition.' },
-    { key: 'scheduled', row: 1, label: 'Scheduled (0%)', date: undefined, detail: 'Date unavailable' },
-    { key: 'started', row: 2, label: 'Started (1%–4%)', date: undefined, detail: 'First-progress date unavailable' },
-    { key: 'process', row: 3, label: 'In Process (5%–99%)', date: undefined, detail: 'First ≥5% date unavailable' },
+    { key: 'approval', row: 1, label: 'Scheduled (0%) · approval', date: task.approvedAt,
+      detail: 'Recorded approval date. The order became an approved task at 0% on this date.' },
+    { key: 'scheduled', row: 1, label: 'Scheduled (0%) progress record', date: undefined,
+      detail: 'No separate saved 0% progress timestamp; the recorded approval date is the SCHEDULED evidence.' },
+    { key: 'started', row: 2, label: 'Started (1%–4%)', date: undefined, detail: 'First-progress date unavailable unless a saved milestone records it' },
+    { key: 'process', row: 3, label: 'In Process (5%–99%)', date: undefined, detail: 'First ≥5% date unavailable unless a saved milestone records it' },
     ...milestones,
     { key: 'completed', row: 4, label: 'Completed', date: completed,
       detail: completed ? 'Recorded task completion.' : 'Actual completion date unavailable' },
@@ -44,7 +56,7 @@ export function taskJourneyEvents(task) {
 }
 
 // Both views share the same available dated evidence, never planned start/end dates.
-export function taskJourneyRange(task) {
+export function taskJourneyRange(task, today = journeyDay(new Date())) {
   const events = taskJourneyEvents(task);
   const dates = events.map(event => journeyDay(event.date)).filter(Boolean).sort();
   const orderDate = journeyDay(task.order?.createdAt);
@@ -54,11 +66,23 @@ export function taskJourneyRange(task) {
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0]?.date;
   const endEvidence = [task.completedAt, milestoneEnd].filter(journeyDay).sort((a, b) => new Date(a) - new Date(b))[0];
   const completed = Boolean(journeyDay(task.completedAt) && endEvidence === task.completedAt);
+  const latestEvidence = journeyDay(endEvidence) || dates[dates.length - 1] || null;
+  // 100% is the terminal endpoint: a recorded completion, saved 100% evidence or the
+  // latest saved progress each stop the journey. Nothing is ever drawn after it.
+  const terminal = completed || Boolean(journeyDay(milestoneEnd)) || stageRow(task.progress) === 4;
+  // An unfinished journey advances one calendar day at a time up to the reporting
+  // day, so its range never stops at the last recorded event and never projects a
+  // future date. The reporting day is the same UTC day key the graph uses.
+  const active = !terminal && Boolean(orderDate && today && today > orderDate);
   return {
     start: orderDate,
-    end: journeyDay(endEvidence) || dates[dates.length - 1] || null,
+    end: active && today > latestEvidence ? today : latestEvidence,
     completed,
-    endLabel: completed ? 'Completed' : journeyDay(milestoneEnd) ? 'Saved 100% evidence' : 'Latest evidence',
+    terminal,
+    active,
+    latestEvidence,
+    endLabel: completed ? 'Completed' : journeyDay(milestoneEnd) ? 'Saved 100% evidence'
+      : terminal ? 'Latest saved progress 100%' : active ? 'Active today' : 'Latest evidence',
     missingOrder: !orderDate,
   };
 }
@@ -156,21 +180,62 @@ export function journeyDateAxis(startDate, endDate) {
   return { count, dayWidth, width, x, ticks };
 }
 
-export function journeyDatePoints(events, currentRow = null) {
+// HORIZONTAL MOVEMENT — one point per active journey per calendar day. `span`
+// ({ start, end, reportingDay }) enables the daily continuation; without it the
+// function stays an evidence-only listing and never invents a day.
+export function journeyDatePoints(events, currentRow = null, span = null) {
   const byDay = new Map();
   for (const event of events.filter(event => journeyDay(event.date)).sort((a, b) => new Date(a.date) - new Date(b.date) || a.row - b.row)) {
     const day = journeyDay(event.date);
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push(event);
   }
+  const evidenceDays = [...byDay.keys()].sort();
+  if (span && evidenceDays.length) {
+    // The earliest terminal record ends the journey: a saved completion, or saved
+    // 100% milestone evidence. Saved 100% progress is terminal too, so no daily
+    // point is ever generated after the journey reached its endpoint.
+    const terminalDay = evidenceDays.find(day => byDay.get(day).some(event => event.key === 'completed'
+      || (event.key.startsWith('milestone:') && Number.isFinite(event.progress) && event.progress >= 100)));
+    const terminal = Boolean(terminalDay) || (Number.isInteger(currentRow) && currentRow >= 4);
+    const limit = [journeyDay(span.end), journeyDay(span.reportingDay), terminalDay || (terminal ? evidenceDays[evidenceDays.length - 1] : null)]
+      .filter(Boolean).sort()[0];
+    const from = journeyDay(span.start) && span.start > evidenceDays[0] ? journeyDay(span.start) : evidenceDays[0];
+    // Never a future date, never past the terminal endpoint, never a fabricated
+    // record: the extra days carry no events at all.
+    for (let time = new Date(from).getTime(); limit && limit > from; time += dayMillis) {
+      const day = new Date(time).toISOString().slice(0, 10);
+      if (day > limit) break;
+      if (!byDay.has(day)) byDay.set(day, []);
+    }
+  }
+  const days = [...byDay.keys()].sort();
   let furthestStage = null;
-  const points = [...byDay].map(([day, records], index, days) => {
+  const points = days.map((day, index) => {
+    const records = byDay.get(day);
+    if (!records.length) {
+      // A calendar day without a new record still advances the journey and keeps
+      // the latest saved stage, so the line never stops at the last update date.
+      return { key: 'daily', label: 'Journey active', date: null, day, events: [], row: furthestStage ?? 0,
+        stageKnown: furthestStage !== null, supporting: false, daily: true, rises: [],
+        detail: 'No new record on this date · the journey continues at its latest saved stage.',
+        endpoint: index === days.length - 1, isOrder: false };
+    }
     const order = records.find(event => event.key === 'order');
     const transitions = records.filter(event => Number.isInteger(event.row));
-    const representative = order || [...(transitions.length ? transitions : records)].sort((a, b) => b.row - a.row)[0];
+    // A recorded completion outranks saved percentage evidence on the same date, so
+    // the terminal dot always represents Completed rather than a 100% milestone.
+    const rank = event => (event.key === 'completed' ? 0 : event.key.startsWith('milestone:') ? 2 : 1);
+    const representative = order || [...(transitions.length ? transitions : records)]
+      .sort((a, b) => b.row - a.row || rank(a) - rank(b))[0];
     for (const event of transitions) furthestStage = Math.max(furthestStage ?? 0, event.row);
-    return { ...representative, day, events: records, row: order ? 0 : furthestStage ?? 0,
-      stageKnown: furthestStage !== null, supporting: !transitions.length,
+    const row = furthestStage ?? 0;
+    // Recorded stages sharing this date all stay visible: the dot sits on the
+    // furthest one and the earlier ones become same-date start markers, so a
+    // same-day order and approval never invent a second date.
+    const rises = [...new Set(transitions.map(event => event.row).filter(value => value < row))].sort((a, b) => a - b);
+    return { ...representative, day, events: records, row,
+      stageKnown: furthestStage !== null, supporting: !transitions.length, rises,
       endpoint: Boolean(order) || index === days.length - 1, isOrder: Boolean(order) };
   });
   // The latest saved progress is the journey's present stage, so the last dated
@@ -239,6 +304,12 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
     // starts there on the same date and shows the vertical stage movement.
     const first = line.points[0];
     line.origin = line.points.length === 1 && first.fromProgress ? { row: first.baseRow, x: first.x, day: first.day } : null;
+    // Same-date recorded stages below the dot keep their own marker, so both stages
+    // are represented on that one date without inventing another day.
+    line.markers = line.points.flatMap(point => (point.rises || []).map(row => ({ row, x: point.x, day: point.day })));
+    const anchors = [...line.markers, ...(line.origin ? [line.origin] : [])]
+      .filter(marker => first && marker.day === first.day && marker.row !== first.row);
+    line.anchor = anchors.length ? anchors.reduce((lowest, marker) => (marker.row < lowest.row ? marker : lowest)) : null;
   }
   // Labels never widen dates. Reuse vertical tracks only for disjoint journeys;
   // concurrent journeys keep distinct dot/connector lanes, including siblings.
@@ -267,6 +338,10 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
         line.origin.y = height + 14 + (line.track?.offset || 0);
         if (line.inRange) bandHeight = Math.max(bandHeight, line.origin.y - height + 16);
       }
+      for (const marker of line.markers.filter(marker => marker.row === row)) {
+        marker.y = height + 14 + (line.track?.offset || 0);
+        if (line.inRange) bandHeight = Math.max(bandHeight, marker.y - height + 16);
+      }
     }
     bands[row] = { top: height, height: bandHeight };
     rows[row] = height + bandHeight / 2;
@@ -275,25 +350,29 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const ticks = columns.map(column => column.day);
   const dated = allPoints.filter(point => byDay.has(point.day));
   const firstActual = dated.filter(point => point.isOrder).map(point => point.day).sort()[0] || dated.map(point => point.day).sort()[0] || startDate;
+  // Every dot a connector must avoid, including same-date stage markers.
+  const dots = new Map(series.map(other => [other, [...other.points, ...other.markers, ...(other.origin ? [other.origin] : [])]]));
+  const blocked = (line, segments) => series.some(other => other !== line && dots.get(other).some(dot => segments.some(([from, to]) => {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const t = dx || dy ? Math.max(0, Math.min(1, ((dot.x - from.x) * dx + (dot.y - from.y) * dy) / (dx * dx + dy * dy))) : 0;
+    return Math.hypot(dot.x - from.x - t * dx, dot.y - from.y - t * dy) < 10;
+  })));
   for (const [lineIndex, line] of series.entries()) line.path = line.points.map((point, i) => {
     // For a lifted single point the recorded origin row stands in as the previous
     // position, so the connector ends exactly on the dot and the shared obstruction
     // and detour rules keep it clear of every other journey's dot.
-    const previous = i ? line.points[i - 1] : line.origin && line.origin.row !== point.row ? line.origin : null;
+    const previous = i ? line.points[i - 1] : line.anchor && line.anchor.row !== point.row ? line.anchor : null;
     if (!previous) return `M${point.x},${point.y}`;
     let segment;
     if (previous.y === point.y) segment = `H${point.x}`;
     else {
-      const dx = point.x - previous.x, dy = point.y - previous.y;
-      // A foreign start marker is an obstacle too: same-date rises share one column,
-      // so a straight vertical would otherwise run through another journey's origin.
-      const obstructed = series.some(other => other !== line && [...other.points, ...(other.origin ? [other.origin] : [])].some(dot => {
-        const t = Math.max(0, Math.min(1, ((dot.x - previous.x) * dx + (dot.y - previous.y) * dy) / (dx * dx + dy * dy)));
-        return Math.hypot(dot.x - previous.x - t * dx, dot.y - previous.y - t * dy) < 10;
-      }));
-      if (!obstructed) segment = `L${point.x},${point.y}`;
-      else {
-        // Detour between date centers if a diagonal would touch another task's dot.
+      // A stage change rises vertically on the date it happens: run to that date,
+      // then straight onto the dot. Foreign dots and start markers are obstacles.
+      const turn = { x: point.x, y: previous.y };
+      if (!blocked(line, [[previous, turn], [turn, point]])) {
+        segment = previous.x === point.x ? `L${point.x},${point.y}` : `H${point.x} V${point.y}`;
+      } else {
+        // Detour between date centers if the step would touch another task's dot.
         // Separate turn positions also avoid merging same-date vertical connectors.
         const gap = dayWidth - 20;
         const turnX = point.x - dayWidth / 2 - gap / 2 + (lineIndex + 0.5) * gap / series.length;
@@ -313,6 +392,10 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
   const colors = buildJourneyColors(visible.tasks, visible.orders);
   const numbered = numberJourneyTasks(visible.tasks, visible.orders, startDate, endDate);
   const numbers = numberJourneyOrders(numbered, visible.orders, startDate, endDate);
+  // The reporting day is the current UTC day, the same key every recorded date is
+  // normalized to, so an active journey never ends before today and never runs
+  // into the future.
+  const span = { start: journeyDay(startDate), end: journeyDay(endDate), reportingDay: journeyDay(new Date()) };
   const linked = new Set(numbered.map(task => task.order?.id || task.order?.orderId).filter(Boolean));
   const orderOnly = [...new Map(visible.orders.map(order => [order.id || order.orderId, order])).values()]
     .filter(order => !linked.has(order.id || order.orderId)).map(order => ({
@@ -322,12 +405,12 @@ export function buildWorkflowGraph(timeline, startDate, endDate, mobileWidth = 0
   const series = [...numbered, ...orderOnly].map(task => {
     const events = task.orderOnly ? [
       { key: 'order', row: 0, label: 'Order placed', date: task.order.createdAt, detail: task.order.orderId },
-      { key: 'approval', row: null, label: 'Approval', date: task.order.approvedAt, detail: 'Recorded approval; progress at approval unavailable' },
+      { key: 'approval', row: 1, label: 'Scheduled (0%) · approval', date: task.order.approvedAt, detail: 'Recorded order approval date' },
       { key: 'completed', row: 4, label: 'Completed', date: task.order.completedAt, detail: 'Recorded order completion' },
     ] : taskJourneyEvents(task);
     // An order-only line has no task progress of its own, so it keeps the rows its
     // recorded order evidence produced.
-    const points = journeyDatePoints(events, task.orderOnly ? null : stageRow(task.progress));
+    const points = journeyDatePoints(events, task.orderOnly ? null : stageRow(task.progress), span);
     return { task, points, missing: events.filter(event => !journeyDay(event.date)), color: journeyColor(task, colors) };
   });
   return { ...compactJourneyLayout(series, startDate, endDate, mobileWidth), numbered };
@@ -428,6 +511,7 @@ export const JourneyDetail = ({ detail, closeDetail, showInputs }) => !detail ? 
   <p style={{ margin: '6px 0' }}>{detail.task.sequence ? `Order ${detail.task.sequence} · ` : ''}{detail.task.title}</p>
   {!detail.task.orderOnly && <p style={{ margin: '6px 0' }}>{currentStage(detail.task.progress)}{Number.isFinite(detail.task.progress) ? ` · ${detail.task.progress}%` : ''} · current</p>}
   <span style={{ color: '#64748b' }}>{detail.point.events.length} records on this date</span>
+  {detail.point.daily && <p style={{ margin: '6px 0', color: '#64748b' }}>Journey active · no new record on this date. It continues at the latest saved stage.</p>}
   {detail.point.supporting && <p style={{ margin: '6px 0', color: '#64748b' }}>Supporting activity · no workflow transition recorded on this date.</p>}
   <JourneyDateEvents point={detail.point} />
   <details style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0' }} onToggle={event => { if (event.currentTarget.open && !detail.loading && !detail.data && !detail.error) showInputs(); }}>
@@ -466,7 +550,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. The last dot sits at the latest saved progress stage; a same-date rise keeps its Order Placed start marker below it. Missing stage dates stay unavailable.</p>
+    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey per calendar day. Tap for activity and inputs. An unfinished journey advances one date per day up to today and keeps its latest saved stage; a stage change rises vertically on that date, and same-date recorded stages keep their own start marker below the dot.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '560px' : undefined, background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
@@ -478,7 +562,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
       </svg>
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, height: model.height, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
         <svg aria-label="Task journeys by actual date and workflow stage" width={model.width} height={model.height} style={{ display: 'block', overflow: 'hidden' }}>
-          <title>One step-line per task or order. Points use saved evidence, not invented dates. Connectors do not imply daily progress history.</title>
+          <title>One step-line per task or order, one dot per calendar day while the journey is active. Dots and stage changes use saved evidence, not invented dates.</title>
           {model.bands.map((band, row) => <g key={row}>
             <rect x="0" y={band.top} width={model.width} height={band.height} fill={row % 2 ? '#fff' : '#f8fafc'} />
             <line x1="0" x2={model.width} y1={band.top + band.height} y2={band.top + band.height} stroke="#e2e8f0" />
@@ -500,12 +584,16 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
               {/* A same-date progress rise keeps its recorded Order Placed start visible,
                   so the connector never emerges from nowhere. The marker is decorative:
                   the dated point already owns the tap target, the number and the detail. */}
+              {line.markers.filter(marker => marker.day >= startDate && marker.day <= endDate).map(marker => <g key={`${marker.day}:${marker.row}`} data-stage-marker="true" data-stage={workflowRows[marker.row]} data-marker-day={marker.day} pointerEvents="none">
+                <title>{`${line.task.title} · ${formatDate(marker.day)} · ${workflowRows[marker.row]}`}</title>
+                <circle cx={marker.x} cy={marker.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
+              </g>)}
               {line.origin && line.origin.day >= startDate && line.origin.day <= endDate && <g data-origin-marker="true" data-stage={workflowRows[line.origin.row]} data-date={line.origin.day} pointerEvents="none">
-                <title>{`${line.task.title} · ${formatDate(line.origin.day)} · Order placed`}</title>
+                <title>{`${line.task.title} · ${formatDate(line.origin.day)} · ${workflowRows[line.origin.row]}`}</title>
                 <circle cx={line.origin.x} cy={line.origin.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
               </g>}
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={point.supporting && !point.fromProgress ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
-                <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}`}</title>
+              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-daily={point.daily ? 'true' : undefined} data-stage={point.supporting && !point.fromProgress ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}${point.daily ? ', journey active' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+                <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}${point.daily ? ' · Journey active' : ''}`}</title>
                 <rect data-point-target="true" x={point.x - 12} y={point.y - 12} width="24" height="24" fill="transparent" />
                 <circle cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
                 {point.labels.map(label => <g key={label.kind} data-endpoint-label={label.kind} data-order-number={line.task.sequence || undefined}>
@@ -532,7 +620,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
     </div>
       {model.numbered.filter(task => !highlight || task.id === highlight).map(task => <TaskJourney key={task.id} task={task} />)}
     </details>
-    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. Missing order dates remain unavailable, not replaced by Started. Recorded workflow transitions and the latest saved progress move a journey upward; saved progress never lowers a recorded stage. Supporting records stay at the last known stage, or at the base when stage history is unavailable; their position does not assert an Order or Scheduled event. The last point may be latest activity, not completion. Current progress sets the present stage without adding a date, and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. Milestones use the current saved configuration. Approval does not assert historical 0% progress.</p></details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. An unfinished journey advances one calendar day at a time up to the current reporting date and keeps the latest saved stage on days with no new record; a recorded completion or saved 100% ends it and no further day is drawn. Recorded workflow transitions and saved milestone percentages move a journey upward on the date they were recorded; saved progress never lowers a recorded stage. The current saved progress sets the present stage on the reporting date without adding a date, and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. The recorded approval date is the SCHEDULED (0%) stage; no separate 0%, 1% or 5% progress timestamp is persisted, so a stage without saved milestone evidence stays unavailable rather than invented.</p></details>
   </div>;
 };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { journeyDateAxis, journeyColor, buildJourneyColors, numberJourneyTasks, taskJourneyRange, TaskJourney, buildWorkflowGraph, filterRejectedJourneys, useJourneyDetail, JourneyDetail } from './WorkflowJourney';
+import { journeyDateAxis, journeyColor, buildJourneyColors, numberJourneyTasks, taskJourneyRange, journeyDay, TaskJourney, buildWorkflowGraph, filterRejectedJourneys, useJourneyDetail, JourneyDetail } from './WorkflowJourney';
 
 export function buildCalendarRanges(tasks, rangeStart, rangeEnd, orders = []) {
   const axis = journeyDateAxis(rangeStart, rangeEnd);
@@ -27,13 +27,21 @@ export function buildCalendarRanges(tasks, rangeStart, rangeEnd, orders = []) {
 export function buildCalendarDays(model, series, rangeStart) {
   const ranges = new Map(model.tasks.map(range => [range.task.id, range]));
   const records = new Map(series.map(line => [line.task.id, new Map(line.points.map(point => [point.day, point]))]));
+  const placed = new Map(series.map(line => [line.task.id, journeyDay(line.task.order?.createdAt)
+    || line.points.find(point => point.isOrder)?.day || null]));
   return Array.from({ length: model.count }, (_, index) => {
     const day = new Date(new Date(rangeStart).getTime() + index * 86400000).toISOString().slice(0, 10);
     const journeys = series.flatMap(line => {
       const range = ranges.get(line.task.id), point = records.get(line.task.id).get(day);
-      return point || (range && range.start <= day && range.end >= day) ? [{ line, point, range }] : [];
+      if (!point && !(range && range.start <= day && range.end >= day)) return [];
+      // A package is newly placed only on its true order-creation date. Every other
+      // day of an unfinished journey is continuation, so it must never inflate the
+      // package count for that date.
+      const isNew = placed.get(line.task.id) === day;
+      return [{ line, point, range, placed: isNew, active: !isNew,
+        completedHere: Boolean(point?.events.some(event => event.key === 'completed')) }];
     });
-    return { day, journeys };
+    return { day, journeys, placed: journeys.filter(item => item.placed), active: journeys.filter(item => item.active) };
   });
 }
 
@@ -60,19 +68,25 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
   const height = 56 + Math.max(1, model.tasks.length) * 64;
   return <div className="workflow-calendar" style={{ minWidth: 0 }}>
     <style>{`.workflow-calendar .calendar-days { display: none; } @media (max-width: 640px) { .workflow-calendar .calendar-ranges { display: none; } .workflow-calendar .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; max-height: 340px; overflow-y: auto; } }`}</style>
-    <p style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>{shortDate(rangeStart)} – {shortDate(rangeEnd)} · Tap a date to explore its packages.</p>
+    <p style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>{shortDate(rangeStart)} – {shortDate(rangeEnd)} · Numbered badges are packages placed on that date; coloured dots are journeys still active on it. Tap a date to explore its packages.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div className="calendar-days" aria-label="Calendar dates">
-      {days.map(({ day, journeys }) => {
-        // Chronological order numbers only, in each order's Timeline color. The
-        // same number and color mark the order date and the completion date.
-        const numbers = [...new Map(journeys.filter(({ line }) => line.task.sequence)
+      {days.map(({ day, placed, active }) => {
+        // Chronological order numbers only, in each order's Timeline color, and only
+        // on the date the order was actually created. Continuation days get a small
+        // colour dot per active journey instead, so an ongoing journey is never
+        // counted as a newly placed package again.
+        const numbers = [...new Map(placed.filter(({ line }) => line.task.sequence)
           .map(({ line }) => [line.task.sequence, line.color])).entries()].sort((a, b) => a[0] - b[0]);
-        return <button key={day} type="button" data-calendar-day={day} aria-label={`${shortDate(day)}, ${journeys.length} journeys`} aria-pressed={day === activeDate} onClick={() => chooseDay(day)} style={{ minWidth: 0, minHeight: '62px', padding: '4px 0', border: `1px solid ${day === activeDate ? '#a5b4fc' : '#e2e8f0'}`, borderRadius: '8px', background: day === activeDate ? '#eef2ff' : '#fff', color: '#334155', cursor: 'pointer' }}>
+        const activeColors = [...new Set(active.map(({ line }) => line.color))];
+        return <button key={day} type="button" data-calendar-day={day} aria-label={`${shortDate(day)}, ${numbers.length} packages placed, ${activeColors.length} journeys active`} aria-pressed={day === activeDate} onClick={() => chooseDay(day)} style={{ minWidth: 0, minHeight: '62px', padding: '4px 0', border: `1px solid ${day === activeDate ? '#a5b4fc' : '#e2e8f0'}`, borderRadius: '8px', background: day === activeDate ? '#eef2ff' : '#fff', color: '#334155', cursor: 'pointer' }}>
           <span style={{ display: 'block', fontSize: '11px' }}>{new Date(day).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}</span>
           <strong style={{ display: 'block', fontSize: '14px' }}>{Number(day.slice(-2))}</strong>
           <span data-calendar-numbers={day} style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', justifyContent: 'center', padding: '0 2px', fontSize: '11px', color: '#64748b' }}>
             {numbers.length ? numbers.map(([sequence, color]) => <span key={sequence} data-calendar-order={sequence} style={{ minWidth: '16px', padding: '1px 3px', borderRadius: '9px', background: color, color: '#fff', fontWeight: 700 }}>{sequence}</span>) : '—'}
+          </span>
+          <span data-calendar-active={day} aria-hidden="true" style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'center', padding: '2px 2px 0', minHeight: '7px' }}>
+            {activeColors.slice(0, 8).map(color => <span key={color} data-calendar-active-dot={color} style={{ width: '5px', height: '5px', borderRadius: '50%', background: color, opacity: 0.85 }} />)}
           </span>
         </button>;
       })}
@@ -108,15 +122,16 @@ const WorkflowCalendar = ({ tasks = [], orders = [], rangeStart, rangeEnd, selec
     </div>
     {!model.tasks.length && <p style={{ fontSize: '12px', color: '#64748b' }}>No recorded ranges in this window.</p>}
     <details key={`${activeDate}:${focusedTask || ''}`} style={{ marginTop: '12px', fontSize: '13px', color: '#475569' }} open={Boolean(focusedTask || chosenDate)}>
-      <summary style={{ cursor: 'pointer', padding: '10px 0' }}>{activeDate} · {activeJourneys.length} tasks</summary>
+      <summary style={{ cursor: 'pointer', padding: '10px 0' }}>{activeDate} · {activeJourneys.length} tasks · {days.find(item => item.day === activeDate)?.placed.length || 0} placed</summary>
       {!activeJourneys.length && <p>No recorded journeys on this date.</p>}
-      {activeJourneys.filter(({ line }) => !focusedTask || line.task.id === focusedTask).map(({ line, point, range }) => <article key={line.task.id} style={{ padding: '12px', marginTop: '8px', border: '1px solid #e2e8f0', borderLeft: `3px solid ${line.color}`, borderRadius: '10px', overflowWrap: 'anywhere' }}>
+      {activeJourneys.filter(({ line }) => !focusedTask || line.task.id === focusedTask).map(({ line, point, range, placed, completedHere }) => <article key={line.task.id} style={{ padding: '12px', marginTop: '8px', border: '1px solid #e2e8f0', borderLeft: `3px solid ${line.color}`, borderRadius: '10px', overflowWrap: 'anywhere' }}>
         <strong>{line.task.sequence ? `${line.task.sequence} · ` : ''}{line.task.title}</strong>
+        <p style={{ margin: '6px 0', color: '#475569' }}>{placed ? 'Package placed on this date' : completedHere ? 'Completed on this date' : 'Journey active on this date · not a new package'}</p>
         <p style={{ margin: '6px 0', color: '#64748b' }}>{range ? `${shortDate(range.start)} → ${shortDate(range.end)} · ${range.endLabel}` : 'Order range unavailable'}</p>
         <button type="button" data-calendar-detail={line.task.id} onClick={() => selection.choosePoint(line, point || { day: activeDate, events: [], endpoint: false })} style={{ minHeight: '40px', border: 0, padding: '6px 0', background: 'transparent', color: line.color, cursor: 'pointer', fontWeight: 600 }}>{point ? `${point.events.length} records · View activity & inputs` : 'No activity recorded today · View inputs'}</button>
       </article>)}
     </details>
-    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About journey ranges</summary><p>Existing range dates are unchanged. Saved 100% milestone evidence may bound a range, but does not prove a permanent completion transition. A package on a date indicates its range, not activity every day. Planned dates are not plotted; missing history stays unavailable.</p></details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About journey ranges</summary><p>A numbered badge appears only on the date the order was actually created, so an ongoing journey is never counted as a new package on later days. Coloured dots mark the journeys still active on a date; a recorded completion ends the journey and no later date is marked. Saved 100% milestone evidence may bound a range, but does not prove a permanent completion transition. Planned dates are not plotted; missing history stays unavailable.</p></details>
     {model.undated.length > 0 && <details style={{ fontSize: '12px', color: '#64748b', marginTop: '12px' }}><summary>Other returned tasks · actual range unavailable or outside this window ({model.undated.length})</summary>{model.undated.map(task => <TaskJourney key={task.id} task={task} />)}</details>}
   </div>;
 };
