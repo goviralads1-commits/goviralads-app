@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
+import { getPermissions } from '../services/authService';
 import { useAuth } from '../App';
 import WorkflowCalendar from '../components/WorkflowCalendar';
 import WorkflowJourney from '../components/WorkflowJourney';
@@ -55,6 +56,18 @@ const Dashboard = () => {
   const [timelineError, setTimelineError] = useState(false);
   const [timelineDate, setTimelineDate] = useState(null); // selected day key (YYYY-MM-DD, UTC)
   const [timelineView, setTimelineView] = useState('timeline');
+  // WORKFLOW PDF REPORT — Admin panel only. Own state on purpose: generating a
+  // report never changes the Timeline/Calendar client or date filters above.
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportMode, setReportMode] = useState('monthly');
+  const [reportMonth, setReportMonth] = useState(() => new Date().getUTCMonth() + 1);
+  const [reportYear, setReportYear] = useState(() => new Date().getUTCFullYear());
+  const [reportStart, setReportStart] = useState('');
+  const [reportEnd, setReportEnd] = useState('');
+  const [reportEmployee, setReportEmployee] = useState('');
+  const [reportEmployees, setReportEmployees] = useState(null);
+  const [reportBusy, setReportBusy] = useState('');
+  const [reportError, setReportError] = useState('');
   const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -196,6 +209,79 @@ const Dashboard = () => {
     }
     setShowDatePicker(false);
     applyDateFilter(value);
+  };
+
+  // ---- Workflow PDF report (main admin + assigned staff, admin panel only) ----
+  const reportIsMainAdmin = getPermissions()?.isMainAdmin === true;
+  const reportControlStyle = { minHeight: '42px', padding: '9px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: '#334155', fontSize: '13px', fontWeight: '600', flex: '1 1 140px', minWidth: 0, boxSizing: 'border-box' };
+  const reportYears = Array.from({ length: 6 }, (_, index) => new Date().getUTCFullYear() - index);
+  const reportRange = () => {
+    if (reportMode === 'monthly') {
+      const first = new Date(Date.UTC(reportYear, reportMonth - 1, 1));
+      const last = new Date(Date.UTC(reportYear, reportMonth, 0));
+      return { startDate: first.toISOString().slice(0, 10), endDate: last.toISOString().slice(0, 10), label: `${MONTH_NAMES[reportMonth - 1]} ${reportYear}` };
+    }
+    return { startDate: reportStart, endDate: reportEnd, label: reportStart && reportEnd ? `${reportStart} → ${reportEnd}` : 'Custom range incomplete' };
+  };
+  const clearReportRange = () => {
+    const now = new Date();
+    setReportMode('monthly');
+    setReportMonth(now.getUTCMonth() + 1);
+    setReportYear(now.getUTCFullYear());
+    setReportStart('');
+    setReportEnd('');
+    setReportEmployee('');
+    setReportError('');
+  };
+  const toggleReport = async () => {
+    const next = !reportOpen;
+    setReportOpen(next);
+    // Employee filtering is a main-admin control, so the linked-employee list is
+    // loaded lazily and only the first time the panel is opened.
+    if (next && reportIsMainAdmin && reportEmployees === null) {
+      try {
+        const res = await api.get('/admin/employees', { params: { linkedToUser: 'true' } });
+        setReportEmployees((res.data?.employees || []).filter(employee => employee.userId));
+      } catch (err) {
+        setReportEmployees([]);
+      }
+    }
+  };
+  const saveReportFile = (url, startDate, endDate) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `workflow-report-${startDate}-to-${endDate}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  const runReport = async (action) => {
+    if (!clientFilter) { setReportError('Select at least one client — the workflow report is generated per client.'); return; }
+    const { startDate, endDate } = reportRange();
+    if (!startDate || !endDate) { setReportError('Choose a month, or set both custom dates.'); return; }
+    setReportError('');
+    setReportBusy(action);
+    // Opened synchronously inside the click gesture so popup blockers allow the
+    // preview; the PDF url is assigned once the response arrives.
+    const preview = action === 'generate' ? window.open('', '_blank') : null;
+    try {
+      const params = { clientId: clientFilter, startDate, endDate, mode: action === 'generate' ? 'inline' : 'attachment' };
+      if (reportIsMainAdmin && reportEmployee) params.employeeId = reportEmployee;
+      const res = await api.get('/admin/analytics/report/pdf', { params, responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      if (preview) preview.location.href = url; else saveReportFile(url, startDate, endDate);
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      if (preview) preview.close();
+      let message = 'Failed to generate the report PDF';
+      // A blob request still returns the server's JSON error body as a Blob.
+      if (err.response?.data instanceof Blob) {
+        try { message = JSON.parse(await err.response.data.text()).error || message; } catch (_) { /* keep the fallback message */ }
+      }
+      setReportError(message);
+    } finally {
+      setReportBusy('');
+    }
   };
 
   const selectedClientIds = clientFilter ? clientFilter.split(',') : [];
@@ -723,6 +809,57 @@ const Dashboard = () => {
                 )}
               </div>
             )}
+            {/* WORKFLOW PDF REPORT — admin panel only (never rendered in the client
+                app). Executive summary + chronological order/task details, built
+                server-side from the same authorized timeline data. */}
+            <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '18px 16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Report PDF</h4>
+                  <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: '4px 0 0 0' }}>Client-ready summary with chronological order and task details for {selectedClient ? selectedClient.identifier : 'the selected client(s)'}.</p>
+                </div>
+                <button type="button" aria-expanded={reportOpen} onClick={toggleReport} style={{ minHeight: '40px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', border: '1px solid #e2e8f0', background: reportOpen ? '#eef2ff' : '#fff', color: '#4f46e5' }}>{reportOpen ? 'Hide options' : 'Report options'}</button>
+              </div>
+              {reportOpen && (
+                <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div role="group" aria-label="Report period type" style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', background: '#f1f5f9' }}>
+                    {[['monthly', 'Monthly'], ['custom', 'Custom date to date']].map(([value, label]) => (
+                      <button key={value} type="button" aria-pressed={reportMode === value} onClick={() => setReportMode(value)} style={{ flex: 1, minHeight: '40px', padding: '8px 12px', border: 'none', borderRadius: '8px', background: reportMode === value ? '#fff' : 'transparent', color: reportMode === value ? '#4f46e5' : '#64748b', boxShadow: reportMode === value ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{label}</button>
+                    ))}
+                  </div>
+                  {reportMode === 'monthly' ? (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <select aria-label="Report month" value={reportMonth} onChange={e => setReportMonth(Number(e.target.value))} style={reportControlStyle}>
+                        {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+                      </select>
+                      <select aria-label="Report year" value={reportYear} onChange={e => setReportYear(Number(e.target.value))} style={reportControlStyle}>
+                        {reportYears.map(year => <option key={year} value={year}>{year}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input type="date" aria-label="Report start date" value={reportStart} max={reportEnd || undefined} onChange={e => setReportStart(e.target.value)} style={reportControlStyle} />
+                      <span style={{ fontSize: '13px', color: '#94a3b8' }}>→</span>
+                      <input type="date" aria-label="Report end date" value={reportEnd} min={reportStart || undefined} onChange={e => setReportEnd(e.target.value)} style={reportControlStyle} />
+                    </div>
+                  )}
+                  {reportIsMainAdmin && (
+                    <select aria-label="Filter report by assigned employee" value={reportEmployee} onChange={e => setReportEmployee(e.target.value)} style={reportControlStyle}>
+                      <option value="">All assigned employees</option>
+                      {(reportEmployees || []).map(employee => <option key={employee.id} value={employee.id}>{employee.name}{employee.identifier ? ` (${employee.identifier})` : ''}</option>)}
+                    </select>
+                  )}
+                  <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>Period: {reportRange().label} · Uses actual recorded order and event dates. Unavailable historical dates are reported as unavailable, never invented.</p>
+                  {reportError && <p role="alert" style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{reportError}</p>}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button type="button" onClick={() => runReport('generate')} disabled={Boolean(reportBusy)} style={{ flex: '1 1 150px', minHeight: '44px', padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '700', cursor: reportBusy ? 'default' : 'pointer', border: 'none', background: '#4f46e5', color: '#fff', opacity: reportBusy ? 0.6 : 1 }}>{reportBusy === 'generate' ? 'Generating…' : 'Generate PDF'}</button>
+                    <button type="button" onClick={() => runReport('download')} disabled={Boolean(reportBusy)} style={{ flex: '1 1 150px', minHeight: '44px', padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '700', cursor: reportBusy ? 'default' : 'pointer', border: '1px solid #c7d2fe', background: '#fff', color: '#4f46e5', opacity: reportBusy ? 0.6 : 1 }}>{reportBusy === 'download' ? 'Preparing…' : 'Download PDF'}</button>
+                    <button type="button" onClick={clearReportRange} disabled={Boolean(reportBusy)} style={{ flex: '1 1 120px', minHeight: '44px', padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '600', cursor: reportBusy ? 'default' : 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b' }}>Clear range</button>
+                  </div>
+                  {!clientFilter && <p style={{ fontSize: '11.5px', color: '#d97706', margin: 0 }}>Select one or more clients above to enable the report.</p>}
+                </div>
+              )}
+            </div>
             {analyticsLoading ? (
               /* Skeleton while client/date-scoped analytics load — prevents showing the
                  previous selection's numbers under the new selection */

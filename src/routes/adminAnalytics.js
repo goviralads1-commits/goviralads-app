@@ -1,6 +1,7 @@
 // ================== CLIENT-SCOPED BUSINESS ANALYTICS (READ-ONLY) ==================
 // GET /admin/analytics/client        - Business Analytics for ONE selected client + date range
 // GET /admin/analytics/client/drill  - Drill-down lists (tasks/revenue/commission) for ONE client
+// GET /admin/analytics/report/pdf    - Premium workflow report PDF for the selected client(s)
 //
 // DESIGN NOTES:
 //  - This file exists so the WIP /admin/analytics endpoint in admin.js stays untouched.
@@ -33,7 +34,10 @@ const UserSubscription = require('../models/UserSubscription');
 const { RechargeRequest } = require('../models/RechargeRequest');
 const CommissionLog = require('../models/CommissionLog');
 const Notification = require('../models/Notification');
+const { Employee } = require('../models/Employee');
 const { buildTimelineJourneyMap, findTimelineEventTaskIds, findTimelineTasks } = require('../utils/workflowTimeline');
+const { buildReportModel } = require('../services/workflowReportService');
+const { generateWorkflowReportPDF } = require('../services/workflowReportPdf');
 
 router.use(authenticateJWT);
 router.use(requireAdmin);
@@ -80,7 +84,10 @@ async function buildTimelineTaskPayload(tasks, journeyByTask) {
 
 // Resolve and authorize the target client. Returns { clientId } when allowed,
 // or a { status, error } object the handler must return to the caller.
-async function resolveAuthorizedClient(req) {
+// options.assignmentUnion additionally treats Task.assignedUsers[].userId as a
+// legitimate assignment when deriving a staff caller's visible clients. It is
+// off by default, so every existing endpoint keeps its exact current behaviour.
+async function resolveAuthorizedClient(req, options = {}) {
   const raw = req.query.clientIds ?? req.query.clientId;
   if (typeof raw !== 'string') return { status: 400, error: 'Valid clientId or comma-separated clientIds is required' };
   const ids = [...new Set(raw.split(',').map(id => id.trim()))];
@@ -95,7 +102,12 @@ async function resolveAuthorizedClient(req) {
   const isMainAdmin = caller && caller.role === 'ADMIN' && !caller.customRole;
   if (!isMainAdmin) {
     if (!caller) return { status: 404, error: 'Client not found' };
-    const visibleClientIds = await Task.distinct('clientId', { assignedTo: caller._id });
+    // Both assignment relationships are legitimate: the modern percentage split
+    // in assignedUsers[].userId and the legacy single assignedTo reference.
+    const assignmentFilter = options.assignmentUnion
+      ? { $or: [{ assignedTo: caller._id }, { 'assignedUsers.userId': caller._id }] }
+      : { assignedTo: caller._id };
+    const visibleClientIds = await Task.distinct('clientId', assignmentFilter);
     const allowed = new Set(visibleClientIds.filter(Boolean).map(String));
     if (ids.some(id => !allowed.has(id))) return { status: 404, error: 'Client not found' };
   }
@@ -479,6 +491,132 @@ router.get('/timeline', async (req, res) => {
   } catch (err) {
     console.error('Office timeline error:', err);
     res.status(500).json({ error: 'Failed to load office timeline' });
+  }
+});
+
+// ---------- GET /admin/analytics/report/pdf ----------
+// Premium workflow report PDF for the Admin panel (main admin and assigned staff
+// only). Strictly read-only and additive: it reuses resolveAuthorizedClient,
+// findTimelineEventTaskIds, findTimelineTasks and buildTimelineJourneyMap, so the
+// report can never widen the caller's existing visibility, and it selects NO
+// financial field (no totalAmount, no creditCost, no wallet, commission,
+// invoice or payment data) because none of it belongs in this report.
+//
+// Assigned staff (ADMIN with a customRole) are restricted to work assigned to
+// them through EITHER relationship — the legacy single Task.assignedTo reference
+// or the modern Task.assignedUsers[].userId percentage split — and their client
+// visibility is derived from that same union, so a staff member can report for
+// every client they legitimately hold at least one assigned task for, and never
+// for another employee's work or an unauthorized client.
+// The employeeId filter is a main-admin control and is ignored for anyone else.
+const REPORT_ORDER_SELECT = 'orderId clientId orderStatus createdAt approvedAt completedAt items.planTitle items.quantity';
+const REPORT_TASK_DETAIL_SELECT = 'description clientInputs.link clientContentLinks clientDriveLink';
+const REPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+router.get('/report/pdf', async (req, res) => {
+  try {
+    const auth = await resolveAuthorizedClient(req, { assignmentUnion: true });
+    if (auth.status) return res.status(auth.status).json({ error: auth.error });
+    const { clientId } = auth;
+
+    const { startDate, endDate } = req.query;
+    if (!REPORT_DATE.test(String(startDate)) || !REPORT_DATE.test(String(endDate))) {
+      return res.status(400).json({ error: 'startDate and endDate are required in YYYY-MM-DD format' });
+    }
+    if (String(startDate) > String(endDate)) return res.status(400).json({ error: 'startDate must not be after endDate' });
+
+    const caller = await User.findById(req.user.id).populate('customRole');
+    if (!caller) return res.status(404).json({ error: 'Caller not found' });
+    const isMainAdmin = caller.role === 'ADMIN' && !caller.customRole;
+
+    let assignmentScope = null;
+    let employee = null;
+    if (!isMainAdmin) {
+      assignmentScope = { $or: [{ assignedTo: caller._id }, { 'assignedUsers.userId': caller._id }] };
+    } else if (req.query.employeeId) {
+      const employeeId = String(req.query.employeeId);
+      if (!mongoose.isValidObjectId(employeeId)) return res.status(400).json({ error: 'Invalid employeeId' });
+      const record = await Employee.findOne({ _id: employeeId, isDeleted: { $ne: true } }).select('name userId').lean();
+      if (!record) return res.status(404).json({ error: 'Employee not found' });
+      if (!record.userId) return res.status(400).json({ error: 'Selected employee has no linked user' });
+      employee = { id: employeeId, name: record.name || 'Employee' };
+      assignmentScope = { $or: [{ assignedTo: record.userId }, { 'assignedUsers.userId': record.userId }] };
+    }
+
+    // Same inclusive UTC boundaries as buildDateFilters — one date convention.
+    const rangeFilter = { $gte: new Date(startDate + 'T00:00:00.000Z'), $lte: new Date(endDate + 'T23:59:59.999Z') };
+    const taskBase = { isDeleted: { $ne: true }, isListedInPlans: { $ne: true }, clientId };
+    const taskScope = assignmentScope ? { $and: [taskBase, assignmentScope] } : taskBase;
+    const eventTaskIds = await findTimelineEventTaskIds(rangeFilter);
+    const limit = auth.clientIds.length === 1 ? 500 : 1000;
+
+    let orders;
+    let tasks;
+    if (assignmentScope) {
+      // An assignment grants task access, not access to the buyer's orders, so
+      // only orders linked by exact id to an in-scope task are read.
+      const seed = await findTimelineTasks({ taskScope, rangeFilter, ...eventTaskIds, orderIds: [], limit });
+      const linkedIds = [...new Set(seed.map(task => String(task.orderId || '')).filter(Boolean))];
+      orders = linkedIds.length
+        ? await Order.find({ _id: { $in: linkedIds }, clientId }).sort({ createdAt: 1 }).select(REPORT_ORDER_SELECT).lean()
+        : [];
+      tasks = await findTimelineTasks({ taskScope, rangeFilter, ...eventTaskIds, orderIds: orders.map(order => order._id), limit });
+    } else {
+      orders = await Order.find({ clientId, $or: [
+        { createdAt: rangeFilter }, { approvedAt: rangeFilter }, { completedAt: rangeFilter },
+      ] }).sort({ createdAt: 1 }).select(REPORT_ORDER_SELECT).lean();
+      tasks = await findTimelineTasks({ taskScope, rangeFilter, ...eventTaskIds, orderIds: orders.map(order => order._id), limit });
+    }
+
+    // Both lookups are batched over ids that already obey the caller's scope.
+    const journeyByTask = await buildTimelineJourneyMap(tasks, null, orders);
+    const detailById = new Map(tasks.length
+      ? (await Task.find({ _id: { $in: tasks.map(task => task._id) } }).select(REPORT_TASK_DETAIL_SELECT).lean())
+        .map(detail => [String(detail._id), detail])
+      : []);
+    const clients = await User.find({ _id: { $in: auth.clientIds } }).select('profile.name identifier').lean();
+    const clientNameById = new Map(clients.map(client => [String(client._id), client.profile?.name || client.identifier || null]));
+
+    const model = buildReportModel({
+      range: { startDate, endDate },
+      clients: clients.map(client => ({ id: String(client._id), name: client.profile?.name || client.identifier || 'Client' })),
+      generatedBy: { name: caller.profile?.name || caller.identifier, identifier: caller.identifier },
+      employee,
+      generatedAt: new Date(),
+      orders: orders.map(order => ({
+        id: String(order._id),
+        orderId: order.orderId || '',
+        orderStatus: order.orderStatus,
+        createdAt: order.createdAt,
+        approvedAt: order.approvedAt || null,
+        completedAt: order.completedAt || null,
+        services: (order.items || []).map(item => item.planTitle).filter(Boolean),
+      })),
+      tasks: tasks.map(task => {
+        const detail = detailById.get(String(task._id)) || {};
+        return {
+          id: String(task._id),
+          title: task.title || 'Task',
+          status: task.status,
+          clientName: task.clientId ? clientNameById.get(String(task.clientId)) || null : null,
+          ...(journeyByTask.get(String(task._id)) || {}),
+          description: detail.description || '',
+          clientInputs: detail.clientInputs || [],
+          clientContentLinks: detail.clientContentLinks || [],
+          clientDriveLink: detail.clientDriveLink || '',
+        };
+      }),
+    });
+
+    const pdfBuffer = await generateWorkflowReportPDF(model);
+    const filename = `workflow-report-${startDate}-to-${endDate}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `${req.query.mode === 'inline' ? 'inline' : 'attachment'}; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Workflow report PDF error:', err);
+    return res.status(500).json({ error: 'Failed to generate workflow report' });
   }
 });
 
