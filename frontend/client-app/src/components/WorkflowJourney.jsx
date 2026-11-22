@@ -179,6 +179,7 @@ export function journeyDatePoints(events, currentRow = null) {
   // evidence is never lowered by a later progress value.
   const last = points[points.length - 1];
   if (last && Number.isInteger(currentRow) && currentRow > last.row) {
+    last.baseRow = last.row;
     last.fromProgress = true;
     last.row = currentRow;
   }
@@ -233,6 +234,11 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
     line.right = Math.max(...bounds);
     line.inRange = line.left <= width && line.right >= 0;
     line.trackHeight = Math.max(28, 22 + line.labelLevels * labelStep);
+    // A journey whose only dated point was lifted by saved progress has no drawn
+    // segment of its own, so remember the recorded row it rose from. Its connector
+    // starts there on the same date and shows the vertical stage movement.
+    const first = line.points[0];
+    line.origin = line.points.length === 1 && first.fromProgress ? { row: first.baseRow, x: first.x, day: first.day } : null;
   }
   // Labels never widen dates. Reuse vertical tracks only for disjoint journeys;
   // concurrent journeys keep distinct dot/connector lanes, including siblings.
@@ -250,11 +256,17 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   let height = 48;
   for (const row of [4, 3, 2, 1, 0]) {
     let bandHeight = 48;
-    for (const line of series) for (const point of line.points.filter(point => point.row === row)) {
-      point.y = height + 14 + (line.track?.offset || 0);
-      for (const label of point.labels) label.y = point.y + label.offsetY;
-      if (line.inRange) bandHeight = Math.max(bandHeight, point.y - height + 16,
-        ...point.labels.map(label => label.y - height + label.lines.length * 14 - 6));
+    for (const line of series) {
+      for (const point of line.points.filter(point => point.row === row)) {
+        point.y = height + 14 + (line.track?.offset || 0);
+        for (const label of point.labels) label.y = point.y + label.offsetY;
+        if (line.inRange) bandHeight = Math.max(bandHeight, point.y - height + 16,
+          ...point.labels.map(label => label.y - height + label.lines.length * 14 - 6));
+      }
+      if (line.origin && line.origin.row === row) {
+        line.origin.y = height + 14 + (line.track?.offset || 0);
+        if (line.inRange) bandHeight = Math.max(bandHeight, line.origin.y - height + 16);
+      }
     }
     bands[row] = { top: height, height: bandHeight };
     rows[row] = height + bandHeight / 2;
@@ -264,20 +276,33 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   const dated = allPoints.filter(point => byDay.has(point.day));
   const firstActual = dated.filter(point => point.isOrder).map(point => point.day).sort()[0] || dated.map(point => point.day).sort()[0] || startDate;
   for (const [lineIndex, line] of series.entries()) line.path = line.points.map((point, i) => {
-    if (!i) return `M${point.x},${point.y}`;
-    const previous = line.points[i - 1];
-    if (previous.y === point.y) return `H${point.x}`;
-    const dx = point.x - previous.x, dy = point.y - previous.y;
-    const obstructed = series.some(other => other !== line && other.points.some(dot => {
-      const t = Math.max(0, Math.min(1, ((dot.x - previous.x) * dx + (dot.y - previous.y) * dy) / (dx * dx + dy * dy)));
-      return Math.hypot(dot.x - previous.x - t * dx, dot.y - previous.y - t * dy) < 10;
-    }));
-    if (!obstructed) return `L${point.x},${point.y}`;
-    // Detour between date centers if a diagonal would touch another task's dot.
-    // Separate turn positions also avoid merging same-date vertical connectors.
-    const gap = dayWidth - 20;
-    const turnX = point.x - dayWidth / 2 - gap / 2 + (lineIndex + 0.5) * gap / series.length;
-    return `H${turnX} V${point.y} H${point.x}`;
+    // For a lifted single point the recorded origin row stands in as the previous
+    // position, so the connector ends exactly on the dot and the shared obstruction
+    // and detour rules keep it clear of every other journey's dot.
+    const previous = i ? line.points[i - 1] : line.origin && line.origin.row !== point.row ? line.origin : null;
+    if (!previous) return `M${point.x},${point.y}`;
+    let segment;
+    if (previous.y === point.y) segment = `H${point.x}`;
+    else {
+      const dx = point.x - previous.x, dy = point.y - previous.y;
+      // A foreign start marker is an obstacle too: same-date rises share one column,
+      // so a straight vertical would otherwise run through another journey's origin.
+      const obstructed = series.some(other => other !== line && [...other.points, ...(other.origin ? [other.origin] : [])].some(dot => {
+        const t = Math.max(0, Math.min(1, ((dot.x - previous.x) * dx + (dot.y - previous.y) * dy) / (dx * dx + dy * dy)));
+        return Math.hypot(dot.x - previous.x - t * dx, dot.y - previous.y - t * dy) < 10;
+      }));
+      if (!obstructed) segment = `L${point.x},${point.y}`;
+      else {
+        // Detour between date centers if a diagonal would touch another task's dot.
+        // Separate turn positions also avoid merging same-date vertical connectors.
+        const gap = dayWidth - 20;
+        const turnX = point.x - dayWidth / 2 - gap / 2 + (lineIndex + 0.5) * gap / series.length;
+        segment = `H${turnX} V${point.y} H${point.x}`;
+      }
+    }
+    // With an origin anchor the pen starts on the recorded row, so the connector
+    // shows the same-date vertical rise and still ends exactly on the dot.
+    return i ? segment : `M${previous.x},${previous.y} ${segment}`;
   }).join(' ');
   return { series, rows, bands, labelWidth, width, height, ticks, x, firstActual, count,
     dayWidth, columns, dayStart: day => byDay.get(day)?.left || 0 };
@@ -441,9 +466,9 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. The last dot sits at the latest saved progress stage; missing stage dates stay unavailable.</p>
+    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey/date. Tap for activity and inputs. The last dot sits at the latest saved progress stage; a same-date rise keeps its Order Placed start marker below it. Missing stage dates stay unavailable.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
-    <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '480px' : undefined, background: '#fff' }}>
+    <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '560px' : undefined, background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
         <text x={mobileWidth ? 6 : 10} y="27" fontSize="10" fill="#64748b">{mobileWidth ? 'STAGE' : 'STAGE / DATE'}</text>
         {workflowRows.map((label, row) => <g key={label}>
@@ -472,6 +497,13 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
+              {/* A same-date progress rise keeps its recorded Order Placed start visible,
+                  so the connector never emerges from nowhere. The marker is decorative:
+                  the dated point already owns the tap target, the number and the detail. */}
+              {line.origin && line.origin.day >= startDate && line.origin.day <= endDate && <g data-origin-marker="true" data-stage={workflowRows[line.origin.row]} data-date={line.origin.day} pointerEvents="none">
+                <title>{`${line.task.title} · ${formatDate(line.origin.day)} · Order placed`}</title>
+                <circle cx={line.origin.x} cy={line.origin.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
+              </g>}
               {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-stage={point.supporting && !point.fromProgress ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}`}</title>
                 <rect data-point-target="true" x={point.x - 12} y={point.y - 12} width="24" height="24" fill="transparent" />

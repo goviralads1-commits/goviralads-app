@@ -366,7 +366,7 @@ for (const app of ['client-app', 'admin-panel']) {
     for (const line of model.series) {
       const group = html.split(`data-journey-task="${line.task.id}"`)[1].split('data-journey-task=')[0].split('</svg>')[0];
       const circles = [...group.matchAll(/<circle\b[^>]*r="[56]"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"/g)];
-      assert.equal(circles.length, line.points.length);
+      assert.equal(circles.length, line.points.length + (line.origin ? 1 : 0));
       assert.ok(circles.every(match => match[2] === line.color && match[1] === line.color));
       const texts = [...group.matchAll(/<foreignObject\b[^>]*>([\s\S]*?)<\/foreignObject>/g)];
       assert.equal(texts.length, 2);
@@ -511,7 +511,7 @@ for (const app of ['client-app', 'admin-panel']) {
       const html = render(mobile.default, { timeline: { tasks: [task] }, startDate: '2026-09-15', endDate: '2026-09-24' });
       assert.match(html, /aria-label="Workflow stage axis" width="72"/);
       assert.match(html, /data-point-target="true"[^>]*width="24" height="24"/);
-      assert.match(html, /max-height:480px/);
+      assert.match(html, /max-height:560px/);
       assert.match(html, /overflow-y:auto/);
       assert.match(html, /Scheduled<tspan[^>]*>\(0%\)/);
       assert.match(html, /Started<tspan[^>]*>\(1%–4%\)/);
@@ -725,9 +725,109 @@ for (const app of ['client-app', 'admin-panel']) {
       assert.equal(mobile.rows.length, 5);
       assert.equal(point.row, 3);
       assert.ok(point.y >= mobile.bands[3].top && point.y <= mobile.bands[3].top + mobile.bands[3].height);
-      assert.ok(mobile.series[0].path.includes(`M${point.x},${point.y}`));
+      // The connector starts on the recorded Order Placed row of the same date and
+      // terminates exactly on the lifted dot.
+      assert.equal(mobile.series[0].origin.row, 0);
+      assert.equal(mobile.series[0].origin.x, point.x);
+      assert.ok(mobile.series[0].origin.y >= mobile.bands[0].top && mobile.series[0].origin.y <= mobile.bands[0].top + mobile.bands[0].height);
+      assert.ok(mobile.series[0].path.endsWith(`${point.x},${point.y}`), 'the connector terminates on its dot');
     }
     assert.deepEqual(plain(base), plain({ ...task, id: 'same-day', progress: 0, completedAt: null, approvedAt: null, milestones: [], order }));
+  });
+
+  test(`${app}: same-day connectors rise from the recorded row and end exactly on their dot`, () => {
+    const placed = '2026-11-21T09:00:00Z';
+    const order = i => ({ id: `order-${i}`, orderId: `ORD-${i}`, createdAt: placed });
+    const journey = (i, progress) => ({ ...task, id: `same-${i}`, title: `Package ${i}`, progress,
+      completedAt: null, approvedAt: null, milestones: [], order: order(i) });
+    const polyline = path => {
+      let x = 0, y = 0;
+      return (path.match(/[MLHV][^MLHV]*/g) || []).map(token => {
+        const nums = (token.slice(1).match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+        if (token[0] === 'M' || token[0] === 'L') { x = nums[0]; y = nums[1]; }
+        else if (token[0] === 'H') x = nums[0];
+        else y = nums[0];
+        return { x, y };
+      });
+    };
+    const distance = (dot, a, b) => {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = dx || dy ? Math.max(0, Math.min(1, ((dot.x - a.x) * dx + (dot.y - a.y) * dy) / (dx * dx + dy * dy))) : 0;
+      return Math.hypot(dot.x - a.x - t * dx, dot.y - a.y - t * dy);
+    };
+    for (const width of [0, 235, 290]) {
+      // Every threshold: 0% keeps a bare dot on Order Placed, saved progress draws a
+      // connector that starts on the recorded row and ends exactly on the dot.
+      for (const [progress, row] of [[0, 0], [1, 2], [4, 2], [5, 3], [10, 3], [99, 3], [100, 4]]) {
+        const graph = view.buildWorkflowGraph({ tasks: [journey(1, progress)], orders: [order(1)] }, '2026-11-15', '2026-11-21', width);
+        const line = graph.series[0];
+        const point = line.points[0];
+        const nodes = polyline(line.path);
+        assert.equal(point.row, row);
+        assert.equal(point.day, '2026-11-21', 'the connector never moves the journey to another date');
+        assert.deepEqual(nodes.at(-1), { x: point.x, y: point.y }, 'the connector terminates on its dot');
+        if (progress === 0) {
+          assert.equal(line.origin, null);
+          assert.equal(nodes.length, 1, 'an unlifted journey keeps a bare point path');
+        } else {
+          assert.equal(line.origin.row, 0);
+          assert.equal(line.origin.x, point.x, 'the vertical movement stays on the order date');
+          assert.equal(line.origin.day, point.day, 'the start marker never invents another date');
+          assert.deepEqual(nodes[0], { x: point.x, y: line.origin.y });
+          assert.ok(line.origin.y >= graph.bands[0].top + 5 && line.origin.y <= graph.bands[0].top + graph.bands[0].height - 5, 'the whole start marker fits its band');
+          assert.ok(nodes.length >= 2);
+        }
+      }
+      // Four journeys sharing one date stay separately connected: each connector ends
+      // on its own dot and never comes within touch distance of another journey's dot.
+      const orders = [1, 2, 3, 4].map(i => order(i));
+      const sameDay = orders.map((unused, i) => journey(i + 1, 10));
+      const shared = view.buildWorkflowGraph({ tasks: sameDay, orders }, '2026-11-15', '2026-11-21', width);
+      assert.equal(shared.series.length, 4);
+      for (const line of shared.series) {
+        const nodes = polyline(line.path);
+        const dot = line.points[0];
+        assert.deepEqual(nodes.at(-1), { x: dot.x, y: dot.y });
+        assert.deepEqual(plain(dot.labels.map(label => [label.kind, label.lines.join('')])), [['start', String(line.task.sequence)]], 'journey number preserved');
+        for (const other of shared.series) {
+          if (other === line) continue;
+          for (const foreign of [...other.points, other.origin]) for (let i = 1; i < nodes.length; i++) {
+            assert.ok(distance(foreign, nodes[i - 1], nodes[i]) >= 10, 'no connector touches an unrelated marker');
+          }
+        }
+      }
+      assert.equal(new Set(shared.series.map(line => line.color)).size, 4, 'journey colours stay distinct');
+      assert.equal(new Set(shared.series.map(line => line.origin.y)).size, 4, 'start markers never overlap');
+      // The mobile graph box is capped, so four same-day lanes must fit inside it;
+      // desktop has no cap and simply renders the full height.
+      if (width) assert.ok(shared.height <= 560, 'four same-day lanes fit the mobile graph box, so every start marker is visible without scrolling');
+      // A multi-day journey keeps its recorded dots and needs no origin anchor.
+      const earlier = { ...order(1), createdAt: '2026-11-20T09:00:00Z' };
+      const spanning = { ...journey(1, 10), order: earlier, milestones: [{ name: 'Draft', percentage: 10, reached: true, reachedAt: '2026-11-21T08:00:00Z' }] };
+      const multi = view.buildWorkflowGraph({ tasks: [spanning], orders: [earlier] }, '2026-11-15', '2026-11-21', width);
+      const multiLine = multi.series[0];
+      assert.equal(multiLine.origin, null, 'a journey with its own segment needs no origin anchor');
+      assert.deepEqual(plain(multiLine.points.map(point => [point.day, point.row])), [['2026-11-20', 0], ['2026-11-21', 3]]);
+      assert.deepEqual(polyline(multiLine.path).at(-1), { x: multiLine.points.at(-1).x, y: multiLine.points.at(-1).y });
+      if (width === 0) {
+        // The recorded start is rendered as a real marker: one per same-day journey,
+        // on the connector origin, in the journey colour, and none for multi-day work.
+        const desktop = view.buildWorkflowGraph({ tasks: sameDay, orders }, '2026-11-15', '2026-11-21');
+        const html = render(view.default, { timeline: { tasks: sameDay, orders }, startDate: '2026-11-15', endDate: '2026-11-21' });
+        assert.equal((html.match(/data-origin-marker="true"/g) || []).length, 4);
+        assert.equal((html.match(/data-origin-marker="true" data-stage="ORDER PLACED" data-date="2026-11-21"/g) || []).length, 4);
+        const circles = [...html.matchAll(/<circle\b[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)"[^>]*r="5"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"[^>]*stroke-width="1.5"/g)];
+        assert.equal(circles.length, 8, 'four start markers plus four current-stage dots, all the same size and stroke');
+        for (const line of desktop.series) {
+          const marker = circles.find(circle => +circle[1] === line.origin.x && +circle[2] === line.origin.y);
+          assert.ok(marker, 'the start marker sits exactly on the connector origin');
+          assert.equal(marker[3], line.color);
+          assert.equal(marker[4], line.color, 'start and end markers share the journey colour');
+          assert.ok(circles.some(circle => +circle[1] === line.points[0].x && +circle[2] === line.points[0].y && circle[3] === line.color), 'the current-stage dot is still rendered');
+        }
+        assert.equal((render(view.default, { timeline: { tasks: [spanning], orders: [earlier] }, startDate: '2026-11-15', endDate: '2026-11-21' }).match(/data-origin-marker="true"/g) || []).length, 0, 'a multi-day journey adds no duplicate marker');
+      }
+    }
   });
 }
 
@@ -775,7 +875,10 @@ function clientHarness(user = { id: 'owner', role: 'CLIENT' }, app = 'client-app
     useEffect(fn, deps) { const i = cursor++; if (changed(slots[i]?.deps, deps)) { slots[i]?.cleanup?.(); slots[i] = { deps }; effects.push(() => { slots[i].cleanup = fn(); }); } },
   };
   const api = { get: (url, options) => new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })) };
-  const modules = { react: hooks, '../services/api': api, '../services/authService': { getCurrentUser: () => user },
+  const modules = { react: hooks, '../services/api': api, '../services/authService': { getCurrentUser: () => user,
+    // The admin Dashboard reads stored permissions for the PDF report controls;
+    // the harness has no localStorage, so no stored permissions exist.
+    getPermissions: () => null },
     'react-router-dom': { useNavigate: () => () => {} }, '../components/Header': () => null,
     '../services/pushService': { initPushNotifications() {}, setupForegroundHandler: () => () => {} }, '../App': { useAuth: () => ({ user }) } };
   const load = (name, extension = 'jsx', folder = 'components') => {
