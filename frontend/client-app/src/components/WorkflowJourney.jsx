@@ -550,7 +550,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · one dot per journey per calendar day. Tap for activity and inputs. An unfinished journey advances one date per day up to today and keeps its latest saved stage; a stage change rises vertically on that date, and same-date recorded stages keep their own start marker below the dot.</p>
+    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · two dots per journey: the Order Placed start and the current endpoint. Tap anywhere on the line for that date's activity and inputs. An unfinished journey advances one date per day up to today and keeps its latest saved stage; a stage change rises vertically on that date.</p>
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '560px' : undefined, background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
@@ -562,7 +562,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
       </svg>
       <div ref={scroller} tabIndex={0} role="region" aria-label="Workflow graph, scroll dates horizontally" style={{ minWidth: 0, flex: 1, height: model.height, overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch' }}>
         <svg aria-label="Task journeys by actual date and workflow stage" width={model.width} height={model.height} style={{ display: 'block', overflow: 'hidden' }}>
-          <title>One step-line per task or order, one dot per calendar day while the journey is active. Dots and stage changes use saved evidence, not invented dates.</title>
+          <title>One step-line per task or order, drawn through one coordinate per calendar day while the journey is active, with only the Order Placed start dot and the current endpoint dot visible. Dots and stage changes use saved evidence, not invented dates.</title>
           {model.bands.map((band, row) => <g key={row}>
             <rect x="0" y={band.top} width={model.width} height={band.height} fill={row % 2 ? '#fff' : '#f8fafc'} />
             <line x1="0" x2={model.width} y1={band.top + band.height} y2={band.top + band.height} stroke="#e2e8f0" />
@@ -580,22 +580,28 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
           </g>)}
           {lines.map(line => {
             const visible = !highlight || highlight === line.task.id;
+            // PRESENTATION ONLY — a journey draws exactly two dots: the permanent Order
+            // Placed start and the current endpoint, which moves forward one date per day
+            // until the recorded terminal endpoint. Every intermediate daily coordinate
+            // keeps its tap target, label, connector segment and stage rise, so the
+            // geometry is untouched; only those dots are hidden. Recorded stages sharing
+            // one date are represented by the single start dot instead of extra dots.
+            const inRange = line.points.filter(point => point.day >= startDate && point.day <= endDate);
+            const end = inRange[inRange.length - 1] || null;
+            const startAnchor = [line.anchor, line.origin].find(marker => marker && marker.day >= startDate && marker.day <= endDate) || null;
+            const start = startAnchor || inRange[0] || null;
             return <g key={line.task.id} data-journey-task={line.task.id} opacity={visible ? 1 : 0.15}>
-              {/* A same-date progress rise keeps its recorded Order Placed start visible,
-                  so the connector never emerges from nowhere. The marker is decorative:
-                  the dated point already owns the tap target, the number and the detail. */}
-              {line.markers.filter(marker => marker.day >= startDate && marker.day <= endDate).map(marker => <g key={`${marker.day}:${marker.row}`} data-stage-marker="true" data-stage={workflowRows[marker.row]} data-marker-day={marker.day} pointerEvents="none">
-                <title>{`${line.task.title} · ${formatDate(marker.day)} · ${workflowRows[marker.row]}`}</title>
-                <circle cx={marker.x} cy={marker.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
-              </g>)}
-              {line.origin && line.origin.day >= startDate && line.origin.day <= endDate && <g data-origin-marker="true" data-stage={workflowRows[line.origin.row]} data-date={line.origin.day} pointerEvents="none">
-                <title>{`${line.task.title} · ${formatDate(line.origin.day)} · ${workflowRows[line.origin.row]}`}</title>
-                <circle cx={line.origin.x} cy={line.origin.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
+              {/* The recorded Order Placed row of a same-date rise stays visible as the one
+                  permanent start dot, so the connector never emerges from nowhere. It is
+                  decorative: the dated point owns the tap target, the number and detail. */}
+              {startAnchor && <g data-origin-marker="true" data-stage={workflowRows[startAnchor.row]} data-date={startAnchor.day} pointerEvents="none">
+                <title>{`${line.task.title} · ${formatDate(startAnchor.day)} · ${workflowRows[startAnchor.row]}`}</title>
+                <circle cx={startAnchor.x} cy={startAnchor.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
               </g>}
-              {line.points.filter(point => point.day >= startDate && point.day <= endDate).map(point => <g key={point.day} data-event={point.key} data-daily={point.daily ? 'true' : undefined} data-stage={point.supporting && !point.fromProgress ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}${point.daily ? ', journey active' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
+              {inRange.map(point => <g key={point.day} data-event={point.key} data-daily={point.daily ? 'true' : undefined} data-stage={point.supporting && !point.fromProgress ? 'SUPPORTING ACTIVITY' : workflowRows[point.row]} data-date={point.day} data-event-count={point.events.length} data-timestamp={point.date} role="button" tabIndex={visible ? 0 : -1} aria-label={`${line.task.sequence ? `${line.task.sequence} · ` : ''}${line.task.title}: ${formatDate(point.day)}, ${point.events.length} records${point.isOrder ? ', Order placed' : ''}${point.daily ? ', journey active' : ''}, show activities and client inputs`} onClick={() => choosePoint(line, point)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choosePoint(line, point); } }} style={{ cursor: 'pointer' }}>
                 <title>{`${line.task.title} · ${formatDate(point.day)} · ${point.events.length} records${point.isOrder ? ' · Order placed' : ''}${point.daily ? ' · Journey active' : ''}`}</title>
                 <rect data-point-target="true" x={point.x - 12} y={point.y - 12} width="24" height="24" fill="transparent" />
-                <circle cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />
+                {(point === start || point === end) && <circle data-journey-dot={point === start ? 'start' : 'end'} cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />}
                 {point.labels.map(label => <g key={label.kind} data-endpoint-label={label.kind} data-order-number={line.task.sequence || undefined}>
                   <rect x={label.x - 4} y={label.y - 12} width={label.width + 8} height={label.lines.length * 14 + 2} rx="4" fill="#fff" />
                   <foreignObject x={label.x} y={label.y - 12} width={label.width} height={label.lines.length * 14}>
@@ -620,7 +626,7 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
     </div>
       {model.numbered.filter(task => !highlight || task.id === highlight).map(task => <TaskJourney key={task.id} task={task} />)}
     </details>
-    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. An unfinished journey advances one calendar day at a time up to the current reporting date and keeps the latest saved stage on days with no new record; a recorded completion or saved 100% ends it and no further day is drawn. Recorded workflow transitions and saved milestone percentages move a journey upward on the date they were recorded; saved progress never lowers a recorded stage. The current saved progress sets the present stage on the reporting date without adding a date, and planned dates are not historical events.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. The recorded approval date is the SCHEDULED (0%) stage; no separate 0%, 1% or 5% progress timestamp is persisted, so a stage without saved milestone evidence stays unavailable rather than invented.</p></details>
+    <details style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>About dates &amp; numbering</summary><p>Order dates are the journey start when available; dates outside this filter are clipped. An unfinished journey advances one calendar day at a time up to the current reporting date and keeps the latest saved stage on days with no new record; a recorded completion or saved 100% ends it and no further day is drawn. Recorded workflow transitions and saved milestone percentages move a journey upward on the date they were recorded; saved progress never lowers a recorded stage. The current saved progress sets the present stage on the reporting date without adding a date, and planned dates are not historical events. Only the Order Placed start and the current endpoint are drawn as dots; the daily coordinates in between still carry the connecting line, the vertical stage rises and the tap targets.</p><p>Numbers belong to orders created within {startDate} → {endDate}, starting at 1. Earlier orders and unavailable order dates stay unnumbered. The recorded approval date is the SCHEDULED (0%) stage; no separate 0%, 1% or 5% progress timestamp is persisted, so a stage without saved milestone evidence stays unavailable rather than invented.</p></details>
   </div>;
 };
 

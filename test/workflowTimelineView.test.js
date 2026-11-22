@@ -396,13 +396,93 @@ for (const app of ['client-app', 'admin-panel']) {
     for (const line of model.series) {
       const group = html.split(`data-journey-task="${line.task.id}"`)[1].split('data-journey-task=')[0].split('</svg>')[0];
       const circles = [...group.matchAll(/<circle\b[^>]*r="[56]"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"/g)];
-      assert.equal(circles.length, line.points.length + (line.origin ? 1 : 0) + line.markers.length);
+      // UI-only two-dot rule: the permanent Order Placed start plus the current
+      // endpoint. Intermediate daily coordinates keep their tap targets, labels and
+      // connector geometry, but no visible dot of their own.
+      const inRange = line.points.filter(point => point.day >= '2026-09-15' && point.day <= '2026-09-24');
+      const startAnchor = [line.anchor, line.origin].find(marker => marker && marker.day >= '2026-09-15' && marker.day <= '2026-09-24') || null;
+      const dots = new Set([startAnchor || inRange[0], inRange[inRange.length - 1]].filter(Boolean));
+      assert.equal(circles.length, dots.size);
+      assert.ok(circles.length <= 2, 'never more than one start dot and one endpoint dot per journey');
       assert.ok(circles.every(match => match[2] === line.color && match[1] === line.color));
       const texts = [...group.matchAll(/<foreignObject\b[^>]*>([\s\S]*?)<\/foreignObject>/g)];
       assert.equal(texts.length, 2);
       for (const text of texts) {
         assert.ok(text[0].includes(`color:${line.color}`));
         assert.doesNotMatch(text[1], /Draft|Review|Delivery/);
+      }
+    }
+  });
+
+  test(`${app}: a journey shows only its Order Placed start dot and its current endpoint dot`, () => {
+    // UI-only presentation rule. The daily data model, stage rows and connector
+    // geometry are untouched: the intermediate coordinates are still generated and
+    // still tappable, they simply no longer draw a dot.
+    const active = { ...task, id: 'ui-active', title: 'Active journey', status: 'IN_PROGRESS', progress: 10,
+      order: { id: 'ui-active-order', orderId: 'UI-A', createdAt: '2026-11-15T09:00:00Z' },
+      approvedAt: '2026-11-15T12:00:00Z', startDate: '2026-11-16', completedAt: null, deadline: '2026-11-30',
+      milestones: [{ name: 'Draft', percentage: 10, reached: true, reachedAt: '2026-11-17T09:00:00Z' }] };
+    const done = { ...task, id: 'ui-done', title: 'Completed journey', status: 'COMPLETED', progress: 100,
+      order: { id: 'ui-done-order', orderId: 'UI-D', createdAt: '2026-11-15T09:00:00Z' },
+      approvedAt: '2026-11-16T09:00:00Z', startDate: '2026-11-16', completedAt: '2026-11-19T09:00:00Z', deadline: '2026-11-30',
+      milestones: [{ name: 'Delivery', percentage: 100, reached: true, reachedAt: '2026-11-19T09:00:00Z' }] };
+    const polyline = path => {
+      let x = 0, y = 0;
+      return (path.match(/[MLHV][^MLHV]*/g) || []).map(token => {
+        const nums = (token.slice(1).match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+        if (token[0] === 'M' || token[0] === 'L') { x = nums[0]; y = nums[1]; }
+        else if (token[0] === 'H') x = nums[0];
+        else y = nums[0];
+        return { x, y };
+      });
+    };
+    for (const journey of [active, done]) {
+      const tasks = [journey];
+      const completed = Boolean(journey.completedAt);
+      for (const width of [0, 235]) {
+        const line = view.buildWorkflowGraph({ tasks }, '2026-11-15', '2026-11-21', width).series[0];
+        const last = line.points.at(-1);
+        assert.ok(line.points.length >= 5, 'every intermediate daily coordinate is retained');
+        assert.equal(last.day, completed ? '2026-11-19' : '2026-11-21',
+          completed ? 'the final endpoint sits on the actual completion date and the journey stops' : 'the endpoint advances to the latest reporting date');
+        assert.equal(last.row, completed ? 4 : 3);
+        const nodes = polyline(line.path);
+        assert.ok(nodes.length >= line.points.length, 'the connecting line still runs through every daily coordinate');
+        assert.deepEqual(nodes.at(-1), { x: last.x, y: last.y }, 'the line ends exactly on the endpoint dot');
+        assert.equal(nodes[0].x, line.points[0].x, 'the line starts on the original Order Placed date');
+      }
+      const model = view.buildWorkflowGraph({ tasks }, '2026-11-15', '2026-11-21');
+      const line = model.series[0];
+      const last = line.points.at(-1);
+      const html = render(view.default, { timeline: { tasks }, startDate: '2026-11-15', endDate: '2026-11-21' });
+      const group = html.split(`data-journey-task="${line.task.id}"`)[1].split('</svg>')[0];
+      const circles = [...group.matchAll(/<circle\b[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)"[^>]*r="5"[^>]*fill="([^"]+)"[^>]*stroke="([^"]+)"[^>]*stroke-width="1.5"/g)];
+      assert.equal(circles.length, 2, 'exactly two visible dots per journey');
+      assert.ok(circles.every(circle => circle[3] === line.color && circle[4] === line.color), 'both dots keep the journey colour');
+      assert.ok(circles.some(circle => +circle[1] === last.x && +circle[2] === last.y), 'one dot is the current endpoint');
+      const startCircle = circles.find(circle => !(+circle[1] === last.x && +circle[2] === last.y));
+      assert.equal(+startCircle[1], line.points[0].x, 'the start dot never leaves the original Order Placed date');
+      assert.ok(+startCircle[2] >= model.bands[0].top && +startCircle[2] <= model.bands[0].top + model.bands[0].height, 'the start dot sits on the Order Placed row');
+      const middle = line.points.slice(1, -1);
+      assert.ok(middle.length >= 3, 'the journey has intermediate daily coordinates');
+      for (const point of middle) {
+        assert.ok(!circles.some(circle => +circle[1] === point.x && +circle[2] === point.y), `no visible dot on the intermediate coordinate ${point.day}`);
+      }
+      assert.equal((group.match(/data-point-target="true"/g) || []).length, line.points.length, 'every daily coordinate keeps its tap target');
+      assert.equal((group.match(/data-endpoint-label="start"/g) || []).length, 1, 'the journey number at the start is preserved');
+      assert.equal((group.match(/data-endpoint-label="end"/g) || []).length, 1, 'the journey number at the endpoint is preserved');
+      assert.equal((group.match(/data-stage-marker="true"/g) || []).length, 0, 'a same-date stage rise adds no extra visible dot');
+      assert.equal((group.match(/data-origin-marker="true"/g) || []).length, line.anchor || line.origin ? 1 : 0);
+      if (line.anchor) {
+        assert.ok(group.includes('data-origin-marker="true" data-stage="ORDER PLACED" data-date="2026-11-15"'),
+          'same-date recorded stages keep their line geometry behind one Order Placed start dot');
+        assert.ok(!circles.some(circle => +circle[1] === line.points[0].x && +circle[2] === line.points[0].y),
+          'the lifted same-date coordinate itself draws no dot');
+      }
+      if (!completed) {
+        const earlier = view.buildWorkflowGraph({ tasks }, '2026-11-15', '2026-11-18').series[0];
+        assert.equal(earlier.points.at(-1).day, '2026-11-18', 'the endpoint dot moves forward as the reporting date advances');
+        assert.ok(earlier.points.at(-1).day < last.day);
       }
     }
   });
