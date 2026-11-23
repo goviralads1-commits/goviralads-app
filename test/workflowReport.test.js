@@ -244,12 +244,11 @@ test('an empty period produces a graceful report instead of an error', () => {
   assert.equal(report.buildReportModel({}).clientLabel, 'All authorized clients');
 });
 
-test('multi-client and employee filters are labelled, content links are sanitized', () => {
+test('multi-client reports are labelled, content links are sanitized', () => {
   const first = order('o1', '2026-09-05T09:00:00.000Z');
   const built = model({
     orders: [first],
     clients: [{ id: 'c1', name: 'Acme Media' }, { id: 'c2', name: 'Beta Films' }],
-    employee: { id: 'e1', name: 'Riya (Editor)' },
     tasks: [task('t1', first, {
       clientName: 'Beta Films',
       description: '<p>Shoot &amp; edit&nbsp;the promo</p><script>alert(1)</script>',
@@ -260,8 +259,9 @@ test('multi-client and employee filters are labelled, content links are sanitize
     })],
   });
   assert.equal(built.clientLabel, '2 selected clients');
-  assert.equal(built.employee, 'Riya (Editor)');
-  assert.ok(built.notes.some(note => note.includes('Filtered to work assigned to Riya (Editor)')));
+  // The report is client-based: it carries no per-employee filter label.
+  assert.equal(built.employee, undefined);
+  assert.ok(!built.notes.some(note => note.includes('Filtered to work assigned to')));
   const entry = built.journeys[0].tasks[0];
   assert.deepEqual(entry.links, ['https://example.com/brief', 'https://drive.example.com/assets', 'https://drive.example.com/final']);
   assert.equal(entry.description, 'Shoot & edit the promo alert(1)');
@@ -494,9 +494,11 @@ test('the report route reuses the existing authorization surface and never widen
   assert.equal(optionFreeCalls.length, 3, 'the three existing client-scoped endpoints keep the default rule');
   const unionCalls = source.match(/resolveAuthorizedClient\(req, \{ assignmentUnion: true \}\);/g) || [];
   assert.equal(unionCalls.length, 1, 'only the report route opts into the union rule');
-  // Assigned staff are restricted at TASK level to their own assignment, and the
-  // employee filter is only reachable in the main-admin branch.
-  assert.match(body, /if \(!isMainAdmin\) \{\s*\r?\n\s*assignmentScope = \{ \$or: \[\{ assignedTo: caller\._id \}, \{ 'assignedUsers\.userId': caller\._id \}\] \};\s*\r?\n\s*\} else if \(req\.query\.employeeId\) \{/);
+  // Assigned staff are restricted at TASK level to their own assignment. The
+  // report is client-based: there is NO employeeId filter branch anymore.
+  assert.match(body, /if \(!isMainAdmin\) \{\s*\r?\n\s*assignmentScope = \{ \$or: \[\{ assignedTo: caller\._id \}, \{ 'assignedUsers\.userId': caller\._id \}\] \};\s*\r?\n\s*\}/);
+  assert.doesNotMatch(body, /employeeId/);
+  assert.doesNotMatch(body, /\bEmployee\b/);
   assert.match(body, /const isMainAdmin = caller\.role === 'ADMIN' && !caller\.customRole;/);
   // Orders for an assignment-scoped caller come only from that caller's tasks.
   assert.match(body, /Order\.find\(\{ _id: \{ \$in: linkedIds \}, clientId \}\)/);
@@ -714,11 +716,12 @@ test('the real report route never exposes another employee task or an unauthoriz
   assert.equal(mixed.res.statusCode, 404);
   assert.equal(mixed.calls.models.length, 0);
 
-  // employeeId is a main-admin control: ignored for staff and never queried.
+  // The report is client-based: a stray employeeId query param is ignored, no
+  // employee is ever looked up, and the model carries no employee field.
   const filtered = await runReportRoute(STAFF_CALLER, { clientId: 'c-union', ...PERIOD, employeeId: 'other' });
   assert.equal(filtered.res.statusCode, 200);
   assert.equal(filtered.calls.employee, 0);
-  assert.equal(filtered.calls.models[0].employee, null);
+  assert.equal(filtered.calls.models[0].employee, undefined);
   assert.deepEqual(plain(filtered.calls.taskScope[0].$and[1]), { $or: [{ assignedTo: 'staff' }, { 'assignedUsers.userId': 'staff' }] });
 
   // Orders are reachable only through exact ids linked from in-scope tasks.

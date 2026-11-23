@@ -242,7 +242,6 @@ function buildReportModel(input = {}) {
   const unnumbered = journeys.filter(journey => !journey.sequence);
   if (unnumbered.length) notes.push(`${unnumbered.length} journey(s) have no recorded order date inside the selected period and are listed without a chronological number.`);
   if (unavailable) notes.push(`${unavailable} task(s) have no usable progress value, so their stage is reported as unavailable instead of being guessed.`);
-  if (input.employee?.name) notes.push(`Filtered to work assigned to ${plainText(input.employee.name, 80)}.`);
   if (!tasks.length && !orders.length) notes.push('No order or task record exists for this client and period.');
 
   const clientLabel = clients.length === 1
@@ -254,7 +253,6 @@ function buildReportModel(input = {}) {
     title: 'Workflow Report',
     generatedAt: input.generatedAt || new Date(),
     generatedBy: plainText(input.generatedBy?.name || input.generatedBy?.identifier || 'Admin', 80),
-    employee: input.employee?.name ? plainText(input.employee.name, 80) : null,
     period: {
       startDate,
       endDate,

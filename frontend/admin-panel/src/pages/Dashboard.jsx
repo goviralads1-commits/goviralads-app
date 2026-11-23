@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import { initPushNotifications, setupForegroundHandler } from '../services/pushService';
-import { getPermissions } from '../services/authService';
 import { useAuth } from '../App';
 import WorkflowCalendar from '../components/WorkflowCalendar';
 import WorkflowJourney from '../components/WorkflowJourney';
@@ -64,8 +63,6 @@ const Dashboard = () => {
   const [reportYear, setReportYear] = useState(() => new Date().getUTCFullYear());
   const [reportStart, setReportStart] = useState('');
   const [reportEnd, setReportEnd] = useState('');
-  const [reportEmployee, setReportEmployee] = useState('');
-  const [reportEmployees, setReportEmployees] = useState(null);
   const [reportBusy, setReportBusy] = useState('');
   const [reportError, setReportError] = useState('');
   const [showNoticeForm, setShowNoticeForm] = useState(false);
@@ -212,7 +209,8 @@ const Dashboard = () => {
   };
 
   // ---- Workflow PDF report (main admin + assigned staff, admin panel only) ----
-  const reportIsMainAdmin = getPermissions()?.isMainAdmin === true;
+  // The report is CLIENT-BASED: it covers the client(s) selected in the client
+  // filter above, so the only report options are the period ones.
   const reportControlStyle = { minHeight: '42px', padding: '9px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: '#334155', fontSize: '13px', fontWeight: '600', flex: '1 1 140px', minWidth: 0, boxSizing: 'border-box' };
   const reportYears = Array.from({ length: 6 }, (_, index) => new Date().getUTCFullYear() - index);
   const reportRange = () => {
@@ -230,23 +228,9 @@ const Dashboard = () => {
     setReportYear(now.getUTCFullYear());
     setReportStart('');
     setReportEnd('');
-    setReportEmployee('');
     setReportError('');
   };
-  const toggleReport = async () => {
-    const next = !reportOpen;
-    setReportOpen(next);
-    // Employee filtering is a main-admin control, so the linked-employee list is
-    // loaded lazily and only the first time the panel is opened.
-    if (next && reportIsMainAdmin && reportEmployees === null) {
-      try {
-        const res = await api.get('/admin/employees', { params: { linkedToUser: 'true' } });
-        setReportEmployees((res.data?.employees || []).filter(employee => employee.userId));
-      } catch (err) {
-        setReportEmployees([]);
-      }
-    }
-  };
+  const toggleReport = () => setReportOpen(prev => !prev);
   const saveReportFile = (url, startDate, endDate) => {
     const link = document.createElement('a');
     link.href = url;
@@ -266,7 +250,6 @@ const Dashboard = () => {
     const preview = action === 'generate' ? window.open('', '_blank') : null;
     try {
       const params = { clientId: clientFilter, startDate, endDate, mode: action === 'generate' ? 'inline' : 'attachment' };
-      if (reportIsMainAdmin && reportEmployee) params.employeeId = reportEmployee;
       const res = await api.get('/admin/analytics/report/pdf', { params, responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       if (preview) preview.location.href = url; else saveReportFile(url, startDate, endDate);
@@ -842,12 +825,6 @@ const Dashboard = () => {
                       <span style={{ fontSize: '13px', color: '#94a3b8' }}>→</span>
                       <input type="date" aria-label="Report end date" value={reportEnd} min={reportStart || undefined} onChange={e => setReportEnd(e.target.value)} style={reportControlStyle} />
                     </div>
-                  )}
-                  {reportIsMainAdmin && (
-                    <select aria-label="Filter report by assigned employee" value={reportEmployee} onChange={e => setReportEmployee(e.target.value)} style={reportControlStyle}>
-                      <option value="">All assigned employees</option>
-                      {(reportEmployees || []).map(employee => <option key={employee.id} value={employee.id}>{employee.name}{employee.identifier ? ` (${employee.identifier})` : ''}</option>)}
-                    </select>
                   )}
                   <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>Period: {reportRange().label} · Uses actual recorded order and event dates. Unavailable historical dates are reported as unavailable, never invented.</p>
                   {reportError && <p role="alert" style={{ fontSize: '12px', color: '#ef4444', margin: 0 }}>{reportError}</p>}

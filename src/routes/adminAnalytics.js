@@ -34,7 +34,6 @@ const UserSubscription = require('../models/UserSubscription');
 const { RechargeRequest } = require('../models/RechargeRequest');
 const CommissionLog = require('../models/CommissionLog');
 const Notification = require('../models/Notification');
-const { Employee } = require('../models/Employee');
 const { buildTimelineJourneyMap, findTimelineEventTaskIds, findTimelineTasks } = require('../utils/workflowTimeline');
 const { buildReportModel } = require('../services/workflowReportService');
 const { generateWorkflowReportPDF } = require('../services/workflowReportPdf');
@@ -508,7 +507,10 @@ router.get('/timeline', async (req, res) => {
 // visibility is derived from that same union, so a staff member can report for
 // every client they legitimately hold at least one assigned task for, and never
 // for another employee's work or an unauthorized client.
-// The employeeId filter is a main-admin control and is ignored for anyone else.
+// The report is CLIENT-BASED: it always covers every order and task of the
+// selected client(s) in the period, whoever the work is assigned to. There is no
+// employee filter — a main admin sees all of a selected client's work, and the
+// assignment scope above is an authorization boundary, not a report option.
 const REPORT_ORDER_SELECT = 'orderId clientId orderStatus createdAt approvedAt completedAt items.planTitle items.quantity';
 const REPORT_TASK_DETAIL_SELECT = 'description clientInputs.link clientContentLinks clientDriveLink';
 const REPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -530,17 +532,8 @@ router.get('/report/pdf', async (req, res) => {
     const isMainAdmin = caller.role === 'ADMIN' && !caller.customRole;
 
     let assignmentScope = null;
-    let employee = null;
     if (!isMainAdmin) {
       assignmentScope = { $or: [{ assignedTo: caller._id }, { 'assignedUsers.userId': caller._id }] };
-    } else if (req.query.employeeId) {
-      const employeeId = String(req.query.employeeId);
-      if (!mongoose.isValidObjectId(employeeId)) return res.status(400).json({ error: 'Invalid employeeId' });
-      const record = await Employee.findOne({ _id: employeeId, isDeleted: { $ne: true } }).select('name userId').lean();
-      if (!record) return res.status(404).json({ error: 'Employee not found' });
-      if (!record.userId) return res.status(400).json({ error: 'Selected employee has no linked user' });
-      employee = { id: employeeId, name: record.name || 'Employee' };
-      assignmentScope = { $or: [{ assignedTo: record.userId }, { 'assignedUsers.userId': record.userId }] };
     }
 
     // Same inclusive UTC boundaries as buildDateFilters — one date convention.
@@ -581,7 +574,6 @@ router.get('/report/pdf', async (req, res) => {
       range: { startDate, endDate },
       clients: clients.map(client => ({ id: String(client._id), name: client.profile?.name || client.identifier || 'Client' })),
       generatedBy: { name: caller.profile?.name || caller.identifier, identifier: caller.identifier },
-      employee,
       generatedAt: new Date(),
       orders: orders.map(order => ({
         id: String(order._id),
