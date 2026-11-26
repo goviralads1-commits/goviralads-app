@@ -7,11 +7,17 @@ import AttachSheet from '../components/chat/AttachSheet';
 import MediaBubble from '../components/chat/MediaBubble';
 import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
 import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES, deleteMedia } from '../components/chat/mediaUpload';
+import { readCache, cachedFetch } from '../services/smartCache';
+
+// Support conversations reuse the per-task detail cache written by TaskDetail so
+// opening a previously viewed conversation shows its message history instantly.
+const supportDetailKey = (taskId) => `client::taskdetail::v1::${taskId}`;
 
 const Support = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
+  const SUPPORT_CACHE_KEY = 'client::support::v1';
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
@@ -245,6 +251,11 @@ const Support = () => {
     setChatLoading(true);
     setShowNewMsgBadge(false);
     isNearBottomRef.current = true;
+    // Instant paint from the shared per-task cache on the first (non-retry) open.
+    if (retryCount === 0) {
+      const cachedDetail = readCache(supportDetailKey(taskId));
+      if (cachedDetail?.task) { setSelectedTask(cachedDetail.task); setChatLoading(false); }
+    }
     try {
       console.log('[Support] Opening chat for taskId:', taskId, retryCount > 0 ? `(retry ${retryCount})` : '');
       const res = await api.get(`/client/tasks/${taskId}`);
@@ -289,14 +300,23 @@ const Support = () => {
   };
 
   const fetchTasksWithMessages = async () => {
-    try {
+    // Smart Data Persistence: show the saved conversation list immediately, then
+    // revalidate in the background. Failures retain the cached list (logged only),
+    // matching the previous silent-error behavior for this screen.
+    const buildSupportPayload = async () => {
       const res = await api.get('/client/tasks');
       const allTasks = res.data.tasks || res.data || [];
-      const tasksWithActivity = allTasks.filter(t => 
+      const tasksWithActivity = allTasks.filter(t =>
         (t.messagesCount > 0) || (t.approvalRequestsCount > 0)
       );
       tasksWithActivity.sort((a, b) => getLastActivity(b) - getLastActivity(a));
-      setTasks(tasksWithActivity);
+      return { tasks: tasksWithActivity };
+    };
+    const cached = readCache(SUPPORT_CACHE_KEY);
+    if (cached) { setTasks(cached.tasks || []); setLoading(false); }
+    try {
+      const fresh = await cachedFetch(SUPPORT_CACHE_KEY, buildSupportPayload);
+      setTasks(fresh.tasks || []);
     } catch (err) {
       console.error('[Support] Fetch error:', err);
     } finally {
@@ -309,6 +329,11 @@ const Support = () => {
     setChatLoading(true);
     setShowNewMsgBadge(false);
     isNearBottomRef.current = true;
+    // Paint saved message history instantly (if this conversation was viewed
+    // before); the fetch below overwrites it with authoritative data and only
+    // then starts live polling via activeTaskId.
+    const cachedDetail = readCache(supportDetailKey(taskId));
+    if (cachedDetail?.task) { setSelectedTask(cachedDetail.task); setChatLoading(false); }
     try {
       const res = await api.get(`/client/tasks/${taskId}`);
       setSelectedTask(res.data.task);

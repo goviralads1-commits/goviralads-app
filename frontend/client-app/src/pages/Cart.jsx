@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import api from '../services/api';
 import Header from '../components/Header';
 import OrderContentUpload from '../components/OrderContentUpload';
+import { invalidate } from '../services/smartCache';
 
 const Cart = () => {
   const navigate = useNavigate();
@@ -126,6 +127,15 @@ const Cart = () => {
 
       // Update wallet balance display
       setWalletBalance(response.data.walletBalance);
+
+      // Smart Data Persistence: a purchase creates orders/tasks and changes the
+      // wallet balance, so drop the affected cached payloads. The next visit to
+      // Tasks / Support / Dashboard / Wallet then revalidates and shows the newly
+      // created tasks immediately instead of a stale cached copy.
+      invalidate('client::tasks::v1');
+      invalidate('client::support::v1');
+      invalidate('client::dashboard::v1');
+      invalidate('client::wallet::v1');
 
       setTimeout(() => {
         setToast(null);

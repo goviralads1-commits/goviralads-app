@@ -5,6 +5,7 @@ import api from '../services/api';
 import DOMPurify from 'dompurify';
 import { useCart } from '../context/CartContext';
 import { isAuthenticated } from '../services/authService';
+import { readCache, cachedFetch } from '../services/smartCache';
 
 // Helper: Extract video thumbnail URL
 const getVideoThumbnail = (url) => {
@@ -86,24 +87,45 @@ const Plans = () => {
   }, [urlCategory]);
 
   const fetchData = useCallback(async () => {
-    try {
-      const params = { 
-        categoryId: selectedCategory !== 'ALL' ? selectedCategory : undefined,
-        search: debouncedSearch || undefined
-      };
-      
-      const plansBase = isAuthenticated() ? '/client/plans' : '/public/plans';
-      const catsBase = isAuthenticated() ? '/client/categories' : '/public/categories';
+    // Smart Data Persistence: the marketplace is cached per filter combination so
+    // a revisit (or returning from a plan detail) paints instantly. Keys are
+    // identity-scoped by smartCache, so guest and client catalogs never mix.
+    const authed = isAuthenticated();
+    const key = `client::plans::v1::${authed ? 'auth' : 'guest'}::${selectedCategory}::${debouncedSearch}`;
+    const params = {
+      categoryId: selectedCategory !== 'ALL' ? selectedCategory : undefined,
+      search: debouncedSearch || undefined
+    };
+    const plansBase = authed ? '/client/plans' : '/public/plans';
+    const catsBase = authed ? '/client/categories' : '/public/categories';
+    const buildPlansPayload = async () => {
       const [plansRes, categoriesRes] = await Promise.all([
         api.get(plansBase, { params }),
         api.get(catsBase).catch(() => ({ data: { categories: [] } }))
       ]);
-      
-      setPlans(plansRes.data.plans || []);
-      setCategories(categoriesRes.data.categories || []);
+      return { plans: plansRes.data.plans || [], categories: categoriesRes.data.categories || [] };
+    };
+    const applyPlansPayload = (p) => {
+      if (!p) return;
+      setPlans(p.plans || []);
+      setCategories(p.categories || []);
       setError(null);
+    };
+
+    const cached = readCache(key);
+    if (cached) { applyPlansPayload(cached); setLoading(false); }
+    try {
+      const fresh = await cachedFetch(key, buildPlansPayload);
+      applyPlansPayload(fresh);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load marketplace');
+      // Retain cached data on refresh failure with a subtle notice; only surface
+      // the hard error when there is nothing usable on screen.
+      if (cached) {
+        setToast('Showing saved plans — could not refresh.');
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setError(err.response?.data?.error || 'Failed to load marketplace');
+      }
     } finally {
       setLoading(false);
     }

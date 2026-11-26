@@ -1,9 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import WorkflowTimeline from '../components/WorkflowTimeline';
 import { getCurrentUser, isAuthenticated } from '../services/authService';
+import { readCache, cachedFetch } from '../services/smartCache';
+
+// Smart Data Persistence key for the Office/Dashboard composite payload. Private
+// (client-scoped) keys are automatically namespaced per authenticated identity by
+// the cache service, and guests fall into a separate anonymous namespace.
+const DASHBOARD_CACHE_KEY = 'client::dashboard::v1';
 
 // Helper: Extract video thumbnail URL
 const getVideoThumbnail = (url) => {
@@ -42,6 +48,13 @@ const getMediaDisplayUrl = (media) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const noticeId = new URLSearchParams(location.search).get('noticeId');
+  const [attentionNotices, setAttentionNotices] = useState([]);
+  const [noticeLoading, setNoticeLoading] = useState(false);
+  const shownNotices = useRef(new Set());
+  const noticeRequest = useRef(0);
+  const attentionPaused = useRef(false);
   const [config, setConfig] = useState(null);
   const [featuredPlans, setFeaturedPlans] = useState([]);
   const [notices, setNotices] = useState([]);
@@ -60,57 +73,93 @@ const Dashboard = () => {
   const [responseValue, setResponseValue] = useState('');
   const [toast, setToast] = useState(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [configRes, noticesRes, tasksRes, commRes, walletRes, ordersRes, dashRes] = await Promise.all([
-        api.get(isAuthenticated() ? '/client/office-config' : '/public/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
-        api.get('/client/notices').catch(() => ({ data: { notices: [] } })),
-        api.get('/client/tasks').catch(() => ({ data: { tasks: [] } })),
-        api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } })),
-        // Wallet is tracked separately so a failed request is never shown as "0 credits".
-        // limit=1 uses the endpoint's existing pagination param — the dashboard never reads transactions.
-        api.get('/client/wallet?limit=1').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false })),
-        // Client-owned analytics (existing endpoints, auth-scoped by req.user.id on the server).
-        // Fetched only when logged in; failures are tracked, never rendered as zeros.
-        isAuthenticated()
-          ? api.get('/client/orders').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
-          : Promise.resolve({ ok: true, data: { orders: [] } }),
-        isAuthenticated()
-          ? api.get('/client/dashboard').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
-          : Promise.resolve({ ok: true, data: null })
-      ]);
-      setConfig(configRes.data.config);
-      setFeaturedPlans(configRes.data.featuredPlans || []);
-      setNotices(noticesRes.data.notices || []);
-      setTasks(tasksRes.data.tasks || []);
-      setCommissionData({
+  // Assemble the dashboard payload from the existing endpoints. Guest vs signed-in
+  // branching and per-section ok/error tracking are preserved EXACTLY as before;
+  // the result is a plain, JSON-serializable object so it can be cached.
+  const buildDashboardPayload = async () => {
+    const signedIn = isAuthenticated();
+    const guestEmpty = (value) => Promise.resolve({ data: value });
+    const [configRes, noticesRes, tasksRes, commRes, walletRes, ordersRes, dashRes] = await Promise.all([
+      api.get(signedIn ? '/client/office-config' : '/public/office-config').catch(() => ({ data: { config: null, featuredPlans: [] } })),
+      signedIn
+        ? api.get('/client/notices', { params: { includeAttention: true } }).catch(() => ({ data: { notices: [] } }))
+        : guestEmpty({ notices: [] }),
+      signedIn
+        ? api.get('/client/tasks').catch(() => ({ data: { tasks: [] } }))
+        : guestEmpty({ tasks: [] }),
+      signedIn
+        ? api.get('/client/my-commissions').catch(() => ({ data: { overallTotal: 0, overallTaskCount: 0, logs: [] } }))
+        : guestEmpty({ overallTotal: 0, overallTaskCount: 0, logs: [] }),
+      // Wallet is tracked separately so a failed request is never shown as "0 credits".
+      // limit=1 uses the endpoint's existing pagination param — the dashboard never reads transactions.
+      signedIn
+        ? api.get('/client/wallet?limit=1').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+        : Promise.resolve({ ok: false }),
+      // Client-owned analytics (existing endpoints, auth-scoped by req.user.id on the server).
+      signedIn
+        ? api.get('/client/orders').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+        : Promise.resolve({ ok: true, data: { orders: [] } }),
+      signedIn
+        ? api.get('/client/dashboard').then((res) => ({ ok: true, data: res.data })).catch(() => ({ ok: false }))
+        : Promise.resolve({ ok: true, data: null })
+    ]);
+    return {
+      config: configRes.data.config,
+      featuredPlans: configRes.data.featuredPlans || [],
+      notices: noticesRes.data.notices || [],
+      attentionNotices: noticesRes.data.attentionNotices || [],
+      tasks: tasksRes.data.tasks || [],
+      commissionData: {
         overallTotal: commRes.data?.overallTotal || 0,
         overallTaskCount: commRes.data?.overallTaskCount || 0,
         logs: (commRes.data?.logs || []).slice(0, 5)
-      });
-      if (walletRes.ok) {
-        setWalletData(walletRes.data || null);
-        setWalletError(false);
-      } else {
-        setWalletData(null);
-        setWalletError(true);
-      }
-      if (ordersRes.ok) {
-        setOrders(ordersRes.data?.orders || []);
-        setOrdersError(false);
-      } else {
-        setOrders([]);
-        setOrdersError(true);
-      }
-      if (dashRes.ok) {
-        setDashStats(dashRes.data || null);
-        setDashStatsError(false);
-      } else {
-        setDashStats(null);
-        setDashStatsError(true);
-      }
+      },
+      wallet: walletRes.ok ? { ok: true, data: walletRes.data || null } : { ok: false },
+      orders: ordersRes.ok ? { ok: true, list: ordersRes.data?.orders || [] } : { ok: false },
+      dashStats: dashRes.ok ? { ok: true, data: dashRes.data || null } : { ok: false },
+    };
+  };
+
+  // Push a payload into the existing per-section state. Mirrors the previous inline
+  // setState calls one-for-one, so rendering behaviour is unchanged.
+  const applyDashboardPayload = (p) => {
+    if (!p) return;
+    setConfig(p.config);
+    setFeaturedPlans(p.featuredPlans || []);
+    setNotices(p.notices || []);
+    setAttentionNotices(p.attentionNotices || []);
+    setTasks(p.tasks || []);
+    setCommissionData(p.commissionData || { overallTotal: 0, overallTaskCount: 0, logs: [] });
+    if (p.wallet?.ok) { setWalletData(p.wallet.data || null); setWalletError(false); }
+    else { setWalletData(null); setWalletError(true); }
+    if (p.orders?.ok) { setOrders(p.orders.list || []); setOrdersError(false); }
+    else { setOrders([]); setOrdersError(true); }
+    if (p.dashStats?.ok) { setDashStats(p.dashStats.data || null); setDashStatsError(false); }
+    else { setDashStats(null); setDashStatsError(true); }
+  };
+
+  const fetchData = useCallback(async () => {
+    // Guests may browse the marketplace, but notices/tasks/commissions/wallet are
+    // client-scoped endpoints with no public variant. Calling them logged out
+    // only produces guaranteed 401s, so guests resolve straight to the same
+    // states the .catch() handlers produce — including the wallet card's
+    // failure state, which IS the guest "Sign in to see your balance" card.
+    //
+    // Smart Data Persistence: show the last saved payload immediately (so no
+    // full-page skeleton appears on revisit), then revalidate in the background.
+    const cached = readCache(DASHBOARD_CACHE_KEY);
+    if (cached) { applyDashboardPayload(cached); setLoading(false); }
+    try {
+      const fresh = await cachedFetch(DASHBOARD_CACHE_KEY, buildDashboardPayload);
+      applyDashboardPayload(fresh);
     } catch (err) {
-      // Silent fail - show empty states
+      // Retain whatever is already on screen. When cached data was shown, surface
+      // a subtle notice; with no cache the existing silent empty-state behaviour
+      // is preserved exactly (nothing is applied, loading just stops below).
+      if (cached) {
+        setToast({ type: 'error', message: 'Showing saved data — could not refresh.' });
+        setTimeout(() => setToast(null), 3000);
+      }
     } finally {
       setLoading(false);
     }
@@ -164,14 +213,43 @@ const Dashboard = () => {
     else { setDashStats(null); setDashStatsError(true); }
   };
 
-  const handleViewNotice = async (notice) => {
+  const handleViewNotice = useCallback(async (notice) => {
+    const request = ++noticeRequest.current;
+    shownNotices.current.add(notice.id);
+    setNoticeLoading(true);
     try {
-      // Mark as viewed
-      await api.post(`/client/notices/${notice.id}/view`).catch(() => {});
-      setSelectedNotice(notice);
+      const res = await api.get(`/client/notices/${encodeURIComponent(notice.id)}`);
+      if (request !== noticeRequest.current) return;
+      if (res.data.notice?.expiresAt && new Date(res.data.notice.expiresAt) <= new Date()) throw new Error('Notice expired');
+      setSelectedNotice(res.data.notice);
       setResponseValue('');
     } catch (err) {
-      setSelectedNotice(notice);
+      if (request === noticeRequest.current) {
+        attentionPaused.current = true;
+        setToast({ type: 'error', message: 'This notice could not be opened. Please try again from Notifications.' });
+      }
+    } finally {
+      if (request === noticeRequest.current) setNoticeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (noticeId) void handleViewNotice({ id: noticeId });
+    return () => { noticeRequest.current += 1; };
+  }, [noticeId, location.key, handleViewNotice]);
+
+  useEffect(() => {
+    if (loading || noticeLoading || selectedNotice || noticeId || attentionPaused.current) return;
+    const next = attentionNotices.find(notice => !shownNotices.current.has(notice.id) && !notice.hasResponded);
+    if (next) void handleViewNotice(next);
+  }, [loading, noticeLoading, selectedNotice, noticeId, attentionNotices, handleViewNotice]);
+
+  const closeNotice = () => {
+    setSelectedNotice(null);
+    if (noticeId) {
+      const params = new URLSearchParams(location.search);
+      params.delete('noticeId');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
   };
 
@@ -179,13 +257,20 @@ const Dashboard = () => {
     if (!selectedNotice) return;
     setResponding(true);
     try {
-      await api.post(`/client/notices/${selectedNotice.id}/respond`, {
+      const res = await api.post(`/client/notices/${selectedNotice.id}/respond`, {
         responseType,
         value
       });
+      const handledId = selectedNotice.id;
+      setNotices(previous => previous.map(notice => notice.id === handledId ? { ...notice, hasResponded: true, myResponse: res.data.response } : notice));
+      setAttentionNotices(previous => previous.filter(notice => notice.id !== handledId));
       showToast('success', 'Response submitted!');
-      setSelectedNotice(null);
-      fetchData();
+      closeNotice();
+      const refreshed = await api.get('/client/notices', { params: { includeAttention: true } }).catch(() => null);
+      if (refreshed) {
+        setNotices(refreshed.data.notices || []);
+        setAttentionNotices(refreshed.data.attentionNotices || []);
+      }
     } catch (err) {
       showToast('error', err.response?.data?.error || 'Failed to submit response');
     } finally {
@@ -822,7 +907,7 @@ const Dashboard = () => {
             <div style={{ padding: '20px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{selectedNotice.type === 'REQUIREMENT' ? '📋 Requirement' : selectedNotice.type === 'PROMOTION' ? '🎁 Promotion' : '🔄 Update'}</h3>
               <button 
-                onClick={() => setSelectedNotice(null)} 
+                onClick={closeNotice} disabled={responding}
                 style={{ width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: '10px', cursor: 'pointer', fontSize: '18px', color: '#64748b' }}
               >
                 ✕
@@ -914,7 +999,7 @@ const Dashboard = () => {
               )}
             </div>
             <div style={{ padding: '16px 20px calc(16px + env(safe-area-inset-bottom))', borderTop: '1px solid #eef2f7' }}>
-              <button onClick={() => setSelectedNotice(null)} style={{ width: '100%', padding: '16px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '14px', border: 'none', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
+              <button onClick={closeNotice} disabled={responding} style={{ width: '100%', padding: '16px', backgroundColor: '#f1f5f9', color: '#64748b', borderRadius: '14px', border: 'none', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
                 Close
               </button>
             </div>

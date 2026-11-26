@@ -1,4 +1,5 @@
 import api from './api';
+import { clearPrivateCache } from './smartCache';
 
 // Login function
 export const login = async (email, password) => {
@@ -19,6 +20,9 @@ export const login = async (email, password) => {
     console.log('[AUTH SERVICE] User ID:', user.id);
     
     // Store token and user info in localStorage
+    // Clear any PREVIOUS session's private cache first (account switching / re-login)
+    // so one client's saved data is never visible to another identity.
+    clearPrivateCache();
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     
@@ -39,6 +43,9 @@ export const login = async (email, password) => {
 
 // Logout function
 export const logout = () => {
+  // Clear this client's private cached data BEFORE the identity is removed, while
+  // the cache namespace can still be resolved from the stored user record.
+  clearPrivateCache();
   localStorage.removeItem('token');
   localStorage.removeItem('user');
 };

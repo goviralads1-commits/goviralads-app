@@ -5,6 +5,7 @@ import api from '../services/api';
 import DOMPurify from 'dompurify';
 import { useCart } from '../context/CartContext';
 import { isAuthenticated } from '../services/authService';
+import { readCache, cachedFetch } from '../services/smartCache';
 
 const PlanDetail = () => {
   const { planId } = useParams();
@@ -21,13 +22,33 @@ const PlanDetail = () => {
   const primaryVideoRef = useRef(null);
 
   const fetchPlan = useCallback(async () => {
-    try {
-      const endpoint = isAuthenticated() ? `/client/plans/${planId}` : `/public/plans/${planId}`;
+    // Smart Data Persistence: cache each plan detail by id + auth scope so a
+    // revisit opens instantly while the server copy is revalidated.
+    const authed = isAuthenticated();
+    const key = `client::plandetail::v1::${authed ? 'auth' : 'guest'}::${planId}`;
+    const endpoint = authed ? `/client/plans/${planId}` : `/public/plans/${planId}`;
+    const buildPlanPayload = async () => {
       const response = await api.get(endpoint);
-      setPlan(response.data.plan);
+      return { plan: response.data.plan };
+    };
+    const applyPlanPayload = (p) => {
+      if (!p) return;
+      setPlan(p.plan);
       setError(null);
+    };
+
+    const cached = readCache(key);
+    if (cached) { applyPlanPayload(cached); setLoading(false); }
+    try {
+      const fresh = await cachedFetch(key, buildPlanPayload);
+      applyPlanPayload(fresh);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load plan');
+      if (cached) {
+        setToast('Showing saved plan — could not refresh.');
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setError(err.response?.data?.error || 'Failed to load plan');
+      }
     } finally {
       setLoading(false);
     }

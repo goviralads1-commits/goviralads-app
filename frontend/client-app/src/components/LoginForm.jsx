@@ -20,13 +20,19 @@ const getDownloadAppLink = (downloadApp) => {
   return url;
 };
 
+// The brand logo ships with the frontend bundle so the login screen paints it
+// instantly from the CDN, independent of the backend. GET /public/branding still
+// overrides it reactively when an admin-configured logoUrl exists; this default is
+// used before that response arrives and whenever it returns no logoUrl.
+const DEFAULT_LOGO_URL = '/gva-icon-512.png';
+
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [branding, setBranding] = useState({ appName: 'Go Viral Ads', tagline: 'Your productivity partner', logoUrl: '', accentColor: '#6366f1' });
+  const [branding, setBranding] = useState({ appName: 'Go Viral Ads', tagline: 'Your productivity partner', logoUrl: DEFAULT_LOGO_URL, accentColor: '#6366f1' });
   const [socialLinks, setSocialLinks] = useState({ facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' });
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [downloadApp, setDownloadApp] = useState({ enabled: false, url: '' });
@@ -44,7 +50,7 @@ const LoginForm = () => {
           setBranding({
             appName: brandRes.data.appName || 'Go Viral Ads',
             tagline: brandRes.data.tagline || 'Your productivity partner',
-            logoUrl: brandRes.data.logoUrl || '',
+            logoUrl: brandRes.data.logoUrl || DEFAULT_LOGO_URL,
             accentColor: brandRes.data.accentColor || '#6366f1',
           });
         }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import api from '../services/api';
 import { isAuthenticated } from '../services/authService';
+import { readCache, cachedFetch, writeCache } from '../services/smartCache';
 import Header from '../components/Header';
 import { PresetIcon, isValidPreset } from '../components/PresetIcons';
 
@@ -19,6 +20,7 @@ const formatDescription = (desc) => {
 
 const Tasks = () => {
   const navigate = useNavigate();
+  const TASKS_CACHE_KEY = 'client::tasks::v1';
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,14 +36,32 @@ const Tasks = () => {
   const [milestoneFeedback, setMilestoneFeedback] = useState(null);
 
   const fetchTasks = useCallback(async () => {
+    // /client/tasks has no public variant: a logged-out visitor would only get
+    // a guaranteed 401, so go straight to the existing empty state.
+    if (!isAuthenticated()) {
+      setTasks([]);
+      setError('');
+      setLoading(false);
+      return;
+    }
+    // Smart Data Persistence: paint the saved task list immediately, then
+    // revalidate in the background. Filtering stays client-side against the one
+    // cached list, so a revisit shows tasks without a skeleton.
+    const cached = readCache(TASKS_CACHE_KEY);
+    if (cached) { setTasks(cached.tasks || []); setError(''); setLoading(false); }
     try {
-      const response = await api.get('/client/tasks');
-      setTasks(response.data.tasks || []);
+      const fresh = await cachedFetch(TASKS_CACHE_KEY, async () => {
+        const response = await api.get('/client/tasks');
+        return { tasks: response.data.tasks || [] };
+      });
+      setTasks(fresh.tasks || []);
       setError('');
     } catch (err) {
       if (!isAuthenticated() && err.response?.status === 401) {
         setTasks([]); // Show existing "No tasks yet" empty state for unauth visitors
-      } else {
+      } else if (!cached) {
+        // Only surface the full-page error when there is no saved list to show.
+        // With cached tasks on screen we retain them (a stale list beats an error).
         setError(err.response?.data?.error || 'Failed to load tasks');
       }
     } finally {
@@ -65,11 +85,16 @@ const Tasks = () => {
       // PATCH already derives progress/status/milestones and preserves all
       // authorization/AUTO-to-MANUAL rules. Merge only its existing response
       // into this card so no detail/media requests are introduced.
-      setTasks(prev => prev.map(task => (
-        (task.id || task._id) === taskId
-          ? { ...task, ...updatedTask, milestones: updatedTask.milestones || task.milestones }
-          : task
-      )));
+      setTasks(prev => {
+        const next = prev.map(task => (
+          (task.id || task._id) === taskId
+            ? { ...task, ...updatedTask, milestones: updatedTask.milestones || task.milestones }
+            : task
+        ));
+        // Persist the server-confirmed milestone change so a revisit reflects it.
+        writeCache(TASKS_CACHE_KEY, { tasks: next });
+        return next;
+      });
       setMilestoneFeedback({ taskId, type: 'success', message: 'Milestone updated' });
       setTimeout(() => setMilestoneFeedback(null), 3000);
     } catch (err) {

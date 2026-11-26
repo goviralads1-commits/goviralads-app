@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearPrivateCache } from './smartCache';
 
 // API Base URL - MUST be set in environment variable
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.goviralads.com';
@@ -85,6 +86,7 @@ api.interceptors.response.use(
       } else if (currentToken) {
         // Only clear if token exists (prevents clearing during login race condition)
         console.log('[API] 401 on protected request with token - session expired');
+        clearPrivateCache(); // drop this client's private cached data on forced logout
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('permissions');

@@ -10,6 +10,7 @@ import AttachSheet from '../components/chat/AttachSheet';
 import MediaBubble from '../components/chat/MediaBubble';
 import VoiceRecorder, { isRecordingSupported } from '../components/chat/VoiceRecorder';
 import { probeMediaEnabled, putToR2, mbToBytes, limitFor, VIDEO_ACCEPT, VIDEO_MIME_TYPES, deleteMedia } from '../components/chat/mediaUpload';
+import { readCache, cachedFetch } from '../services/smartCache';
 
 // Utility: Clean description - handles HTML and plain text
 const formatDescription = (desc) => {
@@ -61,6 +62,9 @@ const TaskDetail = () => {
   const [error, setError] = useState('');
   const [downloadingReceipt, setDownloadingReceipt] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+  // Tracks which taskId has already been hydrated from cache, so post-mutation
+  // refreshes revalidate without re-applying the (older) cached copy.
+  const hydratedTaskIdRef = useRef(null);
   
   // Get current user ID from stored user data
   useEffect(() => {
@@ -155,26 +159,49 @@ const TaskDetail = () => {
   };
 
   const fetchTask = useCallback(async () => {
-    console.log('Task ID from URL:', taskId); // Debug log
-    try {
+    // Smart Data Persistence: on first view of a task, paint the saved detail
+    // (incl. milestones/timeline and the latest messages) immediately, then
+    // revalidate. Post-mutation refreshes (content/message/milestone submit) call
+    // this again with newer on-screen state, so we only hydrate from cache once
+    // per taskId to avoid flashing the pre-mutation copy.
+    const key = `client::taskdetail::v1::${taskId}`;
+    const isFirstLoad = hydratedTaskIdRef.current !== taskId;
+    const buildTaskPayload = async () => {
       const [taskResponse, receiptResponse] = await Promise.all([
         api.get(`/client/tasks/${taskId}`),
         api.get(`/client/tasks/${taskId}/receipt`).catch(() => ({ data: { receipt: null } }))
       ]);
-      setTask(taskResponse.data.task);
-      setReceipt(receiptResponse.data.receipt);
-      // Initialize messages from task (latest 30)
-      setAllMessages(taskResponse.data.task.messages || []);
+      return { task: taskResponse.data.task, receipt: receiptResponse.data.receipt ?? null };
+    };
+    const applyTaskPayload = (p) => {
+      if (!p) return;
+      setTask(p.task);
+      setReceipt(p.receipt);
+      setAllMessages(p.task?.messages || []);
       setCurrentPage(0); // Reset page on fresh fetch
       setError('');
+    };
+
+    let cached = null;
+    if (isFirstLoad) {
+      hydratedTaskIdRef.current = taskId;
+      cached = readCache(key);
+      if (cached) { applyTaskPayload(cached); setLoading(false); }
+    }
+    try {
+      const fresh = await cachedFetch(key, buildTaskPayload);
+      applyTaskPayload(fresh);
     } catch (err) {
       console.error('Task detail error:', err.response?.data || err.message);
-      // Better error message for access/not found errors
-      const status = err.response?.status;
-      if (status === 404 || status === 403 || status === 401) {
-        setError('Task not found or access denied');
-      } else {
-        setError(err.response?.data?.error || 'Failed to load task details');
+      // With a cached detail already on screen, retain it rather than replacing
+      // it with the full-page error; only surface errors when nothing is shown.
+      if (!cached) {
+        const status = err.response?.status;
+        if (status === 404 || status === 403 || status === 401) {
+          setError('Task not found or access denied');
+        } else {
+          setError(err.response?.data?.error || 'Failed to load task details');
+        }
       }
     } finally {
       setLoading(false);

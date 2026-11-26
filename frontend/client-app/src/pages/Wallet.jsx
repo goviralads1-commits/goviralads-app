@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
 import { isAuthenticated } from '../services/authService';
+import { readCache, cachedFetch, invalidate } from '../services/smartCache';
+
+// Wallet is a financial screen: after any balance-affecting mutation we drop the
+// cached payload so the next visit never flashes a pre-mutation balance. Server
+// data stays authoritative; a cached balance is never proof of a payment.
+const WALLET_CACHE_KEY = 'client::wallet::v1';
 
 const Wallet = () => {
   const navigate = useNavigate();
@@ -44,66 +50,85 @@ const Wallet = () => {
   const addCreditRef = useRef(null);
 
   useEffect(() => {
+    // Apply a cached/fresh payload to the existing per-section state. Optional
+    // sections are only touched when present, so a partial refresh never wipes
+    // data a previous payload already provided.
+    const applyWalletPayload = (p) => {
+      if (!p) return;
+      setWalletData(p.walletData ?? {});
+      setRechargeRequests(p.rechargeRequests || []);
+      if (p.invoices) setInvoices(p.invoices);
+      if (p.creditPlans) setCreditPlans(p.creditPlans);
+      if ('subscription' in p) setSubscription(p.subscription || null);
+      if (p.expiredSubscription) setExpiredSubscription(p.expiredSubscription);
+      if (p.pendingSubscriptionRequests) setPendingSubscriptionRequests(p.pendingSubscriptionRequests);
+      if (p.availableCoupons) setAvailableCoupons(p.availableCoupons);
+    };
+
+    // Fetch and shape the wallet payload. Critical sections still throw on failure
+    // exactly as before; optional sections are included only when they resolve.
+    const buildWalletPayload = async () => {
+      // Run ALL requests in parallel — critical and optional together
+      const [walletResult, requestsResult, invoicesResult, plansResult, subResult, pendingResult, couponResult] = await Promise.allSettled([
+        api.get('/client/wallet'),
+        api.get('/client/wallet/recharge-requests'),
+        api.get('/client/invoices').catch(() => null),
+        api.get('/client/credit-plans').catch(() => null),
+        api.get('/client/my-subscription').catch(() => null),
+        api.get('/client/subscription-requests').catch(() => null),
+        api.get('/client/coupons').catch(() => null),
+      ]);
+      // Critical: wallet data + recharge requests must succeed for authed users.
+      if (walletResult.status !== 'fulfilled') throw new Error('Failed to load wallet data');
+      if (requestsResult.status !== 'fulfilled') throw new Error('Failed to load recharge requests');
+      const payload = {
+        walletData: walletResult.value.data,
+        rechargeRequests: requestsResult.value.data.requests || [],
+      };
+      // Optional: invoices
+      if (invoicesResult.status === 'fulfilled' && invoicesResult.value?.data) payload.invoices = invoicesResult.value.data.invoices || [];
+      // Optional: credit plans
+      if (plansResult.status === 'fulfilled' && plansResult.value?.data) payload.creditPlans = plansResult.value.data.plans || [];
+      // Optional: active subscription
+      if (subResult.status === 'fulfilled' && subResult.value?.data) {
+        payload.subscription = subResult.value.data.subscription || null;
+        if (!subResult.value.data.subscription && subResult.value.data.recentExpired) payload.expiredSubscription = subResult.value.data.recentExpired;
+      }
+      // Optional: pending subscription requests
+      if (pendingResult.status === 'fulfilled' && pendingResult.value?.data) payload.pendingSubscriptionRequests = pendingResult.value.data.requests?.filter(r => r.status === 'PENDING') || [];
+      // Optional: available coupons
+      if (couponResult.status === 'fulfilled' && couponResult.value?.data) payload.availableCoupons = couponResult.value.data.coupons || [];
+      return payload;
+    };
+
     const fetchData = async () => {
+      // Every endpoint below is client-scoped (req.user.id on the server) with no
+      // public variant, so a logged-out visitor would fire seven guaranteed 401s.
+      // Resolve the guest state directly: the page renders its sign-in CTA from
+      // these same empty values.
+      if (!isAuthenticated()) {
+        setWalletData({});
+        setRechargeRequests([]);
+        setLoading(false);
+        return;
+      }
+      // Smart Data Persistence: show the saved wallet immediately (no full-page
+      // skeleton on revisit), then revalidate in the background. Server data always
+      // wins on arrival; a cached balance is never treated as a confirmed payment.
+      const cached = readCache(WALLET_CACHE_KEY);
+      if (cached) { applyWalletPayload(cached); setLoading(false); }
       try {
-        // Run ALL requests in parallel — critical and optional together
-        const [walletResult, requestsResult, invoicesResult, plansResult, subResult, pendingResult, couponResult] = await Promise.allSettled([
-          api.get('/client/wallet'),
-          api.get('/client/wallet/recharge-requests'),
-          api.get('/client/invoices').catch(() => null),
-          api.get('/client/credit-plans').catch(() => null),
-          api.get('/client/my-subscription').catch(() => null),
-          api.get('/client/subscription-requests').catch(() => null),
-          api.get('/client/coupons').catch(() => null),
-        ]);
-        
-        // Critical: wallet data (must succeed for authed users)
-        if (walletResult.status === 'fulfilled') {
-          setWalletData(walletResult.value.data);
-        } else if (isAuthenticated()) {
-          throw new Error('Failed to load wallet data');
-        } else {
-          setWalletData({}); // Empty wallet for unauth visitors
-        }
-        
-        // Critical: recharge requests (must succeed for authed users)
-        if (requestsResult.status === 'fulfilled') {
-          setRechargeRequests(requestsResult.value.data.requests || []);
-        } else if (isAuthenticated()) {
-          throw new Error('Failed to load recharge requests');
-        } else {
-          setRechargeRequests([]); // Empty list for unauth visitors
-        }
-        
-        // Optional: invoices
-        if (invoicesResult.status === 'fulfilled' && invoicesResult.value?.data) {
-          setInvoices(invoicesResult.value.data.invoices || []);
-        }
-        
-        // Optional: credit plans
-        if (plansResult.status === 'fulfilled' && plansResult.value?.data) {
-          setCreditPlans(plansResult.value.data.plans || []);
-        }
-        
-        // Optional: active subscription
-        if (subResult.status === 'fulfilled' && subResult.value?.data) {
-          setSubscription(subResult.value.data.subscription || null);
-          if (!subResult.value.data.subscription && subResult.value.data.recentExpired) {
-            setExpiredSubscription(subResult.value.data.recentExpired);
-          }
-        }
-        
-        // Optional: pending subscription requests
-        if (pendingResult.status === 'fulfilled' && pendingResult.value?.data) {
-          setPendingSubscriptionRequests(pendingResult.value.data.requests?.filter(r => r.status === 'PENDING') || []);
-        }
-        
-        // Optional: available coupons
-        if (couponResult.status === 'fulfilled' && couponResult.value?.data) {
-          setAvailableCoupons(couponResult.value.data.coupons || []);
-        }
+        const fresh = await cachedFetch(WALLET_CACHE_KEY, buildWalletPayload);
+        applyWalletPayload(fresh);
       } catch (err) {
-        setError('Failed to load wallet data');
+        // With cached data on screen, retain it and show a subtle notice instead of
+        // the full-page error. With no cache, preserve the original hard error.
+        if (cached) {
+          setToast('Showing saved wallet — could not refresh.');
+          setTimeout(() => setToast(null), 3000);
+        } else {
+          setError('Failed to load wallet data');
+        }
       } finally {
         setLoading(false);
       }
@@ -114,6 +139,7 @@ const Wallet = () => {
 
   // Fetch transactions with optional date filter
   const fetchTransactions = async (dateFrom, dateTo) => {
+    if (!isAuthenticated()) return; // guest: no wallet, no transaction history
     setTxLoading(true);
     try {
       const params = {};
@@ -236,6 +262,8 @@ const Wallet = () => {
       if (res.data.request) {
         setPendingSubscriptionRequests(prev => [...prev, res.data.request]);
       }
+      // Pending request changed server state — drop the cached wallet payload.
+      invalidate(WALLET_CACHE_KEY);
     } catch (err) {
       const msg = err.response?.data?.error || 'Purchase failed';
       setToast(msg);
@@ -310,6 +338,9 @@ const Wallet = () => {
       } catch (refreshErr) {
         // Silently handle refresh errors
       }
+      // Balance/recharge state changed — invalidate so the next visit revalidates
+      // a full, fresh payload instead of showing the pre-recharge cached balance.
+      invalidate(WALLET_CACHE_KEY);
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'Failed to submit recharge request';
       setToast(errorMsg);
@@ -1586,6 +1617,8 @@ const Wallet = () => {
                     // Refresh recharge requests
                     const requestsResponse = await api.get('/client/wallet/recharge-requests');
                     setRechargeRequests(requestsResponse.data.requests || []);
+                    // New request submitted — invalidate the cached wallet payload.
+                    invalidate(WALLET_CACHE_KEY);
                   } catch (err) {
                     const msg = err.response?.data?.error || 'Failed to submit request';
                     setToast(msg);
