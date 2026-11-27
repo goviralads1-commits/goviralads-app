@@ -344,22 +344,27 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
           ...line.markers.filter(marker => marker.row === row),
         ];
         if (!occupants.length) continue;
-        let left = Infinity, right = -Infinity;
+        let left = Infinity, right = -Infinity, levels = 0;
         for (const occupant of occupants) {
           left = Math.min(left, occupant.x - 12);
           right = Math.max(right, occupant.x + 12);
           for (const label of occupant.labels || []) {
             left = Math.min(left, label.x - 4);
             right = Math.max(right, label.x + label.width + 4);
+            levels = Math.max(levels, Math.round((label.offsetY - 24) / labelStep) + 1);
           }
         }
-        items.push({ line, left, right });
+        // A lane only needs clearance for the labels actually drawn in THIS band. A
+        // journey that has already risen past a stage leaves an unlabeled pass-through
+        // dot here, so it needs only the 28px tap-target lane rather than the 40px
+        // global trackHeight its order-number labels reserve in the bands they sit in.
+        items.push({ line, left, right, h: Math.max(28, 22 + levels * labelStep) });
       }
       items.sort((a, b) => a.left - b.left || String(a.line.task.id).localeCompare(String(b.line.task.id)));
       const lanes = [], laneOf = new Map();
       for (const item of items) {
-        let lane = lanes.find(candidate => candidate.right + 8 < item.left && candidate.height >= item.line.trackHeight);
-        if (!lane) { lane = { right: item.right, height: item.line.trackHeight, offset: 0 }; lanes.push(lane); }
+        let lane = lanes.find(candidate => candidate.right + 8 < item.left && candidate.height >= item.h);
+        if (!lane) { lane = { right: item.right, height: item.h, offset: 0 }; lanes.push(lane); }
         lane.right = item.right;
         laneOf.set(item.line, lane);
       }
