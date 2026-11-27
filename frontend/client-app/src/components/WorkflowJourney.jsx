@@ -521,6 +521,11 @@ export const JourneyDetail = ({ detail, closeDetail, showInputs }) => !detail ? 
   {!detail.task.orderOnly && <a href={`/tasks/${encodeURIComponent(detail.task.id)}`} style={{ display: 'inline-block', padding: '10px 0', color: '#4338ca', textDecoration: 'underline' }}>Open task details</a>}
 </section>;
 
+// Verbatim help copy for the graph. Extracted so the desktop paragraph and the
+// mobile disclosure can never drift apart. Keep the two-dot wording: a journey
+// draws the Order Placed start and the current endpoint, never one dot per day.
+const GRAPH_HELP_TEXT = "Bottom → top · two dots per journey: the Order Placed start and the current endpoint. Tap anywhere on the line for that date's activity and inputs. An unfinished journey advances one date per day up to today and keeps its latest saved stage; a stage change rises vertically on that date.";
+
 const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectDate, loadInputs }) => {
   const container = useRef(null);
   const [mobileWidth, setMobileWidth] = useState(0);
@@ -550,7 +555,16 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
   if (model.count <= 0) return <p>Choose a valid date range.</p>;
   const lines = [...model.series].sort((a, b) => Number(a.task.id === highlight) - Number(b.task.id === highlight));
   return <div ref={container} className="workflow-journey" style={{ minWidth: 0 }}>
-    <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>Bottom → top · two dots per journey: the Order Placed start and the current endpoint. Tap anywhere on the line for that date's activity and inputs. An unfinished journey advances one date per day up to today and keeps its latest saved stage; a stage change rises vertically on that date.</p>
+    {mobileWidth ? (
+      /* Mobile finishing: let the graph lead the card. The long help copy collapses
+         into an on-demand disclosure instead of pushing the chart below the fold. */
+      <details style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600, color: '#475569' }}>How to read this graph</summary>
+        <p style={{ margin: '6px 0 0', lineHeight: 1.5 }}>{GRAPH_HELP_TEXT}</p>
+      </details>
+    ) : (
+      <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px' }}>{GRAPH_HELP_TEXT}</p>
+    )}
     <JourneyDetail key={selection.detail ? `${selection.detail.task.id}:${selection.detail.point.day}` : 'closed'} {...selection} />
     <div style={{ display: 'flex', minWidth: 0, border: '1px solid #e2e8f0', borderRadius: '10px', overflowX: 'hidden', overflowY: 'auto', maxHeight: mobileWidth ? '560px' : undefined, background: '#fff' }}>
       <svg aria-label="Workflow stage axis" width={stageWidth} height={model.height} style={{ flex: `0 0 ${stageWidth}px`, background: '#fff', borderRight: '1px solid #e2e8f0' }}>
@@ -616,6 +630,13 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
         </svg>
       </div>
     </div>
+    {mobileWidth && model.series.length > 0 && (
+      /* Mobile responsiveness affordance: the stage axis is frozen while the plot
+         scrolls sideways, so make the horizontal swipe discoverable. */
+      <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#94a3b8', margin: '8px 0 0', lineHeight: 1.4 }}>
+        <span aria-hidden="true" style={{ fontSize: '13px' }}>↔</span> Swipe the graph sideways to see every date · tap a point for that day’s activity and inputs.
+      </p>
+    )}
     {!model.series.length && <p style={{ fontSize: '12px', color: '#64748b' }}>No tasks or orders in this range.</p>}
     <details style={{ marginTop: '12px', fontSize: '13px' }}><summary style={{ cursor: 'pointer', padding: '8px 0' }}>Packages · {model.series.length}</summary>
     <div aria-label="Journey key" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>

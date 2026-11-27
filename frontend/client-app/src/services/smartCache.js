@@ -170,18 +170,43 @@ export function clearPrivateCache() {
   }
 }
 
+// A cold free-tier backend can hang the first request until the service spins up
+// and then abort on the axios timeout. cachedFetch fetchers only build idempotent
+// READ payloads (GETs) — mutations never flow through here — so we transparently
+// retry a couple of times on a timeout / network abort (or a 5xx): the first
+// request wakes the server and a retry lands on the now-warm instance instead of
+// dropping the screen into a hard error. A response that already reached the
+// server with a 4xx (e.g. auth) is NEVER retried.
+function isRetryableNetworkError(err) {
+  if (!err) return false;
+  if (err.response) return err.response.status >= 500;
+  const code = err.code || '';
+  return code === 'ECONNABORTED' || code === 'ERR_NETWORK' || /timeout|network/i.test(err.message || '');
+}
+
 // Deduplicated fetch that persists a successful result. `fetcher` must return the
 // payload to cache (a plain, JSON-serializable object). Concurrent calls for the
 // same key share one network round-trip. On failure the promise rejects and NO
 // cache write happens, so previously saved data is retained by the caller.
-export function cachedFetch(key, fetcher) {
+export function cachedFetch(key, fetcher, options) {
   if (inflight.has(key)) return inflight.get(key);
   const reqTs = Date.now();
+  const retries = options && typeof options.retries === 'number' ? options.retries : 2;
+  const baseDelayMs = options && typeof options.baseDelayMs === 'number' ? options.baseDelayMs : 1200;
   const promise = (async () => {
     try {
-      const value = await fetcher();
-      writeCache(key, value, reqTs);
-      return value;
+      let attempt = 0;
+      for (;;) {
+        try {
+          const value = await fetcher();
+          writeCache(key, value, reqTs);
+          return value;
+        } catch (err) {
+          if (attempt >= retries || !isRetryableNetworkError(err)) throw err;
+          attempt += 1;
+          await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+        }
+      }
     } finally {
       inflight.delete(key);
     }

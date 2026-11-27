@@ -353,3 +353,36 @@ test('Public namespace — anon keys do not leak into an authenticated identity'
   assert.deepEqual(readCache('public::office-config::v1'), { config: { name: 'public' } });
   assert.equal(readCache('client::office-config::v1'), null);
 });
+
+// ---- Cold-start resilience: idempotent GET retries -------------------------
+test('Retry — a transient timeout is retried and succeeds on a later attempt', async () => {
+  resetStorage();
+  loginAs('client-1');
+  const key = 'client::plans::v1';
+  let calls = 0;
+  const fetcher = async () => {
+    calls += 1;
+    if (calls < 3) { const e = new Error('timeout of 30000ms exceeded'); e.code = 'ECONNABORTED'; throw e; }
+    return { plans: [{ id: 'p1' }] };
+  };
+  const result = await cachedFetch(key, fetcher, { retries: 2, baseDelayMs: 1 });
+  assert.equal(calls, 3, 'retried until the warm server responded');
+  assert.deepEqual(result, { plans: [{ id: 'p1' }] });
+  assert.deepEqual(readCache(key), { plans: [{ id: 'p1' }] }, 'successful retry was cached');
+});
+
+test('Retry — a 4xx response is never retried (auth failures fail fast)', async () => {
+  resetStorage();
+  loginAs('client-1');
+  const key = 'client::tasks::v1';
+  let calls = 0;
+  const fetcher = async () => {
+    calls += 1;
+    const e = new Error('Request failed with status code 401');
+    e.response = { status: 401 };
+    throw e;
+  };
+  await assert.rejects(() => cachedFetch(key, fetcher, { retries: 2, baseDelayMs: 1 }), /401/);
+  assert.equal(calls, 1, 'a 4xx that reached the server is not retried');
+  assert.equal(readCache(key), null, 'no cache write on failure');
+});

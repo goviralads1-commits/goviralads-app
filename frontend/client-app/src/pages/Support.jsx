@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ApprovalBox from '../components/ApprovalBox';
@@ -176,6 +176,15 @@ const Support = () => {
       uploadsRef.current.clear();
     };
   }, [activeTaskId]);
+
+  // Smart Data Persistence: paint the saved conversation list synchronously before
+  // the browser paints so a revisit shows the last known conversations immediately
+  // instead of a skeleton. The mount effect below still revalidates against the
+  // server and owns deep-link navigation (kept as a post-paint effect on purpose).
+  useLayoutEffect(() => {
+    const cached = readCache(SUPPORT_CACHE_KEY);
+    if (cached) { setTasks(cached.tasks || []); setLoading(false); }
+  }, []);
 
   // Extract taskId from URL or sessionStorage on mount
   useEffect(() => {

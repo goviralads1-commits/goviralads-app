@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
@@ -165,7 +165,10 @@ const Dashboard = () => {
     }
   }, []);
 
-  useEffect(() => {
+  // useLayoutEffect hydrates the cached payload synchronously BEFORE the browser
+  // paints, so a revisit shows the last saved dashboard immediately instead of
+  // flashing a skeleton. The background revalidation still runs exactly as before.
+  useLayoutEffect(() => {
     fetchData();
   }, [fetchData]);
 

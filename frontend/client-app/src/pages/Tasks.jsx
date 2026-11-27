@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import api from '../services/api';
@@ -69,7 +69,9 @@ const Tasks = () => {
     }
   }, []);
 
-  useEffect(() => {
+  // useLayoutEffect paints the cached task list synchronously before the browser
+  // paints, so a revisit shows saved tasks immediately instead of a skeleton flash.
+  useLayoutEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
 

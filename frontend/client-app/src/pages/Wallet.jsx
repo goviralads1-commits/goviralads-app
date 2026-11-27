@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Header from '../components/Header';
@@ -49,7 +49,11 @@ const Wallet = () => {
   const subscriptionRef = useRef(null);
   const addCreditRef = useRef(null);
 
-  useEffect(() => {
+  // useLayoutEffect hydrates the cached wallet synchronously before the browser
+  // paints, so a revisit shows the last saved balance/sections immediately instead
+  // of a skeleton flash. A cached balance is still never a confirmed payment: the
+  // background revalidation below always overwrites it with authoritative data.
+  useLayoutEffect(() => {
     // Apply a cached/fresh payload to the existing per-section state. Optional
     // sections are only touched when present, so a partial refresh never wipes
     // data a previous payload already provided.

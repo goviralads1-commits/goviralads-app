@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import api from '../services/api';
@@ -86,18 +86,26 @@ const Plans = () => {
     }
   }, [urlCategory]);
 
+  // Latest in-flight marketplace request key. Category/search changes fire a new
+  // fetch while an older one may still be pending; this ref lets the newest
+  // request win so a slow older response can never clobber the current view.
+  const latestRequestKeyRef = useRef(null);
+
   const fetchData = useCallback(async () => {
     // Smart Data Persistence: the marketplace is cached per filter combination so
     // a revisit (or returning from a plan detail) paints instantly. Keys are
     // identity-scoped by smartCache, so guest and client catalogs never mix.
     const authed = isAuthenticated();
     const key = `client::plans::v1::${authed ? 'auth' : 'guest'}::${selectedCategory}::${debouncedSearch}`;
+    latestRequestKeyRef.current = key; // mark this as the newest request
     const params = {
       categoryId: selectedCategory !== 'ALL' ? selectedCategory : undefined,
       search: debouncedSearch || undefined
     };
     const plansBase = authed ? '/client/plans' : '/public/plans';
     const catsBase = authed ? '/client/categories' : '/public/categories';
+    // cachedFetch transparently retries idempotent GETs on a cold-start timeout,
+    // so the marketplace still loads while the free-tier backend spins up.
     const buildPlansPayload = async () => {
       const [plansRes, categoriesRes] = await Promise.all([
         api.get(plansBase, { params }),
@@ -116,22 +124,28 @@ const Plans = () => {
     if (cached) { applyPlansPayload(cached); setLoading(false); }
     try {
       const fresh = await cachedFetch(key, buildPlansPayload);
-      applyPlansPayload(fresh);
+      // Ignore a superseded response: only the newest request may paint the screen.
+      if (latestRequestKeyRef.current === key) applyPlansPayload(fresh);
     } catch (err) {
+      // A newer category/search fetch already owns the UI — let it handle state.
+      if (latestRequestKeyRef.current !== key) return;
       // Retain cached data on refresh failure with a subtle notice; only surface
       // the hard error when there is nothing usable on screen.
       if (cached) {
-        setToast('Showing saved plans — could not refresh.');
+        setToast({ type: 'error', message: 'Showing saved plans — could not refresh.' });
         setTimeout(() => setToast(null), 3000);
       } else {
         setError(err.response?.data?.error || 'Failed to load marketplace');
       }
     } finally {
-      setLoading(false);
+      if (latestRequestKeyRef.current === key) setLoading(false);
     }
   }, [selectedCategory, debouncedSearch]);
 
-  useEffect(() => {
+  // useLayoutEffect hydrates the cached catalog synchronously before the browser
+  // paints, so a revisit (or returning from a plan detail) shows saved plans
+  // immediately instead of flashing a skeleton. Revalidation still runs after.
+  useLayoutEffect(() => {
     setLoading(true);
     fetchData();
   }, [fetchData]);

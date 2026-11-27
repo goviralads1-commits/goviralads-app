@@ -65,6 +65,14 @@ const Dashboard = () => {
   const [reportEnd, setReportEnd] = useState('');
   const [reportBusy, setReportBusy] = useState('');
   const [reportError, setReportError] = useState('');
+  // Report-scoped client selection — the report is generated per client, so the
+  // admin picks the client(s) right inside the report options. Independent state
+  // on purpose: choosing a client here never changes the Timeline/Analytics scope.
+  const [reportClientFilter, setReportClientFilter] = useState('');
+  const [reportClientDraft, setReportClientDraft] = useState([]);
+  const [reportClientOpen, setReportClientOpen] = useState(false);
+  const [reportClientSearch, setReportClientSearch] = useState('');
+  const reportClientRef = useRef(null);
   const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [editingNotice, setEditingNotice] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -240,7 +248,7 @@ const Dashboard = () => {
     document.body.removeChild(link);
   };
   const runReport = async (action) => {
-    if (!clientFilter) { setReportError('Select at least one client — the workflow report is generated per client.'); return; }
+    if (!reportClientFilter) { setReportError('Select at least one client — the workflow report is generated per client.'); return; }
     const { startDate, endDate } = reportRange();
     if (!startDate || !endDate) { setReportError('Choose a month, or set both custom dates.'); return; }
     setReportError('');
@@ -249,7 +257,7 @@ const Dashboard = () => {
     // preview; the PDF url is assigned once the response arrives.
     const preview = action === 'generate' ? window.open('', '_blank') : null;
     try {
-      const params = { clientId: clientFilter, startDate, endDate, mode: action === 'generate' ? 'inline' : 'attachment' };
+      const params = { clientId: reportClientFilter, startDate, endDate, mode: action === 'generate' ? 'inline' : 'attachment' };
       const res = await api.get('/admin/analytics/report/pdf', { params, responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       if (preview) preview.location.href = url; else saveReportFile(url, startDate, endDate);
@@ -270,6 +278,10 @@ const Dashboard = () => {
   const selectedClientIds = clientFilter ? clientFilter.split(',') : [];
   const selectedClient = selectedClientIds.length > 1 ? { identifier: `${selectedClientIds.length} selected clients` } : clients.find(c => c.id === clientFilter);
   const filteredClients = clients.filter(c => (c.identifier || '').toLowerCase().includes(clientSearch.toLowerCase()));
+  // Report-scoped client derivation (mirrors the analytics selector, own state).
+  const reportSelectedIds = reportClientFilter ? reportClientFilter.split(',') : [];
+  const reportSelectedClient = reportSelectedIds.length > 1 ? { identifier: `${reportSelectedIds.length} selected clients` } : clients.find(c => c.id === reportClientFilter);
+  const reportFilteredClients = clients.filter(c => (c.identifier || '').toLowerCase().includes(reportClientSearch.toLowerCase()));
 
   // Close the client dropdown on outside click
   useEffect(() => {
@@ -280,6 +292,16 @@ const Dashboard = () => {
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [clientDropdownOpen]);
+
+  // Close the report's own client dropdown on outside click
+  useEffect(() => {
+    if (!reportClientOpen) return;
+    const onDocClick = (e) => {
+      if (reportClientRef.current && !reportClientRef.current.contains(e.target)) setReportClientOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [reportClientOpen]);
 
   // Analytics fetch is scoped by BOTH filters (WHO + WHEN) against the same query logic.
   // analyticsReqRef guards against stale responses so Client A's numbers can never
@@ -799,12 +821,60 @@ const Dashboard = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0, flex: '1 1 200px' }}>
                   <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Workflow Report PDF</h4>
-                  <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: '4px 0 0 0' }}>Client-ready summary with chronological order and task details for {selectedClient ? selectedClient.identifier : 'the selected client(s)'}.</p>
+                  <p style={{ fontSize: '11.5px', color: '#94a3b8', margin: '4px 0 0 0' }}>Client-ready summary with chronological order and task details for {reportSelectedClient ? reportSelectedClient.identifier : 'the selected client(s)'}.</p>
                 </div>
                 <button type="button" aria-expanded={reportOpen} onClick={toggleReport} style={{ minHeight: '40px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', border: '1px solid #e2e8f0', background: reportOpen ? '#eef2ff' : '#fff', color: '#4f46e5' }}>{reportOpen ? 'Hide options' : 'Report options'}</button>
               </div>
               {reportOpen && (
                 <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Client selector — WHO the report is for. Self-contained so the
+                      admin never has to scroll up to the analytics filter. */}
+                  <div ref={reportClientRef} style={{ position: 'relative' }}>
+                    <span style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Client(s)</span>
+                    <button
+                      type="button"
+                      aria-expanded={reportClientOpen}
+                      onClick={() => { setReportClientDraft(reportSelectedIds); setReportClientOpen(o => !o); setReportClientSearch(''); }}
+                      style={{ width: '100%', boxSizing: 'border-box', minHeight: '42px', padding: '9px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', border: reportClientFilter ? '1px solid #6366f1' : '1px solid #e2e8f0', background: reportClientFilter ? '#eef2ff' : '#fff', color: reportClientFilter ? '#4f46e5' : '#64748b', display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left' }}
+                    >
+                      <span style={{ fontSize: '13px' }}>👤</span>
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{reportSelectedClient ? reportSelectedClient.identifier : 'Select client(s)…'}</span>
+                      <span style={{ fontSize: '9px', opacity: 0.7 }}>▼</span>
+                    </button>
+                    {reportClientOpen && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(15,23,42,0.12)', zIndex: 60, overflow: 'hidden' }}>
+                        <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                          <input
+                            autoFocus
+                            value={reportClientSearch}
+                            onChange={e => setReportClientSearch(e.target.value)}
+                            placeholder="Search name / email…"
+                            style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12.5px', outline: 'none' }}
+                          />
+                        </div>
+                        <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                          {reportFilteredClients.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              aria-pressed={reportClientDraft.includes(c.id)}
+                              onClick={() => setReportClientDraft(previous => previous.includes(c.id) ? previous.filter(id => id !== c.id) : previous.length < 100 ? [...previous, c.id] : previous)}
+                              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12.5px', fontWeight: reportClientDraft.includes(c.id) ? '700' : '500', cursor: 'pointer', border: 'none', background: reportClientDraft.includes(c.id) ? '#eef2ff' : '#fff', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            >
+                              {reportClientDraft.includes(c.id) ? '☑ ' : '☐ '}{c.identifier}
+                            </button>
+                          ))}
+                          {reportFilteredClients.length === 0 && (
+                            <p style={{ padding: '10px 12px', fontSize: '12px', color: '#94a3b8', margin: 0 }}>No clients match</p>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', padding: '8px', borderTop: '1px solid #f1f5f9' }}>
+                          <button type="button" onClick={() => { setReportClientFilter(''); setReportClientDraft([]); setReportClientOpen(false); }} style={{ flex: '0 0 auto', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', color: '#64748b', fontSize: '12.5px', fontWeight: '600', cursor: 'pointer' }}>Clear</button>
+                          <button type="button" onClick={() => { setReportClientFilter(reportClientDraft.join(',')); setReportClientOpen(false); }} style={{ flex: 1, padding: '8px 12px', border: 0, borderRadius: '6px', background: '#4f46e5', color: '#fff', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer' }}>Apply {reportClientDraft.length ? `(${reportClientDraft.length})` : ''}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div role="group" aria-label="Report period type" style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', background: '#f1f5f9' }}>
                     {[['monthly', 'Monthly'], ['custom', 'Custom date to date']].map(([value, label]) => (
                       <button key={value} type="button" aria-pressed={reportMode === value} onClick={() => setReportMode(value)} style={{ flex: 1, minHeight: '40px', padding: '8px 12px', border: 'none', borderRadius: '8px', background: reportMode === value ? '#fff' : 'transparent', color: reportMode === value ? '#4f46e5' : '#64748b', boxShadow: reportMode === value ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>{label}</button>
@@ -833,7 +903,7 @@ const Dashboard = () => {
                     <button type="button" onClick={() => runReport('download')} disabled={Boolean(reportBusy)} style={{ flex: '1 1 150px', minHeight: '44px', padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '700', cursor: reportBusy ? 'default' : 'pointer', border: '1px solid #c7d2fe', background: '#fff', color: '#4f46e5', opacity: reportBusy ? 0.6 : 1 }}>{reportBusy === 'download' ? 'Preparing…' : 'Download PDF'}</button>
                     <button type="button" onClick={clearReportRange} disabled={Boolean(reportBusy)} style={{ flex: '1 1 120px', minHeight: '44px', padding: '10px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: '600', cursor: reportBusy ? 'default' : 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b' }}>Clear range</button>
                   </div>
-                  {!clientFilter && <p style={{ fontSize: '11.5px', color: '#d97706', margin: 0 }}>Select one or more clients above to enable the report.</p>}
+                  {!reportClientFilter && <p style={{ fontSize: '11.5px', color: '#d97706', margin: 0 }}>Select one or more clients to enable the report.</p>}
                 </div>
               )}
             </div>

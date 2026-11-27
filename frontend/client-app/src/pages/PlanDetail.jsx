@@ -44,7 +44,7 @@ const PlanDetail = () => {
       applyPlanPayload(fresh);
     } catch (err) {
       if (cached) {
-        setToast('Showing saved plan — could not refresh.');
+        setToast({ type: 'error', message: 'Showing saved plan — could not refresh.' });
         setTimeout(() => setToast(null), 3000);
       } else {
         setError(err.response?.data?.error || 'Failed to load plan');
