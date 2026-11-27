@@ -322,6 +322,56 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
   }
   let offset = 0;
   for (const track of tracks) { track.offset = offset; offset += track.height; }
+  // MOBILE-ONLY vertical compaction. The desktop graph keeps the single global lane
+  // stack above (line.track.offset) and is never affected. On mobile, each stage band
+  // instead allocates lanes only for the journeys actually drawn in that band, packed
+  // by their horizontal extent WITHIN the band using the same disjoint-reuse rule as
+  // the global stack. Order Placed / Scheduled / Completed hold a single dot per
+  // journey, so packages placed on different dates now share a lane instead of every
+  // band paying the full concurrent-journey stack. A band's lanes are a subset of the
+  // global stack, so the graph only ever gets shorter; journeys that genuinely overlap
+  // within a band still get distinct, collision-free lanes, and each journey keeps one
+  // lane per band so its horizontal run stays straight.
+  const bandLanes = availableWidth ? (() => {
+    const perRow = {};
+    for (const row of [0, 1, 2, 3, 4]) {
+      const items = [];
+      for (const line of series) {
+        if (!line.inRange) continue;
+        const occupants = [
+          ...line.points.filter(point => point.row === row),
+          ...(line.origin && line.origin.row === row ? [line.origin] : []),
+          ...line.markers.filter(marker => marker.row === row),
+        ];
+        if (!occupants.length) continue;
+        let left = Infinity, right = -Infinity;
+        for (const occupant of occupants) {
+          left = Math.min(left, occupant.x - 12);
+          right = Math.max(right, occupant.x + 12);
+          for (const label of occupant.labels || []) {
+            left = Math.min(left, label.x - 4);
+            right = Math.max(right, label.x + label.width + 4);
+          }
+        }
+        items.push({ line, left, right });
+      }
+      items.sort((a, b) => a.left - b.left || String(a.line.task.id).localeCompare(String(b.line.task.id)));
+      const lanes = [], laneOf = new Map();
+      for (const item of items) {
+        let lane = lanes.find(candidate => candidate.right + 8 < item.left && candidate.height >= item.line.trackHeight);
+        if (!lane) { lane = { right: item.right, height: item.line.trackHeight, offset: 0 }; lanes.push(lane); }
+        lane.right = item.right;
+        laneOf.set(item.line, lane);
+      }
+      let laneOffsetAcc = 0;
+      for (const lane of lanes) { lane.offset = laneOffsetAcc; laneOffsetAcc += lane.height; }
+      perRow[row] = new Map(items.map(item => [item.line, laneOf.get(item.line).offset]));
+    }
+    return perRow;
+  })() : null;
+  const laneOffset = (line, row) => bandLanes
+    ? (bandLanes[row]?.get(line) ?? (line.track?.offset || 0))
+    : (line.track?.offset || 0);
   const allPoints = series.flatMap(line => line.points);
   const rows = [], bands = [];
   let height = 48;
@@ -329,17 +379,17 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
     let bandHeight = 48;
     for (const line of series) {
       for (const point of line.points.filter(point => point.row === row)) {
-        point.y = height + 14 + (line.track?.offset || 0);
+        point.y = height + 14 + laneOffset(line, row);
         for (const label of point.labels) label.y = point.y + label.offsetY;
         if (line.inRange) bandHeight = Math.max(bandHeight, point.y - height + 16,
           ...point.labels.map(label => label.y - height + label.lines.length * 14 - 6));
       }
       if (line.origin && line.origin.row === row) {
-        line.origin.y = height + 14 + (line.track?.offset || 0);
+        line.origin.y = height + 14 + laneOffset(line, row);
         if (line.inRange) bandHeight = Math.max(bandHeight, line.origin.y - height + 16);
       }
       for (const marker of line.markers.filter(marker => marker.row === row)) {
-        marker.y = height + 14 + (line.track?.offset || 0);
+        marker.y = height + 14 + laneOffset(line, row);
         if (line.inRange) bandHeight = Math.max(bandHeight, marker.y - height + 16);
       }
     }
