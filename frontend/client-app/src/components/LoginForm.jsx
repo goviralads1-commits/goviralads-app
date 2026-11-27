@@ -158,6 +158,7 @@ const LoginForm = () => {
             <img 
               src={branding.logoUrl} 
               alt="Logo" 
+              onError={() => setBranding(prev => ({ ...prev, logoUrl: prev.logoUrl === DEFAULT_LOGO_URL ? '' : DEFAULT_LOGO_URL }))}
               style={{
                 width: '64px',
                 height: '64px',

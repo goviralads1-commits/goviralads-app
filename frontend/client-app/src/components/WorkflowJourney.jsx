@@ -285,7 +285,12 @@ function compactJourneyLayout(series, startDate, endDate, availableWidth) {
         levels[level].push({ left, right: left + size });
         occupied.set(point.row, levels);
         line.labelLevels = Math.max(line.labelLevels, level + 1);
-        point.labels.push({ kind, lines, x: left, width: size, offsetY: 24 + level * labelStep });
+        // MOBILE compaction: the order number is drawn as a badge centred ON the
+        // endpoint dot (offsetY 0) instead of below it, so a labelled lane needs no
+        // extra 16px of clearance under the dot. Every mobile lane then packs to the
+        // same 28px tap-target pitch, which also lets a labelled journey share a lane
+        // with a disjoint unlabelled one. Desktop keeps the below-dot box (offsetY 24).
+        point.labels.push({ kind, lines, x: left, width: size, offsetY: availableWidth ? 0 : 24 + level * labelStep });
       };
       if (point.isOrder && line.task.sequence) addLabel('start', String(line.task.sequence));
       // Endpoint labels are the order number only. A journey whose last point is
@@ -672,12 +677,25 @@ const WorkflowJourney = ({ timeline, startDate, endDate, selectedDate, onSelectD
                 <rect data-point-target="true" x={point.x - 12} y={point.y - 12} width="24" height="24" fill="transparent" />
                 {(point === start || point === end) && <circle data-journey-dot={point === start ? 'start' : 'end'} cx={point.x} cy={point.y} r="5" fill={line.color} stroke={line.color} strokeWidth="1.5" />}
                 {point.labels.map(label => <g key={label.kind} data-endpoint-label={label.kind} data-order-number={line.task.sequence || undefined}>
-                  <rect x={label.x - 4} y={label.y - 12} width={label.width + 8} height={label.lines.length * 14 + 2} rx="4" fill="#fff" />
-                  <foreignObject x={label.x} y={label.y - 12} width={label.width} height={label.lines.length * 14}>
-                    <div xmlns="http://www.w3.org/1999/xhtml" style={{ color: line.color, fontFamily: 'system-ui, sans-serif', fontSize: '12px', fontWeight: 600, lineHeight: '14px', pointerEvents: 'none' }}>
-                      {label.lines.map((text, index) => <div key={index} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{text}</div>)}
-                    </div>
-                  </foreignObject>
+                  {mobileWidth ? (
+                    /* MOBILE: a compact badge centred on the dot. Same journey colour,
+                       white number, and it stays inside the 24px tap target, so lanes
+                       pack to 28px without reserving space below the dot. */
+                    <foreignObject x={label.x - 4} y={label.y - 8} width={label.width + 8} height={16}>
+                      <div xmlns="http://www.w3.org/1999/xhtml" style={{ boxSizing: 'border-box', height: '16px', background: line.color, color: '#fff', borderRadius: '8px', fontFamily: 'system-ui, sans-serif', fontSize: '12px', fontWeight: 700, lineHeight: '16px', textAlign: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
+                        {label.lines.map((text, index) => <div key={index} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{text}</div>)}
+                      </div>
+                    </foreignObject>
+                  ) : (
+                    <>
+                      <rect x={label.x - 4} y={label.y - 12} width={label.width + 8} height={label.lines.length * 14 + 2} rx="4" fill="#fff" />
+                      <foreignObject x={label.x} y={label.y - 12} width={label.width} height={label.lines.length * 14}>
+                        <div xmlns="http://www.w3.org/1999/xhtml" style={{ color: line.color, fontFamily: 'system-ui, sans-serif', fontSize: '12px', fontWeight: 600, lineHeight: '14px', pointerEvents: 'none' }}>
+                          {label.lines.map((text, index) => <div key={index} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{text}</div>)}
+                        </div>
+                      </foreignObject>
+                    </>
+                  )}
                 </g>)}
               </g>)}
             </g>;

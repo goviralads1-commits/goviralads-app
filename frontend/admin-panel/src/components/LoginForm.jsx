@@ -15,6 +15,10 @@ const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Falls back to the gradient mark if the configured logo URL fails to load,
+  // so a broken/invalid brand logo (including a bad GIF/URL) never shows a
+  // broken-image icon on the login screen.
+  const [logoFailed, setLogoFailed] = useState(false);
   const brandingCtx = useBranding();
   const [socialLinks, setSocialLinks] = useState({ facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' });
   const [whatsappNumber, setWhatsappNumber] = useState('');
@@ -141,10 +145,11 @@ const LoginForm = () => {
       <div style={{ width: '100%', maxWidth: '420px' }}>
         {/* Logo / Brand */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          {branding.logoUrl ? (
+          {branding.logoUrl && !logoFailed ? (
             <img 
               src={branding.logoUrl} 
               alt="Logo" 
+              onError={() => setLogoFailed(true)}
               style={{
                 width: '72px',
                 height: '72px',

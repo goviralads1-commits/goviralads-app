@@ -626,17 +626,22 @@ for (const app of ['client-app', 'admin-panel']) {
             const column = model.columns.find(column => column.day === point.day);
             assert.equal(point.x, column.left + column.width / 2);
             assert.ok(point.x - 12 >= column.left && point.x + 12 <= column.left + column.width);
-            rectangles.push({ left: point.x - 12, right: point.x + 12, top: point.y - 12, bottom: point.y + 12 });
+            rectangles.push({ owner: point, left: point.x - 12, right: point.x + 12, top: point.y - 12, bottom: point.y + 12 });
             for (const label of point.labels) {
               assert.equal(label.lines.length, 1);
-              const box = { left: label.x - 4, right: label.x + label.width + 4, top: label.y - 12, bottom: label.y + 4 };
+              // Mobile draws the order number as a badge centred on its own dot
+              // (offsetY 0); desktop keeps the below-dot box (offsetY 24). A badge may
+              // overlap only its own dot, so both are tagged with their owning point.
+              const box = width
+                ? { owner: point, left: label.x - 4, right: label.x + label.width + 4, top: label.y - 8, bottom: label.y + 8 }
+                : { owner: null, left: label.x - 4, right: label.x + label.width + 4, top: label.y - 12, bottom: label.y + 4 };
               assert.ok(box.left >= 0 && box.right <= model.width);
               assert.ok(box.top >= model.bands[point.row].top && box.bottom <= model.bands[point.row].top + model.bands[point.row].height);
               rectangles.push(box);
             }
           }
         }
-        rectangles.forEach((a, i) => rectangles.slice(i + 1).forEach(b => assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)));
+        rectangles.forEach((a, i) => rectangles.slice(i + 1).forEach(b => assert.ok((a.owner && a.owner === b.owner) || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)));
       }
       const short = { ...task, approvedAt: null, milestones: [], completedAt: '2026-09-16' };
       for (const end of ['2026-09-15', '2026-09-16']) assert.equal(view.buildWorkflowGraph({ tasks: [short] }, '2026-09-15', end, 235).width, 235);

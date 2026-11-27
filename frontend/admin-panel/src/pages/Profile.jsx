@@ -34,6 +34,12 @@ const Profile = () => {
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  // Brand logo upload (animated GIF or static image). The uploaded Cloudinary
+  // URL is written straight into profileForm.logoUrl so it is saved by the
+  // existing Save flow and rendered by the existing Live Preview <img>, which
+  // animates GIFs natively.
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState('');
 
   // User Manager State
   const [users, setUsers] = useState([]);
@@ -175,6 +181,42 @@ const Profile = () => {
       showToast(err.response?.data?.error || 'Failed to save profile', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Upload a logo file (animated GIF or static image) to Cloudinary via the
+  // admin-only /upload/brand-logo endpoint, then store the returned URL in the
+  // form. Client-side type/size checks mirror the server-side multer limits so
+  // the admin gets instant feedback; the server still re-validates.
+  const handleLogoFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file after an error
+    if (!file) return;
+    setLogoError('');
+    const allowed = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setLogoError('Only GIF, JPG, PNG or WebP images are allowed.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoError('Logo too large. Maximum 5MB allowed.');
+      return;
+    }
+    try {
+      setUploadingLogo(true);
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await api.post('/upload/brand-logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0
+      });
+      if (res.data?.url) {
+        setProfileForm(prev => ({ ...prev, logoUrl: res.data.url }));
+      }
+    } catch (err) {
+      setLogoError(err.response?.data?.error || 'Logo upload failed. Please try again.');
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -844,7 +886,15 @@ const Profile = () => {
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Logo URL</label>
-                        <input type="url" value={profileForm.logoUrl} onChange={e => setProfileForm({...profileForm, logoUrl: e.target.value})} placeholder="https://example.com/logo.png" style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none' }} />
+                        <input type="url" value={profileForm.logoUrl} onChange={e => setProfileForm({...profileForm, logoUrl: e.target.value})} placeholder="https://example.com/logo.gif" style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '15px', outline: 'none' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginTop: '10px' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: uploadingLogo ? '#a5b4fc' : '#6366f1', color: '#fff', borderRadius: '10px', fontWeight: '600', fontSize: '13px', cursor: uploadingLogo ? 'not-allowed' : 'pointer' }}>
+                            {uploadingLogo ? 'Uploading…' : '⬆ Upload Logo'}
+                            <input type="file" accept="image/gif,image/png,image/jpeg,image/webp" onChange={handleLogoFileUpload} disabled={uploadingLogo} style={{ display: 'none' }} />
+                          </label>
+                          <span style={{ fontSize: '12px', color: '#94a3b8' }}>GIF, PNG, JPG or WebP · animated GIFs stay animated · max 5MB</span>
+                        </div>
+                        {logoError && <p style={{ fontSize: '12px', color: '#dc2626', margin: '8px 0 0' }}>{logoError}</p>}
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Tagline</label>

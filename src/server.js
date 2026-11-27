@@ -245,6 +245,47 @@ app.post('/upload/plan-video', authenticateJWT, requireAdmin, (req, res, next) =
   }
 });
 
+// ============== BRAND LOGO UPLOAD ENDPOINT (Admin only) ==============
+// Powers the login-page logo setting in Admin Profile. Accepts animated GIF as
+// well as the existing static formats, so an admin can brand the login screen
+// with an animated logo. Cloudinary stores the original bytes and the returned
+// secure_url serves them untransformed, so GIF animation is preserved end to
+// end (no conversion to a static first frame). MIME whitelist + 5MB size limit
+// are enforced server-side by multer; the route is admin-only.
+const brandLogoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Invalid file type. Only GIF, JPG, PNG, WebP allowed.'));
+  }
+});
+
+app.post('/upload/brand-logo', authenticateJWT, requireAdmin, (req, res, next) => {
+  // Intercept multer errors per-route (size/type) so clients get a clean JSON error
+  brandLogoUpload.single('image')(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE'
+        ? 'Logo too large. Maximum 5MB allowed.'
+        : (err.message || 'Logo upload rejected');
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const url = await uploadBufferToCloudinary(req.file.buffer, 'goviralads/branding');
+    return res.status(200).json({ url });
+  } catch (err) {
+    console.error('[BRAND LOGO UPLOAD] Error:', err.message);
+    return res.status(500).json({ error: err.message || 'Upload failed' });
+  }
+});
+
 // Multer config for progress icons (smaller size limit)
 const iconUpload = multer({
   storage: multer.memoryStorage(),
